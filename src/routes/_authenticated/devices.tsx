@@ -35,12 +35,12 @@ function DevicesPage() {
   });
 
   const save = useMutation({
-    mutationFn: async (d: Partial<Device>) => {
+    mutationFn: async (d: any) => {
       if (editing) {
         const { error } = await supabase.from("devices").update(d).eq("id", editing.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("devices").insert(d as any);
+        const { error } = await supabase.from("devices").insert(d);
         if (error) throw error;
       }
     },

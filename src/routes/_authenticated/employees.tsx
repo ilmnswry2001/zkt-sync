@@ -41,9 +41,9 @@ function EmployeesPage() {
   });
 
   const save = useMutation({
-    mutationFn: async (d: Partial<Emp> & { department_id?: string | null }) => {
+    mutationFn: async (d: any) => {
       if (editing) { const { error } = await supabase.from("employees").update(d).eq("id", editing.id); if (error) throw error; }
-      else { const { error } = await supabase.from("employees").insert(d as any); if (error) throw error; }
+      else { const { error } = await supabase.from("employees").insert(d); if (error) throw error; }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); setOpen(false); setEditing(null); toast.success("تم الحفظ"); },
     onError: (e: any) => toast.error(e.message),
