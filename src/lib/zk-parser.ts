@@ -1,7 +1,7 @@
 // Client-side parser for ZKTeco backupdata.dat files.
 // Format: 3072-byte ZK header → GZIP → TAR → ZKDB.db (SQLite).
 import { inflate } from "pako";
-import initSqlJs, { type Database } from "sql.js";
+import initSqlJs, { type Database, type SqlJsStatic } from "sql.js";
 
 export interface ZkUser {
   user_pin: string;
@@ -68,21 +68,21 @@ function parseTar(buf: Uint8Array): { name: string; data: Uint8Array }[] {
   return files;
 }
 
-let sqlPromise: Promise<typeof import("sql.js").default extends (...args: infer _A) => infer R ? Awaited<R> : never> | null = null;
-async function getSql() {
+let sqlPromise: Promise<SqlJsStatic> | null = null;
+async function getSql(): Promise<SqlJsStatic> {
   if (!sqlPromise) {
-    sqlPromise = initSqlJs({ locateFile: () => "/sql-wasm.wasm" }) as any;
+    sqlPromise = initSqlJs({ locateFile: () => "/sql-wasm.wasm" });
   }
-  return sqlPromise!;
+  return sqlPromise;
 }
 
 function queryAll(db: Database, sql: string): Record<string, unknown>[] {
   const res = db.exec(sql);
   if (!res.length) return [];
   const { columns, values } = res[0];
-  return values.map((row) => {
+  return values.map((row: unknown[]) => {
     const obj: Record<string, unknown> = {};
-    columns.forEach((c, i) => (obj[c] = row[i]));
+    columns.forEach((c: string, i: number) => (obj[c] = row[i]));
     return obj;
   });
 }
