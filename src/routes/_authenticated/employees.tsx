@@ -99,6 +99,13 @@ function EmployeesPage() {
           <h1 className="text-3xl font-bold">الموظفون</h1>
           <p className="text-muted-foreground mt-1">إجمالي: {rows.length} موظف</p>
         </div>
+        <div className="flex items-center gap-2">
+          <input id="emp-excel" type="file" accept=".xlsx,.xls" className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; e.currentTarget.value = ""; if (f) handleExcel(f); }} />
+          <Button variant="outline" disabled={importing} onClick={() => document.getElementById("emp-excel")?.click()}>
+            {importing ? <Loader2 className="w-4 h-4 ml-2 animate-spin" /> : <Upload className="w-4 h-4 ml-2" />}
+            استيراد من Excel
+          </Button>
         <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setEditing(null); }}>
           <DialogTrigger asChild><Button><Plus className="w-4 h-4 ml-2" /> موظف جديد</Button></DialogTrigger>
           <DialogContent dir="rtl">
