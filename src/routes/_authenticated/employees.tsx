@@ -28,6 +28,39 @@ function EmployeesPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Emp | null>(null);
   const [search, setSearch] = useState("");
+  const doImport = useServerFn(importEmployees);
+  const [importing, setImporting] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
+
+  async function handleExcel(file: File) {
+    setImporting(true); setProgress(0); setImportMsg("جاري قراءة الملف...");
+    try {
+      const { parseEmployeesWorkbook } = await import("@/lib/excel-employees");
+      const buf = await file.arrayBuffer();
+      const { rows: parsed, skipped } = parseEmployeesWorkbook(buf);
+      if (!parsed.length) throw new Error("لم يتم العثور على صفوف صالحة — تأكد من وجود أعمدة «التسلسل» و«اسم الموظف»");
+      const CHUNK = 500;
+      let done = 0;
+      for (let i = 0; i < parsed.length; i += CHUNK) {
+        const chunk = parsed.slice(i, i + CHUNK);
+        await doImport({ data: { rows: chunk } });
+        done += chunk.length;
+        setProgress(Math.round((done / parsed.length) * 100));
+        setImportMsg(`تم استيراد ${done} من ${parsed.length}...`);
+      }
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      qc.invalidateQueries({ queryKey: ["departments"] });
+      setImportMsg(`تم استيراد ${done} موظف${skipped ? ` (تم تجاهل ${skipped} صف بدون رقم/اسم أو مكرر)` : ""}`);
+      toast.success(`تم استيراد ${done} موظف`);
+    } catch (e: any) {
+      setImportMsg(null);
+      toast.error(e?.message ?? "فشل الاستيراد");
+    } finally {
+      setImporting(false);
+    }
+  }
+
 
   const { data: rows = [] } = useQuery({
     queryKey: ["employees"],
