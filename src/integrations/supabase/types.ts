@@ -143,37 +143,82 @@ export type Database = {
       }
       employees: {
         Row: {
+          address: string | null
+          birth_date: string | null
           created_at: string
           department_id: string | null
           employee_no: string
+          erp_no: string | null
           full_name: string
+          hire_date: string | null
           id: string
+          id_no: string | null
+          last_working_day: string | null
+          nationality: string | null
+          notes: string | null
+          phone1: string | null
+          phone2: string | null
           position: string | null
           privilege: number | null
+          project: string | null
+          safety_passport_expiry: string | null
+          safety_passport_no: string | null
+          salary_structure: string | null
+          salary_type: string | null
           shift_id: string | null
           status: Database["public"]["Enums"]["employee_status"]
           updated_at: string
         }
         Insert: {
+          address?: string | null
+          birth_date?: string | null
           created_at?: string
           department_id?: string | null
           employee_no: string
+          erp_no?: string | null
           full_name: string
+          hire_date?: string | null
           id?: string
+          id_no?: string | null
+          last_working_day?: string | null
+          nationality?: string | null
+          notes?: string | null
+          phone1?: string | null
+          phone2?: string | null
           position?: string | null
           privilege?: number | null
+          project?: string | null
+          safety_passport_expiry?: string | null
+          safety_passport_no?: string | null
+          salary_structure?: string | null
+          salary_type?: string | null
           shift_id?: string | null
           status?: Database["public"]["Enums"]["employee_status"]
           updated_at?: string
         }
         Update: {
+          address?: string | null
+          birth_date?: string | null
           created_at?: string
           department_id?: string | null
           employee_no?: string
+          erp_no?: string | null
           full_name?: string
+          hire_date?: string | null
           id?: string
+          id_no?: string | null
+          last_working_day?: string | null
+          nationality?: string | null
+          notes?: string | null
+          phone1?: string | null
+          phone2?: string | null
           position?: string | null
           privilege?: number | null
+          project?: string | null
+          safety_passport_expiry?: string | null
+          safety_passport_no?: string | null
+          salary_structure?: string | null
+          salary_type?: string | null
           shift_id?: string | null
           status?: Database["public"]["Enums"]["employee_status"]
           updated_at?: string
