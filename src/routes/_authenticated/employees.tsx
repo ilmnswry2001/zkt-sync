@@ -147,7 +147,16 @@ function EmployeesPage() {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
+      {(importing || importMsg) && (
+        <Card>
+          <CardContent className="py-4 space-y-2">
+            <p className="text-sm">{importMsg}</p>
+            {importing && <Progress value={progress} />}
+          </CardContent>
+        </Card>
+      )}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>القائمة</CardTitle>
