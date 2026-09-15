@@ -143,37 +143,82 @@ export type Database = {
       }
       employees: {
         Row: {
+          address: string | null
+          birth_date: string | null
           created_at: string
           department_id: string | null
           employee_no: string
+          erp_no: string | null
           full_name: string
+          hire_date: string | null
           id: string
+          id_no: string | null
+          last_working_day: string | null
+          nationality: string | null
+          notes: string | null
+          phone1: string | null
+          phone2: string | null
           position: string | null
           privilege: number | null
+          project: string | null
+          safety_passport_expiry: string | null
+          safety_passport_no: string | null
+          salary_structure: string | null
+          salary_type: string | null
           shift_id: string | null
           status: Database["public"]["Enums"]["employee_status"]
           updated_at: string
         }
         Insert: {
+          address?: string | null
+          birth_date?: string | null
           created_at?: string
           department_id?: string | null
           employee_no: string
+          erp_no?: string | null
           full_name: string
+          hire_date?: string | null
           id?: string
+          id_no?: string | null
+          last_working_day?: string | null
+          nationality?: string | null
+          notes?: string | null
+          phone1?: string | null
+          phone2?: string | null
           position?: string | null
           privilege?: number | null
+          project?: string | null
+          safety_passport_expiry?: string | null
+          safety_passport_no?: string | null
+          salary_structure?: string | null
+          salary_type?: string | null
           shift_id?: string | null
           status?: Database["public"]["Enums"]["employee_status"]
           updated_at?: string
         }
         Update: {
+          address?: string | null
+          birth_date?: string | null
           created_at?: string
           department_id?: string | null
           employee_no?: string
+          erp_no?: string | null
           full_name?: string
+          hire_date?: string | null
           id?: string
+          id_no?: string | null
+          last_working_day?: string | null
+          nationality?: string | null
+          notes?: string | null
+          phone1?: string | null
+          phone2?: string | null
           position?: string | null
           privilege?: number | null
+          project?: string | null
+          safety_passport_expiry?: string | null
+          safety_passport_no?: string | null
+          salary_structure?: string | null
+          salary_type?: string | null
           shift_id?: string | null
           status?: Database["public"]["Enums"]["employee_status"]
           updated_at?: string
@@ -357,12 +402,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -386,11 +431,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -411,11 +456,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -436,11 +481,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -453,11 +498,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

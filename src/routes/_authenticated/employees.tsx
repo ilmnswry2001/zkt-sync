@@ -10,8 +10,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Plus, Pencil, Search } from "lucide-react";
+import { Trash2, Plus, Pencil, Search, Upload, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { Progress } from "@/components/ui/progress";
+import { useServerFn } from "@tanstack/react-start";
+import { importEmployees } from "@/lib/employees.functions";
 
 export const Route = createFileRoute("/_authenticated/employees")({
   head: () => ({ meta: [{ title: "الموظفون" }] }),
@@ -25,6 +28,39 @@ function EmployeesPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Emp | null>(null);
   const [search, setSearch] = useState("");
+  const doImport = useServerFn(importEmployees);
+  const [importing, setImporting] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
+
+  async function handleExcel(file: File) {
+    setImporting(true); setProgress(0); setImportMsg("جاري قراءة الملف...");
+    try {
+      const { parseEmployeesWorkbook } = await import("@/lib/excel-employees");
+      const buf = await file.arrayBuffer();
+      const { rows: parsed, skipped } = parseEmployeesWorkbook(buf);
+      if (!parsed.length) throw new Error("لم يتم العثور على صفوف صالحة — تأكد من وجود أعمدة «التسلسل» و«اسم الموظف»");
+      const CHUNK = 500;
+      let done = 0;
+      for (let i = 0; i < parsed.length; i += CHUNK) {
+        const chunk = parsed.slice(i, i + CHUNK);
+        await doImport({ data: { rows: chunk } });
+        done += chunk.length;
+        setProgress(Math.round((done / parsed.length) * 100));
+        setImportMsg(`تم استيراد ${done} من ${parsed.length}...`);
+      }
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      qc.invalidateQueries({ queryKey: ["departments"] });
+      setImportMsg(`تم استيراد ${done} موظف${skipped ? ` (تم تجاهل ${skipped} صف بدون رقم/اسم أو مكرر)` : ""}`);
+      toast.success(`تم استيراد ${done} موظف`);
+    } catch (e: any) {
+      setImportMsg(null);
+      toast.error(e?.message ?? "فشل الاستيراد");
+    } finally {
+      setImporting(false);
+    }
+  }
+
 
   const { data: rows = [] } = useQuery({
     queryKey: ["employees"],
@@ -63,6 +99,13 @@ function EmployeesPage() {
           <h1 className="text-3xl font-bold">الموظفون</h1>
           <p className="text-muted-foreground mt-1">إجمالي: {rows.length} موظف</p>
         </div>
+        <div className="flex items-center gap-2">
+          <input id="emp-excel" type="file" accept=".xlsx,.xls" className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; e.currentTarget.value = ""; if (f) handleExcel(f); }} />
+          <Button variant="outline" disabled={importing} onClick={() => document.getElementById("emp-excel")?.click()}>
+            {importing ? <Loader2 className="w-4 h-4 ml-2 animate-spin" /> : <Upload className="w-4 h-4 ml-2" />}
+            استيراد من Excel
+          </Button>
         <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setEditing(null); }}>
           <DialogTrigger asChild><Button><Plus className="w-4 h-4 ml-2" /> موظف جديد</Button></DialogTrigger>
           <DialogContent dir="rtl">
@@ -104,7 +147,16 @@ function EmployeesPage() {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
+      {(importing || importMsg) && (
+        <Card>
+          <CardContent className="py-4 space-y-2">
+            <p className="text-sm">{importMsg}</p>
+            {importing && <Progress value={progress} />}
+          </CardContent>
+        </Card>
+      )}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>القائمة</CardTitle>
