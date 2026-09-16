@@ -14,6 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      attendance_day_status: {
+        Row: {
+          created_at: string
+          employee_id: string
+          id: string
+          notes: string | null
+          status: Database["public"]["Enums"]["day_status"]
+          updated_at: string
+          updated_by: string | null
+          work_date: string
+        }
+        Insert: {
+          created_at?: string
+          employee_id: string
+          id?: string
+          notes?: string | null
+          status: Database["public"]["Enums"]["day_status"]
+          updated_at?: string
+          updated_by?: string | null
+          work_date: string
+        }
+        Update: {
+          created_at?: string
+          employee_id?: string
+          id?: string
+          notes?: string | null
+          status?: Database["public"]["Enums"]["day_status"]
+          updated_at?: string
+          updated_by?: string | null
+          work_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_day_status_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attendance_logs: {
         Row: {
           created_at: string
@@ -144,84 +185,144 @@ export type Database = {
       employees: {
         Row: {
           address: string | null
+          bank_account: string | null
+          bank_name: string | null
+          base_salary: number | null
           birth_date: string | null
+          blood_type: string | null
+          contract_end_date: string | null
+          contract_type: string | null
           created_at: string
+          ctr_code: string | null
           department_id: string | null
+          education: string | null
+          email: string | null
+          emergency_contact_name: string | null
+          emergency_contact_phone: string | null
           employee_no: string
           erp_no: string | null
           full_name: string
+          gender: string | null
           hire_date: string | null
+          iban: string | null
           id: string
           id_no: string | null
           last_working_day: string | null
+          marital_status: string | null
           nationality: string | null
           notes: string | null
+          passport_expiry: string | null
+          passport_no: string | null
           phone1: string | null
           phone2: string | null
           position: string | null
           privilege: number | null
           project: string | null
+          residency_expiry: string | null
+          residency_no: string | null
           safety_passport_expiry: string | null
           safety_passport_no: string | null
           salary_structure: string | null
           salary_type: string | null
           shift_id: string | null
+          site_id: string | null
           status: Database["public"]["Enums"]["employee_status"]
           updated_at: string
+          wage_rate_id: string | null
         }
         Insert: {
           address?: string | null
+          bank_account?: string | null
+          bank_name?: string | null
+          base_salary?: number | null
           birth_date?: string | null
+          blood_type?: string | null
+          contract_end_date?: string | null
+          contract_type?: string | null
           created_at?: string
+          ctr_code?: string | null
           department_id?: string | null
+          education?: string | null
+          email?: string | null
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
           employee_no: string
           erp_no?: string | null
           full_name: string
+          gender?: string | null
           hire_date?: string | null
+          iban?: string | null
           id?: string
           id_no?: string | null
           last_working_day?: string | null
+          marital_status?: string | null
           nationality?: string | null
           notes?: string | null
+          passport_expiry?: string | null
+          passport_no?: string | null
           phone1?: string | null
           phone2?: string | null
           position?: string | null
           privilege?: number | null
           project?: string | null
+          residency_expiry?: string | null
+          residency_no?: string | null
           safety_passport_expiry?: string | null
           safety_passport_no?: string | null
           salary_structure?: string | null
           salary_type?: string | null
           shift_id?: string | null
+          site_id?: string | null
           status?: Database["public"]["Enums"]["employee_status"]
           updated_at?: string
+          wage_rate_id?: string | null
         }
         Update: {
           address?: string | null
+          bank_account?: string | null
+          bank_name?: string | null
+          base_salary?: number | null
           birth_date?: string | null
+          blood_type?: string | null
+          contract_end_date?: string | null
+          contract_type?: string | null
           created_at?: string
+          ctr_code?: string | null
           department_id?: string | null
+          education?: string | null
+          email?: string | null
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
           employee_no?: string
           erp_no?: string | null
           full_name?: string
+          gender?: string | null
           hire_date?: string | null
+          iban?: string | null
           id?: string
           id_no?: string | null
           last_working_day?: string | null
+          marital_status?: string | null
           nationality?: string | null
           notes?: string | null
+          passport_expiry?: string | null
+          passport_no?: string | null
           phone1?: string | null
           phone2?: string | null
           position?: string | null
           privilege?: number | null
           project?: string | null
+          residency_expiry?: string | null
+          residency_no?: string | null
           safety_passport_expiry?: string | null
           safety_passport_no?: string | null
           salary_structure?: string | null
           salary_type?: string | null
           shift_id?: string | null
+          site_id?: string | null
           status?: Database["public"]["Enums"]["employee_status"]
           updated_at?: string
+          wage_rate_id?: string | null
         }
         Relationships: [
           {
@@ -236,6 +337,20 @@ export type Database = {
             columns: ["shift_id"]
             isOneToOne: false
             referencedRelation: "shifts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employees_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employees_wage_rate_id_fkey"
+            columns: ["wage_rate_id"]
+            isOneToOne: false
+            referencedRelation: "wage_rates"
             referencedColumns: ["id"]
           },
         ]
@@ -261,6 +376,50 @@ export type Database = {
         }
         Relationships: []
       }
+      salary_additions: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          description: string | null
+          employee_id: string
+          id: string
+          kind: string
+          month: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          employee_id: string
+          id?: string
+          kind?: string
+          month: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          employee_id?: string
+          id?: string
+          kind?: string
+          month?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "salary_additions_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shifts: {
         Row: {
           created_at: string
@@ -285,6 +444,48 @@ export type Database = {
           id?: string
           name?: string
           start_time?: string
+        }
+        Relationships: []
+      }
+      sites: {
+        Row: {
+          client: string | null
+          created_at: string
+          ctr_code: string
+          description: string | null
+          end_date: string | null
+          id: string
+          location: string | null
+          name: string
+          start_date: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          client?: string | null
+          created_at?: string
+          ctr_code: string
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          location?: string | null
+          name: string
+          start_date?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          client?: string | null
+          created_at?: string
+          ctr_code?: string
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          location?: string | null
+          name?: string
+          start_date?: string | null
+          status?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -368,6 +569,42 @@ export type Database = {
         }
         Relationships: []
       }
+      wage_rates: {
+        Row: {
+          created_at: string
+          currency: string
+          daily_rate: number
+          id: string
+          monthly_rate: number
+          notes: string | null
+          overtime_hour_rate: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          currency?: string
+          daily_rate?: number
+          id?: string
+          monthly_rate?: number
+          notes?: string | null
+          overtime_hour_rate?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          daily_rate?: number
+          id?: string
+          monthly_rate?: number
+          notes?: string | null
+          overtime_hour_rate?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -384,6 +621,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "hr" | "supervisor" | "data_entry"
+      day_status: "present" | "absent" | "leave" | "holiday" | "rest"
       device_status: "active" | "inactive" | "maintenance"
       employee_status: "active" | "inactive" | "terminated"
       upload_status: "pending" | "processing" | "completed" | "failed"
@@ -515,6 +753,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "hr", "supervisor", "data_entry"],
+      day_status: ["present", "absent", "leave", "holiday", "rest"],
       device_status: ["active", "inactive", "maintenance"],
       employee_status: ["active", "inactive", "terminated"],
       upload_status: ["pending", "processing", "completed", "failed"],
