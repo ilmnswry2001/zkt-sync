@@ -12,8 +12,10 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedWagesRouteImport } from './routes/_authenticated/wages'
 import { Route as AuthenticatedUploadRouteImport } from './routes/_authenticated/upload'
 import { Route as AuthenticatedPlanningRouteImport } from './routes/_authenticated/planning'
+import { Route as AuthenticatedMonthlyRouteImport } from './routes/_authenticated/monthly'
 import { Route as AuthenticatedFilesRouteImport } from './routes/_authenticated/files'
 import { Route as AuthenticatedEmployeesRouteImport } from './routes/_authenticated/employees'
 import { Route as AuthenticatedDevicesRouteImport } from './routes/_authenticated/devices'
@@ -35,6 +37,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedWagesRoute = AuthenticatedWagesRouteImport.update({
+  id: '/wages',
+  path: '/wages',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedUploadRoute = AuthenticatedUploadRouteImport.update({
   id: '/upload',
   path: '/upload',
@@ -43,6 +50,11 @@ const AuthenticatedUploadRoute = AuthenticatedUploadRouteImport.update({
 const AuthenticatedPlanningRoute = AuthenticatedPlanningRouteImport.update({
   id: '/planning',
   path: '/planning',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedMonthlyRoute = AuthenticatedMonthlyRouteImport.update({
+  id: '/monthly',
+  path: '/monthly',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedFilesRoute = AuthenticatedFilesRouteImport.update({
@@ -86,8 +98,10 @@ export interface FileRoutesByFullPath {
   '/devices': typeof AuthenticatedDevicesRoute
   '/employees': typeof AuthenticatedEmployeesRoute
   '/files': typeof AuthenticatedFilesRoute
+  '/monthly': typeof AuthenticatedMonthlyRoute
   '/planning': typeof AuthenticatedPlanningRoute
   '/upload': typeof AuthenticatedUploadRoute
+  '/wages': typeof AuthenticatedWagesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -98,8 +112,10 @@ export interface FileRoutesByTo {
   '/devices': typeof AuthenticatedDevicesRoute
   '/employees': typeof AuthenticatedEmployeesRoute
   '/files': typeof AuthenticatedFilesRoute
+  '/monthly': typeof AuthenticatedMonthlyRoute
   '/planning': typeof AuthenticatedPlanningRoute
   '/upload': typeof AuthenticatedUploadRoute
+  '/wages': typeof AuthenticatedWagesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -112,8 +128,10 @@ export interface FileRoutesById {
   '/_authenticated/devices': typeof AuthenticatedDevicesRoute
   '/_authenticated/employees': typeof AuthenticatedEmployeesRoute
   '/_authenticated/files': typeof AuthenticatedFilesRoute
+  '/_authenticated/monthly': typeof AuthenticatedMonthlyRoute
   '/_authenticated/planning': typeof AuthenticatedPlanningRoute
   '/_authenticated/upload': typeof AuthenticatedUploadRoute
+  '/_authenticated/wages': typeof AuthenticatedWagesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -126,8 +144,10 @@ export interface FileRouteTypes {
     | '/devices'
     | '/employees'
     | '/files'
+    | '/monthly'
     | '/planning'
     | '/upload'
+    | '/wages'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -138,8 +158,10 @@ export interface FileRouteTypes {
     | '/devices'
     | '/employees'
     | '/files'
+    | '/monthly'
     | '/planning'
     | '/upload'
+    | '/wages'
   id:
     | '__root__'
     | '/'
@@ -151,8 +173,10 @@ export interface FileRouteTypes {
     | '/_authenticated/devices'
     | '/_authenticated/employees'
     | '/_authenticated/files'
+    | '/_authenticated/monthly'
     | '/_authenticated/planning'
     | '/_authenticated/upload'
+    | '/_authenticated/wages'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -184,6 +208,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/wages': {
+      id: '/_authenticated/wages'
+      path: '/wages'
+      fullPath: '/wages'
+      preLoaderRoute: typeof AuthenticatedWagesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/upload': {
       id: '/_authenticated/upload'
       path: '/upload'
@@ -196,6 +227,13 @@ declare module '@tanstack/react-router' {
       path: '/planning'
       fullPath: '/planning'
       preLoaderRoute: typeof AuthenticatedPlanningRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/monthly': {
+      id: '/_authenticated/monthly'
+      path: '/monthly'
+      fullPath: '/monthly'
+      preLoaderRoute: typeof AuthenticatedMonthlyRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/files': {
@@ -250,8 +288,10 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDevicesRoute: typeof AuthenticatedDevicesRoute
   AuthenticatedEmployeesRoute: typeof AuthenticatedEmployeesRoute
   AuthenticatedFilesRoute: typeof AuthenticatedFilesRoute
+  AuthenticatedMonthlyRoute: typeof AuthenticatedMonthlyRoute
   AuthenticatedPlanningRoute: typeof AuthenticatedPlanningRoute
   AuthenticatedUploadRoute: typeof AuthenticatedUploadRoute
+  AuthenticatedWagesRoute: typeof AuthenticatedWagesRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -261,8 +301,10 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDevicesRoute: AuthenticatedDevicesRoute,
   AuthenticatedEmployeesRoute: AuthenticatedEmployeesRoute,
   AuthenticatedFilesRoute: AuthenticatedFilesRoute,
+  AuthenticatedMonthlyRoute: AuthenticatedMonthlyRoute,
   AuthenticatedPlanningRoute: AuthenticatedPlanningRoute,
   AuthenticatedUploadRoute: AuthenticatedUploadRoute,
+  AuthenticatedWagesRoute: AuthenticatedWagesRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
