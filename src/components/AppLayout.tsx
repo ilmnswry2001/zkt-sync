@@ -79,7 +79,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </Button>
         </div>
       </aside>
-      <main className="flex-1 overflow-auto">
+      <main className="min-w-0 flex-1 overflow-auto">
         <div className="p-8 max-w-7xl mx-auto">{children}</div>
       </main>
     </div>
