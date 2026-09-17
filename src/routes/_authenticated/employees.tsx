@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import { Trash2, Plus, Pencil, Search, Upload, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
@@ -75,6 +76,16 @@ function EmployeesPage() {
     queryKey: ["departments"],
     queryFn: async () => (await supabase.from("departments").select("id, name").order("name")).data ?? [],
   });
+  const { data: sites = [] } = useQuery({
+    queryKey: ["sites"],
+    queryFn: async () => (await supabase.from("sites").select("id, name, ctr_code").order("name")).data ?? [],
+  });
+  const { data: wages = [] } = useQuery({
+    queryKey: ["wage_rates"],
+    queryFn: async () => (await supabase.from("wage_rates").select("id, title").order("title")).data ?? [],
+  });
+  const ed = editing as any;
+
 
   const save = useMutation({
     mutationFn: async (d: any) => {
@@ -108,42 +119,159 @@ function EmployeesPage() {
           </Button>
         <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setEditing(null); }}>
           <DialogTrigger asChild><Button><Plus className="w-4 h-4 ml-2" /> موظف جديد</Button></DialogTrigger>
-          <DialogContent dir="rtl">
+          <DialogContent dir="rtl" className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>{editing ? "تعديل موظف" : "موظف جديد"}</DialogTitle></DialogHeader>
             <form onSubmit={(e) => { e.preventDefault(); const f = new FormData(e.currentTarget);
+              const g = (k: string) => { const v = (f.get(k) as string ?? "").trim(); return v === "" || v === "none" ? null : v; };
+              const n = (k: string) => { const v = g(k); return v === null ? null : Number(v); };
               save.mutate({
                 employee_no: f.get("employee_no") as string,
                 full_name: f.get("full_name") as string,
-                department_id: (f.get("department_id") as string) || null,
-                position: (f.get("position") as string) || null,
+                department_id: g("department_id"),
+                site_id: g("site_id"),
+                wage_rate_id: g("wage_rate_id"),
+                position: g("position"),
                 status: f.get("status") as any,
+                base_salary: n("base_salary"),
+                erp_no: g("erp_no"), id_no: g("id_no"), ctr_code: g("ctr_code"),
+                nationality: g("nationality"), gender: g("gender"), marital_status: g("marital_status"),
+                blood_type: g("blood_type"), education: g("education"),
+                birth_date: g("birth_date"), hire_date: g("hire_date"), last_working_day: g("last_working_day"),
+                contract_type: g("contract_type"), contract_end_date: g("contract_end_date"),
+                email: g("email"), phone1: g("phone1"), phone2: g("phone2"), address: g("address"),
+                salary_type: g("salary_type"), salary_structure: g("salary_structure"), project: g("project"),
+                passport_no: g("passport_no"), passport_expiry: g("passport_expiry"),
+                residency_no: g("residency_no"), residency_expiry: g("residency_expiry"),
+                safety_passport_no: g("safety_passport_no"), safety_passport_expiry: g("safety_passport_expiry"),
+                bank_name: g("bank_name"), bank_account: g("bank_account"), iban: g("iban"),
+                emergency_contact_name: g("emergency_contact_name"), emergency_contact_phone: g("emergency_contact_phone"),
+                notes: g("notes"),
               });
-            }} className="space-y-3">
-              <div><Label>الرقم الوظيفي</Label><Input name="employee_no" required defaultValue={editing?.employee_no} /></div>
-              <div><Label>الاسم الكامل</Label><Input name="full_name" required defaultValue={editing?.full_name} /></div>
-              <div>
-                <Label>القسم</Label>
-                <Select name="department_id" defaultValue={editing?.department_id ?? "none"}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— بدون —</SelectItem>
-                    {depts.map((d: any) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div><Label>المنصب</Label><Input name="position" defaultValue={editing?.position ?? ""} /></div>
-              <div>
-                <Label>الحالة</Label>
-                <Select name="status" defaultValue={editing?.status ?? "active"}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">نشط</SelectItem>
-                    <SelectItem value="inactive">معطل</SelectItem>
-                    <SelectItem value="terminated">منتهي</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button type="submit" className="w-full">حفظ</Button>
+            }} className="space-y-5">
+              <section className="space-y-3">
+                <h3 className="font-semibold text-sm text-muted-foreground">المعلومات الأساسية</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div><Label>الرقم الوظيفي *</Label><Input name="employee_no" required defaultValue={ed?.employee_no ?? ""} /></div>
+                  <div className="md:col-span-2"><Label>الاسم الكامل *</Label><Input name="full_name" required defaultValue={ed?.full_name ?? ""} /></div>
+                  <div><Label>المسمى الوظيفي</Label><Input name="position" defaultValue={ed?.position ?? ""} /></div>
+                  <div>
+                    <Label>القسم</Label>
+                    <Select name="department_id" defaultValue={ed?.department_id ?? "none"}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">— بدون —</SelectItem>
+                        {depts.map((d: any) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>الحالة</Label>
+                    <Select name="status" defaultValue={ed?.status ?? "active"}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">نشط</SelectItem>
+                        <SelectItem value="inactive">معطل</SelectItem>
+                        <SelectItem value="terminated">منتهي</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div><Label>NO EM ERP</Label><Input name="erp_no" defaultValue={ed?.erp_no ?? ""} /></div>
+                  <div><Label>رقم الهوية</Label><Input name="id_no" defaultValue={ed?.id_no ?? ""} /></div>
+                  <div><Label>المشروع</Label><Input name="project" defaultValue={ed?.project ?? ""} /></div>
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <h3 className="font-semibold text-sm text-muted-foreground">موقع العمل والأجر</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <Label>موقع العمل</Label>
+                    <Select name="site_id" defaultValue={ed?.site_id ?? "none"}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">— بدون —</SelectItem>
+                        {sites.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name} ({s.ctr_code})</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div><Label>كود التكلفة CTR</Label><Input name="ctr_code" defaultValue={ed?.ctr_code ?? ""} /></div>
+                  <div>
+                    <Label>أجر التخصص</Label>
+                    <Select name="wage_rate_id" defaultValue={ed?.wage_rate_id ?? "none"}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">— بدون —</SelectItem>
+                        {wages.map((w: any) => <SelectItem key={w.id} value={w.id}>{w.title}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div><Label>الراتب الأساسي</Label><Input name="base_salary" type="number" step="0.01" defaultValue={ed?.base_salary ?? ""} /></div>
+                  <div><Label>نوع الراتب</Label><Input name="salary_type" defaultValue={ed?.salary_type ?? ""} /></div>
+                  <div><Label>هيكل الراتب</Label><Input name="salary_structure" defaultValue={ed?.salary_structure ?? ""} /></div>
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <h3 className="font-semibold text-sm text-muted-foreground">البيانات الشخصية</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div><Label>الجنسية</Label><Input name="nationality" defaultValue={ed?.nationality ?? ""} /></div>
+                  <div>
+                    <Label>الجنس</Label>
+                    <Select name="gender" defaultValue={ed?.gender ?? "none"}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">— غير محدد —</SelectItem>
+                        <SelectItem value="male">ذكر</SelectItem>
+                        <SelectItem value="female">أنثى</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div><Label>الحالة الاجتماعية</Label><Input name="marital_status" defaultValue={ed?.marital_status ?? ""} /></div>
+                  <div><Label>فصيلة الدم</Label><Input name="blood_type" defaultValue={ed?.blood_type ?? ""} /></div>
+                  <div><Label>التعليم</Label><Input name="education" defaultValue={ed?.education ?? ""} /></div>
+                  <div><Label>تاريخ الميلاد</Label><Input name="birth_date" type="date" defaultValue={ed?.birth_date ?? ""} /></div>
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <h3 className="font-semibold text-sm text-muted-foreground">التواصل</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div><Label>البريد الإلكتروني</Label><Input name="email" type="email" defaultValue={ed?.email ?? ""} /></div>
+                  <div><Label>هاتف 1</Label><Input name="phone1" defaultValue={ed?.phone1 ?? ""} /></div>
+                  <div><Label>هاتف 2</Label><Input name="phone2" defaultValue={ed?.phone2 ?? ""} /></div>
+                  <div className="md:col-span-3"><Label>عنوان السكن</Label><Input name="address" defaultValue={ed?.address ?? ""} /></div>
+                  <div><Label>جهة اتصال الطوارئ</Label><Input name="emergency_contact_name" defaultValue={ed?.emergency_contact_name ?? ""} /></div>
+                  <div><Label>هاتف الطوارئ</Label><Input name="emergency_contact_phone" defaultValue={ed?.emergency_contact_phone ?? ""} /></div>
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <h3 className="font-semibold text-sm text-muted-foreground">العقد والوثائق</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div><Label>تاريخ المباشرة</Label><Input name="hire_date" type="date" defaultValue={ed?.hire_date ?? ""} /></div>
+                  <div><Label>آخر يوم عمل</Label><Input name="last_working_day" type="date" defaultValue={ed?.last_working_day ?? ""} /></div>
+                  <div><Label>نوع العقد</Label><Input name="contract_type" defaultValue={ed?.contract_type ?? ""} /></div>
+                  <div><Label>انتهاء العقد</Label><Input name="contract_end_date" type="date" defaultValue={ed?.contract_end_date ?? ""} /></div>
+                  <div><Label>رقم الجواز</Label><Input name="passport_no" defaultValue={ed?.passport_no ?? ""} /></div>
+                  <div><Label>انتهاء الجواز</Label><Input name="passport_expiry" type="date" defaultValue={ed?.passport_expiry ?? ""} /></div>
+                  <div><Label>رقم الإقامة</Label><Input name="residency_no" defaultValue={ed?.residency_no ?? ""} /></div>
+                  <div><Label>انتهاء الإقامة</Label><Input name="residency_expiry" type="date" defaultValue={ed?.residency_expiry ?? ""} /></div>
+                  <div><Label>رقم جواز السلامة</Label><Input name="safety_passport_no" defaultValue={ed?.safety_passport_no ?? ""} /></div>
+                  <div><Label>انتهاء جواز السلامة</Label><Input name="safety_passport_expiry" type="date" defaultValue={ed?.safety_passport_expiry ?? ""} /></div>
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <h3 className="font-semibold text-sm text-muted-foreground">المعلومات البنكية والملاحظات</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div><Label>اسم البنك</Label><Input name="bank_name" defaultValue={ed?.bank_name ?? ""} /></div>
+                  <div><Label>رقم الحساب</Label><Input name="bank_account" defaultValue={ed?.bank_account ?? ""} /></div>
+                  <div><Label>IBAN</Label><Input name="iban" defaultValue={ed?.iban ?? ""} /></div>
+                  <div className="md:col-span-3"><Label>ملاحظات</Label><Textarea name="notes" defaultValue={ed?.notes ?? ""} /></div>
+                </div>
+              </section>
+
+              <Button type="submit" className="w-full" disabled={save.isPending}>حفظ</Button>
             </form>
           </DialogContent>
         </Dialog>
