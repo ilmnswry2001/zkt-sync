@@ -7,7 +7,6 @@ import { getEmployeeMonthly, setDayStatus } from "@/lib/reports.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
@@ -106,13 +105,14 @@ function MonthlyPage() {
 
       {data && s && p && (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
             {[
               { l: "أيام الحضور", v: s.presentDays },
               { l: "أيام الغياب", v: s.absentDays },
               { l: "الإجازات", v: s.leaveDays },
               { l: "العطل", v: s.holidayDays },
               { l: "مجموع الساعات", v: s.totalHours },
+              { l: "الوقت الإضافي", v: `${s.totalOvertimeHours} س` },
               { l: "أيام الشهر", v: s.workDays },
             ].map((c) => (
               <Card key={c.l}><CardContent className="p-4"><p className="text-xs text-muted-foreground">{c.l}</p><p className="text-2xl font-bold">{c.v}</p></CardContent></Card>
@@ -137,53 +137,56 @@ function MonthlyPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader><CardTitle>أيام شهر {month}</CardTitle></CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>التاريخ</TableHead><TableHead>اليوم</TableHead><TableHead>أول دخول</TableHead>
-                    <TableHead>آخر خروج</TableHead><TableHead>الساعات</TableHead><TableHead>الحالة</TableHead>
-                    <TableHead>تعديل الحالة</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.days.map((d) => (
-                    <TableRow key={d.date}>
-                      <TableCell className="font-mono">{d.date}</TableCell>
-                      <TableCell>{new Date(d.date + "T00:00:00Z").toLocaleDateString("ar", { weekday: "long", timeZone: "UTC" })}</TableCell>
-                      <TableCell>{fmt(d.check_in)}</TableCell>
-                      <TableCell>{fmt(d.check_out)}</TableCell>
-                      <TableCell>{d.hours > 0 ? d.hours.toFixed(2) : "—"}</TableCell>
-                      <TableCell>
+          <section aria-labelledby="month-days-title" className="space-y-3">
+            <div>
+              <h2 id="month-days-title" className="text-xl font-semibold">أيام شهر {month}</h2>
+              <p className="text-sm text-muted-foreground">اسحب أفقياً لعرض بقية أيام الشهر</p>
+            </div>
+            <div className="overflow-x-auto pb-3" dir="rtl">
+              <div className="flex w-max gap-3">
+                {data.days.map((d) => (
+                  <Card key={d.date} className="w-52 shrink-0 overflow-hidden">
+                    <CardHeader className="border-b bg-muted/40 p-3">
+                      <CardTitle className="flex items-center justify-between text-sm">
+                        <span>{new Date(d.date + "T00:00:00Z").toLocaleDateString("ar", { weekday: "long", timeZone: "UTC" })}</span>
+                        <span className="font-mono text-xs text-muted-foreground">{d.date.slice(8, 10)}</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3 p-3">
+                      <div className="flex min-h-6 items-center justify-between gap-2">
                         <Badge variant={d.status === "absent" ? "destructive" : "default"} className={STATUS_CLASS[d.status] ?? ""}>
                           {STATUS_LABEL[d.status] ?? d.status}
                         </Badge>
-                        {d.manual && <span className="text-[10px] text-muted-foreground mr-2">يدوي</span>}
-                      </TableCell>
-                      <TableCell>
-                        <Select
-                          value={d.manual ? d.status : "auto"}
-                          onValueChange={(v) => mut.mutate({ work_date: d.date, status: v === "auto" ? null : v })}
-                        >
-                          <SelectTrigger className="w-36 h-8"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="auto">تلقائي (البصمة)</SelectItem>
-                            <SelectItem value="present">حاضر</SelectItem>
-                            <SelectItem value="absent">غائب</SelectItem>
-                            <SelectItem value="leave">إجازة</SelectItem>
-                            <SelectItem value="holiday">عطلة</SelectItem>
-                            <SelectItem value="rest">راحة</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+                        <span className="text-xs font-semibold text-primary">
+                          إضافي: {d.overtime_hours > 0 ? `${d.overtime_hours.toFixed(2)} س` : "—"}
+                        </span>
+                      </div>
+                      <dl className="grid grid-cols-2 gap-x-2 gap-y-2 text-xs">
+                        <div><dt className="text-muted-foreground">أول دخول</dt><dd className="mt-0.5 font-medium">{fmt(d.check_in)}</dd></div>
+                        <div><dt className="text-muted-foreground">آخر خروج</dt><dd className="mt-0.5 font-medium">{fmt(d.check_out)}</dd></div>
+                        <div><dt className="text-muted-foreground">ساعات العمل</dt><dd className="mt-0.5 font-medium">{d.hours > 0 ? `${d.hours.toFixed(2)} س` : "—"}</dd></div>
+                        <div><dt className="text-muted-foreground">المصدر</dt><dd className="mt-0.5 font-medium">{d.manual ? "يدوي" : "البصمة"}</dd></div>
+                      </dl>
+                      <Select
+                        value={d.manual ? d.status : "auto"}
+                        onValueChange={(v) => mut.mutate({ work_date: d.date, status: v === "auto" ? null : v })}
+                      >
+                        <SelectTrigger className="h-8 w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="auto">تلقائي (البصمة)</SelectItem>
+                          <SelectItem value="present">حاضر</SelectItem>
+                          <SelectItem value="absent">غائب</SelectItem>
+                          <SelectItem value="leave">إجازة</SelectItem>
+                          <SelectItem value="holiday">عطلة</SelectItem>
+                          <SelectItem value="rest">راحة</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          </section>
         </>
       )}
     </div>

@@ -6,7 +6,16 @@ const monthSchema = z.object({ month: z.string().regex(/^\d{4}-\d{2}$/), employe
 
 function daysInMonth(month: string) {
   const [y, m] = month.split("-").map(Number);
-  return new Date(Date.UTC(y!, m!, 0)).getUTCDate();
+  if (!y || !m) return 0;
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
+
+function overtimeAfterShift(date: string, checkOut: string | null, endTime?: string | null) {
+  if (!checkOut || !endTime) return 0;
+  const shiftEnd = new Date(`${date}T${endTime}Z`).getTime();
+  const checkOutTime = new Date(checkOut).getTime();
+  if (!Number.isFinite(shiftEnd) || !Number.isFinite(checkOutTime)) return 0;
+  return Math.max(0, Math.round(((checkOutTime - shiftEnd) / 3600000) * 100) / 100);
 }
 
 // تقرير شهري لموظف واحد: كل يوم مع أول دخول وآخر خروج والساعات والحالة
@@ -20,7 +29,7 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
     const end = new Date(new Date(start + "T00:00:00Z").getTime() + total * 86400000).toISOString();
 
     const { data: emp } = await supabase.from("employees")
-      .select("id, employee_no, full_name, position, base_salary, departments(name), sites(name, ctr_code), wage_rates(title, daily_rate, monthly_rate, overtime_hour_rate)")
+      .select("id, employee_no, full_name, position, base_salary, departments(name), sites(name, ctr_code), shifts(name, start_time, end_time), wage_rates(title, daily_rate, monthly_rate, overtime_hour_rate)")
       .eq("id", data.employee_id).maybeSingle();
     if (!emp) throw new Error("الموظف غير موجود");
 
@@ -46,13 +55,14 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
 
     const days = [] as {
       date: string; check_in: string | null; check_out: string | null; hours: number;
-      status: string; manual: boolean; notes: string | null; punches: number;
+      overtime_hours: number; status: string; manual: boolean; notes: string | null; punches: number;
     }[];
+    const shift = (emp as any).shifts as { end_time?: string | null } | null;
     for (let i = 1; i <= total; i++) {
       const date = `${data.month}-${String(i).padStart(2, "0")}`;
       const times = byDay.get(date) ?? [];
       const first = times[0] ?? null;
-      const last = times.length > 1 ? times[times.length - 1]! : null;
+      const last = times.length > 1 ? (times[times.length - 1] ?? null) : null;
       const hours = first && last ? Math.max(0, Math.round(((new Date(last).getTime() - new Date(first).getTime()) / 3600000) * 100) / 100) : 0;
       const ov = ovMap.get(date) as any;
       days.push({
@@ -60,6 +70,7 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
         check_in: first,
         check_out: last,
         hours,
+        overtime_hours: overtimeAfterShift(date, last, shift?.end_time),
         status: ov?.status ?? (times.length ? "present" : "absent"),
         manual: !!ov,
         notes: ov?.notes ?? null,
@@ -72,6 +83,7 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
     const leaveDays = days.filter((d) => d.status === "leave").length;
     const holidayDays = days.filter((d) => d.status === "holiday" || d.status === "rest").length;
     const totalHours = Math.round(days.reduce((s, d) => s + d.hours, 0) * 100) / 100;
+    const totalOvertimeHours = Math.round(days.reduce((s, d) => s + d.overtime_hours, 0) * 100) / 100;
 
     const wage: any = (emp as any).wage_rates ?? null;
     const dailyRate = Number(wage?.daily_rate ?? 0);
@@ -82,7 +94,7 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
     return {
       employee: emp,
       days,
-      summary: { presentDays, absentDays, leaveDays, holidayDays, totalHours, workDays: total },
+      summary: { presentDays, absentDays, leaveDays, holidayDays, totalHours, totalOvertimeHours, workDays: total },
       payroll: {
         dailyRate, monthly, basePay,
         additions: additions ?? [],
