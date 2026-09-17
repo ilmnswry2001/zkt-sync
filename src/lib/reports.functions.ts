@@ -1,103 +1,164 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { buildAttendanceDays, loadAllRows, monthDates, summarizeDays } from "@/lib/monthly-report";
 import { z } from "zod";
 
-const monthSchema = z.object({ month: z.string().regex(/^\d{4}-\d{2}$/), employee_id: z.string().uuid() });
+const monthValue = z.string().regex(/^[1-9]\d{3}-(0[1-9]|1[0-2])$/);
+const monthSchema = z.object({ month: monthValue, employee_id: z.string().uuid() });
 
-function daysInMonth(month: string) {
-  const [y, m] = month.split("-").map(Number);
-  if (!y || !m) return 0;
-  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+function monthRange(month: string) {
+  const dates = monthDates(month);
+  const end = new Date(Date.parse(`${dates[0]}T00:00:00Z`) + dates.length * 86400000).toISOString();
+  return { dates, start: dates[0], end };
 }
 
-function overtimeAfterShift(date: string, checkOut: string | null, endTime?: string | null) {
-  if (!checkOut || !endTime) return 0;
-  const shiftEnd = new Date(`${date}T${endTime}Z`).getTime();
-  const checkOutTime = new Date(checkOut).getTime();
-  if (!Number.isFinite(shiftEnd) || !Number.isFinite(checkOutTime)) return 0;
-  return Math.max(0, Math.round(((checkOutTime - shiftEnd) / 3600000) * 100) / 100);
-}
+export const getMonthlySheet = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ month: monthValue }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = context;
+    const { dates, start, end } = monthRange(data.month);
+    const today = new Date().toISOString().slice(0, 10);
+    const employees = await loadAllRows((from, to) =>
+      supabase
+        .from("employees")
+        .select(
+          "id, employee_no, full_name, department_id, site_id, shift_id, departments(name), sites(name), shifts(name, end_time)",
+        )
+        .order("employee_no")
+        .order("id")
+        .range(from, to),
+    );
+    const rows = [];
+    for (let i = 0; i < employees.length; i += 100) {
+      const batch = employees.slice(i, i + 100);
+      const [logs, overrides] = await Promise.all([
+        loadAllRows((from, to) =>
+          supabase
+            .from("attendance_logs")
+            .select("employee_no, verify_time")
+            .in(
+              "employee_no",
+              batch.map((e) => e.employee_no),
+            )
+            .gte("verify_time", `${start}T00:00:00Z`)
+            .lt("verify_time", end)
+            .order("verify_time")
+            .order("id")
+            .range(from, to),
+        ),
+        loadAllRows((from, to) =>
+          supabase
+            .from("attendance_day_status")
+            .select("employee_id, work_date, status, notes")
+            .in(
+              "employee_id",
+              batch.map((e) => e.id),
+            )
+            .gte("work_date", start)
+            .lt("work_date", end.slice(0, 10))
+            .order("employee_id")
+            .order("work_date")
+            .range(from, to),
+        ),
+      ]);
+      const logsByEmployee = new Map<string, typeof logs>();
+      for (const log of logs) {
+        const entries = logsByEmployee.get(log.employee_no) ?? [];
+        entries.push(log);
+        logsByEmployee.set(log.employee_no, entries);
+      }
+      const overridesByEmployee = new Map<string, typeof overrides>();
+      for (const override of overrides) {
+        const entries = overridesByEmployee.get(override.employee_id) ?? [];
+        entries.push(override);
+        overridesByEmployee.set(override.employee_id, entries);
+      }
+      for (const employee of batch) {
+        const days = buildAttendanceDays(
+          dates,
+          logsByEmployee.get(employee.employee_no) ?? [],
+          overridesByEmployee.get(employee.id) ?? [],
+          employee.shifts?.end_time,
+          today,
+        );
+        rows.push({ employee, days, summary: summarizeDays(days) });
+      }
+    }
+    return { dates, rows, today };
+  });
 
-// تقرير شهري لموظف واحد: كل يوم مع أول دخول وآخر خروج والساعات والحالة
 export const getEmployeeMonthly = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => monthSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = context;
-    const start = `${data.month}-01`;
-    const total = daysInMonth(data.month);
-    const end = new Date(new Date(start + "T00:00:00Z").getTime() + total * 86400000).toISOString();
-
-    const { data: emp } = await supabase.from("employees")
-      .select("id, employee_no, full_name, position, base_salary, departments(name), sites(name, ctr_code), shifts(name, start_time, end_time), wage_rates(title, daily_rate, monthly_rate, overtime_hour_rate)")
-      .eq("id", data.employee_id).maybeSingle();
+    const { dates, start, end } = monthRange(data.month);
+    const { data: emp, error } = await supabase
+      .from("employees")
+      .select(
+        "id, employee_no, full_name, position, base_salary, departments(name), sites(name, ctr_code), shifts(name, start_time, end_time), wage_rates(title, daily_rate, monthly_rate, overtime_hour_rate, currency)",
+      )
+      .eq("id", data.employee_id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
     if (!emp) throw new Error("الموظف غير موجود");
 
-    const [{ data: logs }, { data: overrides }, { data: additions }] = await Promise.all([
-      supabase.from("attendance_logs").select("verify_time")
-        .eq("employee_no", (emp as any).employee_no)
-        .gte("verify_time", start + "T00:00:00Z").lt("verify_time", end)
-        .order("verify_time", { ascending: true }),
-      supabase.from("attendance_day_status").select("work_date, status, notes")
-        .eq("employee_id", data.employee_id)
-        .gte("work_date", start).lt("work_date", end.slice(0, 10)),
-      supabase.from("salary_additions").select("id, kind, description, amount")
-        .eq("employee_id", data.employee_id).eq("month", start),
+    const [logs, overrides, additions] = await Promise.all([
+      loadAllRows((from, to) =>
+        supabase
+          .from("attendance_logs")
+          .select("verify_time")
+          .eq("employee_no", emp.employee_no)
+          .gte("verify_time", `${start}T00:00:00Z`)
+          .lt("verify_time", end)
+          .order("verify_time")
+          .order("id")
+          .range(from, to),
+      ),
+      loadAllRows((from, to) =>
+        supabase
+          .from("attendance_day_status")
+          .select("work_date, status, notes")
+          .eq("employee_id", data.employee_id)
+          .gte("work_date", start)
+          .lt("work_date", end.slice(0, 10))
+          .order("work_date")
+          .range(from, to),
+      ),
+      loadAllRows((from, to) =>
+        supabase
+          .from("salary_additions")
+          .select("id, kind, description, amount")
+          .eq("employee_id", data.employee_id)
+          .eq("month", start)
+          .order("id")
+          .range(from, to),
+      ),
     ]);
-
-    const byDay = new Map<string, string[]>();
-    (logs ?? []).forEach((l: any) => {
-      const day = l.verify_time.slice(0, 10);
-      if (!byDay.has(day)) byDay.set(day, []);
-      byDay.get(day)!.push(l.verify_time);
-    });
-    const ovMap = new Map((overrides ?? []).map((o: any) => [o.work_date, o]));
-
-    const days = [] as {
-      date: string; check_in: string | null; check_out: string | null; hours: number;
-      overtime_hours: number; status: string; manual: boolean; notes: string | null; punches: number;
-    }[];
-    const shift = (emp as any).shifts as { end_time?: string | null } | null;
-    for (let i = 1; i <= total; i++) {
-      const date = `${data.month}-${String(i).padStart(2, "0")}`;
-      const times = byDay.get(date) ?? [];
-      const first = times[0] ?? null;
-      const last = times.length > 1 ? (times[times.length - 1] ?? null) : null;
-      const hours = first && last ? Math.max(0, Math.round(((new Date(last).getTime() - new Date(first).getTime()) / 3600000) * 100) / 100) : 0;
-      const ov = ovMap.get(date) as any;
-      days.push({
-        date,
-        check_in: first,
-        check_out: last,
-        hours,
-        overtime_hours: overtimeAfterShift(date, last, shift?.end_time),
-        status: ov?.status ?? (times.length ? "present" : "absent"),
-        manual: !!ov,
-        notes: ov?.notes ?? null,
-        punches: times.length,
-      });
-    }
-
-    const presentDays = days.filter((d) => d.status === "present").length;
-    const absentDays = days.filter((d) => d.status === "absent").length;
-    const leaveDays = days.filter((d) => d.status === "leave").length;
-    const holidayDays = days.filter((d) => d.status === "holiday" || d.status === "rest").length;
-    const totalHours = Math.round(days.reduce((s, d) => s + d.hours, 0) * 100) / 100;
-    const totalOvertimeHours = Math.round(days.reduce((s, d) => s + d.overtime_hours, 0) * 100) / 100;
-
-    const wage: any = (emp as any).wage_rates ?? null;
+    const days = buildAttendanceDays(
+      dates,
+      logs,
+      overrides,
+      emp.shifts?.end_time,
+      new Date().toISOString().slice(0, 10),
+    );
+    const summary = summarizeDays(days);
+    const wage = emp.wage_rates;
     const dailyRate = Number(wage?.daily_rate ?? 0);
-    const monthly = Number((emp as any).base_salary ?? wage?.monthly_rate ?? 0);
-    const basePay = dailyRate > 0 ? dailyRate * presentDays : monthly;
-    const additionsTotal = (additions ?? []).reduce((s: number, a: any) => s + Number(a.amount ?? 0), 0);
+    const monthly = Number(emp.base_salary ?? wage?.monthly_rate ?? 0);
+    const basePay = dailyRate > 0 ? dailyRate * summary.presentDays : monthly;
+    const additionsTotal = additions.reduce((sum, a) => sum + Number(a.amount ?? 0), 0);
 
     return {
       employee: emp,
       days,
-      summary: { presentDays, absentDays, leaveDays, holidayDays, totalHours, totalOvertimeHours, workDays: total },
+      summary,
       payroll: {
-        dailyRate, monthly, basePay,
-        additions: additions ?? [],
+        dailyRate,
+        monthly,
+        basePay,
+        additions,
         additionsTotal,
         total: Math.round((basePay + additionsTotal) * 100) / 100,
         currency: wage?.currency ?? "IQD",
@@ -105,31 +166,39 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
     };
   });
 
-// تعديل حالة يوم واحد
 export const setDayStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({
-    employee_id: z.string().uuid(),
-    work_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    status: z.enum(["present", "absent", "leave", "holiday", "rest"]).nullable(),
-    notes: z.string().max(300).nullable().optional(),
-  }).parse(d))
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        employee_id: z.string().uuid(),
+        work_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        status: z.enum(["present", "absent", "leave", "holiday", "rest"]).nullable(),
+        notes: z.string().max(300).nullable().optional(),
+      })
+      .parse(d),
+  )
   .handler(async ({ data, context }) => {
     const { supabase } = context;
     if (data.status === null) {
-      const { error } = await supabase.from("attendance_day_status").delete()
-        .eq("employee_id", data.employee_id).eq("work_date", data.work_date);
+      const { error } = await supabase
+        .from("attendance_day_status")
+        .delete()
+        .eq("employee_id", data.employee_id)
+        .eq("work_date", data.work_date);
       if (error) throw new Error(error.message);
       return { removed: true };
     }
-    const { error } = await supabase.from("attendance_day_status")
-      .upsert({
+    const { error } = await supabase.from("attendance_day_status").upsert(
+      {
         employee_id: data.employee_id,
         work_date: data.work_date,
         status: data.status,
         notes: data.notes ?? null,
         updated_by: context.userId,
-      }, { onConflict: "employee_id,work_date" });
+      },
+      { onConflict: "employee_id,work_date" },
+    );
     if (error) throw new Error(error.message);
     return { saved: true };
   });
