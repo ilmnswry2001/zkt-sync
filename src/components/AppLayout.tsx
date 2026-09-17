@@ -16,19 +16,6 @@ const nav = [
   { to: "/upload", label: "رفع ملفات البصمة", icon: Upload },
   { to: "/files", label: "سجل الملفات", icon: FileBox },
 ] as const;
-import { useAuth } from "@/hooks/use-auth";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-
-const nav = [
-  { to: "/dashboard", label: "لوحة التحكم", icon: LayoutDashboard },
-  { to: "/attendance", label: "الحضور والانصراف", icon: ClockIcon },
-  { to: "/employees", label: "الموظفون", icon: Users },
-  { to: "/departments", label: "الأقسام", icon: Building2 },
-  { to: "/devices", label: "الأجهزة", icon: Fingerprint },
-  { to: "/upload", label: "رفع ملفات البصمة", icon: Upload },
-  { to: "/files", label: "سجل الملفات", icon: FileBox },
-] as const;
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
