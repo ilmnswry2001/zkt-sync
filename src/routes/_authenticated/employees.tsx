@@ -76,6 +76,16 @@ function EmployeesPage() {
     queryKey: ["departments"],
     queryFn: async () => (await supabase.from("departments").select("id, name").order("name")).data ?? [],
   });
+  const { data: sites = [] } = useQuery({
+    queryKey: ["sites"],
+    queryFn: async () => (await supabase.from("sites").select("id, name, ctr_code").order("name")).data ?? [],
+  });
+  const { data: wages = [] } = useQuery({
+    queryKey: ["wage_rates"],
+    queryFn: async () => (await supabase.from("wage_rates").select("id, title").order("title")).data ?? [],
+  });
+  const ed = editing as any;
+
 
   const save = useMutation({
     mutationFn: async (d: any) => {
