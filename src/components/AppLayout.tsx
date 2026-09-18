@@ -1,5 +1,5 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
-import { LayoutDashboard, Users, Fingerprint, Building2, Upload, ClockIcon, FileBox, LogOut, ShieldCheck, CalendarDays, MapPinned, Wallet } from "lucide-react";
+import { LayoutDashboard, Users, Fingerprint, Building2, Upload, ClockIcon, FileBox, LogOut, ShieldCheck, CalendarDays, MapPinned, Wallet, FileSignature } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -8,6 +8,7 @@ const nav = [
   { to: "/dashboard", label: "لوحة التحكم", icon: LayoutDashboard },
   { to: "/attendance", label: "التقارير اليومية", icon: ClockIcon },
   { to: "/monthly", label: "التقرير الشهري", icon: CalendarDays },
+  { to: "/forms", label: "الاستمارات الإلكترونية", icon: FileSignature },
   { to: "/employees", label: "الموظفون", icon: Users },
   { to: "/departments", label: "الأقسام", icon: Building2 },
   { to: "/planning", label: "التخطيط والمواقع", icon: MapPinned },
