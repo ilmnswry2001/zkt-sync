@@ -21,7 +21,12 @@ export function monthDates(month: string) {
 export function buildAttendanceDays(
   dates: string[],
   logs: { verify_time: string }[],
-  overrides: { work_date: string; status: DayStatus; notes: string | null }[],
+  overrides: {
+    work_date: string;
+    status: DayStatus;
+    notes: string | null;
+    overtime_hours?: number | null;
+  }[],
   shiftEnd: string | null | undefined,
   today: string,
 ): AttendanceDay[] {
@@ -39,8 +44,13 @@ export function buildAttendanceDays(
     const last = times.length > 1 ? times[times.length - 1] : null;
     const override = manualDays.get(date);
     const hours = first && last ? (Date.parse(last) - Date.parse(first)) / 3600000 : 0;
+    const manualOvertime = Number(override?.overtime_hours ?? 0);
     const overtime =
-      last && shiftEnd ? (Date.parse(last) - Date.parse(`${date}T${shiftEnd}Z`)) / 3600000 : 0;
+      manualOvertime > 0
+        ? manualOvertime
+        : last && shiftEnd
+          ? (Date.parse(last) - Date.parse(`${date}T${shiftEnd}Z`)) / 3600000
+          : 0;
     return {
       date,
       check_in: first,
