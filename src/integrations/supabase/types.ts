@@ -20,6 +20,7 @@ export type Database = {
           employee_id: string
           id: string
           notes: string | null
+          overtime_hours: number
           status: Database["public"]["Enums"]["day_status"]
           updated_at: string
           updated_by: string | null
@@ -30,6 +31,7 @@ export type Database = {
           employee_id: string
           id?: string
           notes?: string | null
+          overtime_hours?: number
           status: Database["public"]["Enums"]["day_status"]
           updated_at?: string
           updated_by?: string | null
@@ -40,6 +42,7 @@ export type Database = {
           employee_id?: string
           id?: string
           notes?: string | null
+          overtime_hours?: number
           status?: Database["public"]["Enums"]["day_status"]
           updated_at?: string
           updated_by?: string | null
@@ -112,6 +115,35 @@ export type Database = {
             columns: ["upload_id"]
             isOneToOne: false
             referencedRelation: "uploaded_files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      department_managers: {
+        Row: {
+          created_at: string
+          department_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          department_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          department_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "department_managers_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
             referencedColumns: ["id"]
           },
         ]
@@ -351,6 +383,168 @@ export type Database = {
             columns: ["wage_rate_id"]
             isOneToOne: false
             referencedRelation: "wage_rates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      form_events: {
+        Row: {
+          action: string
+          actor: string | null
+          created_at: string
+          form_id: string
+          id: string
+          note: string | null
+        }
+        Insert: {
+          action: string
+          actor?: string | null
+          created_at?: string
+          form_id: string
+          id?: string
+          note?: string | null
+        }
+        Update: {
+          action?: string
+          actor?: string | null
+          created_at?: string
+          form_id?: string
+          id?: string
+          note?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_events_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "forms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      form_role_assignments: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["form_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["form_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["form_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      forms: {
+        Row: {
+          ceo_approved_at: string | null
+          ceo_approved_by: string | null
+          check_in: string | null
+          check_out: string | null
+          created_at: string
+          created_by: string | null
+          day_status: Database["public"]["Enums"]["day_status"] | null
+          department_id: string | null
+          employee_id: string
+          executed_at: string | null
+          executed_by: string | null
+          form_no: number
+          id: string
+          kind: Database["public"]["Enums"]["form_kind"]
+          manager_approved_at: string | null
+          manager_approved_by: string | null
+          overtime_hours: number
+          reason: string
+          rejected_at: string | null
+          rejected_by: string | null
+          rejection_reason: string | null
+          status: Database["public"]["Enums"]["form_status"]
+          target_department_id: string | null
+          updated_at: string
+          work_date: string
+        }
+        Insert: {
+          ceo_approved_at?: string | null
+          ceo_approved_by?: string | null
+          check_in?: string | null
+          check_out?: string | null
+          created_at?: string
+          created_by?: string | null
+          day_status?: Database["public"]["Enums"]["day_status"] | null
+          department_id?: string | null
+          employee_id: string
+          executed_at?: string | null
+          executed_by?: string | null
+          form_no?: number
+          id?: string
+          kind?: Database["public"]["Enums"]["form_kind"]
+          manager_approved_at?: string | null
+          manager_approved_by?: string | null
+          overtime_hours?: number
+          reason: string
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
+          status?: Database["public"]["Enums"]["form_status"]
+          target_department_id?: string | null
+          updated_at?: string
+          work_date: string
+        }
+        Update: {
+          ceo_approved_at?: string | null
+          ceo_approved_by?: string | null
+          check_in?: string | null
+          check_out?: string | null
+          created_at?: string
+          created_by?: string | null
+          day_status?: Database["public"]["Enums"]["day_status"] | null
+          department_id?: string | null
+          employee_id?: string
+          executed_at?: string | null
+          executed_by?: string | null
+          form_no?: number
+          id?: string
+          kind?: Database["public"]["Enums"]["form_kind"]
+          manager_approved_at?: string | null
+          manager_approved_by?: string | null
+          overtime_hours?: number
+          reason?: string
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
+          status?: Database["public"]["Enums"]["form_status"]
+          target_department_id?: string | null
+          updated_at?: string
+          work_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forms_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "forms_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "forms_target_department_id_fkey"
+            columns: ["target_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
             referencedColumns: ["id"]
           },
         ]
@@ -610,6 +804,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      has_form_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["form_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -624,6 +825,14 @@ export type Database = {
       day_status: "present" | "absent" | "leave" | "holiday" | "rest"
       device_status: "active" | "inactive" | "maintenance"
       employee_status: "active" | "inactive" | "terminated"
+      form_kind: "attendance" | "overtime" | "leave"
+      form_role: "dept_manager" | "ceo" | "executor"
+      form_status:
+        | "pending_manager"
+        | "pending_ceo"
+        | "pending_execution"
+        | "executed"
+        | "rejected"
       upload_status: "pending" | "processing" | "completed" | "failed"
     }
     CompositeTypes: {
@@ -756,6 +965,15 @@ export const Constants = {
       day_status: ["present", "absent", "leave", "holiday", "rest"],
       device_status: ["active", "inactive", "maintenance"],
       employee_status: ["active", "inactive", "terminated"],
+      form_kind: ["attendance", "overtime", "leave"],
+      form_role: ["dept_manager", "ceo", "executor"],
+      form_status: [
+        "pending_manager",
+        "pending_ceo",
+        "pending_execution",
+        "executed",
+        "rejected",
+      ],
       upload_status: ["pending", "processing", "completed", "failed"],
     },
   },
