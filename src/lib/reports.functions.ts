@@ -50,7 +50,7 @@ export const getMonthlySheet = createServerFn({ method: "GET" })
         loadAllRows((from, to) =>
           supabase
             .from("attendance_day_status")
-            .select("employee_id, work_date, status, notes")
+            .select("employee_id, work_date, status, notes, overtime_hours")
             .in(
               "employee_id",
               batch.map((e) => e.id),
@@ -119,7 +119,7 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
       loadAllRows((from, to) =>
         supabase
           .from("attendance_day_status")
-          .select("work_date, status, notes")
+          .select("work_date, status, notes, overtime_hours")
           .eq("employee_id", data.employee_id)
           .gte("work_date", start)
           .lt("work_date", end.slice(0, 10))
