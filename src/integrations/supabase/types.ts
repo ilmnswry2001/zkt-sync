@@ -245,6 +245,7 @@ export type Database = {
           notes: string | null
           passport_expiry: string | null
           passport_no: string | null
+          pay_type: string
           phone1: string | null
           phone2: string | null
           position: string | null
@@ -292,6 +293,7 @@ export type Database = {
           notes?: string | null
           passport_expiry?: string | null
           passport_no?: string | null
+          pay_type?: string
           phone1?: string | null
           phone2?: string | null
           position?: string | null
@@ -339,6 +341,7 @@ export type Database = {
           notes?: string | null
           passport_expiry?: string | null
           passport_no?: string | null
+          pay_type?: string
           phone1?: string | null
           phone2?: string | null
           position?: string | null

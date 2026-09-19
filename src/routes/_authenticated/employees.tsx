@@ -63,14 +63,24 @@ function EmployeesPage() {
   }
 
 
-  const { data: rows = [] } = useQuery({
-    queryKey: ["employees"],
+  const [limit, setLimit] = useState(50);
+  const { data: rows = [], isFetching } = useQuery({
+    queryKey: ["employees", search, limit],
     queryFn: async () => {
-      const { data, error } = await supabase.from("employees")
-        .select("*, departments(name)").order("employee_no");
+      let q = supabase.from("employees").select("*, departments(name)");
+      const term = search.trim();
+      if (term) q = q.or(`employee_no.ilike.%${term}%,full_name.ilike.%${term}%`);
+      const { data, error } = await q
+        .order("created_at", { ascending: false })
+        .order("employee_no")
+        .limit(limit);
       if (error) throw error;
       return data as Emp[];
     },
+  });
+  const { data: totalCount = 0 } = useQuery({
+    queryKey: ["employees_count"],
+    queryFn: async () => (await supabase.from("employees").select("id", { count: "exact", head: true })).count ?? 0,
   });
   const { data: depts = [] } = useQuery({
     queryKey: ["departments"],
@@ -92,23 +102,23 @@ function EmployeesPage() {
       if (editing) { const { error } = await supabase.from("employees").update(d).eq("id", editing.id); if (error) throw error; }
       else { const { error } = await supabase.from("employees").insert(d); if (error) throw error; }
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); setOpen(false); setEditing(null); toast.success("تم الحفظ"); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); qc.invalidateQueries({ queryKey: ["employees_count"] }); setOpen(false); setEditing(null); toast.success("تم الحفظ"); },
     onError: (e: any) => toast.error(e.message),
   });
   const del = useMutation({
     mutationFn: async (id: string) => { const { error } = await supabase.from("employees").delete().eq("id", id); if (error) throw error; },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); toast.success("تم الحذف"); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); qc.invalidateQueries({ queryKey: ["employees_count"] }); toast.success("تم الحذف"); },
     onError: (e: any) => toast.error(e.message),
   });
 
-  const filtered = rows.filter((r) => !search || r.employee_no.includes(search) || r.full_name.toLowerCase().includes(search.toLowerCase()));
+  const filtered = rows;
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">الموظفون</h1>
-          <p className="text-muted-foreground mt-1">إجمالي: {rows.length} موظف</p>
+          <p className="text-muted-foreground mt-1">إجمالي: {totalCount} موظف</p>
         </div>
         <div className="flex items-center gap-2">
           <input id="emp-excel" type="file" accept=".xlsx,.xls" className="hidden"
@@ -133,6 +143,7 @@ function EmployeesPage() {
                 position: g("position"),
                 status: f.get("status") as any,
                 base_salary: n("base_salary"),
+                pay_type: (f.get("pay_type") as string) || "monthly",
                 erp_no: g("erp_no"), id_no: g("id_no"), ctr_code: g("ctr_code"),
                 nationality: g("nationality"), gender: g("gender"), marital_status: g("marital_status"),
                 blood_type: g("blood_type"), education: g("education"),
@@ -202,6 +213,16 @@ function EmployeesPage() {
                       <SelectContent>
                         <SelectItem value="none">— بدون —</SelectItem>
                         {wages.map((w: any) => <SelectItem key={w.id} value={w.id}>{w.title}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>تصنيف الأجر *</Label>
+                    <Select name="pay_type" defaultValue={ed?.pay_type ?? "monthly"}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="monthly">شهري</SelectItem>
+                        <SelectItem value="daily">يومي (تُحتسب أيام الجمعة بأجر)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -295,14 +316,15 @@ function EmployeesPage() {
         </CardHeader>
         <CardContent>
           <Table>
-            <TableHeader><TableRow><TableHead>الرقم</TableHead><TableHead>الاسم</TableHead><TableHead>القسم</TableHead><TableHead>المنصب</TableHead><TableHead>الحالة</TableHead><TableHead></TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>الرقم</TableHead><TableHead>الاسم</TableHead><TableHead>القسم</TableHead><TableHead>المنصب</TableHead><TableHead>تصنيف الأجر</TableHead><TableHead>الحالة</TableHead><TableHead></TableHead></TableRow></TableHeader>
             <TableBody>
-              {filtered.slice(0, 200).map((e) => (
+              {filtered.map((e) => (
                 <TableRow key={e.id}>
                   <TableCell className="font-mono">{e.employee_no}</TableCell>
                   <TableCell className="font-medium">{e.full_name}</TableCell>
                   <TableCell>{e.departments?.name ?? "-"}</TableCell>
                   <TableCell>{e.position ?? "-"}</TableCell>
+                  <TableCell>{(e as any).pay_type === "daily" ? "يومي" : "شهري"}</TableCell>
                   <TableCell><Badge variant={e.status === "active" ? "default" : "secondary"}>{e.status === "active" ? "نشط" : "معطل"}</Badge></TableCell>
                   <TableCell>
                     <div className="flex gap-1">
@@ -312,10 +334,17 @@ function EmployeesPage() {
                   </TableCell>
                 </TableRow>
               ))}
-              {!filtered.length && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">لا توجد بيانات</TableCell></TableRow>}
+              {!filtered.length && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">لا توجد بيانات</TableCell></TableRow>}
             </TableBody>
           </Table>
-          {filtered.length > 200 && <p className="text-xs text-muted-foreground mt-3">يتم عرض أول 200 نتيجة فقط — استخدم البحث للتصفية.</p>}
+          <div className="mt-4 flex items-center justify-center gap-3">
+            <p className="text-xs text-muted-foreground">يتم عرض {filtered.length} من {totalCount}</p>
+            {filtered.length >= limit && (
+              <Button variant="outline" size="sm" disabled={isFetching} onClick={() => setLimit(limit + 50)}>
+                {isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : "عرض المزيد"}
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>

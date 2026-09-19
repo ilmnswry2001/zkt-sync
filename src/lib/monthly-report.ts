@@ -65,12 +65,15 @@ export function buildAttendanceDays(
   });
 }
 
+export const isFriday = (date: string) => new Date(`${date}T00:00:00Z`).getUTCDay() === 5;
+
 export function summarizeDays(days: AttendanceDay[]) {
   return {
     presentDays: days.filter((d) => d.status === "present").length,
     absentDays: days.filter((d) => d.status === "absent").length,
     leaveDays: days.filter((d) => d.status === "leave").length,
     holidayDays: days.filter((d) => d.status === "holiday" || d.status === "rest").length,
+    fridayDays: days.filter((d) => isFriday(d.date)).length,
     totalHours: Math.round(days.reduce((sum, d) => sum + d.hours, 0) * 100) / 100,
     totalOvertimeHours: Math.round(days.reduce((sum, d) => sum + d.overtime_hours, 0) * 100) / 100,
     workDays: days.length,

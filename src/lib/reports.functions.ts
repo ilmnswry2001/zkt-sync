@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { buildAttendanceDays, loadAllRows, monthDates, summarizeDays } from "@/lib/monthly-report";
+import { buildAttendanceDays, isFriday, loadAllRows, monthDates, summarizeDays } from "@/lib/monthly-report";
 import { z } from "zod";
 
 const monthValue = z.string().regex(/^[1-9]\d{3}-(0[1-9]|1[0-2])$/);
@@ -97,7 +97,7 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
     const { data: emp, error } = await supabase
       .from("employees")
       .select(
-        "id, employee_no, full_name, position, base_salary, departments(name), sites(name, ctr_code), shifts(name, start_time, end_time), wage_rates(title, daily_rate, monthly_rate, overtime_hour_rate, currency)",
+        "id, employee_no, full_name, position, base_salary, pay_type, departments(name), sites(name, ctr_code), shifts(name, start_time, end_time), wage_rates(title, daily_rate, monthly_rate, overtime_hour_rate, currency)",
       )
       .eq("id", data.employee_id)
       .maybeSingle();
@@ -147,7 +147,13 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
     const wage = emp.wage_rates;
     const dailyRate = Number(wage?.daily_rate ?? 0);
     const monthly = Number(emp.base_salary ?? wage?.monthly_rate ?? 0);
-    const basePay = dailyRate > 0 ? dailyRate * summary.presentDays : monthly;
+    const isDaily = emp.pay_type === "daily";
+    // الموظف اليومي: تُحتسب له أيام الجمعة بأجر إضافة إلى أيام حضوره
+    const paidFridays = isDaily
+      ? days.filter((d) => isFriday(d.date) && d.status !== "present").length
+      : 0;
+    const paidDays = summary.presentDays + paidFridays;
+    const basePay = isDaily ? dailyRate * paidDays : monthly;
     const additionsTotal = additions.reduce((sum, a) => sum + Number(a.amount ?? 0), 0);
 
     return {
@@ -155,8 +161,11 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
       days,
       summary,
       payroll: {
+        payType: isDaily ? ("daily" as const) : ("monthly" as const),
         dailyRate,
         monthly,
+        paidFridays,
+        paidDays,
         basePay,
         additions,
         additionsTotal,

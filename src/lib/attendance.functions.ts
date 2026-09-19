@@ -36,50 +36,23 @@ export const ingestZkData = createServerFn({ method: "POST" })
       .eq("id", data.upload_id);
 
     try {
-      // 1. Upsert departments (by external_id → name)
-      const deptMap = new Map<number, string>();
-      if (data.departments.length) {
-        for (const d of data.departments) {
-          const { data: existing } = await supabase.from("departments").select("id").eq("name", d.name).maybeSingle();
-          let id = existing?.id as string | undefined;
-          if (!id) {
-            const { data: created } = await supabase.from("departments")
-              .insert({ name: d.name, external_id: d.external_id })
-              .select("id").single();
-            id = created?.id;
-          }
-          if (id) deptMap.set(d.external_id, id);
-        }
-      }
-
-      // 2. Upsert employees (by employee_no = user_pin)
+      // ملفات البصمة تُستخدم للحضور فقط: لا يتم إنشاء أو تعديل بيانات الموظفين أو الأقسام.
+      // الربط يتم عبر الرقم التعريفي للموظف (employee_no) الموجود مسبقاً في النظام.
+      const pins = [...new Set(data.logs.map((l) => l.user_pin))];
       const empIdByPin = new Map<string, string>();
-      const empBatch = data.users.filter((u) => u.user_pin && u.user_pin !== "0").map((u) => ({
-        employee_no: u.user_pin,
-        full_name: u.name || u.user_pin,
-        privilege: u.privilege,
-        department_id: deptMap.get(u.dept_id) ?? null,
-      }));
-      // chunk upsert (500)
-      for (let i = 0; i < empBatch.length; i += 500) {
-        const chunk = empBatch.slice(i, i + 500);
-        const { data: rows, error } = await supabase.from("employees")
-          .upsert(chunk, { onConflict: "employee_no", ignoreDuplicates: false })
-          .select("id, employee_no");
+      for (let i = 0; i < pins.length; i += 500) {
+        const chunk = pins.slice(i, i + 500);
+        const { data: rows, error } = await supabase
+          .from("employees")
+          .select("id, employee_no")
+          .in("employee_no", chunk);
         if (error) throw error;
         rows?.forEach((r: any) => empIdByPin.set(r.employee_no, r.id));
       }
-      // fetch any missing IDs (employees that already existed and weren't returned)
-      const missing = empBatch.map((e) => e.employee_no).filter((pin) => !empIdByPin.has(pin));
-      for (let i = 0; i < missing.length; i += 500) {
-        const chunk = missing.slice(i, i + 500);
-        const { data: rows } = await supabase.from("employees").select("id, employee_no").in("employee_no", chunk);
-        rows?.forEach((r: any) => empIdByPin.set(r.employee_no, r.id));
-      }
+      const unmatched = pins.filter((p) => !empIdByPin.has(p)).length;
 
-      // 3. Insert attendance logs (skip duplicates via UNIQUE constraint)
+      // إدراج سجلات البصمة (تجاهل المكرر)
       const logRows = data.logs.map((l) => {
-        // verify_time is in format YYYY-MM-DDTHH:MM:SS, treat as device local time → UTC ISO
         const t = l.verify_time.length >= 19 ? l.verify_time + "Z" : new Date(l.verify_time).toISOString();
         return {
           employee_no: l.user_pin,
@@ -116,7 +89,7 @@ export const ingestZkData = createServerFn({ method: "POST" })
         await supabase.from("devices").update({ last_sync_at: new Date().toISOString() }).eq("id", data.device_id);
       }
 
-      return { success: true, inserted, users: data.users.length, departments: data.departments.length };
+      return { success: true, inserted, users: data.users.length, departments: 0, unmatched };
     } catch (e: any) {
       await supabase.from("uploaded_files").update({
         status: "failed",
