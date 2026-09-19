@@ -111,14 +111,14 @@ function EmployeesPage() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const filtered = rows.filter((r) => !search || r.employee_no.includes(search) || r.full_name.toLowerCase().includes(search.toLowerCase()));
+  const filtered = rows;
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">الموظفون</h1>
-          <p className="text-muted-foreground mt-1">إجمالي: {rows.length} موظف</p>
+          <p className="text-muted-foreground mt-1">إجمالي: {totalCount} موظف</p>
         </div>
         <div className="flex items-center gap-2">
           <input id="emp-excel" type="file" accept=".xlsx,.xls" className="hidden"
@@ -143,6 +143,7 @@ function EmployeesPage() {
                 position: g("position"),
                 status: f.get("status") as any,
                 base_salary: n("base_salary"),
+                pay_type: (f.get("pay_type") as string) || "monthly",
                 erp_no: g("erp_no"), id_no: g("id_no"), ctr_code: g("ctr_code"),
                 nationality: g("nationality"), gender: g("gender"), marital_status: g("marital_status"),
                 blood_type: g("blood_type"), education: g("education"),
