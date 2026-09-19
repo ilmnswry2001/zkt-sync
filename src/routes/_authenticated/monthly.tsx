@@ -707,7 +707,8 @@ function EmployeeDetails({
                 <div key={label}>
                   <dt className="text-xs text-muted-foreground">{label}</dt>
                   <dd className="mt-1 font-semibold">
-                    {value.toLocaleString()} {data.payroll.currency}
+                    {value.toLocaleString()}{" "}
+                    {label.includes("أيام") || label.includes("الأيام") ? "يوم" : data.payroll.currency}
                   </dd>
                 </div>
               ))}

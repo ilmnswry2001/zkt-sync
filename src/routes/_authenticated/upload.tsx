@@ -73,7 +73,7 @@ function UploadPage() {
 
       setProgress(100); setStep("اكتمل!");
       setResult({ users: res.users, logs: parsed.logs.length, inserted: res.inserted, departments: res.departments });
-      toast.success(`تم إدراج ${res.inserted} سجل حضور جديد`);
+      toast.success(`تم إدراج ${res.inserted} سجل حضور جديد${res.unmatched ? ` — ${res.unmatched} رقم بصمة غير مرتبط بموظف في النظام` : ""}`);
       setFile(null);
     } catch (e: any) {
       toast.error("فشل: " + (e?.message ?? e));
