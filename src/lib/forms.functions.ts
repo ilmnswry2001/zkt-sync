@@ -166,7 +166,7 @@ export const actOnForm = createServerFn({ method: "POST" })
       Object.assign(patch, { status: "executed", executed_by: userId, executed_at: now });
     }
 
-    const { error: updateError } = await supabase.from("forms").update(patch).eq("id", form.id);
+    const { error: updateError } = await supabase.from("forms").update(patch as never).eq("id", form.id);
     if (updateError) throw new Error(updateError.message);
     await supabase
       .from("form_events")
