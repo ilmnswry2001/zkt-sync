@@ -55,6 +55,7 @@ const summaryColumns = [
   { key: "absentDays", label: "غياب", className: "text-red-600" },
   { key: "leaveDays", label: "إجازة", className: "text-blue-600" },
   { key: "holidayDays", label: "عطلة / راحة", className: "" },
+  { key: "fridayDays", label: "أيام الجمعة", className: "text-indigo-600" },
   { key: "totalHours", label: "الساعات", className: "" },
   { key: "totalOvertimeHours", label: "الإضافي", className: "" },
 ] as const;
@@ -687,14 +688,22 @@ function EmployeeDetails({
             ))}
           </div>
           <section className="border-t pt-4">
-            <h3 className="mb-3 font-semibold">ملخص الأجر</h3>
+            <h3 className="mb-3 font-semibold">
+              ملخص الأجر — {data.payroll.payType === "daily" ? "موظف يومي" : "موظف شهري"}
+            </h3>
             <dl className="grid grid-cols-2 gap-4">
-              {[
+              {([
                 ["الأجر اليومي", data.payroll.dailyRate],
+                ...(data.payroll.payType === "daily"
+                  ? ([
+                      ["أيام الجمعة المحتسبة", data.payroll.paidFridays],
+                      ["الأيام المدفوعة", data.payroll.paidDays],
+                    ] as [string, number][])
+                  : []),
                 ["أجر الحضور", data.payroll.basePay],
                 ["الإضافات والمكافآت", data.payroll.additionsTotal],
                 ["الإجمالي المستحق", data.payroll.total],
-              ].map(([label, value]) => (
+              ] as [string, number][]).map(([label, value]) => (
                 <div key={label}>
                   <dt className="text-xs text-muted-foreground">{label}</dt>
                   <dd className="mt-1 font-semibold">
