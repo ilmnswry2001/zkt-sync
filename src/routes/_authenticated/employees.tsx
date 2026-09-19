@@ -63,14 +63,24 @@ function EmployeesPage() {
   }
 
 
-  const { data: rows = [] } = useQuery({
-    queryKey: ["employees"],
+  const [limit, setLimit] = useState(50);
+  const { data: rows = [], isFetching } = useQuery({
+    queryKey: ["employees", search, limit],
     queryFn: async () => {
-      const { data, error } = await supabase.from("employees")
-        .select("*, departments(name)").order("employee_no");
+      let q = supabase.from("employees").select("*, departments(name)");
+      const term = search.trim();
+      if (term) q = q.or(`employee_no.ilike.%${term}%,full_name.ilike.%${term}%`);
+      const { data, error } = await q
+        .order("created_at", { ascending: false })
+        .order("employee_no")
+        .limit(limit);
       if (error) throw error;
       return data as Emp[];
     },
+  });
+  const { data: totalCount = 0 } = useQuery({
+    queryKey: ["employees_count"],
+    queryFn: async () => (await supabase.from("employees").select("id", { count: "exact", head: true })).count ?? 0,
   });
   const { data: depts = [] } = useQuery({
     queryKey: ["departments"],
