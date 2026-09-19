@@ -102,12 +102,12 @@ function EmployeesPage() {
       if (editing) { const { error } = await supabase.from("employees").update(d).eq("id", editing.id); if (error) throw error; }
       else { const { error } = await supabase.from("employees").insert(d); if (error) throw error; }
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); setOpen(false); setEditing(null); toast.success("تم الحفظ"); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); qc.invalidateQueries({ queryKey: ["employees_count"] }); setOpen(false); setEditing(null); toast.success("تم الحفظ"); },
     onError: (e: any) => toast.error(e.message),
   });
   const del = useMutation({
     mutationFn: async (id: string) => { const { error } = await supabase.from("employees").delete().eq("id", id); if (error) throw error; },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); toast.success("تم الحذف"); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); qc.invalidateQueries({ queryKey: ["employees_count"] }); toast.success("تم الحذف"); },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -216,6 +216,16 @@ function EmployeesPage() {
                       </SelectContent>
                     </Select>
                   </div>
+                  <div>
+                    <Label>تصنيف الأجر *</Label>
+                    <Select name="pay_type" defaultValue={ed?.pay_type ?? "monthly"}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="monthly">شهري</SelectItem>
+                        <SelectItem value="daily">يومي (تُحتسب أيام الجمعة بأجر)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div><Label>الراتب الأساسي</Label><Input name="base_salary" type="number" step="0.01" defaultValue={ed?.base_salary ?? ""} /></div>
                   <div><Label>نوع الراتب</Label><Input name="salary_type" defaultValue={ed?.salary_type ?? ""} /></div>
                   <div><Label>هيكل الراتب</Label><Input name="salary_structure" defaultValue={ed?.salary_structure ?? ""} /></div>
@@ -306,14 +316,15 @@ function EmployeesPage() {
         </CardHeader>
         <CardContent>
           <Table>
-            <TableHeader><TableRow><TableHead>الرقم</TableHead><TableHead>الاسم</TableHead><TableHead>القسم</TableHead><TableHead>المنصب</TableHead><TableHead>الحالة</TableHead><TableHead></TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>الرقم</TableHead><TableHead>الاسم</TableHead><TableHead>القسم</TableHead><TableHead>المنصب</TableHead><TableHead>تصنيف الأجر</TableHead><TableHead>الحالة</TableHead><TableHead></TableHead></TableRow></TableHeader>
             <TableBody>
-              {filtered.slice(0, 200).map((e) => (
+              {filtered.map((e) => (
                 <TableRow key={e.id}>
                   <TableCell className="font-mono">{e.employee_no}</TableCell>
                   <TableCell className="font-medium">{e.full_name}</TableCell>
                   <TableCell>{e.departments?.name ?? "-"}</TableCell>
                   <TableCell>{e.position ?? "-"}</TableCell>
+                  <TableCell>{(e as any).pay_type === "daily" ? "يومي" : "شهري"}</TableCell>
                   <TableCell><Badge variant={e.status === "active" ? "default" : "secondary"}>{e.status === "active" ? "نشط" : "معطل"}</Badge></TableCell>
                   <TableCell>
                     <div className="flex gap-1">
@@ -323,10 +334,17 @@ function EmployeesPage() {
                   </TableCell>
                 </TableRow>
               ))}
-              {!filtered.length && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">لا توجد بيانات</TableCell></TableRow>}
+              {!filtered.length && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">لا توجد بيانات</TableCell></TableRow>}
             </TableBody>
           </Table>
-          {filtered.length > 200 && <p className="text-xs text-muted-foreground mt-3">يتم عرض أول 200 نتيجة فقط — استخدم البحث للتصفية.</p>}
+          <div className="mt-4 flex items-center justify-center gap-3">
+            <p className="text-xs text-muted-foreground">يتم عرض {filtered.length} من {totalCount}</p>
+            {filtered.length >= limit && (
+              <Button variant="outline" size="sm" disabled={isFetching} onClick={() => setLimit(limit + 50)}>
+                {isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : "عرض المزيد"}
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>
