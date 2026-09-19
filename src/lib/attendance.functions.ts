@@ -89,7 +89,7 @@ export const ingestZkData = createServerFn({ method: "POST" })
         await supabase.from("devices").update({ last_sync_at: new Date().toISOString() }).eq("id", data.device_id);
       }
 
-      return { success: true, inserted, users: data.users.length, departments: data.departments.length };
+      return { success: true, inserted, users: data.users.length, departments: 0, unmatched };
     } catch (e: any) {
       await supabase.from("uploaded_files").update({
         status: "failed",
