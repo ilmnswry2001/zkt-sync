@@ -70,7 +70,7 @@ export const ingestZkData = createServerFn({ method: "POST" })
       for (let i = 0; i < logRows.length; i += 1000) {
         const chunk = logRows.slice(i, i + 1000);
         const { data: rows, error } = await supabase.from("attendance_logs")
-          .upsert(chunk, { onConflict: "employee_no,verify_time,device_id", ignoreDuplicates: true })
+          .upsert(chunk, { onConflict: "employee_no,verify_time", ignoreDuplicates: true })
           .select("id");
         if (error) throw error;
         inserted += rows?.length ?? 0;
