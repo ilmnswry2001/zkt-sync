@@ -23,7 +23,7 @@ export const getMonthlySheet = createServerFn({ method: "GET" })
       supabase
         .from("employees")
         .select(
-          "id, employee_no, full_name, department_id, site_id, shift_id, departments(name), sites(name), shifts(name, end_time)",
+          "id, employee_no, full_name, pay_type, department_id, site_id, shift_id, departments(name), sites(name), shifts(name, end_time)",
         )
         .order("employee_no")
         .order("id")
