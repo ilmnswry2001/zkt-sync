@@ -1,4 +1,8 @@
 export type DayStatus = "present" | "absent" | "leave" | "holiday" | "rest";
+export type ComputedStatus = DayStatus | "incomplete";
+export type PayType = "daily" | "monthly";
+
+export const FRIDAY_OVERTIME_HOURS = 10;
 
 export type AttendanceDay = {
   date: string;
@@ -6,7 +10,7 @@ export type AttendanceDay = {
   check_out: string | null;
   hours: number;
   overtime_hours: number;
-  status: DayStatus | null;
+  status: ComputedStatus | null;
   manual: boolean;
   notes: string | null;
   punches: number;
