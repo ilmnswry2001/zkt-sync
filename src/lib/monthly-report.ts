@@ -1,4 +1,8 @@
 export type DayStatus = "present" | "absent" | "leave" | "holiday" | "rest";
+export type ComputedStatus = DayStatus | "incomplete";
+export type PayType = "daily" | "monthly";
+
+export const FRIDAY_OVERTIME_HOURS = 10;
 
 export type AttendanceDay = {
   date: string;
@@ -6,7 +10,7 @@ export type AttendanceDay = {
   check_out: string | null;
   hours: number;
   overtime_hours: number;
-  status: DayStatus | null;
+  status: ComputedStatus | null;
   manual: boolean;
   notes: string | null;
   punches: number;
@@ -29,6 +33,7 @@ export function buildAttendanceDays(
   }[],
   shiftEnd: string | null | undefined,
   today: string,
+  payType: PayType = "monthly",
 ): AttendanceDay[] {
   const byDay = new Map<string, string[]>();
   for (const log of logs) {
@@ -42,22 +47,37 @@ export function buildAttendanceDays(
     const times = (byDay.get(date) ?? []).sort();
     const first = times[0] ?? null;
     const last = times.length > 1 ? times[times.length - 1] : null;
+    // بصمة واحدة فقط (دخول أو خروج) = يوم غير مكتمل ولا يُحتسب حضوراً
+    const complete = times.length > 1;
+    const friday = isFriday(date);
     const override = manualDays.get(date);
-    const hours = first && last ? (Date.parse(last) - Date.parse(first)) / 3600000 : 0;
+    const hours = complete && first && last ? (Date.parse(last) - Date.parse(first)) / 3600000 : 0;
     const manualOvertime = Number(override?.overtime_hours ?? 0);
-    const overtime =
+    let overtime =
       manualOvertime > 0
         ? manualOvertime
-        : last && shiftEnd
+        : complete && last && shiftEnd
           ? (Date.parse(last) - Date.parse(`${date}T${shiftEnd}Z`)) / 3600000
           : 0;
+    if (!Number.isFinite(overtime)) overtime = 0;
+    // دوام فعلي يوم الجمعة يُمنح 10 ساعات وقت إضافي لأي موظف
+    if (friday && complete && manualOvertime <= 0) overtime = FRIDAY_OVERTIME_HOURS;
+    const auto: ComputedStatus | null = complete
+      ? "present"
+      : times.length === 1
+        ? "incomplete"
+        : friday
+          ? "rest" // WO: راحة أسبوعية (مدفوعة للشهري فقط)
+          : date <= today
+            ? "absent"
+            : null;
     return {
       date,
       check_in: first,
-      check_out: last,
+      check_out: complete ? last : null,
       hours: Math.max(0, Math.round(hours * 100) / 100),
-      overtime_hours: Number.isFinite(overtime) ? Math.max(0, Math.round(overtime * 100) / 100) : 0,
-      status: override?.status ?? (times.length ? "present" : date <= today ? "absent" : null),
+      overtime_hours: Math.max(0, Math.round(overtime * 100) / 100),
+      status: override?.status ?? auto,
       manual: !!override,
       notes: override?.notes ?? null,
       punches: times.length,
@@ -72,11 +92,42 @@ export function summarizeDays(days: AttendanceDay[]) {
     presentDays: days.filter((d) => d.status === "present").length,
     absentDays: days.filter((d) => d.status === "absent").length,
     leaveDays: days.filter((d) => d.status === "leave").length,
+    incompleteDays: days.filter((d) => d.status === "incomplete").length,
     holidayDays: days.filter((d) => d.status === "holiday" || d.status === "rest").length,
+    woDays: days.filter((d) => isFriday(d.date) && d.status === "rest").length,
     fridayDays: days.filter((d) => isFriday(d.date)).length,
     totalHours: Math.round(days.reduce((sum, d) => sum + d.hours, 0) * 100) / 100,
     totalOvertimeHours: Math.round(days.reduce((sum, d) => sum + d.overtime_hours, 0) * 100) / 100,
     workDays: days.length,
+  };
+}
+
+// حساب الأجر المستحق: الشهري = (الراتب ÷ أيام الشهر) × (أيام الحضور + أيام WO)، اليومي = الأجر اليومي × أيام العمل الفعلية
+export function calculatePayroll(options: {
+  payType: PayType;
+  monthlySalary: number;
+  dailyRate: number;
+  daysInMonth: number;
+  summary: ReturnType<typeof summarizeDays>;
+}) {
+  const { payType, monthlySalary, dailyRate, daysInMonth, summary } = options;
+  const isDaily = payType === "daily";
+  const dayRate = isDaily
+    ? dailyRate
+    : daysInMonth
+      ? Math.round((monthlySalary / daysInMonth) * 100) / 100
+      : 0;
+  const woDays = isDaily ? 0 : summary.woDays;
+  const workedDays = summary.presentDays;
+  const paidDays = workedDays + woDays;
+  return {
+    payType,
+    dayRate,
+    workedDays,
+    woDays,
+    paidDays,
+    overtimeHours: summary.totalOvertimeHours,
+    basePay: Math.round(dayRate * paidDays * 100) / 100,
   };
 }
 

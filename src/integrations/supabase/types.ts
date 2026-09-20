@@ -688,6 +688,7 @@ export type Database = {
       }
       uploaded_files: {
         Row: {
+          content_hash: string | null
           created_at: string
           device_id: string | null
           device_serial: string | null
@@ -696,6 +697,7 @@ export type Database = {
           file_size: number | null
           id: string
           inserted_logs: number | null
+          is_duplicate: boolean
           logs_count: number | null
           processed_at: string | null
           status: Database["public"]["Enums"]["upload_status"]
@@ -704,6 +706,7 @@ export type Database = {
           users_count: number | null
         }
         Insert: {
+          content_hash?: string | null
           created_at?: string
           device_id?: string | null
           device_serial?: string | null
@@ -712,6 +715,7 @@ export type Database = {
           file_size?: number | null
           id?: string
           inserted_logs?: number | null
+          is_duplicate?: boolean
           logs_count?: number | null
           processed_at?: string | null
           status?: Database["public"]["Enums"]["upload_status"]
@@ -720,6 +724,7 @@ export type Database = {
           users_count?: number | null
         }
         Update: {
+          content_hash?: string | null
           created_at?: string
           device_id?: string | null
           device_serial?: string | null
@@ -728,6 +733,7 @@ export type Database = {
           file_size?: number | null
           id?: string
           inserted_logs?: number | null
+          is_duplicate?: boolean
           logs_count?: number | null
           processed_at?: string | null
           status?: Database["public"]["Enums"]["upload_status"]

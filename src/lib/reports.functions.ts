@@ -1,6 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { buildAttendanceDays, isFriday, loadAllRows, monthDates, summarizeDays } from "@/lib/monthly-report";
+import {
+  buildAttendanceDays,
+  calculatePayroll,
+  loadAllRows,
+  monthDates,
+  summarizeDays,
+} from "@/lib/monthly-report";
 import { z } from "zod";
 
 const monthValue = z.string().regex(/^[1-9]\d{3}-(0[1-9]|1[0-2])$/);
@@ -23,7 +29,7 @@ export const getMonthlySheet = createServerFn({ method: "GET" })
       supabase
         .from("employees")
         .select(
-          "id, employee_no, full_name, department_id, site_id, shift_id, departments(name), sites(name), shifts(name, end_time)",
+          "id, employee_no, full_name, pay_type, department_id, site_id, shift_id, departments(name), sites(name), shifts(name, end_time)",
         )
         .order("employee_no")
         .order("id")
@@ -81,6 +87,7 @@ export const getMonthlySheet = createServerFn({ method: "GET" })
           overridesByEmployee.get(employee.id) ?? [],
           employee.shifts?.end_time,
           today,
+          employee.pay_type === "daily" ? "daily" : "monthly",
         );
         rows.push({ employee, days, summary: summarizeDays(days) });
       }
@@ -136,24 +143,25 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
           .range(from, to),
       ),
     ]);
+    const payType = emp.pay_type === "daily" ? ("daily" as const) : ("monthly" as const);
     const days = buildAttendanceDays(
       dates,
       logs,
       overrides,
       emp.shifts?.end_time,
       new Date().toISOString().slice(0, 10),
+      payType,
     );
     const summary = summarizeDays(days);
     const wage = emp.wage_rates;
-    const dailyRate = Number(wage?.daily_rate ?? 0);
     const monthly = Number(emp.base_salary ?? wage?.monthly_rate ?? 0);
-    const isDaily = emp.pay_type === "daily";
-    // الموظف اليومي: تُحتسب له أيام الجمعة بأجر إضافة إلى أيام حضوره
-    const paidFridays = isDaily
-      ? days.filter((d) => isFriday(d.date) && d.status !== "present").length
-      : 0;
-    const paidDays = summary.presentDays + paidFridays;
-    const basePay = isDaily ? dailyRate * paidDays : monthly;
+    const pay = calculatePayroll({
+      payType,
+      monthlySalary: monthly,
+      dailyRate: Number(wage?.daily_rate ?? 0),
+      daysInMonth: dates.length,
+      summary,
+    });
     const additionsTotal = additions.reduce((sum, a) => sum + Number(a.amount ?? 0), 0);
 
     return {
@@ -161,15 +169,12 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
       days,
       summary,
       payroll: {
-        payType: isDaily ? ("daily" as const) : ("monthly" as const),
-        dailyRate,
+        ...pay,
+        dailyRate: pay.dayRate,
         monthly,
-        paidFridays,
-        paidDays,
-        basePay,
         additions,
         additionsTotal,
-        total: Math.round((basePay + additionsTotal) * 100) / 100,
+        total: Math.round((pay.basePay + additionsTotal) * 100) / 100,
         currency: wage?.currency ?? "IQD",
       },
     };
