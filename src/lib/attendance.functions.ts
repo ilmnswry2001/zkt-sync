@@ -187,3 +187,26 @@ export const getDailyReport = createServerFn({ method: "GET" })
     });
     return { rows };
   });
+
+// حذف ملفات مرفوعة مع سجلات البصمة الناتجة عنها
+export const deleteUploads = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ ids: z.array(z.string().uuid()).min(1).max(200) }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = context;
+    const { data: files, error: readErr } = await supabase
+      .from("uploaded_files")
+      .select("id, storage_path")
+      .in("id", data.ids);
+    if (readErr) throw new Error(readErr.message);
+
+    const { error: logErr } = await supabase.from("attendance_logs").delete().in("upload_id", data.ids);
+    if (logErr) throw new Error(logErr.message);
+
+    const paths = (files ?? []).map((f) => f.storage_path).filter(Boolean);
+    if (paths.length) await supabase.storage.from("zk-backups").remove(paths);
+
+    const { error } = await supabase.from("uploaded_files").delete().in("id", data.ids);
+    if (error) throw new Error(error.message);
+    return { deleted: data.ids.length };
+  });
