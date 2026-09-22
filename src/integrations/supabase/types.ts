@@ -644,6 +644,102 @@ export type Database = {
         }
         Relationships: []
       }
+      report_catalog_items: {
+        Row: {
+          created_at: string
+          id: string
+          is_archived: boolean
+          kind: string
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_archived?: boolean
+          kind: string
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_archived?: boolean
+          kind?: string
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      site_daily_reports: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          report_date: string
+          site_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          report_date: string
+          site_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          report_date?: string
+          site_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      site_daily_report_lines: {
+        Row: {
+          catalog_item_id: string | null
+          created_at: string
+          id: string
+          idle_count: number
+          item_name: string
+          kind: string
+          report_id: string
+          total_count: number
+          working_count: number
+        }
+        Insert: {
+          catalog_item_id?: string | null
+          created_at?: string
+          id?: string
+          idle_count?: number
+          item_name: string
+          kind: string
+          report_id: string
+          total_count?: number
+          working_count?: number
+        }
+        Update: {
+          catalog_item_id?: string | null
+          created_at?: string
+          id?: string
+          idle_count?: number
+          item_name?: string
+          kind?: string
+          report_id?: string
+          total_count?: number
+          working_count?: number
+        }
+        Relationships: []
+      }
       sites: {
         Row: {
           client: string | null

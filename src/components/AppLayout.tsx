@@ -1,5 +1,21 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
-import { LayoutDashboard, Users, Fingerprint, Building2, Upload, ClockIcon, FileBox, LogOut, ShieldCheck, CalendarDays, MapPinned, Wallet, FileSignature } from "lucide-react";
+import {
+  LayoutDashboard,
+  Users,
+  Fingerprint,
+  Building2,
+  Upload,
+  ClockIcon,
+  FileBox,
+  LogOut,
+  ShieldCheck,
+  CalendarDays,
+  MapPinned,
+  Wallet,
+  FileSignature,
+  BarChart3,
+  Settings2,
+} from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -7,6 +23,7 @@ import { cn } from "@/lib/utils";
 const nav = [
   { to: "/dashboard", label: "لوحة التحكم", icon: LayoutDashboard },
   { to: "/attendance", label: "التقارير اليومية", icon: ClockIcon },
+  { to: "/company-report", label: "تقرير الشركة الكامل", icon: BarChart3, access: "hr" },
   { to: "/monthly", label: "التقرير الشهري", icon: CalendarDays },
   { to: "/forms", label: "الاستمارات الإلكترونية", icon: FileSignature },
   { to: "/employees", label: "الموظفون", icon: Users },
@@ -16,6 +33,7 @@ const nav = [
   { to: "/devices", label: "الأجهزة", icon: Fingerprint },
   { to: "/upload", label: "رفع ملفات البصمة", icon: Upload },
   { to: "/files", label: "سجل الملفات", icon: FileBox },
+  { to: "/settings", label: "الإعدادات", icon: Settings2, access: "admin" },
 ] as const;
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -39,6 +57,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
         <nav className="flex-1 p-3 space-y-1">
           {nav.map((item) => {
+            if (item.access === "admin" && !isAdmin) return null;
+            if (item.access === "hr" && !isHR) return null;
             const active = pathname === item.to || pathname.startsWith(item.to + "/");
             const Icon = item.icon;
             return (
@@ -63,7 +83,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="font-semibold truncate">{user?.email}</div>
             <div className="flex gap-1 mt-1 flex-wrap">
               {roles.map((r) => (
-                <span key={r} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-sidebar-accent/30 text-[10px]">
+                <span
+                  key={r}
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-sidebar-accent/30 text-[10px]"
+                >
                   <ShieldCheck className="w-3 h-3" /> {r}
                 </span>
               ))}
@@ -74,7 +97,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             variant="ghost"
             size="sm"
             className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-border/40"
-            onClick={async () => { await signOut(); navigate({ to: "/auth" }); }}
+            onClick={async () => {
+              await signOut();
+              navigate({ to: "/auth" });
+            }}
           >
             <LogOut className="w-4 h-4 ml-2" /> تسجيل الخروج
           </Button>
