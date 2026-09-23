@@ -15,7 +15,10 @@ import {
   FileSignature,
   BarChart3,
   Settings2,
+  PanelRightClose,
+  PanelRightOpen,
 } from "lucide-react";
+import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -40,11 +43,28 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { user, roles, isAdmin, isHR, signOut } = useAuth();
   const navigate = useNavigate();
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.localStorage.getItem("zkt-sidebar-hidden") !== "true";
+  });
+  const toggleSidebar = () => {
+    setSidebarOpen((open) => {
+      const next = !open;
+      window.localStorage.setItem("zkt-sidebar-hidden", String(!next));
+      return next;
+    });
+  };
 
   return (
     <div dir="rtl" className="min-h-screen flex bg-background">
-      <aside className="w-64 bg-sidebar text-sidebar-foreground flex flex-col border-l border-sidebar-border">
-        <div className="p-6 border-b border-sidebar-border">
+      <aside
+        className={cn(
+          "shrink-0 bg-sidebar text-sidebar-foreground flex flex-col border-l border-sidebar-border transition-[width] duration-200 overflow-hidden",
+          sidebarOpen ? "w-64" : "w-0 border-0",
+        )}
+        aria-hidden={!sidebarOpen}
+      >
+        <div className="p-4 border-b border-sidebar-border flex items-center justify-between min-w-64">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-sidebar-accent flex items-center justify-center">
               <Fingerprint className="w-5 h-5 text-sidebar-accent-foreground" />
@@ -54,8 +74,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <p className="text-xs opacity-70">ZKTeco Attendance</p>
             </div>
           </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleSidebar}
+            title="إخفاء اللوحة الجانبية"
+            aria-label="إخفاء اللوحة الجانبية"
+          >
+            <PanelRightClose className="w-4 h-4" />
+          </Button>
         </div>
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className="flex-1 p-3 space-y-1 min-w-64">
           {nav.map((item) => {
             if (item.access === "admin" && !isAdmin) return null;
             if (item.access === "hr" && !isHR) return null;
@@ -78,16 +107,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
-        <div className="p-3 border-t border-sidebar-border space-y-2">
+        <div className="p-3 border-t border-sidebar-border space-y-2 min-w-64">
           <div className="px-3 py-2 text-xs">
             <div className="font-semibold truncate">{user?.email}</div>
             <div className="flex gap-1 mt-1 flex-wrap">
-              {roles.map((r) => (
+              {roles.map((role) => (
                 <span
-                  key={r}
+                  key={role}
                   className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-sidebar-accent/30 text-[10px]"
                 >
-                  <ShieldCheck className="w-3 h-3" /> {r}
+                  <ShieldCheck className="w-3 h-3" /> {role}
                 </span>
               ))}
               {isAdmin && <span className="text-[10px] opacity-70">مدير</span>}
@@ -107,7 +136,21 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
       <main className="min-w-0 flex-1 overflow-auto">
-        <div className="p-8 max-w-7xl mx-auto">{children}</div>
+        <div className="p-8 max-w-7xl mx-auto">
+          {!sidebarOpen && (
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={toggleSidebar}
+              title="إظهار اللوحة الجانبية"
+              aria-label="إظهار اللوحة الجانبية"
+              className="mb-4"
+            >
+              <PanelRightOpen className="w-4 h-4" />
+            </Button>
+          )}
+          {children}
+        </div>
       </main>
     </div>
   );

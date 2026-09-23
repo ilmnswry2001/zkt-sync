@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   ClipboardList,
+  AlertTriangle,
   FileDown,
   FileText,
   HardHat,
@@ -31,6 +32,7 @@ import {
 } from "lucide-react";
 import { printReport } from "@/lib/report-print";
 import { toast } from "sonner";
+import { readLocalCatalog, type CatalogItem, type CatalogKind } from "@/lib/report-catalog";
 
 export const Route = createFileRoute("/_authenticated/attendance")({
   head: () => ({ meta: [{ title: "التقارير اليومية" }] }),
@@ -38,15 +40,7 @@ export const Route = createFileRoute("/_authenticated/attendance")({
 });
 
 type ReportType = "workers" | "equipment";
-type CatalogKind = "worker_specialty" | "equipment_type";
 type Site = { id: string; name: string; ctr_code?: string | null };
-type CatalogItem = {
-  id: string;
-  kind: CatalogKind;
-  name: string;
-  sort_order: number;
-  is_archived: boolean;
-};
 type ReportLine = {
   id: string;
   catalog_item_id: string | null;
@@ -104,8 +98,8 @@ function AttendancePage() {
         .order("kind")
         .order("sort_order")
         .order("name");
-      if (error) throw error;
-      return (data ?? []) as CatalogItem[];
+      if (error || !data?.length) return { items: readLocalCatalog(), usingFallback: true };
+      return { items: (data ?? []) as CatalogItem[], usingFallback: false };
     },
   });
   const reportsQuery = useQuery({
@@ -134,7 +128,8 @@ function AttendancePage() {
     },
   });
   const sites = useMemo(() => sitesQuery.data ?? [], [sitesQuery.data]);
-  const catalogs = useMemo(() => catalogQuery.data ?? [], [catalogQuery.data]);
+  const catalogs = useMemo(() => catalogQuery.data?.items ?? [], [catalogQuery.data]);
+  const usingCatalogFallback = catalogQuery.data?.usingFallback ?? false;
   const reports = reportsQuery.data ?? [];
   const activeWorkers = useMemo(
     () => catalogs.filter((item) => item.kind === "worker_specialty" && !item.is_archived),
@@ -330,6 +325,23 @@ function AttendancePage() {
         <h1 className="text-3xl font-bold">التقارير اليومية</h1>
         <p className="text-muted-foreground mt-1">تقارير الحضور وأعمال المواقع حسب التاريخ</p>
       </div>
+      {usingCatalogFallback && (
+        <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+          <div>
+            <b>قائمة التخصصات جاهزة:</b> يتم عرض التخصصات المحفوظة محلياً مؤقتاً إلى أن تتم مزامنة
+            جداول التقارير مع قاعدة البيانات.
+          </div>
+        </div>
+      )}
+      {catalogQuery.error && (
+        <p className="text-destructive">تعذر تحميل التخصصات: {catalogQuery.error.message}</p>
+      )}
+      {reportsQuery.error && (
+        <p className="text-destructive">
+          تعذر تحميل التقارير المحفوظة: {reportsQuery.error.message}
+        </p>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <button
           onClick={() => setActiveTab("sites")}

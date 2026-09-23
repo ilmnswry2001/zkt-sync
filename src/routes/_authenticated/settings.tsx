@@ -7,7 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  AlertTriangle,
   ArrowDown,
   ArrowUp,
   Archive,
@@ -19,9 +21,16 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  newCatalogId,
+  readLocalCatalog,
+  writeLocalCatalog,
+  type CatalogItem,
+  type CatalogKind,
+} from "@/lib/report-catalog";
 
 export const Route = createFileRoute("/_authenticated/settings")({
-  head: () => ({ meta: [{ title: "إعدادات التقارير" }] }),
+  head: () => ({ meta: [{ title: "الإعدادات" }] }),
   beforeLoad: async () => {
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) throw redirect({ to: "/auth" });
@@ -34,14 +43,25 @@ export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
 });
 
-type CatalogKind = "worker_specialty" | "equipment_type";
-type CatalogItem = {
-  id: string;
-  kind: CatalogKind;
-  name: string;
-  sort_order: number;
-  is_archived: boolean;
+const BASIC_SETTINGS_KEY = "zkt-basic-settings";
+
+type BasicSettings = {
+  systemName: string;
+  companyManager: string;
 };
+
+function readBasicSettings(): BasicSettings {
+  if (typeof window === "undefined") return { systemName: "نظام الحضور", companyManager: "" };
+  try {
+    const value = JSON.parse(window.localStorage.getItem(BASIC_SETTINGS_KEY) ?? "null");
+    return {
+      systemName: typeof value?.systemName === "string" ? value.systemName : "نظام الحضور",
+      companyManager: typeof value?.companyManager === "string" ? value.companyManager : "",
+    };
+  } catch {
+    return { systemName: "نظام الحضور", companyManager: "" };
+  }
+}
 
 function SettingsPage() {
   const queryClient = useQueryClient();
@@ -51,111 +71,155 @@ function SettingsPage() {
   });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
+  const [basicSettings, setBasicSettings] = useState<BasicSettings>(readBasicSettings);
   const catalogQuery = useQuery({
     queryKey: ["report-catalogs", "all"],
-    queryFn: async () => {
+    queryFn: async (): Promise<{ items: CatalogItem[]; usingFallback: boolean }> => {
       const { data, error } = await supabase
         .from("report_catalog_items")
         .select("id, kind, name, sort_order, is_archived")
         .order("kind")
         .order("sort_order")
         .order("name");
-      if (error) throw error;
-      return (data ?? []) as CatalogItem[];
+      if (error || !data?.length) return { items: readLocalCatalog(), usingFallback: true };
+      return { items: (data ?? []) as CatalogItem[], usingFallback: false };
     },
   });
-  const items = catalogQuery.data ?? [];
+  const items = catalogQuery.data?.items ?? [];
+  const usingFallback = catalogQuery.data?.usingFallback ?? false;
   const workers = items.filter((item) => item.kind === "worker_specialty");
   const equipment = items.filter((item) => item.kind === "equipment_type");
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["report-catalogs"] });
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(BASIC_SETTINGS_KEY, JSON.stringify(basicSettings));
+    }
+  }, [basicSettings]);
+
   const addItem = async (kind: CatalogKind) => {
     const name = newNames[kind].trim();
-    if (!name) return toast.error("اكتب اسم البند أولاً");
+    if (!name) return toast.error("اكتب اسم التخصص أو البند أولاً");
+    if (items.some((item) => item.kind === kind && item.name.trim() === name)) {
+      return toast.error("هذا الاسم موجود مسبقاً");
+    }
     const maxOrder = Math.max(
       0,
       ...items.filter((item) => item.kind === kind).map((item) => item.sort_order),
     );
-    const { error } = await supabase
-      .from("report_catalog_items")
-      .insert({ kind, name, sort_order: maxOrder + 10 });
-    if (error)
-      return toast.error(
-        error.message.includes("duplicate") ? "هذا الاسم موجود مسبقاً" : error.message,
-      );
+    if (usingFallback) {
+      writeLocalCatalog([
+        ...items,
+        { id: newCatalogId(), kind, name, sort_order: maxOrder + 10, is_archived: false },
+      ]);
+    } else {
+      const { error } = await supabase
+        .from("report_catalog_items")
+        .insert({ kind, name, sort_order: maxOrder + 10 });
+      if (error) return toast.error(error.message);
+    }
     setNewNames((current) => ({ ...current, [kind]: "" }));
     await refresh();
-    toast.success("تمت إضافة البند");
+    toast.success("تمت إضافة البند وسيظهر فوراً في تقرير المواقع");
   };
+
   const saveName = async (item: CatalogItem) => {
     const name = editingName.trim();
     if (!name) return toast.error("لا يمكن ترك الاسم فارغاً");
-    const { error } = await supabase
-      .from("report_catalog_items")
-      .update({ name })
-      .eq("id", item.id);
-    if (error) return toast.error(error.message);
+    if (usingFallback) {
+      writeLocalCatalog(items.map((entry) => (entry.id === item.id ? { ...entry, name } : entry)));
+    } else {
+      const { error } = await supabase
+        .from("report_catalog_items")
+        .update({ name })
+        .eq("id", item.id);
+      if (error) return toast.error(error.message);
+    }
     setEditingId(null);
     await refresh();
     toast.success("تم تعديل الاسم");
   };
+
   const archive = async (item: CatalogItem) => {
-    const { error } = await supabase
-      .from("report_catalog_items")
-      .update({ is_archived: !item.is_archived })
-      .eq("id", item.id);
-    if (error) return toast.error(error.message);
+    if (usingFallback) {
+      writeLocalCatalog(
+        items.map((entry) =>
+          entry.id === item.id ? { ...entry, is_archived: !item.is_archived } : entry,
+        ),
+      );
+    } else {
+      const { error } = await supabase
+        .from("report_catalog_items")
+        .update({ is_archived: !item.is_archived })
+        .eq("id", item.id);
+      if (error) return toast.error(error.message);
+    }
     await refresh();
     toast.success(item.is_archived ? "تمت إعادة تفعيل البند" : "تمت أرشفة البند");
   };
+
   const move = async (list: CatalogItem[], item: CatalogItem, direction: -1 | 1) => {
     const index = list.findIndex((entry) => entry.id === item.id);
     const target = list[index + direction];
     if (!target) return;
-    const { error } = await supabase.from("report_catalog_items").upsert([
-      {
-        id: item.id,
-        kind: item.kind,
-        name: item.name,
-        sort_order: target.sort_order,
-        is_archived: item.is_archived,
-      },
-      {
-        id: target.id,
-        kind: target.kind,
-        name: target.name,
-        sort_order: item.sort_order,
-        is_archived: target.is_archived,
-      },
-    ]);
-    if (error) return toast.error(error.message);
+    if (usingFallback) {
+      writeLocalCatalog(
+        items.map((entry) => {
+          if (entry.id === item.id) return { ...entry, sort_order: target.sort_order };
+          if (entry.id === target.id) return { ...entry, sort_order: item.sort_order };
+          return entry;
+        }),
+      );
+    } else {
+      const { error } = await supabase.from("report_catalog_items").upsert([
+        {
+          id: item.id,
+          kind: item.kind,
+          name: item.name,
+          sort_order: target.sort_order,
+          is_archived: item.is_archived,
+        },
+        {
+          id: target.id,
+          kind: target.kind,
+          name: target.name,
+          sort_order: item.sort_order,
+          is_archived: target.is_archived,
+        },
+      ]);
+      if (error) return toast.error(error.message);
+    }
     await refresh();
   };
+
   const renderCatalog = (title: string, kind: CatalogKind, list: CatalogItem[]) => (
     <Card>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
         <p className="text-sm text-muted-foreground">
-          رتّب البنود كما تريد ظهورها في نموذج التقرير اليومي. الأرشفة لا تحذفها من التقارير
+          كل بند نشط يظهر تلقائياً في نموذج تقرير المواقع اليومية. الأرشفة لا تحذف البند من التقارير
           السابقة.
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex gap-2">
           <div className="flex-1">
-            <Label>إضافة بند جديد</Label>
+            <Label>
+              {kind === "worker_specialty" ? "إضافة تخصص جديد" : "إضافة نوع آلية أو مركبة"}
+            </Label>
             <Input
               value={newNames[kind]}
               onChange={(e) => setNewNames((current) => ({ ...current, [kind]: e.target.value }))}
               onKeyDown={(e) => {
                 if (e.key === "Enter") void addItem(kind);
               }}
-              placeholder="اكتب الاسم..."
+              placeholder={
+                kind === "worker_specialty" ? "مثال: مهندس اتصالات" : "مثال: سيارة صالون"
+              }
             />
           </div>
           <Button className="mt-6" onClick={() => void addItem(kind)}>
-            <Plus className="w-4 h-4 ml-2" />
-            إضافة
+            <Plus className="w-4 h-4 ml-2" /> إضافة
           </Button>
         </div>
         <div className="divide-y rounded-lg border">
@@ -246,25 +310,83 @@ function SettingsPage() {
       </CardContent>
     </Card>
   );
+
   return (
     <div className="space-y-6">
       <div>
         <div className="flex items-center gap-2">
           <Settings2 className="w-7 h-7 text-primary" />
-          <h1 className="text-3xl font-bold">إعدادات التقارير</h1>
+          <h1 className="text-3xl font-bold">الإعدادات</h1>
         </div>
         <p className="text-muted-foreground mt-1">
-          إدارة القوائم التي تظهر في تقارير المواقع اليومية
+          إدارة التقارير اليومية والإعدادات الأساسية للنظام
         </p>
       </div>
-      {catalogQuery.isLoading ? (
-        <p className="text-muted-foreground">جارٍ التحميل...</p>
-      ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          {renderCatalog("التخصصات — العاملون", "worker_specialty", workers)}
-          {renderCatalog("أنواع الآليات والمركبات", "equipment_type", equipment)}
-        </div>
-      )}
+      <Tabs defaultValue="reports" dir="rtl">
+        <TabsList className="h-auto flex-wrap justify-start">
+          <TabsTrigger value="reports">إعدادات التقارير اليومية</TabsTrigger>
+          <TabsTrigger value="basic">الإعدادات الأساسية</TabsTrigger>
+        </TabsList>
+        <TabsContent value="reports" className="space-y-5">
+          {usingFallback && (
+            <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+              <div>
+                <b>وضع توافق مؤقت:</b> جدول الإعدادات لم تتم مزامنته بعد مع قاعدة البيانات؛ التخصصات
+                المعروضة والإضافات محفوظة في هذا المتصفح وستظهر فوراً في التقارير اليومية.
+              </div>
+            </div>
+          )}
+          {catalogQuery.error && (
+            <p className="text-destructive">
+              تعذر تحميل قائمة التخصصات: {catalogQuery.error.message}
+            </p>
+          )}
+          {catalogQuery.isLoading ? (
+            <p className="text-muted-foreground">جارٍ تحميل التخصصات والآليات...</p>
+          ) : (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              {renderCatalog("التخصصات — العاملون", "worker_specialty", workers)}
+              {renderCatalog("أنواع الآليات والمركبات", "equipment_type", equipment)}
+            </div>
+          )}
+        </TabsContent>
+        <TabsContent value="basic">
+          <Card>
+            <CardHeader>
+              <CardTitle>الإعدادات الأساسية</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                هذه البيانات تحفظ محلياً حالياً إلى أن تتم مزامنة جدول إعدادات النظام.
+              </p>
+            </CardHeader>
+            <CardContent className="max-w-xl space-y-5">
+              <div>
+                <Label>اسم النظام</Label>
+                <Input
+                  value={basicSettings.systemName}
+                  onChange={(e) =>
+                    setBasicSettings((current) => ({ ...current, systemName: e.target.value }))
+                  }
+                  placeholder="نظام الحضور"
+                />
+              </div>
+              <div>
+                <Label>اسم مدير الشركة</Label>
+                <Input
+                  value={basicSettings.companyManager}
+                  onChange={(e) =>
+                    setBasicSettings((current) => ({ ...current, companyManager: e.target.value }))
+                  }
+                  placeholder="اكتب اسم مدير الشركة"
+                />
+              </div>
+              <Button onClick={() => toast.success("تم حفظ الإعدادات الأساسية")}>
+                حفظ الإعدادات
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
