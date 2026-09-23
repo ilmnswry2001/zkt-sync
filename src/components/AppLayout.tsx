@@ -38,7 +38,7 @@ const nav = [
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { user, roles, isAdmin, signOut } = useAuth();
+  const { user, roles, isAdmin, isHR, signOut } = useAuth();
   const navigate = useNavigate();
 
   return (
