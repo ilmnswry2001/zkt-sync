@@ -68,24 +68,35 @@ function CompanyReportPage() {
   const query = useQuery({
     queryKey: ["company-report-data", from, to],
     queryFn: async () => {
-      const [sitesResult, reportsResult, linesResult] = await Promise.all([
+      const [sitesResult, reportsResult] = await Promise.all([
         supabase.from("sites").select("id, name, ctr_code").order("name"),
         supabase
           .from("site_daily_reports")
           .select("id, site_id, report_date, notes")
           .gte("report_date", from)
           .lte("report_date", to),
-        supabase
-          .from("site_daily_report_lines")
-          .select("report_id, kind, item_name, total_count, working_count, idle_count"),
       ]);
       if (sitesResult.error) throw sitesResult.error;
       if (reportsResult.error) throw reportsResult.error;
-      if (linesResult.error) throw linesResult.error;
+      const reports = (reportsResult.data ?? []) as Report[];
+      const reportIds = reports.map((report) => report.id);
+      const lineChunks = Array.from({ length: Math.ceil(reportIds.length / 100) }, (_, index) =>
+        reportIds.slice(index * 100, index * 100 + 100),
+      );
+      const lineResults = await Promise.all(
+        lineChunks.map((ids) =>
+          supabase
+            .from("site_daily_report_lines")
+            .select("report_id, kind, item_name, total_count, working_count, idle_count")
+            .in("report_id", ids),
+        ),
+      );
+      const lineError = lineResults.find((result) => result.error)?.error;
+      if (lineError) throw lineError;
       return {
         sites: (sitesResult.data ?? []) as Site[],
-        reports: (reportsResult.data ?? []) as Report[],
-        lines: (linesResult.data ?? []) as Line[],
+        reports,
+        lines: lineResults.flatMap((result) => result.data ?? []) as Line[],
       };
     },
   });
@@ -127,22 +138,17 @@ function CompanyReportPage() {
       (a, b) => a.kind.localeCompare(b.kind) || a.itemName.localeCompare(b.itemName, "ar"),
     );
   }, [data.lines, reportIds, kindFilter]);
-  const missing = useMemo(
-    () =>
-      data.sites
-        .flatMap((site) =>
-          dateList(from, to)
-            .filter(
-              (date) =>
-                !data.reports.some(
-                  (report) => report.site_id === site.id && report.report_date === date,
-                ),
-            )
-            .map((date) => ({ site, date })),
-        )
-        .filter(({ site }) => siteFilter === "all" || site.id === siteFilter),
-    [data.sites, data.reports, from, to, siteFilter],
-  );
+  const missing = useMemo(() => {
+    const reportKeys = new Set(data.reports.map((report) => `${report.site_id}:${report.report_date}`));
+    return data.sites
+      .flatMap((site) =>
+        dateList(from, to)
+          .filter((date) => !reportKeys.has(`${site.id}:${date}`))
+          .map((date) => ({ site, date })),
+      )
+      .filter(({ site }) => siteFilter === "all" || site.id === siteFilter);
+  }, [data.sites, data.reports, from, to, siteFilter]);
+  const visibleMissing = missing.slice(0, 500);
   const total = aggregate.reduce((sum, row) => sum + row.total, 0);
   const formatDate = (value: string) => new Date(`${value}T00:00:00`).toLocaleDateString("ar-IQ");
   const exportPdf = () => {
@@ -152,7 +158,7 @@ function CompanyReportPage() {
           `<tr><td>${row.kind === "worker_specialty" ? "عاملون" : "آليات ومركبات"}</td><td>${row.itemName}</td><td>${row.total}</td></tr>`,
       )
       .join("");
-    const missingRows = missing
+    const missingRows = visibleMissing
       .map((entry) => `<tr><td>${entry.site.name}</td><td>${formatDate(entry.date)}</td></tr>`)
       .join("");
     const ok = printReport(
@@ -285,7 +291,7 @@ function CompanyReportPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {missing.map((entry) => (
+                {visibleMissing.map((entry) => (
                   <TableRow key={`${entry.site.id}-${entry.date}`}>
                     <TableCell className="font-medium">{entry.site.name}</TableCell>
                     <TableCell>{formatDate(entry.date)}</TableCell>
@@ -299,6 +305,11 @@ function CompanyReportPage() {
           ) : (
             <p className="py-6 text-center text-success">
               كل المواقع رفعت تقاريرها خلال الفترة المحددة.
+            </p>
+          )}
+          {missing.length > visibleMissing.length && (
+            <p className="mt-3 text-sm text-muted-foreground text-center">
+              تم عرض أول {visibleMissing.length.toLocaleString("ar-IQ")} حالة من أصل {missing.length.toLocaleString("ar-IQ")} لتجنب تجمّد المتصفح.
             </p>
           )}
         </CardContent>
