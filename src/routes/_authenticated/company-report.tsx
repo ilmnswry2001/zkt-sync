@@ -15,7 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { BarChart3, FileDown, TriangleAlert } from "lucide-react";
+import { BarChart3, FileDown, Loader2, Search, TriangleAlert } from "lucide-react";
 import { printReport } from "@/lib/report-print";
 import { toast } from "sonner";
 
@@ -59,26 +59,38 @@ const dateList = (from: string, to: string) => {
   for (let current = from; current <= to; current = addDays(current, 1)) dates.push(current);
   return dates;
 };
+const daysBetween = (from: string, to: string) => {
+  const start = new Date(`${from}T00:00:00`).getTime();
+  const end = new Date(`${to}T00:00:00`).getTime();
+  return Math.floor((end - start) / 86400000) + 1;
+};
 
 function CompanyReportPage() {
   const [from, setFrom] = useState(monthStart);
   const [to, setTo] = useState(today);
   const [siteFilter, setSiteFilter] = useState("all");
   const [kindFilter, setKindFilter] = useState("all");
+  const [runRange, setRunRange] = useState<{ from: string; to: string } | null>(null);
+  const rangeIsValid = from <= to && daysBetween(from, to) <= 31;
   const query = useQuery({
-    queryKey: ["company-report-data", from, to],
+    queryKey: ["company-report-data", runRange?.from, runRange?.to],
+    enabled: Boolean(runRange && rangeIsValid),
     queryFn: async () => {
+      if (!runRange) throw new Error("اختر فترة التقرير أولاً");
       const [sitesResult, reportsResult] = await Promise.all([
         supabase.from("sites").select("id, name, ctr_code").order("name"),
         supabase
           .from("site_daily_reports")
           .select("id, site_id, report_date, notes")
-          .gte("report_date", from)
-          .lte("report_date", to),
+          .gte("report_date", runRange.from)
+          .lte("report_date", runRange.to),
       ]);
       if (sitesResult.error) throw sitesResult.error;
       if (reportsResult.error) throw reportsResult.error;
       const reports = (reportsResult.data ?? []) as Report[];
+      if (reports.length > 2000) {
+        throw new Error("الفترة المحددة تحتوي على أكثر من 2000 تقرير. اختر فترة أقصر لتجنب استهلاك ذاكرة المتصفح.");
+      }
       const reportIds = reports.map((report) => report.id);
       const lineChunks = Array.from({ length: Math.ceil(reportIds.length / 100) }, (_, index) =>
         reportIds.slice(index * 100, index * 100 + 100),
@@ -101,10 +113,6 @@ function CompanyReportPage() {
     },
   });
   const data = query.data ?? { sites: [], reports: [], lines: [] };
-  const reportsById = useMemo(
-    () => new Map(data.reports.map((report) => [report.id, report])),
-    [data.reports],
-  );
   const filteredReports = useMemo(
     () => data.reports.filter((report) => siteFilter === "all" || report.site_id === siteFilter),
     [data.reports, siteFilter],
@@ -139,15 +147,16 @@ function CompanyReportPage() {
     );
   }, [data.lines, reportIds, kindFilter]);
   const missing = useMemo(() => {
+    if (!runRange) return [];
     const reportKeys = new Set(data.reports.map((report) => `${report.site_id}:${report.report_date}`));
     return data.sites
       .flatMap((site) =>
-        dateList(from, to)
+          dateList(runRange.from, runRange.to)
           .filter((date) => !reportKeys.has(`${site.id}:${date}`))
           .map((date) => ({ site, date })),
       )
       .filter(({ site }) => siteFilter === "all" || site.id === siteFilter);
-  }, [data.sites, data.reports, from, to, siteFilter]);
+  }, [data.sites, data.reports, runRange, siteFilter]);
   const visibleMissing = missing.slice(0, 500);
   const total = aggregate.reduce((sum, row) => sum + row.total, 0);
   const formatDate = (value: string) => new Date(`${value}T00:00:00`).toLocaleDateString("ar-IQ");
@@ -179,13 +188,13 @@ function CompanyReportPage() {
             تجميع أعداد العاملين والآليات عبر المواقع والفترة المختارة
           </p>
         </div>
-        <Button variant="outline" onClick={exportPdf} disabled={query.isLoading}>
+        <Button variant="outline" onClick={exportPdf} disabled={query.isLoading || !runRange}>
           <FileDown className="w-4 h-4 ml-2" />
           تصدير PDF
         </Button>
       </div>
       <Card>
-        <CardContent className="p-4 grid grid-cols-1 md:grid-cols-4 gap-4">
+          <CardContent className="p-4 grid grid-cols-1 md:grid-cols-5 gap-4">
           <div>
             <Label>من تاريخ</Label>
             <Input type="date" max={today} value={from} onChange={(e) => setFrom(e.target.value)} />
@@ -221,17 +230,28 @@ function CompanyReportPage() {
               <option value="equipment_type">آليات ومركبات</option>
             </select>
           </div>
+          <div className="flex items-end">
+            <Button className="w-full" disabled={!rangeIsValid || query.isFetching} onClick={() => setRunRange({ from, to })}>
+              {query.isFetching ? <Loader2 className="w-4 h-4 ml-2 animate-spin" /> : <Search className="w-4 h-4 ml-2" />}
+              {query.isFetching ? "جارٍ إعداد التقرير..." : "عرض التقرير"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
-      {from > to && (
-        <p className="text-destructive">يجب أن يكون تاريخ البداية قبل تاريخ النهاية.</p>
+      {!rangeIsValid && (
+        <p className="text-destructive">
+          {from > to ? "يجب أن يكون تاريخ البداية قبل تاريخ النهاية." : "الحد الأقصى للفترة 31 يومًا لتجنب تجمّد المتصفح."}
+        </p>
       )}
+      {query.error && <p className="text-destructive">تعذر إعداد التقرير: {(query.error as Error).message}</p>}
       <Card>
         <CardHeader>
           <CardTitle>الجدول المجمّع</CardTitle>
         </CardHeader>
         <CardContent>
-          {query.isLoading ? (
+          {!runRange ? (
+            <p className="text-muted-foreground py-8 text-center">حدد فترة لا تتجاوز 31 يومًا ثم اضغط «عرض التقرير».</p>
+          ) : query.isLoading ? (
             <p className="text-muted-foreground">جارٍ التحميل...</p>
           ) : (
             <Table>
