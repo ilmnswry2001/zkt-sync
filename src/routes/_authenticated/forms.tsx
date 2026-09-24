@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Check, FileSignature, Plus, Play, X } from "lucide-react";
+import { Check, Clock3, Eye, FileSignature, ListChecks, Plus, Play, Printer, X } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/forms")({
@@ -87,6 +87,22 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "
   rejected: "destructive",
 };
 
+function printForm(row: FormRow) {
+  const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[char] ?? char);
+  const details = row.kind === "overtime" ? `${row.overtime_hours} ساعة` : `${row.check_in ?? "—"} → ${row.check_out ?? "—"}`;
+  const popup = window.open("", "_blank", "width=900,height=800");
+  if (!popup) {
+    toast.error("تعذر فتح نافذة الطباعة؛ اسمح بالنوافذ المنبثقة ثم حاول مرة أخرى");
+    return;
+  }
+  popup.document.write(`<!doctype html><html dir="rtl"><head><meta charset="utf-8"/><title>استمارة رقم ${row.form_no}</title><style>body{font-family:Arial,sans-serif;color:#111;padding:40px;line-height:1.8}h1{text-align:center;margin-bottom:4px}h2{text-align:center;font-weight:normal;color:#555;margin-top:0}.meta{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:28px 0}.item{border:1px solid #ddd;padding:12px;border-radius:8px}.label{display:block;color:#666;font-size:12px}.reason{border:1px solid #ddd;border-radius:8px;padding:16px;min-height:90px}.signatures{display:grid;grid-template-columns:1fr 1fr 1fr;gap:30px;margin-top:70px;text-align:center}.line{border-top:1px solid #555;margin-top:45px}@media print{body{padding:0}}</style></head><body><h1>الاستمارة الإلكترونية</h1><h2>رقم الاستمارة: ${row.form_no}</h2><div class="meta"><div class="item"><span class="label">الموظف</span>${escapeHtml(`${row.employees?.employee_no ?? "—"} — ${row.employees?.full_name ?? "—"}`)}</div><div class="item"><span class="label">نوع الاستمارة</span>${escapeHtml(KIND_LABEL[row.kind])}</div><div class="item"><span class="label">تاريخ الاستحقاق</span>${escapeHtml(row.work_date)}</div><div class="item"><span class="label">القسم</span>${escapeHtml(row.department?.name ?? "—")}</div><div class="item"><span class="label">مرسلة إلى</span>${escapeHtml(row.target?.name ?? "—")}</div><div class="item"><span class="label">التفاصيل</span>${escapeHtml(details)}</div></div><h3>السبب والتفاصيل</h3><div class="reason">${escapeHtml(row.reason)}</div><div class="signatures"><div>مقدم الطلب<div class="line"></div></div><div>الاعتماد<div class="line"></div></div><div>التنفيذ<div class="line"></div></div></div><script>window.onload=()=>{window.print();}</script></body></html>`);
+  popup.document.close();
+}
+
+function StatCard({ title, value, icon: Icon, tone }: { title: string; value: number | string; icon: typeof Clock3; tone: string }) {
+  return <Card><CardContent className="p-4 flex items-center gap-3"><div className={`w-10 h-10 rounded-lg flex items-center justify-center ${tone}`}><Icon className="w-5 h-5 text-white" /></div><div><p className="text-xs text-muted-foreground">{title}</p><p className="text-2xl font-bold">{value}</p></div></CardContent></Card>;
+}
+
 function FormsPage() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -94,6 +110,7 @@ function FormsPage() {
   const [kind, setKind] = useState<"attendance" | "overtime" | "leave">("attendance");
   const [employeeId, setEmployeeId] = useState("");
   const [search, setSearch] = useState("");
+  const [selectedForm, setSelectedForm] = useState<FormRow | null>(null);
 
   const powersFn = useServerFn(getMyFormPowers);
   const createFn = useServerFn(createForm);
@@ -141,6 +158,23 @@ function FormsPage() {
       return data as unknown as FormRow[];
     },
   });
+
+  const { data: statsRows = [] } = useQuery({
+    queryKey: ["forms", "statistics"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("forms").select("status, kind, overtime_hours").limit(1000);
+      if (error) throw error;
+      return data as { status: FormRow["status"]; kind: FormRow["kind"]; overtime_hours: number }[];
+    },
+  });
+
+  const statistics = useMemo(() => ({
+    total: statsRows.length,
+    pending: statsRows.filter((f) => f.status.startsWith("pending_")).length,
+    executed: statsRows.filter((f) => f.status === "executed").length,
+    rejected: statsRows.filter((f) => f.status === "rejected").length,
+    overtime: statsRows.filter((f) => f.kind === "overtime").reduce((sum, f) => sum + Number(f.overtime_hours || 0), 0),
+  }), [statsRows]);
 
   const create = useMutation({
     mutationFn: (payload: Parameters<typeof createForm>[0] extends never ? never : any) =>
@@ -299,6 +333,14 @@ function FormsPage() {
         </Dialog>
       </div>
 
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+        <StatCard title="إجمالي الاستمارات" value={statistics.total} icon={ListChecks} tone="bg-primary" />
+        <StatCard title="قيد الاعتماد" value={statistics.pending} icon={Clock3} tone="bg-warning" />
+        <StatCard title="منفذة" value={statistics.executed} icon={Check} tone="bg-success" />
+        <StatCard title="مرفوضة" value={statistics.rejected} icon={X} tone="bg-destructive" />
+        <StatCard title="ساعات إضافية" value={statistics.overtime.toLocaleString("ar")} icon={FileSignature} tone="bg-accent-foreground" />
+      </div>
+
       <div className="flex gap-2 flex-wrap">
         {["all", "pending_manager", "pending_ceo", "pending_execution", "executed", "rejected"].map((s) => (
           <Button key={s} size="sm" variant={filter === s ? "default" : "outline"} onClick={() => setFilter(s)}>
@@ -354,9 +396,16 @@ function FormsPage() {
                     )}
                   </TableCell>
                   <TableCell>
-                    {canAct(row) ? (
-                      <div className="flex gap-1">
-                        <Button
+                    <div className="flex gap-1">
+                      <Button size="icon" variant="ghost" title="استعراض الاستمارة" onClick={() => setSelectedForm(row)}>
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                      <Button size="icon" variant="ghost" title="طباعة / تصدير PDF" onClick={() => printForm(row)}>
+                        <Printer className="w-4 h-4" />
+                      </Button>
+                      {canAct(row) ? (
+                        <>
+                          <Button
                           size="icon"
                           variant="ghost"
                           title={row.status === "pending_execution" ? "تنفيذ" : "موافقة"}
@@ -372,8 +421,8 @@ function FormsPage() {
                           ) : (
                             <Check className="w-4 h-4 text-primary" />
                           )}
-                        </Button>
-                        <Button
+                          </Button>
+                          <Button
                           size="icon"
                           variant="ghost"
                           title="رفض"
@@ -383,11 +432,10 @@ function FormsPage() {
                           }}
                         >
                           <X className="w-4 h-4 text-destructive" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
+                          </Button>
+                        </>
+                      ) : null}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -402,6 +450,28 @@ function FormsPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <Dialog open={!!selectedForm} onOpenChange={(value) => !value && setSelectedForm(null)}>
+        <DialogContent dir="rtl" className="max-w-2xl">
+          <DialogHeader><DialogTitle>استعراض الاستمارة الإلكترونية</DialogTitle></DialogHeader>
+          {selectedForm && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b pb-3"><div><p className="text-sm text-muted-foreground">رقم الاستمارة</p><p className="text-2xl font-bold">#{selectedForm.form_no}</p></div><Badge variant={STATUS_VARIANT[selectedForm.status]}>{STATUS_LABEL[selectedForm.status]}</Badge></div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><span className="text-muted-foreground">الموظف:</span> {selectedForm.employees?.employee_no} — {selectedForm.employees?.full_name}</div>
+                <div><span className="text-muted-foreground">النوع:</span> {KIND_LABEL[selectedForm.kind]}</div>
+                <div><span className="text-muted-foreground">التاريخ:</span> {selectedForm.work_date}</div>
+                <div><span className="text-muted-foreground">القسم:</span> {selectedForm.department?.name ?? "—"}</div>
+                <div><span className="text-muted-foreground">مرسلة إلى:</span> {selectedForm.target?.name ?? "—"}</div>
+                <div><span className="text-muted-foreground">التفاصيل:</span> {selectedForm.kind === "overtime" ? `${selectedForm.overtime_hours} ساعة` : `${selectedForm.check_in ?? "—"} → ${selectedForm.check_out ?? "—"}`}</div>
+              </div>
+              <div className="rounded-lg bg-muted/50 p-4"><p className="text-sm font-semibold mb-1">السبب والتفاصيل</p><p className="whitespace-pre-wrap">{selectedForm.reason}</p></div>
+              {selectedForm.rejection_reason && <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-destructive"><p className="text-sm font-semibold mb-1">سبب الرفض</p><p>{selectedForm.rejection_reason}</p></div>}
+              <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => printForm(selectedForm)}><Printer className="w-4 h-4 ml-2" /> طباعة / حفظ PDF</Button><Button onClick={() => setSelectedForm(null)}>إغلاق</Button></div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {powers?.admin && <FormRolesCard />}
     </div>
