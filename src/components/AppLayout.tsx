@@ -27,7 +27,7 @@ import { cn } from "@/lib/utils";
 const nav = [
   { to: "/dashboard", label: "لوحة التحكم", icon: LayoutDashboard },
   { to: "/attendance", label: "التقارير اليومية", icon: ClockIcon },
-  { to: "/tasks", label: "مهام الموظفين", icon: ClipboardCheck },
+  { to: "/tasks", label: "مهامي اليومية", icon: ClipboardCheck },
   { to: "/company-report", label: "تقرير الشركة الكامل", icon: BarChart3, access: "hr" },
   { to: "/monthly", label: "التقرير الشهري", icon: CalendarDays },
   { to: "/forms", label: "الاستمارات الإلكترونية", icon: FileSignature },

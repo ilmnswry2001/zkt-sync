@@ -21,20 +21,18 @@ import {
   Loader2,
   Plus,
   Trash2,
-  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/tasks")({
-  head: () => ({ meta: [{ title: "مهام الموظفين" }] }),
+  head: () => ({ meta: [{ title: "مهامي اليومية" }] }),
   component: EmployeeTasksPage,
 });
 
 type TaskStatus = "completed" | "in_progress";
-type Employee = { id: string; employee_no: string; full_name: string; position: string | null };
 type Task = {
   id: string;
-  employee_id: string;
+  employee_id: string | null;
   task_date: string;
   title: string;
   description: string | null;
@@ -42,12 +40,10 @@ type Task = {
   duration_minutes: number;
   archived_at: string | null;
   created_by: string;
-  employee?: Employee | null;
 };
 
 const today = new Date().toISOString().slice(0, 10);
 const emptyForm = {
-  employeeId: "",
   title: "",
   description: "",
   status: "completed" as TaskStatus,
@@ -65,27 +61,13 @@ function EmployeeTasksPage() {
   const [form, setForm] = useState(emptyForm);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
-  const employeesQuery = useQuery({
-    queryKey: ["task-employees"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("employees")
-        .select("id, employee_no, full_name, position")
-        .eq("status", "active")
-        .order("full_name");
-      if (error) throw error;
-      return (data ?? []) as Employee[];
-    },
-  });
-  const employees = employeesQuery.data ?? [];
-
   const activeTasksQuery = useQuery({
     queryKey: ["employee-tasks", "active", selectedDate],
     queryFn: async () => {
       let query = supabase
         .from("employee_tasks")
         .select(
-          "id, employee_id, task_date, title, description, status, duration_minutes, archived_at, created_by, employees(id, employee_no, full_name, position)",
+          "id, employee_id, task_date, title, description, status, duration_minutes, archived_at, created_by",
         )
         .eq("task_date", selectedDate)
         .is("archived_at", null)
@@ -104,7 +86,7 @@ function EmployeeTasksPage() {
       let query = supabase
         .from("employee_tasks")
         .select(
-          "id, employee_id, task_date, title, description, status, duration_minutes, archived_at, created_by, employees(id, employee_no, full_name, position)",
+          "id, employee_id, task_date, title, description, status, duration_minutes, archived_at, created_by",
         )
         .not("archived_at", "is", null)
         .order("task_date", { ascending: false })
@@ -127,7 +109,13 @@ function EmployeeTasksPage() {
       completed: activeTasks.filter((task) => task.status === "completed").length,
       inProgress: activeTasks.filter((task) => task.status === "in_progress").length,
       minutes: activeTasks.reduce((sum, task) => sum + Number(task.duration_minutes || 0), 0),
-      employees: new Set(activeTasks.map((task) => task.employee_id)).size,
+      completionRate: activeTasks.length
+        ? Math.round(
+            (activeTasks.filter((task) => task.status === "completed").length /
+              activeTasks.length) *
+              100,
+          )
+        : 0,
     }),
     [activeTasks],
   );
@@ -136,16 +124,14 @@ function EmployeeTasksPage() {
     await queryClient.invalidateQueries({ queryKey: ["employee-tasks"] });
   };
   const resetForm = () => {
-    setForm({ ...emptyForm, employeeId: employees[0]?.id ?? "" });
+    setForm(emptyForm);
     setEditingTask(null);
   };
   const saveTask = async () => {
     if (!user) return toast.error("يجب تسجيل الدخول أولاً");
-    if (!form.employeeId) return toast.error("اختر اسم الموظف");
     if (selectedDate > today) return toast.error("لا يمكن تسجيل مهمة بتاريخ مستقبلي");
     if (form.title.trim().length < 2) return toast.error("اكتب عنوان المهمة بوضوح");
     const payload = {
-      employee_id: form.employeeId,
       task_date: selectedDate,
       title: form.title.trim(),
       description: form.description.trim() || null,
@@ -165,7 +151,6 @@ function EmployeeTasksPage() {
     setEditingTask(task);
     setSelectedDate(task.task_date);
     setForm({
-      employeeId: task.employee_id,
       title: task.title,
       description: task.description ?? "",
       status: task.status,
@@ -202,10 +187,7 @@ function EmployeeTasksPage() {
             </Badge>
             {archived && <Badge variant="outline">مؤرشفة</Badge>}
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {task.employee?.full_name ?? "موظف غير محدد"} · {task.employee?.employee_no ?? "—"} ·{" "}
-            {task.task_date}
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">مهمتي الشخصية · {task.task_date}</p>
           {task.description && (
             <p className="mt-3 whitespace-pre-wrap text-sm">{task.description}</p>
           )}
@@ -271,7 +253,7 @@ function EmployeeTasksPage() {
         <div>
           <div className="flex items-center gap-2">
             <ClipboardCheck className="w-7 h-7 text-primary" />
-            <h1 className="text-3xl font-bold">مهام الموظفين</h1>
+            <h1 className="text-3xl font-bold">مهامي اليومية</h1>
           </div>
           <p className="text-muted-foreground mt-1">
             سجل الأعمال المنجزة خلال اليوم مع متابعة وإرشفة كاملة
@@ -295,7 +277,12 @@ function EmployeeTasksPage() {
         <StatCard label="منجزة" value={stats.completed} icon={CheckCircle2} />
         <StatCard label="قيد التنفيذ" value={stats.inProgress} icon={Clock3} />
         <StatCard label="إجمالي الدقائق" value={stats.minutes} icon={Clock3} />
-        <StatCard label="الموظفون" value={stats.employees} icon={Users} />
+        <StatCard
+          label="نسبة الإنجاز"
+          value={stats.completionRate}
+          suffix="%"
+          icon={CheckCircle2}
+        />
       </div>
       <Tabs
         value={activeTab}
@@ -315,20 +302,9 @@ function EmployeeTasksPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label>الموظف</Label>
-                <select
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                  value={form.employeeId}
-                  onChange={(e) => setForm({ ...form, employeeId: e.target.value })}
-                >
-                  <option value="">اختر الموظف</option>
-                  {employees.map((employee) => (
-                    <option key={employee.id} value={employee.id}>
-                      {employee.full_name} — {employee.employee_no}
-                    </option>
-                  ))}
-                </select>
+              <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+                <b className="text-foreground">السجل الشخصي:</b> سيتم حفظ المهمة تلقائياً باسم حسابك
+                الحالي، ولا يمكن إدخال مهمة باسم موظف آخر.
               </div>
               <div>
                 <Label>حالة المهمة</Label>
@@ -460,10 +436,12 @@ function EmployeeTasksPage() {
 function StatCard({
   label,
   value,
+  suffix = "",
   icon: Icon,
 }: {
   label: string;
   value: number;
+  suffix?: string;
   icon: typeof ListChecks;
 }) {
   return (
@@ -474,7 +452,10 @@ function StatCard({
         </div>
         <div>
           <p className="text-xs text-muted-foreground">{label}</p>
-          <p className="text-2xl font-bold">{value.toLocaleString("ar-IQ")}</p>
+          <p className="text-2xl font-bold">
+            {value.toLocaleString("ar-IQ")}
+            {suffix}
+          </p>
         </div>
       </CardContent>
     </Card>

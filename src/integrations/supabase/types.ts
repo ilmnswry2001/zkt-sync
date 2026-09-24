@@ -21,7 +21,7 @@ export type Database = {
           created_by: string
           description: string | null
           duration_minutes: number
-          employee_id: string
+          employee_id: string | null
           id: string
           status: string
           task_date: string
@@ -34,7 +34,7 @@ export type Database = {
           created_by?: string
           description?: string | null
           duration_minutes?: number
-          employee_id: string
+          employee_id?: string | null
           id?: string
           status?: string
           task_date?: string
@@ -47,7 +47,7 @@ export type Database = {
           created_by?: string
           description?: string | null
           duration_minutes?: number
-          employee_id?: string
+          employee_id?: string | null
           id?: string
           status?: string
           task_date?: string
