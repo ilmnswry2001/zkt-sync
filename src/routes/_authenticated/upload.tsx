@@ -72,7 +72,12 @@ function UploadPage() {
         content_hash: hash,
         is_duplicate: isDuplicate,
       });
-      if (rowErr) throw rowErr;
+      if (rowErr) {
+        // Do not leave an object in Storage when its database record could not
+        // be created; otherwise the UI loses the file while Storage keeps it.
+        await supabase.storage.from("zk-backups").remove([path]);
+        throw rowErr;
+      }
       setProgress(100);
       setStep("تم الرفع — ابدأ المعالجة من صفحة سجل الملفات");
       setDone(true);

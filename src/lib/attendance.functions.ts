@@ -25,6 +25,16 @@ const ingestSchema = z.object({
   })).max(100000),
 });
 
+function normalizeVerifyTime(value: string) {
+  const trimmed = value.trim();
+  // ZKTeco exports commonly omit a timezone. Treat those values as UTC,
+  // but do not append a second timezone designator to ISO timestamps.
+  if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(trimmed)) return trimmed;
+  const parsed = new Date(`${trimmed}Z`);
+  if (Number.isNaN(parsed.getTime())) throw new Error(`وقت بصمة غير صالح: ${value}`);
+  return parsed.toISOString();
+}
+
 export const ingestZkData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => ingestSchema.parse(data))
@@ -53,13 +63,12 @@ export const ingestZkData = createServerFn({ method: "POST" })
 
       // إدراج سجلات البصمة (تجاهل المكرر)
       const logRows = data.logs.map((l) => {
-        const t = l.verify_time.length >= 19 ? l.verify_time + "Z" : new Date(l.verify_time).toISOString();
         return {
           employee_no: l.user_pin,
           employee_id: empIdByPin.get(l.user_pin) ?? null,
           device_id: data.device_id,
           upload_id: data.upload_id,
-          verify_time: t,
+          verify_time: normalizeVerifyTime(l.verify_time),
           verify_type: l.verify_type,
           status: l.status,
           external_log_id: l.external_id,
@@ -70,7 +79,10 @@ export const ingestZkData = createServerFn({ method: "POST" })
       for (let i = 0; i < logRows.length; i += 1000) {
         const chunk = logRows.slice(i, i + 1000);
         const { data: rows, error } = await supabase.from("attendance_logs")
-          .upsert(chunk, { onConflict: "employee_no,verify_time", ignoreDuplicates: true })
+          // Must match attendance_logs' UNIQUE(employee_no, verify_time, device_id)
+          // constraint. The previous two-column target made every import fail
+          // with PostgreSQL's "no unique constraint matching" error.
+          .upsert(chunk, { onConflict: "employee_no,verify_time,device_id", ignoreDuplicates: true })
           .select("id");
         if (error) throw error;
         inserted += rows?.length ?? 0;
