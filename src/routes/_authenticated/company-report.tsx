@@ -15,7 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, ArrowRight, BarChart3, FileDown, Loader2, RefreshCw, TriangleAlert } from "lucide-react";
+import { ArrowLeft, ArrowRight, BarChart3, CheckCircle2, FileDown, Loader2, MapPinned, RefreshCw, TriangleAlert, Truck, Users } from "lucide-react";
 import { printReport } from "@/lib/report-print";
 import { toast } from "sonner";
 
@@ -60,6 +60,17 @@ const dateList = (from: string, to: string) => {
 };
 const shiftDate = (value: string, amount: number) => addDays(value, amount);
 
+function DashboardStat({ title, value, icon: Icon, tone }: { title: string; value: number | string; icon: typeof Users; tone: string }) {
+  return (
+    <Card>
+      <CardContent className="p-4 flex items-center gap-3">
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tone}`}><Icon className="w-5 h-5 text-white" /></div>
+        <div><p className="text-xs text-muted-foreground">{title}</p><p className="text-xl font-bold">{value}</p></div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function CompanyReportPage() {
   const [reportDate, setReportDate] = useState(today);
   const [siteFilter, setSiteFilter] = useState("all");
@@ -71,49 +82,40 @@ function CompanyReportPage() {
         supabase.from("sites").select("id, name, ctr_code").order("name"),
         (supabase as any)
           .from("site_daily_reports")
-          .select("id, site_id, report_date, notes, site_daily_report_lines(kind, item_name, total_count, working_count, idle_count)")
+          .select("id, site_id, report_date, notes")
           .eq("report_date", reportDate)
           .limit(500),
       ]);
       if (sitesResult.error) throw sitesResult.error;
       if (reportsResult.error) throw reportsResult.error;
       const reports = (reportsResult.data ?? []) as Report[];
-      const sums = new Map<string, { kind: string; item_name: string; total: number; working: number; idle: number }>();
-      for (const report of (reportsResult.data ?? []) as any[]) {
-        if (siteFilter !== "all" && report.site_id !== siteFilter) continue;
-        for (const line of report.site_daily_report_lines ?? []) {
-          if (kindFilter !== "all" && line.kind !== kindFilter) continue;
-          const key = `${line.kind}:${line.item_name}`;
-          const current = sums.get(key) ?? { kind: line.kind, item_name: line.item_name, total: 0, working: 0, idle: 0 };
-          current.total += Number(line.total_count ?? 0);
-          current.working += Number(line.working_count ?? 0);
-          current.idle += Number(line.idle_count ?? 0);
-          sums.set(key, current);
-        }
+      const reportIds = reports.map((report) => report.id);
+      let lines: Line[] = [];
+      if (reportIds.length) {
+        const linesResult = await supabase
+          .from("site_daily_report_lines")
+          .select("report_id, kind, item_name, total_count, working_count, idle_count")
+          .in("report_id", reportIds);
+        if (linesResult.error) throw linesResult.error;
+        lines = (linesResult.data ?? []) as Line[];
       }
-      const aggregateRows = [...sums.values()];
       return {
         sites: (sitesResult.data ?? []) as Site[],
         reports,
-        lines: (aggregateRows ?? []).map((row: any) => ({
-          report_id: "aggregate",
-          kind: row.kind,
-          item_name: row.itemName ?? row.item_name,
-          total_count: row.total ?? 0,
-          working_count: row.working ?? 0,
-          idle_count: row.idle ?? 0,
-        })) as Line[],
+        lines,
       };
     },
   });
   const data = query.data ?? { sites: [], reports: [], lines: [] };
+  const filteredReports = useMemo(
+    () => data.reports.filter((report) => siteFilter === "all" || report.site_id === siteFilter),
+    [data.reports, siteFilter],
+  );
+  const reportIds = useMemo(() => new Set(filteredReports.map((report) => report.id)), [filteredReports]);
   const aggregate = useMemo<Aggregate[]>(() => {
     const map = new Map<string, Aggregate>();
     data.lines
-      .filter(
-        (line) =>
-          line.report_id === "aggregate",
-      )
+      .filter((line) => reportIds.has(line.report_id) && (kindFilter === "all" || line.kind === kindFilter))
       .forEach((line) => {
         const key = `${line.kind}:${line.item_name}`;
         const current = map.get(key) ?? {
@@ -131,7 +133,7 @@ function CompanyReportPage() {
     return [...map.values()].sort(
       (a, b) => a.kind.localeCompare(b.kind) || a.itemName.localeCompare(b.itemName, "ar"),
     );
-  }, [data.lines]);
+  }, [data.lines, reportIds, kindFilter]);
   const missing = useMemo(() => {
     const reportKeys = new Set(data.reports.map((report) => `${report.site_id}:${report.report_date}`));
     return data.sites
@@ -144,6 +146,12 @@ function CompanyReportPage() {
   }, [data.sites, data.reports, reportDate, siteFilter]);
   const visibleMissing = missing.slice(0, 500);
   const total = aggregate.reduce((sum, row) => sum + row.total, 0);
+  const workerTotal = aggregate.filter((row) => row.kind === "worker_specialty").reduce((sum, row) => sum + row.total, 0);
+  const equipmentTotal = aggregate.filter((row) => row.kind === "equipment_type").reduce((sum, row) => sum + row.total, 0);
+  const equipmentWorking = aggregate.filter((row) => row.kind === "equipment_type").reduce((sum, row) => sum + row.working, 0);
+  const equipmentIdle = aggregate.filter((row) => row.kind === "equipment_type").reduce((sum, row) => sum + row.idle, 0);
+  const reportedSites = new Set(filteredReports.map((report) => report.site_id)).size;
+  const reportRate = data.sites.length ? Math.round((reportedSites / data.sites.length) * 100) : 0;
   const formatDate = (value: string) => new Date(`${value}T00:00:00`).toLocaleDateString("ar-IQ");
   const exportPdf = () => {
     const rows = aggregate
@@ -223,6 +231,20 @@ function CompanyReportPage() {
           </div>
         </CardContent>
       </Card>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <DashboardStat title="إجمالي الأفراد" value={workerTotal} icon={Users} tone="bg-primary" />
+        <DashboardStat title="إجمالي الآليات" value={equipmentTotal} icon={Truck} tone="bg-indigo-600" />
+        <DashboardStat title="آليات عاملة" value={equipmentWorking} icon={CheckCircle2} tone="bg-success" />
+        <DashboardStat title="آليات متوقفة" value={equipmentIdle} icon={TriangleAlert} tone="bg-warning" />
+        <DashboardStat title="المواقع المرسلة" value={`${reportedSites}/${data.sites.length}`} icon={MapPinned} tone="bg-accent-foreground" />
+        <DashboardStat title="نسبة الإنجاز" value={`${reportRate}%`} icon={CheckCircle2} tone="bg-emerald-600" />
+      </div>
+      <Card className="border-primary/20 bg-primary/5">
+        <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
+          <div><p className="text-sm text-muted-foreground">لوحة التقرير اليومي</p><p className="text-xl font-bold">{formatDate(reportDate)}</p></div>
+          <div className="text-sm text-muted-foreground">تم استقبال {reportedSites} من أصل {data.sites.length} موقعًا اليوم</div>
+        </CardContent>
+      </Card>
       {query.error && <p className="text-destructive">تعذر إعداد التقرير: {(query.error as Error).message}</p>}
       <Card>
         <CardHeader>
@@ -275,7 +297,7 @@ function CompanyReportPage() {
             )
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            تظهر كل حالة غياب تقرير حسب الموقع والتاريخ، ولا يتم تجاهلها ضمن التجميع.
+            تظهر المواقع التي لم ترسل تقريرها لليوم المحدد.
           </p>
         </CardHeader>
         <CardContent>
@@ -302,7 +324,7 @@ function CompanyReportPage() {
             </Table>
           ) : (
             <p className="py-6 text-center text-success">
-              كل المواقع رفعت تقاريرها خلال الفترة المحددة.
+              كل المواقع رفعت تقاريرها لليوم المحدد.
             </p>
           )}
           {missing.length > visibleMissing.length && (
