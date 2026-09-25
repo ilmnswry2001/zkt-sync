@@ -18,6 +18,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
   ClipboardCheck,
+  UserCog,
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
@@ -40,6 +41,7 @@ const nav = [
   { to: "/upload", label: "رفع ملفات البصمة", icon: Upload },
   { to: "/files", label: "سجل الملفات", icon: FileBox },
   { to: "/settings", label: "الإعدادات", icon: Settings2, access: "admin" },
+  { to: "/accounts", label: "الحسابات والصلاحيات", icon: UserCog, access: "admin" },
 ] as const;
 
 export function AppLayout({ children }: { children: React.ReactNode }) {

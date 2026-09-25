@@ -267,72 +267,81 @@ function ProjectsPage() {
         <CardHeader>
           <CardTitle>تقارير المشاريع اليومية — {reportDate}</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent>
           {query.isLoading ? (
             <p className="py-8 text-center text-muted-foreground">جارٍ تحميل تقارير المشاريع...</p>
           ) : projectCards.length ? (
-            projectCards.map((card) => (
-              <div key={card.project.id} className="rounded-xl border p-4">
-                <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-                  <div>
-                    <h2 className="font-semibold">{card.project.name}</h2>
-                    <p className="text-sm text-muted-foreground">
-                      كود المشروع: {card.project.ctr_code}
-                    </p>
-                  </div>
-                  {card.report ? (
-                    <Badge className="w-fit">تم رفع التقرير</Badge>
-                  ) : (
-                    <Badge variant="destructive" className="w-fit">
-                      لم يرفع تقريراً
-                    </Badge>
-                  )}
-                </div>
-                {card.report ? (
-                  <div className="mt-4 overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b text-right text-muted-foreground">
-                          <th className="px-2 py-2">النوع</th>
-                          <th className="px-2 py-2">التخصص / الآلية</th>
-                          <th className="px-2 py-2">العدد</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {card.lines.map((line) => (
-                          <tr
-                            key={`${card.project.id}-${line.kind}-${line.item_name}`}
-                            className="border-b last:border-0"
-                          >
-                            <td className="px-2 py-2">
-                              {line.kind === "worker_specialty" ? "عاملون" : "آليات ومركبات"}
-                            </td>
-                            <td className="px-2 py-2 font-medium">{line.item_name}</td>
-                            <td className="px-2 py-2">{Number(line.total_count || 0)}</td>
-                          </tr>
-                        ))}
-                        {!card.lines.length && (
-                          <tr>
-                            <td colSpan={3} className="px-2 py-5 text-center text-muted-foreground">
-                              التقرير محفوظ بدون بنود.
-                            </td>
-                          </tr>
+            <div dir="rtl" className="overflow-x-auto rounded-xl border">
+              <table className="min-w-[920px] w-full text-sm">
+                <thead className="bg-muted/60">
+                  <tr className="border-b text-right">
+                    <th className="px-4 py-3 font-semibold">المشروع / الموقع</th>
+                    <th className="px-4 py-3 font-semibold">حالة التقرير</th>
+                    <th className="px-4 py-3 font-semibold">إجمالي العاملين</th>
+                    <th className="px-4 py-3 font-semibold">إجمالي الآليات</th>
+                    <th className="px-4 py-3 font-semibold">تفاصيل التقرير اليومي</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {projectCards.map((card) => (
+                    <tr
+                      key={card.project.id}
+                      className="border-b align-top transition-colors last:border-0 hover:bg-muted/30"
+                    >
+                      <td className="px-4 py-4">
+                        <p className="font-semibold">{card.project.name}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          CTR: {card.project.ctr_code}
+                        </p>
+                      </td>
+                      <td className="px-4 py-4">
+                        {card.report ? (
+                          <Badge>تم رفع التقرير</Badge>
+                        ) : (
+                          <Badge variant="destructive">لم يرفع تقريراً</Badge>
                         )}
-                      </tbody>
-                    </table>
-                    {card.report.notes && (
-                      <p className="mt-3 rounded-lg bg-muted/50 p-3 text-sm">
-                        <span className="font-semibold">الملاحظات:</span> {card.report.notes}
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <p className="mt-3 text-sm text-muted-foreground">
-                    لا يوجد تقرير لهذا المشروع في التاريخ المحدد.
-                  </p>
-                )}
-              </div>
-            ))
+                      </td>
+                      <td className="px-4 py-4 text-lg font-bold text-indigo-700 dark:text-indigo-300">
+                        {card.workerTotal}
+                      </td>
+                      <td className="px-4 py-4 text-lg font-bold text-slate-700 dark:text-slate-300">
+                        {card.equipmentTotal}
+                      </td>
+                      <td className="min-w-[430px] px-4 py-4">
+                        {card.report ? (
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap gap-2">
+                              {card.lines.map((line) => (
+                                <span
+                                  key={`${card.project.id}-${line.kind}-${line.item_name}`}
+                                  className="rounded-lg bg-muted px-2.5 py-1.5 text-xs"
+                                >
+                                  <b>{line.item_name}</b>: {Number(line.total_count || 0)}
+                                </span>
+                              ))}
+                            </div>
+                            {card.report.notes && (
+                              <p className="rounded-lg bg-primary/5 p-2 text-xs">
+                                <b>ملاحظات:</b> {card.report.notes}
+                              </p>
+                            )}
+                            {!card.lines.length && (
+                              <p className="text-xs text-muted-foreground">
+                                التقرير محفوظ بدون بنود.
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            لا يوجد تقرير لهذا المشروع في التاريخ المحدد.
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <p className="py-8 text-center text-muted-foreground">لا توجد مشاريع أو مواقع متاحة.</p>
           )}
