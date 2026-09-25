@@ -16,6 +16,7 @@ import { Route as AuthenticatedWagesRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedUploadRouteImport } from './routes/_authenticated/upload'
 import { Route as AuthenticatedTasksRouteImport } from './routes/_authenticated/tasks'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedProjectsRouteImport } from './routes/_authenticated/projects'
 import { Route as AuthenticatedPlanningRouteImport } from './routes/_authenticated/planning'
 import { Route as AuthenticatedMonthlyRouteImport } from './routes/_authenticated/monthly'
 import { Route as AuthenticatedFormsRouteImport } from './routes/_authenticated/forms'
@@ -59,6 +60,11 @@ const AuthenticatedTasksRoute = AuthenticatedTasksRouteImport.update({
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedProjectsRoute = AuthenticatedProjectsRouteImport.update({
+  id: '/projects',
+  path: '/projects',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedPlanningRoute = AuthenticatedPlanningRouteImport.update({
@@ -127,6 +133,7 @@ export interface FileRoutesByFullPath {
   '/forms': typeof AuthenticatedFormsRoute
   '/monthly': typeof AuthenticatedMonthlyRoute
   '/planning': typeof AuthenticatedPlanningRoute
+  '/projects': typeof AuthenticatedProjectsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/tasks': typeof AuthenticatedTasksRoute
   '/upload': typeof AuthenticatedUploadRoute
@@ -145,6 +152,7 @@ export interface FileRoutesByTo {
   '/forms': typeof AuthenticatedFormsRoute
   '/monthly': typeof AuthenticatedMonthlyRoute
   '/planning': typeof AuthenticatedPlanningRoute
+  '/projects': typeof AuthenticatedProjectsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/tasks': typeof AuthenticatedTasksRoute
   '/upload': typeof AuthenticatedUploadRoute
@@ -165,6 +173,7 @@ export interface FileRoutesById {
   '/_authenticated/forms': typeof AuthenticatedFormsRoute
   '/_authenticated/monthly': typeof AuthenticatedMonthlyRoute
   '/_authenticated/planning': typeof AuthenticatedPlanningRoute
+  '/_authenticated/projects': typeof AuthenticatedProjectsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/tasks': typeof AuthenticatedTasksRoute
   '/_authenticated/upload': typeof AuthenticatedUploadRoute
@@ -185,6 +194,7 @@ export interface FileRouteTypes {
     | '/forms'
     | '/monthly'
     | '/planning'
+    | '/projects'
     | '/settings'
     | '/tasks'
     | '/upload'
@@ -203,6 +213,7 @@ export interface FileRouteTypes {
     | '/forms'
     | '/monthly'
     | '/planning'
+    | '/projects'
     | '/settings'
     | '/tasks'
     | '/upload'
@@ -222,6 +233,7 @@ export interface FileRouteTypes {
     | '/_authenticated/forms'
     | '/_authenticated/monthly'
     | '/_authenticated/planning'
+    | '/_authenticated/projects'
     | '/_authenticated/settings'
     | '/_authenticated/tasks'
     | '/_authenticated/upload'
@@ -283,6 +295,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/projects': {
+      id: '/_authenticated/projects'
+      path: '/projects'
+      fullPath: '/projects'
+      preLoaderRoute: typeof AuthenticatedProjectsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/planning': {
@@ -369,6 +388,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedFormsRoute: typeof AuthenticatedFormsRoute
   AuthenticatedMonthlyRoute: typeof AuthenticatedMonthlyRoute
   AuthenticatedPlanningRoute: typeof AuthenticatedPlanningRoute
+  AuthenticatedProjectsRoute: typeof AuthenticatedProjectsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedTasksRoute: typeof AuthenticatedTasksRoute
   AuthenticatedUploadRoute: typeof AuthenticatedUploadRoute
@@ -386,6 +406,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedFormsRoute: AuthenticatedFormsRoute,
   AuthenticatedMonthlyRoute: AuthenticatedMonthlyRoute,
   AuthenticatedPlanningRoute: AuthenticatedPlanningRoute,
+  AuthenticatedProjectsRoute: AuthenticatedProjectsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedTasksRoute: AuthenticatedTasksRoute,
   AuthenticatedUploadRoute: AuthenticatedUploadRoute,
