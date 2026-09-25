@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, RefreshCw, ShieldCheck, UserCog, Users } from "lucide-react";
+import { KeyRound, Loader2, Plus, RefreshCw, ShieldCheck, UserCog, Users } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/accounts")({
@@ -44,6 +44,16 @@ function AccountsPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    fullName: "",
+    email: "",
+    password: "",
+    role: "data_entry" as Role,
+  });
+  const [resetUserId, setResetUserId] = useState<string | null>(null);
+  const [resetPassword, setResetPassword] = useState("");
+  const [actionBusy, setActionBusy] = useState(false);
   const profilesQuery = useQuery({
     queryKey: ["accounts", "profiles"],
     queryFn: async () => {
@@ -111,6 +121,46 @@ function AccountsPage() {
     await queryClient.invalidateQueries({ queryKey: ["accounts", "roles"] });
     toast.success("تم تحديث صلاحيات الحساب");
   };
+  const createAccount = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (createForm.password.length < 8)
+      return toast.error("كلمة المرور يجب أن تكون 8 أحرف على الأقل");
+    setActionBusy(true);
+    const { data, error } = await supabase.functions.invoke("admin-account", {
+      body: {
+        action: "create",
+        full_name: createForm.fullName,
+        email: createForm.email,
+        password: createForm.password,
+        role: createForm.role,
+      },
+    });
+    setActionBusy(false);
+    if (error || data?.error)
+      return toast.error(data?.error ?? error?.message ?? "تعذر إنشاء الحساب");
+    setCreateForm({ fullName: "", email: "", password: "", role: "data_entry" });
+    setShowCreateForm(false);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["accounts", "profiles"] }),
+      queryClient.invalidateQueries({ queryKey: ["accounts", "roles"] }),
+    ]);
+    toast.success("تم إنشاء الحساب وتعيين الصلاحية");
+  };
+  const updatePassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!resetUserId || resetPassword.length < 8)
+      return toast.error("كلمة المرور يجب أن تكون 8 أحرف على الأقل");
+    setActionBusy(true);
+    const { data, error } = await supabase.functions.invoke("admin-account", {
+      body: { action: "set_password", user_id: resetUserId, password: resetPassword },
+    });
+    setActionBusy(false);
+    if (error || data?.error)
+      return toast.error(data?.error ?? error?.message ?? "تعذر تغيير كلمة المرور");
+    setResetUserId(null);
+    setResetPassword("");
+    toast.success("تم تغيير كلمة المرور. لا يتم عرضها داخل النظام");
+  };
 
   const loading = profilesQuery.isLoading || rolesQuery.isLoading;
   const error = profilesQuery.error ?? rolesQuery.error;
@@ -125,15 +175,97 @@ function AccountsPage() {
           </div>
           <p className="mt-1 text-muted-foreground">إدارة أدوار الحسابات المسجلة في النظام.</p>
         </div>
-        <Button variant="outline" onClick={refresh} disabled={loading}>
-          {loading ? (
-            <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="ml-2 h-4 w-4" />
-          )}
-          تحديث
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => setShowCreateForm((value) => !value)}>
+            <Plus className="ml-2 h-4 w-4" />
+            إضافة حساب
+          </Button>
+          <Button variant="outline" onClick={refresh} disabled={loading}>
+            {loading ? (
+              <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="ml-2 h-4 w-4" />
+            )}
+            تحديث
+          </Button>
+        </div>
       </div>
+
+      {showCreateForm && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardHeader>
+            <CardTitle>إضافة حساب جديد</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={createAccount} className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <Label htmlFor="new-account-name">الاسم الكامل</Label>
+                <Input
+                  id="new-account-name"
+                  required
+                  value={createForm.fullName}
+                  onChange={(event) =>
+                    setCreateForm((current) => ({ ...current, fullName: event.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <Label htmlFor="new-account-email">البريد الإلكتروني</Label>
+                <Input
+                  id="new-account-email"
+                  type="email"
+                  required
+                  value={createForm.email}
+                  onChange={(event) =>
+                    setCreateForm((current) => ({ ...current, email: event.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <Label htmlFor="new-account-password">كلمة المرور الأولية</Label>
+                <Input
+                  id="new-account-password"
+                  type="password"
+                  minLength={8}
+                  required
+                  value={createForm.password}
+                  onChange={(event) =>
+                    setCreateForm((current) => ({ ...current, password: event.target.value }))
+                  }
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  لن تظهر كلمة المرور بعد الحفظ، ويمكن للمدير إعادة تعيينها.
+                </p>
+              </div>
+              <div>
+                <Label htmlFor="new-account-role">الصلاحية</Label>
+                <select
+                  id="new-account-role"
+                  className="mt-1 flex h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  value={createForm.role}
+                  onChange={(event) =>
+                    setCreateForm((current) => ({ ...current, role: event.target.value as Role }))
+                  }
+                >
+                  {roles.map((role) => (
+                    <option key={role.key} value={role.key}>
+                      {role.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-2 md:col-span-2">
+                <Button type="submit" disabled={actionBusy}>
+                  {actionBusy && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}حفظ الحساب
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setShowCreateForm(false)}>
+                  إلغاء
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Card>
@@ -233,8 +365,39 @@ function AccountsPage() {
                       >
                         {editingUserId === profile.id ? "إغلاق" : "تعديل الصلاحيات"}
                       </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setResetUserId(resetUserId === profile.id ? null : profile.id);
+                          setResetPassword("");
+                        }}
+                      >
+                        <KeyRound className="ml-2 h-4 w-4" /> كلمة مرور جديدة
+                      </Button>
                     </div>
                   </div>
+                  {resetUserId === profile.id && (
+                    <form
+                      onSubmit={updatePassword}
+                      className="mt-4 flex flex-col gap-2 border-t pt-4 sm:flex-row sm:items-end"
+                    >
+                      <div className="flex-1">
+                        <Label htmlFor={`reset-password-${profile.id}`}>كلمة المرور الجديدة</Label>
+                        <Input
+                          id={`reset-password-${profile.id}`}
+                          type="password"
+                          minLength={8}
+                          required
+                          value={resetPassword}
+                          onChange={(event) => setResetPassword(event.target.value)}
+                        />
+                      </div>
+                      <Button type="submit" disabled={actionBusy}>
+                        {actionBusy ? "جارٍ الحفظ..." : "تأكيد التغيير"}
+                      </Button>
+                    </form>
+                  )}
                   {editingUserId === profile.id && (
                     <div className="mt-4 grid grid-cols-1 gap-3 border-t pt-4 md:grid-cols-2">
                       {roles.map((role) => (
