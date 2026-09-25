@@ -15,7 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { BarChart3, FileDown, Loader2, Search, TriangleAlert } from "lucide-react";
+import { ArrowLeft, ArrowRight, BarChart3, FileDown, Loader2, RefreshCw, TriangleAlert } from "lucide-react";
 import { printReport } from "@/lib/report-print";
 import { toast } from "sonner";
 
@@ -47,7 +47,6 @@ type Line = {
 type Aggregate = { kind: string; itemName: string; total: number; working: number; idle: number };
 
 const isoDate = (date: Date) => date.toISOString().slice(0, 10);
-const monthStart = isoDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
 const today = isoDate(new Date());
 const addDays = (value: string, amount: number) => {
   const date = new Date(`${value}T00:00:00`);
@@ -59,39 +58,26 @@ const dateList = (from: string, to: string) => {
   for (let current = from; current <= to; current = addDays(current, 1)) dates.push(current);
   return dates;
 };
-const daysBetween = (from: string, to: string) => {
-  const start = new Date(`${from}T00:00:00`).getTime();
-  const end = new Date(`${to}T00:00:00`).getTime();
-  return Math.floor((end - start) / 86400000) + 1;
-};
+const shiftDate = (value: string, amount: number) => addDays(value, amount);
 
 function CompanyReportPage() {
-  const [from, setFrom] = useState(monthStart);
-  const [to, setTo] = useState(today);
+  const [reportDate, setReportDate] = useState(today);
   const [siteFilter, setSiteFilter] = useState("all");
   const [kindFilter, setKindFilter] = useState("all");
-  const [runRange, setRunRange] = useState<{ from: string; to: string } | null>(null);
-  const rangeIsValid = from <= to && daysBetween(from, to) <= 31;
   const query = useQuery({
-    queryKey: ["company-report-data", runRange?.from, runRange?.to, siteFilter, kindFilter],
-    enabled: Boolean(runRange && rangeIsValid),
+    queryKey: ["company-report-data", reportDate, siteFilter, kindFilter],
     queryFn: async () => {
-      if (!runRange) throw new Error("اختر فترة التقرير أولاً");
       const [sitesResult, reportsResult] = await Promise.all([
         supabase.from("sites").select("id, name, ctr_code").order("name"),
         (supabase as any)
           .from("site_daily_reports")
           .select("id, site_id, report_date, notes, site_daily_report_lines(kind, item_name, total_count, working_count, idle_count)")
-          .gte("report_date", runRange.from)
-          .lte("report_date", runRange.to)
-          .limit(2001),
+          .eq("report_date", reportDate)
+          .limit(500),
       ]);
       if (sitesResult.error) throw sitesResult.error;
       if (reportsResult.error) throw reportsResult.error;
       const reports = (reportsResult.data ?? []) as Report[];
-      if (reports.length > 2000) {
-        throw new Error("الفترة المحددة تحتوي على أكثر من 2000 تقرير. اختر فترة أقصر لتجنب استهلاك ذاكرة المتصفح.");
-      }
       const sums = new Map<string, { kind: string; item_name: string; total: number; working: number; idle: number }>();
       for (const report of (reportsResult.data ?? []) as any[]) {
         if (siteFilter !== "all" && report.site_id !== siteFilter) continue;
@@ -147,16 +133,15 @@ function CompanyReportPage() {
     );
   }, [data.lines]);
   const missing = useMemo(() => {
-    if (!runRange) return [];
     const reportKeys = new Set(data.reports.map((report) => `${report.site_id}:${report.report_date}`));
     return data.sites
       .flatMap((site) =>
-          dateList(runRange.from, runRange.to)
+          dateList(reportDate, reportDate)
           .filter((date) => !reportKeys.has(`${site.id}:${date}`))
           .map((date) => ({ site, date })),
       )
       .filter(({ site }) => siteFilter === "all" || site.id === siteFilter);
-  }, [data.sites, data.reports, runRange, siteFilter]);
+  }, [data.sites, data.reports, reportDate, siteFilter]);
   const visibleMissing = missing.slice(0, 500);
   const total = aggregate.reduce((sum, row) => sum + row.total, 0);
   const formatDate = (value: string) => new Date(`${value}T00:00:00`).toLocaleDateString("ar-IQ");
@@ -172,7 +157,7 @@ function CompanyReportPage() {
       .join("");
     const ok = printReport(
       "تقرير الشركة الكامل",
-      `<div class="meta"><span><b>من:</b> ${formatDate(from)}</span><span><b>إلى:</b> ${formatDate(to)}</span><span><b>الموقع:</b> ${siteFilter === "all" ? "كل المواقع" : (data.sites.find((site) => site.id === siteFilter)?.name ?? "-")}</span><span><b>النوع:</b> ${kindFilter === "all" ? "الكل" : kindFilter === "worker_specialty" ? "عاملون" : "آليات ومركبات"}</span></div><h2>الجدول المجمّع</h2><table><thead><tr><th>النوع</th><th>البند</th><th>الإجمالي</th></tr></thead><tbody>${rows}<tr class="total"><td colspan="2">الإجمالي الكلي</td><td>${total}</td></tr></tbody></table><h2>مواقع لم ترفع تقرير</h2><table><thead><tr><th>الموقع</th><th>التاريخ</th></tr></thead><tbody>${missingRows || "<tr><td colspan=2>لا توجد مواقع متأخرة</td></tr>"}</tbody></table>`,
+      `<div class="meta"><span><b>اليوم:</b> ${formatDate(reportDate)}</span><span><b>الموقع:</b> ${siteFilter === "all" ? "كل المواقع" : (data.sites.find((site) => site.id === siteFilter)?.name ?? "-")}</span><span><b>النوع:</b> ${kindFilter === "all" ? "الكل" : kindFilter === "worker_specialty" ? "عاملون" : "آليات ومركبات"}</span></div><h2>الجدول المجمّع</h2><table><thead><tr><th>النوع</th><th>البند</th><th>الإجمالي</th></tr></thead><tbody>${rows}<tr class="total"><td colspan="2">الإجمالي الكلي</td><td>${total}</td></tr></tbody></table><h2>مواقع لم ترفع تقرير اليوم</h2><table><thead><tr><th>الموقع</th><th>التاريخ</th></tr></thead><tbody>${missingRows || "<tr><td colspan=2>لا توجد مواقع متأخرة</td></tr>"}</tbody></table>`,
     );
     if (!ok) toast.error("اسمح للنوافذ المنبثقة لتصدير التقرير");
   };
@@ -185,23 +170,23 @@ function CompanyReportPage() {
             <h1 className="text-3xl font-bold">تقرير الشركة الكامل</h1>
           </div>
           <p className="text-muted-foreground mt-1">
-            تجميع أعداد العاملين والآليات عبر المواقع والفترة المختارة
+            تجميع أعداد العاملين والآليات عبر المواقع لليوم المحدد فقط
           </p>
         </div>
-        <Button variant="outline" onClick={exportPdf} disabled={query.isLoading || !runRange}>
+        <Button variant="outline" onClick={exportPdf} disabled={query.isLoading}>
           <FileDown className="w-4 h-4 ml-2" />
           تصدير PDF
         </Button>
       </div>
       <Card>
-          <CardContent className="p-4 grid grid-cols-1 md:grid-cols-5 gap-4">
-          <div>
-            <Label>من تاريخ</Label>
-            <Input type="date" max={today} value={from} onChange={(e) => setFrom(e.target.value)} />
-          </div>
-          <div>
-            <Label>إلى تاريخ</Label>
-            <Input type="date" max={today} value={to} onChange={(e) => setTo(e.target.value)} />
+          <CardContent className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="md:col-span-1">
+            <Label>اليوم المحدد</Label>
+            <div className="flex items-center gap-2 mt-1">
+              <Button size="icon" variant="outline" title="اليوم السابق" onClick={() => setReportDate(shiftDate(reportDate, -1))} disabled={query.isFetching}><ArrowRight className="w-4 h-4" /></Button>
+              <Input type="date" max={today} value={reportDate} onChange={(e) => setReportDate(e.target.value)} />
+              <Button size="icon" variant="outline" title="اليوم التالي" onClick={() => setReportDate(shiftDate(reportDate, 1))} disabled={query.isFetching || reportDate >= today}><ArrowLeft className="w-4 h-4" /></Button>
+            </div>
           </div>
           <div>
             <Label>الموقع</Label>
@@ -231,27 +216,20 @@ function CompanyReportPage() {
             </select>
           </div>
           <div className="flex items-end">
-            <Button className="w-full" disabled={!rangeIsValid || query.isFetching} onClick={() => setRunRange({ from, to })}>
-              {query.isFetching ? <Loader2 className="w-4 h-4 ml-2 animate-spin" /> : <Search className="w-4 h-4 ml-2" />}
-              {query.isFetching ? "جارٍ إعداد التقرير..." : "عرض التقرير"}
+            <Button className="w-full" variant="secondary" disabled={query.isFetching} onClick={() => query.refetch()}>
+              {query.isFetching ? <Loader2 className="w-4 h-4 ml-2 animate-spin" /> : <RefreshCw className="w-4 h-4 ml-2" />}
+              {query.isFetching ? "جارٍ التحديث..." : "تحديث التقرير"}
             </Button>
           </div>
         </CardContent>
       </Card>
-      {!rangeIsValid && (
-        <p className="text-destructive">
-          {from > to ? "يجب أن يكون تاريخ البداية قبل تاريخ النهاية." : "الحد الأقصى للفترة 31 يومًا لتجنب تجمّد المتصفح."}
-        </p>
-      )}
       {query.error && <p className="text-destructive">تعذر إعداد التقرير: {(query.error as Error).message}</p>}
       <Card>
         <CardHeader>
           <CardTitle>الجدول المجمّع</CardTitle>
         </CardHeader>
         <CardContent>
-          {!runRange ? (
-            <p className="text-muted-foreground py-8 text-center">حدد فترة لا تتجاوز 31 يومًا ثم اضغط «عرض التقرير».</p>
-          ) : query.isLoading ? (
+          {query.isLoading ? (
             <p className="text-muted-foreground">جارٍ التحميل...</p>
           ) : (
             <Table>
