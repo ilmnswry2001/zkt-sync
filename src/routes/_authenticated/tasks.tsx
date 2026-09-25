@@ -142,7 +142,14 @@ function EmployeeTasksPage() {
     const result = editingTask
       ? await supabase.from("employee_tasks").update(payload).eq("id", editingTask.id)
       : await supabase.from("employee_tasks").insert(payload);
-    if (result.error) return toast.error(result.error.message);
+    if (result.error) {
+      if (result.error.code === "23502" && result.error.message.includes("employee_id")) {
+        return toast.error(
+          "قاعدة البيانات ما زالت تشترط employee_id. نفّذ كود تحديث جدول employee_tasks في Lovable Cloud SQL editor ثم أعد المحاولة.",
+        );
+      }
+      return toast.error(result.error.message);
+    }
     await invalidate();
     resetForm();
     toast.success(editingTask ? "تم تعديل المهمة" : "تمت إضافة المهمة");
