@@ -94,18 +94,43 @@ function CompanyReportPage() {
       ]);
       if (sitesResult.error) throw sitesResult.error;
       if (reportsResult.error) throw reportsResult.error;
-      if (aggregateResult.error) throw aggregateResult.error;
       const reports = (reportsResult.data ?? []) as Report[];
       if (reports.length > 2000) {
         throw new Error("الفترة المحددة تحتوي على أكثر من 2000 تقرير. اختر فترة أقصر لتجنب استهلاك ذاكرة المتصفح.");
       }
+      let aggregateRows = aggregateResult.data as unknown[] | null;
+      if (aggregateResult.error) {
+        const isMissingFunction = /could not find the function|schema cache/i.test(aggregateResult.error.message ?? "");
+        if (!isMissingFunction) throw aggregateResult.error;
+        const fallback = await (supabase as any)
+          .from("site_daily_reports")
+          .select("id, site_id, report_date, site_daily_report_lines(kind, item_name, total_count, working_count, idle_count)")
+          .gte("report_date", runRange.from)
+          .lte("report_date", runRange.to)
+          .limit(2000);
+        if (fallback.error) throw fallback.error;
+        const sums = new Map<string, { kind: string; item_name: string; total: number; working: number; idle: number }>();
+        for (const report of (fallback.data ?? []) as any[]) {
+          if (siteFilter !== "all" && report.site_id !== siteFilter) continue;
+          for (const line of report.site_daily_report_lines ?? []) {
+            if (kindFilter !== "all" && line.kind !== kindFilter) continue;
+            const key = `${line.kind}:${line.item_name}`;
+            const current = sums.get(key) ?? { kind: line.kind, item_name: line.item_name, total: 0, working: 0, idle: 0 };
+            current.total += Number(line.total_count ?? 0);
+            current.working += Number(line.working_count ?? 0);
+            current.idle += Number(line.idle_count ?? 0);
+            sums.set(key, current);
+          }
+        }
+        aggregateRows = [...sums.values()];
+      }
       return {
         sites: (sitesResult.data ?? []) as Site[],
         reports,
-        lines: (aggregateResult.data ?? []).map((row: Aggregate) => ({
+        lines: (aggregateRows ?? []).map((row: any) => ({
           report_id: "aggregate",
           kind: row.kind,
-          item_name: row.itemName ?? (row as any).item_name,
+          item_name: row.itemName ?? row.item_name,
           total_count: row.total ?? 0,
           working_count: row.working ?? 0,
           idle_count: row.idle ?? 0,
