@@ -73,60 +73,53 @@ function CompanyReportPage() {
   const [runRange, setRunRange] = useState<{ from: string; to: string } | null>(null);
   const rangeIsValid = from <= to && daysBetween(from, to) <= 31;
   const query = useQuery({
-    queryKey: ["company-report-data", runRange?.from, runRange?.to],
+    queryKey: ["company-report-data", runRange?.from, runRange?.to, siteFilter, kindFilter],
     enabled: Boolean(runRange && rangeIsValid),
     queryFn: async () => {
       if (!runRange) throw new Error("اختر فترة التقرير أولاً");
-      const [sitesResult, reportsResult] = await Promise.all([
+      const [sitesResult, reportsResult, aggregateResult] = await Promise.all([
         supabase.from("sites").select("id, name, ctr_code").order("name"),
         supabase
           .from("site_daily_reports")
           .select("id, site_id, report_date, notes")
           .gte("report_date", runRange.from)
-          .lte("report_date", runRange.to),
+          .lte("report_date", runRange.to)
+          .limit(2001),
+        (supabase as any).rpc("get_company_report_aggregate", {
+          p_from: runRange.from,
+          p_to: runRange.to,
+          p_site_id: siteFilter === "all" ? null : siteFilter,
+          p_kind: kindFilter === "all" ? null : kindFilter,
+        }),
       ]);
       if (sitesResult.error) throw sitesResult.error;
       if (reportsResult.error) throw reportsResult.error;
+      if (aggregateResult.error) throw aggregateResult.error;
       const reports = (reportsResult.data ?? []) as Report[];
       if (reports.length > 2000) {
         throw new Error("الفترة المحددة تحتوي على أكثر من 2000 تقرير. اختر فترة أقصر لتجنب استهلاك ذاكرة المتصفح.");
       }
-      const reportIds = reports.map((report) => report.id);
-      const lineChunks = Array.from({ length: Math.ceil(reportIds.length / 100) }, (_, index) =>
-        reportIds.slice(index * 100, index * 100 + 100),
-      );
-      const lineResults = await Promise.all(
-        lineChunks.map((ids) =>
-          supabase
-            .from("site_daily_report_lines")
-            .select("report_id, kind, item_name, total_count, working_count, idle_count")
-            .in("report_id", ids),
-        ),
-      );
-      const lineError = lineResults.find((result) => result.error)?.error;
-      if (lineError) throw lineError;
       return {
         sites: (sitesResult.data ?? []) as Site[],
         reports,
-        lines: lineResults.flatMap((result) => result.data ?? []) as Line[],
+        lines: (aggregateResult.data ?? []).map((row: Aggregate) => ({
+          report_id: "aggregate",
+          kind: row.kind,
+          item_name: row.itemName ?? (row as any).item_name,
+          total_count: row.total ?? 0,
+          working_count: row.working ?? 0,
+          idle_count: row.idle ?? 0,
+        })) as Line[],
       };
     },
   });
   const data = query.data ?? { sites: [], reports: [], lines: [] };
-  const filteredReports = useMemo(
-    () => data.reports.filter((report) => siteFilter === "all" || report.site_id === siteFilter),
-    [data.reports, siteFilter],
-  );
-  const reportIds = useMemo(
-    () => new Set(filteredReports.map((report) => report.id)),
-    [filteredReports],
-  );
   const aggregate = useMemo<Aggregate[]>(() => {
     const map = new Map<string, Aggregate>();
     data.lines
       .filter(
         (line) =>
-          reportIds.has(line.report_id) && (kindFilter === "all" || line.kind === kindFilter),
+          line.report_id === "aggregate",
       )
       .forEach((line) => {
         const key = `${line.kind}:${line.item_name}`;
@@ -145,7 +138,7 @@ function CompanyReportPage() {
     return [...map.values()].sort(
       (a, b) => a.kind.localeCompare(b.kind) || a.itemName.localeCompare(b.itemName, "ar"),
     );
-  }, [data.lines, reportIds, kindFilter]);
+  }, [data.lines]);
   const missing = useMemo(() => {
     if (!runRange) return [];
     const reportKeys = new Set(data.reports.map((report) => `${report.site_id}:${report.report_date}`));
