@@ -49,12 +49,27 @@ function WagesPage() {
       const titles = (catalog?.length ? catalog.map((item) => item.name) : Object.keys(getKnownDefaultWages())).filter(Boolean);
       const existingTitles = new Set((existing ?? []).map((rate) => rate.title.trim()));
       const missing = titles.filter((title) => !existingTitles.has(title));
-      if (missing.length) {
-        const { error: seedError } = await supabase.from("wage_rates").upsert(
-          missing.map((title) => ({ title, ...getDefaultWage(title) })),
-          { onConflict: "title", ignoreDuplicates: true },
-        );
-        if (seedError) throw seedError;
+      const incomplete = (existing ?? []).filter((rate) =>
+        Number(rate.daily_rate) <= 0 || Number(rate.monthly_rate) <= 0 || Number(rate.overtime_hour_rate) <= 0,
+      );
+      if (missing.length || incomplete.length) {
+        if (missing.length) {
+          const { error: seedError } = await supabase.from("wage_rates").upsert(
+            missing.map((title) => ({ title, ...getDefaultWage(title) })),
+            { onConflict: "title", ignoreDuplicates: true },
+          );
+          if (seedError) throw seedError;
+        }
+        await Promise.all(incomplete.map(async (rate) => {
+          const defaults = getDefaultWage(rate.title);
+          const { error } = await supabase.from("wage_rates").update({
+            daily_rate: Number(rate.daily_rate) > 0 ? rate.daily_rate : defaults.daily_rate,
+            monthly_rate: Number(rate.monthly_rate) > 0 ? rate.monthly_rate : defaults.monthly_rate,
+            overtime_hour_rate: Number(rate.overtime_hour_rate) > 0 ? rate.overtime_hour_rate : defaults.overtime_hour_rate,
+            notes: rate.notes || defaults.notes,
+          }).eq("id", rate.id);
+          if (error) throw error;
+        }));
         const { data: refreshed, error: refreshError } = await supabase.from("wage_rates").select("*").order("title");
         if (refreshError) throw refreshError;
         return refreshed as Rate[];
