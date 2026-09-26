@@ -29,6 +29,7 @@ import {
   type CatalogItem,
   type CatalogKind,
 } from "@/lib/report-catalog";
+import { getDefaultWage } from "@/lib/wage-defaults";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({ meta: [{ title: "الإعدادات" }] }),
@@ -145,6 +146,14 @@ function SettingsPage() {
         .from("report_catalog_items")
         .insert({ kind, name, sort_order: maxOrder + 10 });
       if (error) return toast.error(error.message);
+      if (kind === "worker_specialty") {
+        const wage = getDefaultWage(name);
+        const { error: wageError } = await supabase.from("wage_rates").upsert(
+          { title: name, ...wage },
+          { onConflict: "title", ignoreDuplicates: true },
+        );
+        if (wageError) return toast.error(`تمت إضافة التخصص لكن تعذر إنشاء أجره الافتراضي: ${wageError.message}`);
+      }
     }
     setNewNames((current) => ({ ...current, [kind]: "" }));
     await refresh();

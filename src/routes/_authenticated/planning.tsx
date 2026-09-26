@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Banknote, Plus, Pencil, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/planning")({
@@ -55,6 +55,39 @@ function PlanningPage() {
       return map;
     },
   });
+  const { data: costData = { employees: [], rates: [] } } = useQuery({
+    queryKey: ["site-employee-costs"],
+    queryFn: async () => {
+      const [employeesResult, ratesResult] = await Promise.all([
+        (supabase as any).from("employees").select("id, site_id, position, wage_rate_id, base_salary, wage_rates(title, monthly_rate, daily_rate, currency)").eq("status", "active"),
+        supabase.from("wage_rates").select("title, monthly_rate, daily_rate, currency"),
+      ]);
+      if (employeesResult.error) throw employeesResult.error;
+      if (ratesResult.error) throw ratesResult.error;
+      return { employees: (employeesResult.data ?? []) as any[], rates: (ratesResult.data ?? []) as any[] };
+    },
+  });
+  const siteEmployees = costData.employees;
+  const siteSummary = useMemo(() => {
+    const result: Record<string, { employees: number; monthly: number; daily: number; specialties: Record<string, number> }> = {};
+    const wagesByTitle = new Map(costData.rates.map((rate: any) => [rate.title.trim(), rate]));
+    for (const employee of siteEmployees) {
+      if (!employee.site_id) continue;
+      const linkedWage = Array.isArray(employee.wage_rates) ? employee.wage_rates[0] : employee.wage_rates;
+      const wage = linkedWage ?? wagesByTitle.get(employee.position?.trim());
+      const monthly = Number(employee.base_salary ?? wage?.monthly_rate ?? 0);
+      const daily = Number(wage?.daily_rate ?? (monthly ? monthly / 26 : 0));
+      const current = result[employee.site_id] ?? { employees: 0, monthly: 0, daily: 0, specialties: {} };
+      current.employees += 1;
+      current.monthly += monthly;
+      current.daily += daily;
+      const specialty = wage?.title ?? employee.position ?? "بدون تخصص / أجر";
+      current.specialties[specialty] = (current.specialties[specialty] ?? 0) + 1;
+      result[employee.site_id] = current;
+    }
+    return result;
+  }, [costData.rates, siteEmployees]);
+  const totalMonthly = Object.values(siteSummary).reduce((sum, item) => sum + item.monthly, 0);
 
   const save = useMutation({
     mutationFn: async (d: any) => {
@@ -121,14 +154,20 @@ function PlanningPage() {
         </Dialog>
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card><CardContent className="p-4 flex items-center gap-3"><div className="rounded-xl bg-primary p-3"><Users className="w-5 h-5 text-white" /></div><div><p className="text-sm text-muted-foreground">إجمالي الموظفين بالمواقع</p><p className="text-2xl font-bold">{Object.values(siteSummary).reduce((sum, item) => sum + item.employees, 0)}</p></div></CardContent></Card>
+        <Card><CardContent className="p-4 flex items-center gap-3"><div className="rounded-xl bg-emerald-600 p-3"><Banknote className="w-5 h-5 text-white" /></div><div><p className="text-sm text-muted-foreground">التكلفة الشهرية التقديرية</p><p className="text-2xl font-bold">{totalMonthly.toLocaleString()} د.ع</p></div></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-sm text-muted-foreground">قاعدة الحساب</p><p className="font-semibold mt-1">الراتب الأساسي، ثم أجر التخصص الافتراضي عند عدم وجود راتب خاص</p></CardContent></Card>
+      </div>
+
       <Card>
         <CardHeader><CardTitle>مواقع العمل</CardTitle></CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>كود التكلفة</TableHead><TableHead>الموقع</TableHead><TableHead>العميل</TableHead>
-                <TableHead>الفترة</TableHead><TableHead>الموظفون</TableHead><TableHead>الحالة</TableHead><TableHead></TableHead>
+                <TableHead>كود التكلفة</TableHead><TableHead>الموقع</TableHead><TableHead>التخصصات العاملة</TableHead>
+                <TableHead>الموظفون</TableHead><TableHead>التكلفة الشهرية</TableHead><TableHead>الحالة</TableHead><TableHead></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -136,9 +175,9 @@ function PlanningPage() {
                 <TableRow key={s.id}>
                   <TableCell className="font-mono font-semibold">{s.ctr_code}</TableCell>
                   <TableCell className="font-medium">{s.name}</TableCell>
-                  <TableCell>{s.client ?? "-"}</TableCell>
-                  <TableCell className="text-xs">{s.start_date ?? "—"} → {s.end_date ?? "—"}</TableCell>
-                  <TableCell>{(counts as any)[s.id] ?? 0}</TableCell>
+                  <TableCell><div className="flex flex-wrap gap-1 max-w-xs">{Object.entries(siteSummary[s.id]?.specialties ?? {}).map(([title, count]) => <Badge key={title} variant="outline">{title} ({count})</Badge>)}{!siteSummary[s.id]?.employees && <span className="text-muted-foreground">لا يوجد موظفون</span>}</div></TableCell>
+                  <TableCell>{siteSummary[s.id]?.employees ?? (counts as any)[s.id] ?? 0}</TableCell>
+                  <TableCell className="font-semibold">{(siteSummary[s.id]?.monthly ?? 0).toLocaleString()} د.ع</TableCell>
                   <TableCell><Badge variant={s.status === "active" ? "default" : "secondary"}>{s.status}</Badge></TableCell>
                   <TableCell>
                     <div className="flex gap-1">

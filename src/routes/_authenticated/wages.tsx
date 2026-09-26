@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { getDefaultWage, getKnownDefaultWages } from "@/lib/wage-defaults";
 
 export const Route = createFileRoute("/_authenticated/wages")({
   head: () => ({
@@ -38,9 +39,27 @@ function WagesPage() {
   const { data: rates = [] } = useQuery({
     queryKey: ["wage-rates"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("wage_rates").select("*").order("title");
+      const { data: existing, error } = await supabase.from("wage_rates").select("*").order("title");
       if (error) throw error;
-      return data as Rate[];
+      const { data: catalog } = await supabase
+        .from("report_catalog_items")
+        .select("name, kind, is_archived")
+        .eq("kind", "worker_specialty")
+        .eq("is_archived", false);
+      const titles = (catalog?.length ? catalog.map((item) => item.name) : Object.keys(getKnownDefaultWages())).filter(Boolean);
+      const existingTitles = new Set((existing ?? []).map((rate) => rate.title.trim()));
+      const missing = titles.filter((title) => !existingTitles.has(title));
+      if (missing.length) {
+        const { error: seedError } = await supabase.from("wage_rates").upsert(
+          missing.map((title) => ({ title, ...getDefaultWage(title) })),
+          { onConflict: "title", ignoreDuplicates: true },
+        );
+        if (seedError) throw seedError;
+        const { data: refreshed, error: refreshError } = await supabase.from("wage_rates").select("*").order("title");
+        if (refreshError) throw refreshError;
+        return refreshed as Rate[];
+      }
+      return (existing ?? []) as Rate[];
     },
   });
   const { data: emps = [] } = useQuery({
