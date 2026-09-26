@@ -40,6 +40,23 @@ const roles: { key: Role; label: string; description: string }[] = [
   { key: "data_entry", label: "مدخل بيانات", description: "إدخال التقارير والمهام المسموحة" },
 ];
 
+async function getFunctionErrorMessage(error: unknown, data: { error?: string } | null) {
+  if (data?.error) return data.error;
+  const functionError = error as { message?: string; context?: Response } | null;
+  if (functionError?.context?.status === 404) {
+    return "وظيفة إدارة الحسابات غير منشورة في Supabase. انشر admin-account من Edge Functions ثم أعد المحاولة.";
+  }
+  if (functionError?.context) {
+    try {
+      const body = (await functionError.context.clone().json()) as { error?: string };
+      if (body.error) return body.error;
+    } catch {
+      // Keep the SDK message when the function did not return JSON.
+    }
+  }
+  return functionError?.message ?? "تعذر تنفيذ العملية";
+}
+
 function AccountsPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -136,8 +153,7 @@ function AccountsPage() {
       },
     });
     setActionBusy(false);
-    if (error || data?.error)
-      return toast.error(data?.error ?? error?.message ?? "تعذر إنشاء الحساب");
+    if (error || data?.error) return toast.error(await getFunctionErrorMessage(error, data));
     setCreateForm({ fullName: "", email: "", password: "", role: "data_entry" });
     setShowCreateForm(false);
     await Promise.all([
@@ -155,8 +171,7 @@ function AccountsPage() {
       body: { action: "set_password", user_id: resetUserId, password: resetPassword },
     });
     setActionBusy(false);
-    if (error || data?.error)
-      return toast.error(data?.error ?? error?.message ?? "تعذر تغيير كلمة المرور");
+    if (error || data?.error) return toast.error(await getFunctionErrorMessage(error, data));
     setResetUserId(null);
     setResetPassword("");
     toast.success("تم تغيير كلمة المرور. لا يتم عرضها داخل النظام");
