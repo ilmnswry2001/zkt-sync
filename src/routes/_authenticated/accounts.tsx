@@ -136,18 +136,18 @@ function AccountsPage() {
           role: createForm.role,
         },
       });
+      setCreateForm({ fullName: "", email: "", password: "", role: "data_entry" });
+      setShowCreateForm(false);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["accounts", "profiles"] }),
+        queryClient.invalidateQueries({ queryKey: ["accounts", "roles"] }),
+      ]);
+      toast.success("تم إنشاء الحساب وتعيين الصلاحية");
     } catch (error) {
+      toast.error(error instanceof Error ? error.message : "تعذر إنشاء الحساب");
+    } finally {
       setActionBusy(false);
-      return toast.error(error instanceof Error ? error.message : "تعذر إنشاء الحساب");
     }
-    setActionBusy(false);
-    setCreateForm({ fullName: "", email: "", password: "", role: "data_entry" });
-    setShowCreateForm(false);
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["accounts", "profiles"] }),
-      queryClient.invalidateQueries({ queryKey: ["accounts", "roles"] }),
-    ]);
-    toast.success("تم إنشاء الحساب وتعيين الصلاحية");
   };
   const handleUpdatePassword = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -158,14 +158,14 @@ function AccountsPage() {
       await updateAccountPassword({
         data: { userId: resetUserId, password: resetPassword },
       });
+      setResetUserId(null);
+      setResetPassword("");
+      toast.success("تم تغيير كلمة المرور. لا يتم عرضها داخل النظام");
     } catch (error) {
+      toast.error(error instanceof Error ? error.message : "تعذر تغيير كلمة المرور");
+    } finally {
       setActionBusy(false);
-      return toast.error(error instanceof Error ? error.message : "تعذر تغيير كلمة المرور");
     }
-    setActionBusy(false);
-    setResetUserId(null);
-    setResetPassword("");
-    toast.success("تم تغيير كلمة المرور. لا يتم عرضها داخل النظام");
   };
 
   const loading = profilesQuery.isLoading || rolesQuery.isLoading;
