@@ -29,7 +29,7 @@ export const getMonthlySheet = createServerFn({ method: "GET" })
       supabase
         .from("employees")
         .select(
-          "id, employee_no, full_name, pay_type, department_id, site_id, shift_id, departments(name), sites(name), shifts(name, end_time)",
+          "id, employee_no, full_name, pay_type, department_id, site_id, shift_id, departments(name), sites(name), shifts(name, start_time, end_time, grace_minutes)",
         )
         .order("employee_no")
         .order("id")
@@ -88,6 +88,7 @@ export const getMonthlySheet = createServerFn({ method: "GET" })
           employee.shifts?.end_time,
           today,
           employee.pay_type === "daily" ? "daily" : "monthly",
+          employee.shifts?.grace_minutes ?? 0,
         );
         rows.push({ employee, days, summary: summarizeDays(days) });
       }
@@ -104,7 +105,7 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
     const { data: emp, error } = await supabase
       .from("employees")
       .select(
-        "id, employee_no, full_name, position, base_salary, pay_type, departments(name), sites(name, ctr_code), shifts(name, start_time, end_time), wage_rates(title, daily_rate, monthly_rate, overtime_hour_rate, currency)",
+        "id, employee_no, full_name, position, base_salary, pay_type, departments(name), sites(name, ctr_code), shifts(name, start_time, end_time, grace_minutes), wage_rates(title, daily_rate, monthly_rate, overtime_hour_rate, currency)",
       )
       .eq("id", data.employee_id)
       .maybeSingle();
@@ -151,6 +152,7 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
       emp.shifts?.end_time,
       new Date().toISOString().slice(0, 10),
       payType,
+      emp.shifts?.grace_minutes ?? 0,
     );
     const summary = summarizeDays(days);
     const wage = emp.wage_rates;

@@ -34,6 +34,7 @@ export function buildAttendanceDays(
   shiftEnd: string | null | undefined,
   today: string,
   payType: PayType = "monthly",
+  graceMinutes = 0,
 ): AttendanceDay[] {
   const byDay = new Map<string, string[]>();
   for (const log of logs) {
@@ -57,7 +58,8 @@ export function buildAttendanceDays(
       manualOvertime > 0
         ? manualOvertime
         : complete && last && shiftEnd
-          ? (Date.parse(last) - Date.parse(`${date}T${shiftEnd}Z`)) / 3600000
+          ? (Date.parse(last) - Date.parse(`${date}T${shiftEnd}Z`)) / 3600000 -
+            Math.max(0, graceMinutes) / 60
           : 0;
     if (!Number.isFinite(overtime)) overtime = 0;
     // دوام فعلي يوم الجمعة يُمنح 10 ساعات وقت إضافي لأي موظف

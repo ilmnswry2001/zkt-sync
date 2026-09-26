@@ -305,6 +305,9 @@ function MonthlyPage() {
           ))}
           <span className="text-muted-foreground">— لم يحن موعده</span>
           <span className="text-muted-foreground">• تعديل يدوي</span>
+          <span className="rounded border border-orange-400 bg-orange-50 px-1.5 py-0.5 text-orange-700">
+            إضافي
+          </span>
         </div>
 
         {isPending ? (
@@ -460,13 +463,15 @@ function MonthlyPage() {
                       {!summarized &&
                         row.days.map((day) => {
                           const status = statuses.find((s) => s.value === day.status);
-                          const description = `${row.employee.full_name}، ${day.date}، ${status?.label ?? "لم يحن موعده"}${day.manual ? "، تعديل يدوي" : ""}`;
+                          const description = `${row.employee.full_name}، ${day.date}، ${status?.label ?? "لم يحن موعده"}${day.overtime_hours > 0 ? `، وقت إضافي ${day.overtime_hours} ساعة` : ""}${day.manual ? "، تعديل يدوي" : ""}`;
                           return (
                             <td key={day.date} className="text-center">
                               <button
                                 className={cn(
                                   "relative h-8 w-9 rounded font-semibold transition-colors hover:ring-1 hover:ring-primary focus-visible:outline-primary",
                                   status?.className ?? "text-muted-foreground",
+                                  day.overtime_hours > 0 &&
+                                    "ring-2 ring-orange-400 bg-orange-100 text-orange-800",
                                 )}
                                 aria-label={description}
                                 title={description}
@@ -481,6 +486,14 @@ function MonthlyPage() {
                                     className="absolute left-0.5 top-0 text-[10px]"
                                   >
                                     •
+                                  </span>
+                                )}
+                                {day.overtime_hours > 0 && (
+                                  <span
+                                    aria-hidden="true"
+                                    className="absolute right-0.5 top-0 text-[9px] text-orange-700"
+                                  >
+                                    +
                                   </span>
                                 )}
                               </button>

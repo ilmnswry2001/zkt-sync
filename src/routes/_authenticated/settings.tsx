@@ -14,6 +14,7 @@ import {
   ArrowUp,
   Archive,
   Check,
+  Clock3,
   Pencil,
   Plus,
   RotateCcw,
@@ -50,6 +51,14 @@ type BasicSettings = {
   companyManager: string;
 };
 
+type ShiftRule = {
+  id: string;
+  name: string;
+  start_time: string;
+  end_time: string;
+  grace_minutes: number;
+};
+
 function readBasicSettings(): BasicSettings {
   if (typeof window === "undefined") return { systemName: "نظام الحضور", companyManager: "" };
   try {
@@ -72,6 +81,13 @@ function SettingsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [basicSettings, setBasicSettings] = useState<BasicSettings>(readBasicSettings);
+  const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
+  const [shiftForm, setShiftForm] = useState({
+    name: "",
+    start_time: "08:00",
+    end_time: "17:00",
+    grace_minutes: "0",
+  });
   const catalogQuery = useQuery({
     queryKey: ["report-catalogs", "all"],
     queryFn: async (): Promise<{ items: CatalogItem[]; usingFallback: boolean }> => {
@@ -90,6 +106,18 @@ function SettingsPage() {
   const workers = items.filter((item) => item.kind === "worker_specialty");
   const equipment = items.filter((item) => item.kind === "equipment_type");
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["report-catalogs"] });
+  const shiftsQuery = useQuery({
+    queryKey: ["settings", "shift-rules"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("shifts")
+        .select("id, name, start_time, end_time, grace_minutes")
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as ShiftRule[];
+    },
+  });
+  const shifts = shiftsQuery.data ?? [];
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -190,6 +218,28 @@ function SettingsPage() {
       if (error) return toast.error(error.message);
     }
     await refresh();
+  };
+
+  const saveShift = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const name = shiftForm.name.trim();
+    if (!name || !shiftForm.start_time || !shiftForm.end_time) {
+      return toast.error("أدخل اسم الدوام ووقت البداية والنهاية");
+    }
+    const payload = {
+      name,
+      start_time: shiftForm.start_time,
+      end_time: shiftForm.end_time,
+      grace_minutes: Math.max(0, Number(shiftForm.grace_minutes) || 0),
+    };
+    const result = editingShiftId
+      ? await supabase.from("shifts").update(payload).eq("id", editingShiftId)
+      : await supabase.from("shifts").insert(payload);
+    if (result.error) return toast.error(result.error.message);
+    setEditingShiftId(null);
+    setShiftForm({ name: "", start_time: "08:00", end_time: "17:00", grace_minutes: "0" });
+    await queryClient.invalidateQueries({ queryKey: ["settings", "shift-rules"] });
+    toast.success("تم حفظ قاعدة الدوام");
   };
 
   const renderCatalog = (title: string, kind: CatalogKind, list: CatalogItem[]) => (
@@ -325,6 +375,7 @@ function SettingsPage() {
       <Tabs defaultValue="reports" dir="rtl">
         <TabsList className="h-auto flex-wrap justify-start">
           <TabsTrigger value="reports">إعدادات التقارير اليومية</TabsTrigger>
+          <TabsTrigger value="work-rules">أوقات الدوام والإضافي</TabsTrigger>
           <TabsTrigger value="basic">الإعدادات الأساسية</TabsTrigger>
         </TabsList>
         <TabsContent value="reports" className="space-y-5">
@@ -350,6 +401,136 @@ function SettingsPage() {
               {renderCatalog("أنواع الآليات والمركبات", "equipment_type", equipment)}
             </div>
           )}
+        </TabsContent>
+        <TabsContent value="work-rules" className="space-y-5">
+          <Card className="border-primary/20 bg-primary/5">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock3 className="h-5 w-5 text-primary" />
+                قواعد الدوام الرسمي واحتساب الإضافي
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                يحدد وقت النهاية الحد الذي يبدأ بعده احتساب الوقت الإضافي من سجلات البصمة. ويُضاف
+                هامش السماح قبل بدء الاحتساب. يجب تحديد أجر الساعة الإضافية لكل فئة من قسم الأجور
+                والمكافآت.
+              </p>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>{editingShiftId ? "تعديل قاعدة دوام" : "إضافة قاعدة دوام"}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={saveShift} className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                <div>
+                  <Label>اسم الدوام</Label>
+                  <Input
+                    required
+                    value={shiftForm.name}
+                    onChange={(e) => setShiftForm((v) => ({ ...v, name: e.target.value }))}
+                    placeholder="الدوام الرسمي"
+                  />
+                </div>
+                <div>
+                  <Label>بداية الدوام</Label>
+                  <Input
+                    required
+                    type="time"
+                    value={shiftForm.start_time}
+                    onChange={(e) => setShiftForm((v) => ({ ...v, start_time: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label>نهاية الدوام</Label>
+                  <Input
+                    required
+                    type="time"
+                    value={shiftForm.end_time}
+                    onChange={(e) => setShiftForm((v) => ({ ...v, end_time: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label>هامش السماح بالدقائق</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="180"
+                    value={shiftForm.grace_minutes}
+                    onChange={(e) => setShiftForm((v) => ({ ...v, grace_minutes: e.target.value }))}
+                  />
+                </div>
+                <div className="flex gap-2 md:col-span-4">
+                  <Button type="submit">{editingShiftId ? "حفظ التعديل" : "إضافة قاعدة"}</Button>
+                  {editingShiftId && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setEditingShiftId(null);
+                        setShiftForm({
+                          name: "",
+                          start_time: "08:00",
+                          end_time: "17:00",
+                          grace_minutes: "0",
+                        });
+                      }}
+                    >
+                      إلغاء
+                    </Button>
+                  )}
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>قواعد الدوام المسجلة</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {shiftsQuery.isLoading && (
+                <p className="text-muted-foreground">جارٍ تحميل قواعد الدوام...</p>
+              )}
+              {shiftsQuery.error && (
+                <p className="text-destructive">
+                  تعذر تحميل قواعد الدوام: {shiftsQuery.error.message}
+                </p>
+              )}
+              {shifts.map((shift) => (
+                <div
+                  key={shift.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
+                >
+                  <div>
+                    <p className="font-semibold">{shift.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {shift.start_time.slice(0, 5)} — {shift.end_time.slice(0, 5)} · هامش السماح{" "}
+                      {shift.grace_minutes} دقيقة
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setEditingShiftId(shift.id);
+                      setShiftForm({
+                        name: shift.name,
+                        start_time: shift.start_time.slice(0, 5),
+                        end_time: shift.end_time.slice(0, 5),
+                        grace_minutes: String(shift.grace_minutes),
+                      });
+                    }}
+                  >
+                    تعديل
+                  </Button>
+                </div>
+              ))}
+              {!shiftsQuery.isLoading && !shifts.length && (
+                <p className="py-6 text-center text-muted-foreground">
+                  لا توجد قواعد دوام. أضف أول قاعدة الآن.
+                </p>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
         <TabsContent value="basic">
           <Card>
