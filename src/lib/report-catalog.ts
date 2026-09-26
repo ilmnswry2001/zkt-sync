@@ -27,13 +27,15 @@ export const DEFAULT_REPORT_CATALOG: CatalogItem[] = [
   "حراسة وأمن",
   "إسعاف وسلامة HSE",
 ]
-  .map((name, index) => ({
-    id: `default-worker-${index + 1}`,
-    kind: "worker_specialty" as const,
-    name,
-    sort_order: (index + 1) * 10,
-    is_archived: false,
-  }))
+  .map(
+    (name, index): CatalogItem => ({
+      id: `default-worker-${index + 1}`,
+      kind: "worker_specialty" as const,
+      name,
+      sort_order: (index + 1) * 10,
+      is_archived: false,
+    }),
+  )
   .concat(
     [
       "حفارة",
@@ -49,13 +51,15 @@ export const DEFAULT_REPORT_CATALOG: CatalogItem[] = [
       "مولدة كهرباء",
       "ضاغطة هواء",
       "معدات رفع",
-    ].map((name, index) => ({
-      id: `default-equipment-${index + 1}`,
-      kind: "equipment_type" as const,
-      name,
-      sort_order: (index + 1) * 10,
-      is_archived: false,
-    })),
+    ].map(
+      (name, index): CatalogItem => ({
+        id: `default-equipment-${index + 1}`,
+        kind: "equipment_type" as const,
+        name,
+        sort_order: (index + 1) * 10,
+        is_archived: false,
+      }),
+    ),
   );
 
 function isCatalogItem(value: unknown): value is CatalogItem {

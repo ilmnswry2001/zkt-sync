@@ -173,7 +173,9 @@ function AttendancePage() {
                 (entry.kind === line.kind && entry.item_name === line.item_name),
             ),
         )
-        .forEach((line) => result.push(line));
+        .forEach((line) =>
+          result.push({ ...line, catalog_item_id: line.catalog_item_id ?? line.id }),
+        );
       return result;
     },
     [activeEquipment, activeWorkers],

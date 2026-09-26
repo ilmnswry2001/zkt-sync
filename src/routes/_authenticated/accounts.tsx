@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { KeyRound, Loader2, Plus, RefreshCw, ShieldCheck, UserCog, Users } from "lucide-react";
 import { toast } from "sonner";
+import { createAccount, updateAccountPassword } from "@/lib/accounts.functions";
 
 export const Route = createFileRoute("/_authenticated/accounts")({
   head: () => ({ meta: [{ title: "الحسابات والصلاحيات" }] }),
@@ -39,23 +40,6 @@ const roles: { key: Role; label: string; description: string }[] = [
   { key: "supervisor", label: "مشرف", description: "المتابعة والإشراف على التقارير والمهام" },
   { key: "data_entry", label: "مدخل بيانات", description: "إدخال التقارير والمهام المسموحة" },
 ];
-
-async function getFunctionErrorMessage(error: unknown, data: { error?: string } | null) {
-  if (data?.error) return data.error;
-  const functionError = error as { message?: string; context?: Response } | null;
-  if (functionError?.context?.status === 404) {
-    return "وظيفة إدارة الحسابات غير منشورة في Supabase. انشر admin-account من Edge Functions ثم أعد المحاولة.";
-  }
-  if (functionError?.context) {
-    try {
-      const body = (await functionError.context.clone().json()) as { error?: string };
-      if (body.error) return body.error;
-    } catch {
-      // Keep the SDK message when the function did not return JSON.
-    }
-  }
-  return functionError?.message ?? "تعذر تنفيذ العملية";
-}
 
 function AccountsPage() {
   const queryClient = useQueryClient();
@@ -138,22 +122,25 @@ function AccountsPage() {
     await queryClient.invalidateQueries({ queryKey: ["accounts", "roles"] });
     toast.success("تم تحديث صلاحيات الحساب");
   };
-  const createAccount = async (event: React.FormEvent) => {
+  const handleCreateAccount = async (event: React.FormEvent) => {
     event.preventDefault();
     if (createForm.password.length < 8)
       return toast.error("كلمة المرور يجب أن تكون 8 أحرف على الأقل");
     setActionBusy(true);
-    const { data, error } = await supabase.functions.invoke("admin-account", {
-      body: {
-        action: "create",
-        full_name: createForm.fullName,
-        email: createForm.email,
-        password: createForm.password,
-        role: createForm.role,
-      },
-    });
+    try {
+      await createAccount({
+        data: {
+          fullName: createForm.fullName,
+          email: createForm.email,
+          password: createForm.password,
+          role: createForm.role,
+        },
+      });
+    } catch (error) {
+      setActionBusy(false);
+      return toast.error(error instanceof Error ? error.message : "تعذر إنشاء الحساب");
+    }
     setActionBusy(false);
-    if (error || data?.error) return toast.error(await getFunctionErrorMessage(error, data));
     setCreateForm({ fullName: "", email: "", password: "", role: "data_entry" });
     setShowCreateForm(false);
     await Promise.all([
@@ -162,16 +149,20 @@ function AccountsPage() {
     ]);
     toast.success("تم إنشاء الحساب وتعيين الصلاحية");
   };
-  const updatePassword = async (event: React.FormEvent) => {
+  const handleUpdatePassword = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!resetUserId || resetPassword.length < 8)
       return toast.error("كلمة المرور يجب أن تكون 8 أحرف على الأقل");
     setActionBusy(true);
-    const { data, error } = await supabase.functions.invoke("admin-account", {
-      body: { action: "set_password", user_id: resetUserId, password: resetPassword },
-    });
+    try {
+      await updateAccountPassword({
+        data: { userId: resetUserId, password: resetPassword },
+      });
+    } catch (error) {
+      setActionBusy(false);
+      return toast.error(error instanceof Error ? error.message : "تعذر تغيير كلمة المرور");
+    }
     setActionBusy(false);
-    if (error || data?.error) return toast.error(await getFunctionErrorMessage(error, data));
     setResetUserId(null);
     setResetPassword("");
     toast.success("تم تغيير كلمة المرور. لا يتم عرضها داخل النظام");
@@ -212,7 +203,7 @@ function AccountsPage() {
             <CardTitle>إضافة حساب جديد</CardTitle>
           </CardHeader>
           <CardContent>
-            <form onSubmit={createAccount} className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <form onSubmit={handleCreateAccount} className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
                 <Label htmlFor="new-account-name">الاسم الكامل</Label>
                 <Input
@@ -394,7 +385,7 @@ function AccountsPage() {
                   </div>
                   {resetUserId === profile.id && (
                     <form
-                      onSubmit={updatePassword}
+                      onSubmit={handleUpdatePassword}
                       className="mt-4 flex flex-col gap-2 border-t pt-4 sm:flex-row sm:items-end"
                     >
                       <div className="flex-1">

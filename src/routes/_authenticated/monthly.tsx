@@ -692,23 +692,27 @@ function EmployeeDetails({
               ملخص الأجر — {data.payroll.payType === "daily" ? "موظف يومي" : "موظف شهري"}
             </h3>
             <dl className="grid grid-cols-2 gap-4">
-              {([
-                ["الأجر اليومي", data.payroll.dailyRate],
-                ...(data.payroll.payType === "daily"
-                  ? ([
-                      ["أيام الجمعة المحتسبة", data.payroll.paidFridays],
-                      ["الأيام المدفوعة", data.payroll.paidDays],
-                    ] as [string, number][])
-                  : []),
-                ["أجر الحضور", data.payroll.basePay],
-                ["الإضافات والمكافآت", data.payroll.additionsTotal],
-                ["الإجمالي المستحق", data.payroll.total],
-              ] as [string, number][]).map(([label, value]) => (
+              {(
+                [
+                  ["الأجر اليومي", data.payroll.dailyRate],
+                  ...(data.payroll.payType === "daily"
+                    ? ([
+                        ["أيام الجمعة المحتسبة", data.payroll.paidDays],
+                        ["الأيام المدفوعة", data.payroll.paidDays],
+                      ] as [string, number][])
+                    : []),
+                  ["أجر الحضور", data.payroll.basePay],
+                  ["الإضافات والمكافآت", data.payroll.additionsTotal],
+                  ["الإجمالي المستحق", data.payroll.total],
+                ] as [string, number][]
+              ).map(([label, value]) => (
                 <div key={label}>
                   <dt className="text-xs text-muted-foreground">{label}</dt>
                   <dd className="mt-1 font-semibold">
                     {value.toLocaleString()}{" "}
-                    {label.includes("أيام") || label.includes("الأيام") ? "يوم" : data.payroll.currency}
+                    {label.includes("أيام") || label.includes("الأيام")
+                      ? "يوم"
+                      : data.payroll.currency}
                   </dd>
                 </div>
               ))}

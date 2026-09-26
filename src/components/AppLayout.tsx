@@ -91,8 +91,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
         <nav className="flex-1 p-3 space-y-1 min-w-64">
           {nav.map((item) => {
-            if (item.access === "admin" && !isAdmin) return null;
-            if (item.access === "hr" && !isHR) return null;
+            if ("access" in item && item.access === "admin" && !isAdmin) return null;
+            if ("access" in item && item.access === "hr" && !isHR) return null;
             const active = pathname === item.to || pathname.startsWith(item.to + "/");
             const Icon = item.icon;
             return (
