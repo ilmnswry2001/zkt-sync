@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Banknote, Plus, Pencil, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
+import { getDefaultWage } from "@/lib/wage-defaults";
 
 export const Route = createFileRoute("/_authenticated/planning")({
   head: () => ({
@@ -74,9 +75,15 @@ function PlanningPage() {
     for (const employee of siteEmployees) {
       if (!employee.site_id) continue;
       const linkedWage = Array.isArray(employee.wage_rates) ? employee.wage_rates[0] : employee.wage_rates;
-      const wage = linkedWage ?? wagesByTitle.get(employee.position?.trim());
-      const monthly = Number(employee.base_salary ?? wage?.monthly_rate ?? 0);
-      const daily = Number(wage?.daily_rate ?? (monthly ? monthly / 26 : 0));
+      const rawWage = linkedWage ?? wagesByTitle.get(employee.position?.trim());
+      const defaults = getDefaultWage(rawWage?.title ?? employee.position ?? "");
+      const wage = rawWage ? {
+        ...rawWage,
+        daily_rate: Number(rawWage.daily_rate) > 0 ? rawWage.daily_rate : defaults.daily_rate,
+        monthly_rate: Number(rawWage.monthly_rate) > 0 ? rawWage.monthly_rate : defaults.monthly_rate,
+      } : defaults;
+      const monthly = Number(employee.base_salary) > 0 ? Number(employee.base_salary) : Number(wage.monthly_rate);
+      const daily = Number(wage.daily_rate ?? (monthly ? monthly / 26 : 0));
       const current = result[employee.site_id] ?? { employees: 0, monthly: 0, daily: 0, specialties: {} };
       current.employees += 1;
       current.monthly += monthly;

@@ -39,6 +39,16 @@ function WagesPage() {
   const { data: rates = [] } = useQuery({
     queryKey: ["wage-rates"],
     queryFn: async () => {
+      const withDefaults = (rate: Rate): Rate => {
+        const defaults = getDefaultWage(rate.title);
+        return {
+          ...rate,
+          daily_rate: Number(rate.daily_rate) > 0 ? rate.daily_rate : defaults.daily_rate,
+          monthly_rate: Number(rate.monthly_rate) > 0 ? rate.monthly_rate : defaults.monthly_rate,
+          overtime_hour_rate: Number(rate.overtime_hour_rate) > 0 ? rate.overtime_hour_rate : defaults.overtime_hour_rate,
+          currency: rate.currency || defaults.currency,
+        };
+      };
       const { data: existing, error } = await supabase.from("wage_rates").select("*").order("title");
       if (error) throw error;
       const { data: catalog } = await supabase
@@ -72,9 +82,9 @@ function WagesPage() {
         }));
         const { data: refreshed, error: refreshError } = await supabase.from("wage_rates").select("*").order("title");
         if (refreshError) throw refreshError;
-        return refreshed as Rate[];
+        return (refreshed as Rate[]).map(withDefaults);
       }
-      return (existing ?? []) as Rate[];
+      return ((existing ?? []) as Rate[]).map(withDefaults);
     },
   });
   const { data: emps = [] } = useQuery({
