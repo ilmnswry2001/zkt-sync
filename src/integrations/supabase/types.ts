@@ -14,56 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      employee_tasks: {
-        Row: {
-          archived_at: string | null
-          created_at: string
-          created_by: string
-          description: string | null
-          duration_minutes: number
-          employee_id: string | null
-          id: string
-          status: string
-          task_date: string
-          title: string
-          updated_at: string
-        }
-        Insert: {
-          archived_at?: string | null
-          created_at?: string
-          created_by?: string
-          description?: string | null
-          duration_minutes?: number
-          employee_id?: string | null
-          id?: string
-          status?: string
-          task_date?: string
-          title: string
-          updated_at?: string
-        }
-        Update: {
-          archived_at?: string | null
-          created_at?: string
-          created_by?: string
-          description?: string | null
-          duration_minutes?: number
-          employee_id?: string | null
-          id?: string
-          status?: string
-          task_date?: string
-          title?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "employee_tasks_employee_id_fkey"
-            columns: ["employee_id"]
-            isOneToOne: false
-            referencedRelation: "employees"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       attendance_day_status: {
         Row: {
           created_at: string
@@ -263,6 +213,56 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      employee_tasks: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          duration_minutes: number
+          employee_id: string | null
+          id: string
+          status: string
+          task_date: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          duration_minutes?: number
+          employee_id?: string | null
+          id?: string
+          status?: string
+          task_date?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          duration_minutes?: number
+          employee_id?: string | null
+          id?: string
+          status?: string
+          task_date?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_tasks_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       employees: {
         Row: {
@@ -623,6 +623,36 @@ export type Database = {
         }
         Relationships: []
       }
+      report_catalog_items: {
+        Row: {
+          created_at: string
+          id: string
+          is_archived: boolean
+          kind: string
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_archived?: boolean
+          kind: string
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_archived?: boolean
+          kind?: string
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       salary_additions: {
         Row: {
           amount: number
@@ -694,66 +724,6 @@ export type Database = {
         }
         Relationships: []
       }
-      report_catalog_items: {
-        Row: {
-          created_at: string
-          id: string
-          is_archived: boolean
-          kind: string
-          name: string
-          sort_order: number
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          is_archived?: boolean
-          kind: string
-          name: string
-          sort_order?: number
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          is_archived?: boolean
-          kind?: string
-          name?: string
-          sort_order?: number
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      site_daily_reports: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          id: string
-          notes: string | null
-          report_date: string
-          site_id: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          notes?: string | null
-          report_date: string
-          site_id: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          notes?: string | null
-          report_date?: string
-          site_id?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
       site_daily_report_lines: {
         Row: {
           catalog_item_id: string | null
@@ -788,7 +758,60 @@ export type Database = {
           total_count?: number
           working_count?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "site_daily_report_lines_catalog_item_id_fkey"
+            columns: ["catalog_item_id"]
+            isOneToOne: false
+            referencedRelation: "report_catalog_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_daily_report_lines_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "site_daily_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_daily_reports: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          report_date: string
+          site_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          report_date: string
+          site_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          report_date?: string
+          site_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_daily_reports_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sites: {
         Row: {
