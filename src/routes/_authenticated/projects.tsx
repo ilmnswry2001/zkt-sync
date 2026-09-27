@@ -178,6 +178,32 @@ function ProjectsPage() {
       }),
     [linesByReport, reportByProject, visibleProjects, wageByTitle],
   );
+  const workerSpecialties = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          projectCards.flatMap((card) =>
+            card.lines
+              .filter((line) => line.kind === "worker_specialty")
+              .map((line) => line.item_name.trim()),
+          ),
+        ),
+      ).sort((a, b) => a.localeCompare(b, "ar")),
+    [projectCards],
+  );
+  const equipmentTypes = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          projectCards.flatMap((card) =>
+            card.lines
+              .filter((line) => line.kind === "equipment_type")
+              .map((line) => line.item_name.trim()),
+          ),
+        ),
+      ).sort((a, b) => a.localeCompare(b, "ar")),
+    [projectCards],
+  );
   const reportedCount = projectCards.filter((card) => card.report).length;
   const missingCount = projectCards.length - reportedCount;
   const workerTotal = projectCards.reduce((sum, card) => sum + card.workerTotal, 0);
@@ -321,111 +347,200 @@ function ProjectsPage() {
           {query.isLoading ? (
             <p className="py-8 text-center text-muted-foreground">جارٍ تحميل تقارير المشاريع...</p>
           ) : projectCards.length ? (
-            <div dir="rtl" className="overflow-x-auto rounded-xl border">
-              <table className="min-w-[920px] w-full text-sm">
-                <thead className="bg-muted/60">
-                  <tr className="border-b text-right">
-                    <th className="px-4 py-3 font-semibold">المشروع / الموقع</th>
-                    <th className="px-4 py-3 font-semibold">حالة التقرير</th>
-                    <th className="px-4 py-3 font-semibold">إجمالي العاملين</th>
-                    <th className="px-4 py-3 font-semibold">التخصصات والتكلفة اليومية</th>
-                    <th className="px-4 py-3 font-semibold">إجمالي الآليات</th>
-                    <th className="px-4 py-3 font-semibold">تفاصيل التقرير اليومي</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {projectCards.map((card) => (
-                    <tr
-                      key={card.project.id}
-                      className="border-b align-top transition-colors last:border-0 hover:bg-muted/30"
-                    >
-                      <td className="px-4 py-4">
-                        <p className="font-semibold">{card.project.name}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          CTR: {card.project.ctr_code}
-                        </p>
-                      </td>
-                      <td className="px-4 py-4">
-                        {card.report ? (
-                          <Badge>تم رفع التقرير</Badge>
-                        ) : (
-                          <Badge variant="destructive">لم يرفع تقريراً</Badge>
-                        )}
-                      </td>
-                      <td className="px-4 py-4 text-lg font-bold text-indigo-700 dark:text-indigo-300">
-                        {card.workerTotal}
-                      </td>
-                      <td className="min-w-[360px] px-4 py-4">
-                        {card.specialtyCosts.length ? (
-                          <div className="space-y-1.5">
-                            {card.specialtyCosts.map((item) => (
-                              <div
-                                key={`${card.project.id}-${item.name}`}
-                                className="flex items-center justify-between gap-3 rounded-md bg-muted/60 px-2.5 py-1.5 text-xs"
-                              >
-                                <span className="font-medium">
-                                  {item.name} × {item.count}
-                                </span>
-                                <span
-                                  className={
-                                    item.hasRate
-                                      ? "text-emerald-700 dark:text-emerald-300"
-                                      : "text-amber-700 dark:text-amber-300"
-                                  }
-                                >
-                                  {item.hasRate
-                                    ? `${item.cost.toLocaleString()} د.ع`
-                                    : "لا يوجد أجر"}
-                                </span>
-                              </div>
-                            ))}
-                            <div className="border-t pt-1.5 text-left font-bold">
-                              المجموع: {card.siteDailyCost.toLocaleString()} د.ع / يوم
-                            </div>
+            <div dir="rtl" className="space-y-6">
+              <div className="overflow-x-auto rounded-xl border">
+                <table className="min-w-[760px] w-full text-sm">
+                  <thead className="bg-muted/60">
+                    <tr className="border-b text-right">
+                      <th className="sticky right-0 z-10 min-w-[190px] bg-muted/90 px-4 py-3 text-right font-semibold">
+                        التخصص / الموقع
+                      </th>
+                      {projectCards.map((card) => (
+                        <th
+                          key={card.project.id}
+                          className="min-w-[150px] px-4 py-3 text-center font-semibold"
+                        >
+                          <div>{card.project.name}</div>
+                          <div className="mt-1 text-[11px] font-normal text-muted-foreground">
+                            CTR: {card.project.ctr_code}
                           </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">
-                            لا توجد تخصصات عاملة في التقرير.
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-4 text-lg font-bold text-slate-700 dark:text-slate-300">
-                        {card.equipmentTotal}
-                      </td>
-                      <td className="min-w-[430px] px-4 py-4">
-                        {card.report ? (
-                          <div className="space-y-2">
-                            <div className="flex flex-wrap gap-2">
-                              {card.lines.map((line) => (
-                                <span
-                                  key={`${card.project.id}-${line.kind}-${line.item_name}`}
-                                  className="rounded-lg bg-muted px-2.5 py-1.5 text-xs"
-                                >
-                                  <b>{line.item_name}</b>: {Number(line.total_count || 0)}
-                                </span>
-                              ))}
-                            </div>
-                            {card.report.notes && (
-                              <p className="rounded-lg bg-primary/5 p-2 text-xs">
-                                <b>ملاحظات:</b> {card.report.notes}
-                              </p>
-                            )}
-                            {!card.lines.length && (
-                              <p className="text-xs text-muted-foreground">
-                                التقرير محفوظ بدون بنود.
-                              </p>
+                          <div className="mt-2">
+                            {card.report ? (
+                              <Badge className="text-[10px]">تم الرفع</Badge>
+                            ) : (
+                              <Badge variant="destructive" className="text-[10px]">
+                                لم يرفع
+                              </Badge>
                             )}
                           </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">
-                            لا يوجد تقرير لهذا المشروع في التاريخ المحدد.
-                          </span>
-                        )}
+                        </th>
+                      ))}
+                      <th className="min-w-[130px] px-4 py-3 text-center font-semibold">
+                        إجمالي التخصص
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {workerSpecialties.map((specialty) => (
+                      <tr
+                        key={specialty}
+                        className="border-b transition-colors last:border-0 hover:bg-muted/30"
+                      >
+                        <th className="sticky right-0 z-10 bg-background px-4 py-3 text-right font-medium">
+                          {specialty}
+                        </th>
+                        {projectCards.map((card) => {
+                          const item = card.specialtyCosts.find(
+                            (cost) => cost.name.trim() === specialty,
+                          );
+                          return (
+                            <td key={card.project.id} className="px-4 py-3 text-center align-top">
+                              {item ? (
+                                <>
+                                  <div className="text-lg font-bold text-indigo-700 dark:text-indigo-300">
+                                    {item.count}
+                                  </div>
+                                  <div
+                                    className={
+                                      item.hasRate
+                                        ? "text-[11px] text-emerald-700 dark:text-emerald-300"
+                                        : "text-[11px] text-amber-700 dark:text-amber-300"
+                                    }
+                                  >
+                                    {item.hasRate
+                                      ? `${item.cost.toLocaleString()} د.ع`
+                                      : "لا يوجد أجر"}
+                                  </div>
+                                </>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </td>
+                          );
+                        })}
+                        <td className="px-4 py-3 text-center font-bold">
+                          {projectCards.reduce(
+                            (sum, card) =>
+                              sum +
+                              (card.specialtyCosts.find((cost) => cost.name.trim() === specialty)
+                                ?.count ?? 0),
+                            0,
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="border-t-2 bg-indigo-50/60 font-bold dark:bg-indigo-950/20">
+                      <th className="sticky right-0 z-10 bg-indigo-50/90 px-4 py-3 text-right dark:bg-indigo-950/40">
+                        إجمالي العاملين
+                      </th>
+                      {projectCards.map((card) => (
+                        <td
+                          key={card.project.id}
+                          className="px-4 py-3 text-center text-indigo-700 dark:text-indigo-300"
+                        >
+                          {card.workerTotal}
+                        </td>
+                      ))}
+                      <td className="px-4 py-3 text-center text-indigo-700 dark:text-indigo-300">
+                        {workerTotal}
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                    <tr className="bg-rose-50/60 font-bold dark:bg-rose-950/20">
+                      <th className="sticky right-0 z-10 bg-rose-50/90 px-4 py-3 text-right dark:bg-rose-950/40">
+                        تكلفة العاملين اليومية
+                      </th>
+                      {projectCards.map((card) => (
+                        <td
+                          key={card.project.id}
+                          className="px-4 py-3 text-center text-rose-700 dark:text-rose-300"
+                        >
+                          {card.siteDailyCost.toLocaleString()} د.ع
+                        </td>
+                      ))}
+                      <td className="px-4 py-3 text-center text-rose-700 dark:text-rose-300">
+                        {companyDailyCost.toLocaleString()} د.ع
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div>
+                <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold">
+                  <Truck className="h-5 w-5" /> الآليات والمركبات
+                </h3>
+                <div className="overflow-x-auto rounded-xl border">
+                  <table className="min-w-[700px] w-full text-sm">
+                    <thead className="bg-muted/60">
+                      <tr className="border-b">
+                        <th className="sticky right-0 z-10 min-w-[190px] bg-muted/90 px-4 py-3 text-right font-semibold">
+                          الآلية / الموقع
+                        </th>
+                        {projectCards.map((card) => (
+                          <th
+                            key={card.project.id}
+                            className="min-w-[140px] px-4 py-3 text-center font-semibold"
+                          >
+                            {card.project.name}
+                          </th>
+                        ))}
+                        <th className="min-w-[120px] px-4 py-3 text-center font-semibold">
+                          الإجمالي
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {equipmentTypes.map((equipment) => (
+                        <tr key={equipment} className="border-b last:border-0 hover:bg-muted/30">
+                          <th className="sticky right-0 z-10 bg-background px-4 py-3 text-right font-medium">
+                            {equipment}
+                          </th>
+                          {projectCards.map((card) => {
+                            const line = card.lines.find(
+                              (item) =>
+                                item.kind === "equipment_type" &&
+                                item.item_name.trim() === equipment,
+                            );
+                            return (
+                              <td
+                                key={card.project.id}
+                                className="px-4 py-3 text-center text-lg font-bold text-slate-700 dark:text-slate-300"
+                              >
+                                {line ? Number(line.total_count || 0) : "—"}
+                              </td>
+                            );
+                          })}
+                          <td className="px-4 py-3 text-center font-bold">
+                            {projectCards.reduce(
+                              (sum, card) =>
+                                sum +
+                                Number(
+                                  card.lines.find(
+                                    (line) =>
+                                      line.kind === "equipment_type" &&
+                                      line.item_name.trim() === equipment,
+                                  )?.total_count || 0,
+                                ),
+                              0,
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                      <tr className="border-t-2 bg-slate-50/70 font-bold dark:bg-slate-900/40">
+                        <th className="sticky right-0 z-10 bg-slate-50/90 px-4 py-3 text-right dark:bg-slate-900/60">
+                          إجمالي الآليات
+                        </th>
+                        {projectCards.map((card) => (
+                          <td key={card.project.id} className="px-4 py-3 text-center">
+                            {card.equipmentTotal}
+                          </td>
+                        ))}
+                        <td className="px-4 py-3 text-center">{equipmentTotal}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           ) : (
             <p className="py-8 text-center text-muted-foreground">لا توجد مشاريع أو مواقع متاحة.</p>
