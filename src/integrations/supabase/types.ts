@@ -214,6 +214,50 @@ export type Database = {
         }
         Relationships: []
       }
+      employee_penalties: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          deduction_amount: number
+          employee_id: string | null
+          employee_name: string
+          id: string
+          notes: string | null
+          penalty_date: string
+          penalty_type: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          deduction_amount?: number
+          employee_id?: string | null
+          employee_name: string
+          id?: string
+          notes?: string | null
+          penalty_date?: string
+          penalty_type: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          deduction_amount?: number
+          employee_id?: string | null
+          employee_name?: string
+          id?: string
+          notes?: string | null
+          penalty_date?: string
+          penalty_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_penalties_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employee_tasks: {
         Row: {
           archived_at: string | null
@@ -823,6 +867,7 @@ export type Database = {
           id: string
           location: string | null
           name: string
+          site_admin_employee_id: string | null
           start_date: string | null
           status: string
           updated_at: string
@@ -836,6 +881,7 @@ export type Database = {
           id?: string
           location?: string | null
           name: string
+          site_admin_employee_id?: string | null
           start_date?: string | null
           status?: string
           updated_at?: string
@@ -849,11 +895,20 @@ export type Database = {
           id?: string
           location?: string | null
           name?: string
+          site_admin_employee_id?: string | null
           start_date?: string | null
           status?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "sites_site_admin_employee_id_fkey"
+            columns: ["site_admin_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       uploaded_files: {
         Row: {
