@@ -17,6 +17,7 @@ import {
   TriangleAlert,
   Truck,
   Users,
+  WalletCards,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -44,6 +45,7 @@ type ProjectLine = {
   item_name: string;
   total_count: number;
 };
+type WageRate = { title: string; daily_rate: number; currency: string };
 
 const isoDate = (value: Date) => value.toISOString().slice(0, 10);
 const today = isoDate(new Date());
@@ -80,7 +82,7 @@ function ProjectsPage() {
   const query = useQuery({
     queryKey: ["projects-dashboard", reportDate],
     queryFn: async () => {
-      const [projectsResult, reportsResult] = await Promise.all([
+      const [projectsResult, reportsResult, wagesResult] = await Promise.all([
         supabase.from("sites").select("id, name, ctr_code").order("name").limit(500),
         supabase
           .from("site_daily_reports")
@@ -88,9 +90,11 @@ function ProjectsPage() {
           .eq("report_date", reportDate)
           .order("site_id")
           .limit(500),
+        supabase.from("wage_rates").select("title, daily_rate, currency").order("title").limit(500),
       ]);
       if (projectsResult.error) throw projectsResult.error;
       if (reportsResult.error) throw reportsResult.error;
+      if (wagesResult.error) throw wagesResult.error;
 
       const reports = (reportsResult.data ?? []) as ProjectReport[];
       const reportIds = reports.map((report) => report.id);
@@ -108,11 +112,16 @@ function ProjectsPage() {
         projects: (projectsResult.data ?? []) as Project[],
         reports,
         lines,
+        wages: (wagesResult.data ?? []) as WageRate[],
       };
     },
   });
 
-  const data = query.data ?? { projects: [], reports: [], lines: [] };
+  const data = query.data ?? { projects: [], reports: [], lines: [], wages: [] as WageRate[] };
+  const wageByTitle = useMemo(
+    () => new Map(data.wages.map((wage) => [wage.title.trim(), wage])),
+    [data.wages],
+  );
   const reportByProject = useMemo(
     () => new Map(data.reports.map((report) => [report.site_id, report])),
     [data.reports],
@@ -144,14 +153,41 @@ function ProjectsPage() {
         const equipmentTotal = lines
           .filter((line) => line.kind === "equipment_type")
           .reduce((sum, line) => sum + Number(line.total_count || 0), 0);
-        return { project, report, lines, workerTotal, equipmentTotal };
+        const workerLines = lines.filter((line) => line.kind === "worker_specialty");
+        const specialtyCosts = workerLines.map((line) => {
+          const count = Number(line.total_count || 0);
+          const wage = wageByTitle.get(line.item_name.trim());
+          return {
+            name: line.item_name,
+            count,
+            dailyRate: Number(wage?.daily_rate ?? 0),
+            cost: count * Number(wage?.daily_rate ?? 0),
+            hasRate: Boolean(wage),
+          };
+        });
+        const siteDailyCost = specialtyCosts.reduce((sum, item) => sum + item.cost, 0);
+        return {
+          project,
+          report,
+          lines,
+          workerTotal,
+          equipmentTotal,
+          specialtyCosts,
+          siteDailyCost,
+        };
       }),
-    [linesByReport, reportByProject, visibleProjects],
+    [linesByReport, reportByProject, visibleProjects, wageByTitle],
   );
   const reportedCount = projectCards.filter((card) => card.report).length;
   const missingCount = projectCards.length - reportedCount;
   const workerTotal = projectCards.reduce((sum, card) => sum + card.workerTotal, 0);
   const equipmentTotal = projectCards.reduce((sum, card) => sum + card.equipmentTotal, 0);
+  const companyDailyCost = projectCards.reduce((sum, card) => sum + card.siteDailyCost, 0);
+  const missingWageCount = projectCards.reduce(
+    (sum, card) =>
+      sum + card.specialtyCosts.filter((item) => item.count > 0 && !item.hasRate).length,
+    0,
+  );
 
   const refresh = async () => {
     await query.refetch();
@@ -261,7 +297,21 @@ function ProjectsPage() {
           icon={ClipboardList}
           tone="bg-teal-600"
         />
+        <StatCard
+          title="تكلفة العاملين اليومية"
+          value={`${companyDailyCost.toLocaleString()} د.ع`}
+          icon={WalletCards}
+          tone="bg-rose-600"
+        />
       </div>
+      {missingWageCount > 0 && (
+        <Card className="border-amber-400/50 bg-amber-50/50 dark:bg-amber-950/20">
+          <CardContent className="p-4 text-sm text-amber-900 dark:text-amber-200">
+            توجد {missingWageCount} تخصصات لها أعداد مسجلة دون أجر يومي. افتح قسم الأجور والمكافآت
+            ثم اضغط «تهيئة الأجور الافتراضية» أو أضف الأجر يدوياً.
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -278,6 +328,7 @@ function ProjectsPage() {
                     <th className="px-4 py-3 font-semibold">المشروع / الموقع</th>
                     <th className="px-4 py-3 font-semibold">حالة التقرير</th>
                     <th className="px-4 py-3 font-semibold">إجمالي العاملين</th>
+                    <th className="px-4 py-3 font-semibold">التخصصات والتكلفة اليومية</th>
                     <th className="px-4 py-3 font-semibold">إجمالي الآليات</th>
                     <th className="px-4 py-3 font-semibold">تفاصيل التقرير اليومي</th>
                   </tr>
@@ -303,6 +354,40 @@ function ProjectsPage() {
                       </td>
                       <td className="px-4 py-4 text-lg font-bold text-indigo-700 dark:text-indigo-300">
                         {card.workerTotal}
+                      </td>
+                      <td className="min-w-[360px] px-4 py-4">
+                        {card.specialtyCosts.length ? (
+                          <div className="space-y-1.5">
+                            {card.specialtyCosts.map((item) => (
+                              <div
+                                key={`${card.project.id}-${item.name}`}
+                                className="flex items-center justify-between gap-3 rounded-md bg-muted/60 px-2.5 py-1.5 text-xs"
+                              >
+                                <span className="font-medium">
+                                  {item.name} × {item.count}
+                                </span>
+                                <span
+                                  className={
+                                    item.hasRate
+                                      ? "text-emerald-700 dark:text-emerald-300"
+                                      : "text-amber-700 dark:text-amber-300"
+                                  }
+                                >
+                                  {item.hasRate
+                                    ? `${item.cost.toLocaleString()} د.ع`
+                                    : "لا يوجد أجر"}
+                                </span>
+                              </div>
+                            ))}
+                            <div className="border-t pt-1.5 text-left font-bold">
+                              المجموع: {card.siteDailyCost.toLocaleString()} د.ع / يوم
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            لا توجد تخصصات عاملة في التقرير.
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-4 text-lg font-bold text-slate-700 dark:text-slate-300">
                         {card.equipmentTotal}
