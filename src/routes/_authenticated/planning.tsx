@@ -30,7 +30,7 @@ export const Route = createFileRoute("/_authenticated/planning")({
 
 type Site = {
   id: string; name: string; ctr_code: string; client: string | null; location: string | null;
-  description: string | null; start_date: string | null; end_date: string | null; status: string;
+  description: string | null; start_date: string | null; end_date: string | null; status: string; site_admin_employee_id: string | null;
 };
 
 function PlanningPage() {
@@ -54,6 +54,14 @@ function PlanningPage() {
       const map: Record<string, number> = {};
       (data ?? []).forEach((e: any) => { if (e.site_id) map[e.site_id] = (map[e.site_id] ?? 0) + 1; });
       return map;
+    },
+  });
+  const { data: siteAdmins = [] } = useQuery({
+    queryKey: ["site-administrators"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("employees").select("id, full_name, employee_no, position, site_id").eq("status", "active").order("full_name");
+      if (error) throw error;
+      return (data ?? []).filter((employee: any) => /ادار|إدار|site\s*admin|administrator/i.test(employee.position ?? ""));
     },
   });
   const { data: costData = { employees: [], rates: [] } } = useQuery({
@@ -126,12 +134,15 @@ function PlanningPage() {
                 e.preventDefault();
                 const f = new FormData(e.currentTarget);
                 const v = (k: string) => (f.get(k) as string)?.trim() || null;
+                const siteAdminId = v("site_admin_employee_id");
+                if (!siteAdminId) { toast.error("اختيار إداري الموقع مطلوب"); return; }
                 save.mutate({
                   name: f.get("name") as string,
                   ctr_code: (f.get("ctr_code") as string).trim(),
                   client: v("client"), location: v("location"), description: v("description"),
                   start_date: v("start_date"), end_date: v("end_date"),
                   status: f.get("status") as string,
+                  site_admin_employee_id: siteAdminId,
                 });
               }}
               className="grid grid-cols-2 gap-3"
@@ -154,6 +165,17 @@ function PlanningPage() {
               </div>
               <div><Label>تاريخ البدء</Label><Input type="date" name="start_date" defaultValue={editing?.start_date ?? ""} /></div>
               <div><Label>تاريخ الانتهاء</Label><Input type="date" name="end_date" defaultValue={editing?.end_date ?? ""} /></div>
+              <div className="col-span-2">
+                <Label>إداري الموقع المسؤول عن التقرير *</Label>
+                <Select name="site_admin_employee_id" defaultValue={editing?.site_admin_employee_id ?? "none"}>
+                  <SelectTrigger><SelectValue placeholder="اختر إداري الموقع" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— اختر إداري الموقع —</SelectItem>
+                    {siteAdmins.map((employee: any) => <SelectItem key={employee.id} value={employee.id}>{employee.full_name} — {employee.employee_no}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                {!siteAdmins.length && <p className="text-xs text-warning mt-1">لا يوجد موظف مصنف كمسمى «إداري موقع».</p>}
+              </div>
               <div className="col-span-2"><Label>وصف</Label><Input name="description" defaultValue={editing?.description ?? ""} /></div>
               <Button type="submit" className="col-span-2">حفظ</Button>
             </form>
@@ -174,7 +196,7 @@ function PlanningPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>كود التكلفة</TableHead><TableHead>الموقع</TableHead><TableHead>التخصصات العاملة</TableHead>
-                <TableHead>الموظفون</TableHead><TableHead>التكلفة الشهرية</TableHead><TableHead>الحالة</TableHead><TableHead></TableHead>
+                <TableHead>إداري الموقع</TableHead><TableHead>الموظفون</TableHead><TableHead>التكلفة الشهرية</TableHead><TableHead>الحالة</TableHead><TableHead></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -183,6 +205,7 @@ function PlanningPage() {
                   <TableCell className="font-mono font-semibold">{s.ctr_code}</TableCell>
                   <TableCell className="font-medium">{s.name}</TableCell>
                   <TableCell><div className="flex flex-wrap gap-1 max-w-xs">{Object.entries(siteSummary[s.id]?.specialties ?? {}).map(([title, count]) => <Badge key={title} variant="outline">{title} ({count})</Badge>)}{!siteSummary[s.id]?.employees && <span className="text-muted-foreground">لا يوجد موظفون</span>}</div></TableCell>
+                  <TableCell>{(siteAdmins as any[]).find((employee) => employee.id === s.site_admin_employee_id)?.full_name ?? <span className="text-warning">غير محدد</span>}</TableCell>
                   <TableCell>{siteSummary[s.id]?.employees ?? (counts as any)[s.id] ?? 0}</TableCell>
                   <TableCell className="font-semibold">{(siteSummary[s.id]?.monthly ?? 0).toLocaleString()} د.ع</TableCell>
                   <TableCell><Badge variant={s.status === "active" ? "default" : "secondary"}>{s.status}</Badge></TableCell>
@@ -194,7 +217,7 @@ function PlanningPage() {
                   </TableCell>
                 </TableRow>
               ))}
-              {!sites.length && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">لا توجد مواقع بعد</TableCell></TableRow>}
+              {!sites.length && <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">لا توجد مواقع بعد</TableCell></TableRow>}
             </TableBody>
           </Table>
         </CardContent>

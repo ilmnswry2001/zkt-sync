@@ -19,6 +19,7 @@ import { Route as AuthenticatedTasksRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedProjectsRouteImport } from './routes/_authenticated/projects'
 import { Route as AuthenticatedPlanningRouteImport } from './routes/_authenticated/planning'
+import { Route as AuthenticatedPenaltiesRouteImport } from './routes/_authenticated/penalties'
 import { Route as AuthenticatedMonthlyRouteImport } from './routes/_authenticated/monthly'
 import { Route as AuthenticatedFormsRouteImport } from './routes/_authenticated/forms'
 import { Route as AuthenticatedFilesRouteImport } from './routes/_authenticated/files'
@@ -78,6 +79,11 @@ const AuthenticatedProjectsRoute = AuthenticatedProjectsRouteImport.update({
 const AuthenticatedPlanningRoute = AuthenticatedPlanningRouteImport.update({
   id: '/planning',
   path: '/planning',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedPenaltiesRoute = AuthenticatedPenaltiesRouteImport.update({
+  id: '/penalties',
+  path: '/penalties',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedMonthlyRoute = AuthenticatedMonthlyRouteImport.update({
@@ -146,6 +152,7 @@ export interface FileRoutesByFullPath {
   '/files': typeof AuthenticatedFilesRoute
   '/forms': typeof AuthenticatedFormsRoute
   '/monthly': typeof AuthenticatedMonthlyRoute
+  '/penalties': typeof AuthenticatedPenaltiesRoute
   '/planning': typeof AuthenticatedPlanningRoute
   '/projects': typeof AuthenticatedProjectsRoute
   '/settings': typeof AuthenticatedSettingsRoute
@@ -167,6 +174,7 @@ export interface FileRoutesByTo {
   '/files': typeof AuthenticatedFilesRoute
   '/forms': typeof AuthenticatedFormsRoute
   '/monthly': typeof AuthenticatedMonthlyRoute
+  '/penalties': typeof AuthenticatedPenaltiesRoute
   '/planning': typeof AuthenticatedPlanningRoute
   '/projects': typeof AuthenticatedProjectsRoute
   '/settings': typeof AuthenticatedSettingsRoute
@@ -190,6 +198,7 @@ export interface FileRoutesById {
   '/_authenticated/files': typeof AuthenticatedFilesRoute
   '/_authenticated/forms': typeof AuthenticatedFormsRoute
   '/_authenticated/monthly': typeof AuthenticatedMonthlyRoute
+  '/_authenticated/penalties': typeof AuthenticatedPenaltiesRoute
   '/_authenticated/planning': typeof AuthenticatedPlanningRoute
   '/_authenticated/projects': typeof AuthenticatedProjectsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
@@ -213,6 +222,7 @@ export interface FileRouteTypes {
     | '/files'
     | '/forms'
     | '/monthly'
+    | '/penalties'
     | '/planning'
     | '/projects'
     | '/settings'
@@ -234,6 +244,7 @@ export interface FileRouteTypes {
     | '/files'
     | '/forms'
     | '/monthly'
+    | '/penalties'
     | '/planning'
     | '/projects'
     | '/settings'
@@ -256,6 +267,7 @@ export interface FileRouteTypes {
     | '/_authenticated/files'
     | '/_authenticated/forms'
     | '/_authenticated/monthly'
+    | '/_authenticated/penalties'
     | '/_authenticated/planning'
     | '/_authenticated/projects'
     | '/_authenticated/settings'
@@ -343,6 +355,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPlanningRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/penalties': {
+      id: '/_authenticated/penalties'
+      path: '/penalties'
+      fullPath: '/penalties'
+      preLoaderRoute: typeof AuthenticatedPenaltiesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/monthly': {
       id: '/_authenticated/monthly'
       path: '/monthly'
@@ -427,6 +446,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedFilesRoute: typeof AuthenticatedFilesRoute
   AuthenticatedFormsRoute: typeof AuthenticatedFormsRoute
   AuthenticatedMonthlyRoute: typeof AuthenticatedMonthlyRoute
+  AuthenticatedPenaltiesRoute: typeof AuthenticatedPenaltiesRoute
   AuthenticatedPlanningRoute: typeof AuthenticatedPlanningRoute
   AuthenticatedProjectsRoute: typeof AuthenticatedProjectsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
@@ -447,6 +467,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedFilesRoute: AuthenticatedFilesRoute,
   AuthenticatedFormsRoute: AuthenticatedFormsRoute,
   AuthenticatedMonthlyRoute: AuthenticatedMonthlyRoute,
+  AuthenticatedPenaltiesRoute: AuthenticatedPenaltiesRoute,
   AuthenticatedPlanningRoute: AuthenticatedPlanningRoute,
   AuthenticatedProjectsRoute: AuthenticatedProjectsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
