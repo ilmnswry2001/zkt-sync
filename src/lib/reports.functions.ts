@@ -29,7 +29,7 @@ export const getMonthlySheet = createServerFn({ method: "GET" })
       supabase
         .from("employees")
         .select(
-          "id, employee_no, full_name, pay_type, department_id, site_id, shift_id, departments(name), sites(name), shifts(name, start_time, end_time, grace_minutes)",
+          "id, employee_no, full_name, pay_type, department_id, site_id, shift_id, departments(name), sites!site_id(name), shifts(name, start_time, end_time, grace_minutes)",
         )
         .order("employee_no")
         .order("id")
@@ -105,7 +105,7 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
     const { data: emp, error } = await supabase
       .from("employees")
       .select(
-        "id, employee_no, full_name, position, base_salary, pay_type, departments(name), sites(name, ctr_code), shifts(name, start_time, end_time, grace_minutes), wage_rates(title, daily_rate, monthly_rate, overtime_hour_rate, currency)",
+        "id, employee_no, full_name, position, base_salary, pay_type, departments(name), sites!site_id(name, ctr_code), shifts(name, start_time, end_time, grace_minutes), wage_rates(title, daily_rate, monthly_rate, overtime_hour_rate, currency)",
       )
       .eq("id", data.employee_id)
       .maybeSingle();
