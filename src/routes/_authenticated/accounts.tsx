@@ -8,9 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { KeyRound, Loader2, Plus, RefreshCw, ShieldCheck, UserCog, Users } from "lucide-react";
+import { KeyRound, Loader2, Plus, RefreshCw, ShieldCheck, UserCog, Users, Save } from "lucide-react";
 import { toast } from "sonner";
-import { createAccount, updateAccountPassword } from "@/lib/accounts.functions";
+import { createAccount, updateAccountPassword, updateUserDepartments } from "@/lib/accounts.functions";
+import { permissionsDb, type UserDepartment } from "@/lib/permissions-client";
 
 export const Route = createFileRoute("/_authenticated/accounts")({
   head: () => ({ meta: [{ title: "الحسابات والصلاحيات" }] }),
@@ -26,9 +27,10 @@ export const Route = createFileRoute("/_authenticated/accounts")({
   component: AccountsPage,
 });
 
-type Role = "admin" | "hr" | "supervisor" | "data_entry";
+type Role = "admin" | "hr" | "supervisor" | "data_entry" | "site_admin" | "department_manager";
 type Profile = { id: string; full_name: string | null; email: string | null; created_at: string };
 type UserRole = { id: string; user_id: string; role: Role };
+type Department = { id: string; name: string };
 
 const roles: { key: Role; label: string; description: string }[] = [
   {
@@ -39,6 +41,8 @@ const roles: { key: Role; label: string; description: string }[] = [
   { key: "hr", label: "الموارد البشرية", description: "الموظفون والأجور والتقارير الإدارية" },
   { key: "supervisor", label: "مشرف", description: "المتابعة والإشراف على التقارير والمهام" },
   { key: "data_entry", label: "مدخل بيانات", description: "إدخال التقارير والمهام المسموحة" },
+  { key: "site_admin", label: "إداري موقع", description: "رفع تقارير الموقع والنوافذ التي يحددها المدير" },
+  { key: "department_manager", label: "مدير إدارة", description: "متابعة فريق الأقسام المخصصة له" },
 ];
 
 function AccountsPage() {
@@ -52,6 +56,8 @@ function AccountsPage() {
     password: "",
     role: "data_entry" as Role,
   });
+  const [departmentIds, setDepartmentIds] = useState<string[]>([]);
+  const [editingDepartments, setEditingDepartments] = useState<Record<string, string[]>>({});
   const [resetUserId, setResetUserId] = useState<string | null>(null);
   const [resetPassword, setResetPassword] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
@@ -78,8 +84,31 @@ function AccountsPage() {
       return (data ?? []) as UserRole[];
     },
   });
+  const departmentsQuery = useQuery({
+    queryKey: ["accounts", "departments"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("departments").select("id, name").order("name");
+      if (error) throw error;
+      return (data ?? []) as Department[];
+    },
+  });
+  const userDepartmentsQuery = useQuery({
+    queryKey: ["accounts", "user-departments"],
+    queryFn: async () => {
+      const { data, error } = await permissionsDb.from("user_departments").select("id, user_id, department_id, created_at");
+      if (error) throw error;
+      return (data ?? []) as UserDepartment[];
+    },
+  });
   const profiles = useMemo(() => profilesQuery.data ?? [], [profilesQuery.data]);
   const userRoles = useMemo(() => rolesQuery.data ?? [], [rolesQuery.data]);
+  const departments = departmentsQuery.data ?? [];
+  const userDepartments = userDepartmentsQuery.data ?? [];
+  const departmentIdsByUser = useMemo(() => {
+    const map = new Map<string, string[]>();
+    userDepartments.forEach((item) => map.set(item.user_id, [...(map.get(item.user_id) ?? []), item.department_id]));
+    return map;
+  }, [userDepartments]);
   const rolesByUser = useMemo(() => {
     const map = new Map<string, UserRole[]>();
     userRoles.forEach((item) => map.set(item.user_id, [...(map.get(item.user_id) ?? []), item]));
@@ -96,7 +125,12 @@ function AccountsPage() {
   }, [profiles, search]);
 
   const refresh = async () => {
-    await Promise.all([profilesQuery.refetch(), rolesQuery.refetch()]);
+    await Promise.all([
+      profilesQuery.refetch(),
+      rolesQuery.refetch(),
+      departmentsQuery.refetch(),
+      userDepartmentsQuery.refetch(),
+    ]);
     toast.success("تم تحديث الحسابات والصلاحيات");
   };
   const hasRole = (userId: string, role: Role) =>
@@ -111,7 +145,7 @@ function AccountsPage() {
       if (adminCount <= 1) return toast.error("لا يمكن إزالة صلاحية المدير الوحيد في النظام");
     }
     if (enabled) {
-      const { error } = await supabase.from("user_roles").insert({ user_id: userId, role });
+      const { error } = await supabase.from("user_roles").insert({ user_id: userId, role } as never);
       if (error) return toast.error(error.message);
     } else {
       const assignment = rolesByUser.get(userId)?.find((item) => item.role === role);
@@ -121,6 +155,17 @@ function AccountsPage() {
     }
     await queryClient.invalidateQueries({ queryKey: ["accounts", "roles"] });
     toast.success("تم تحديث صلاحيات الحساب");
+  };
+  const saveDepartments = async (userId: string) => {
+    try {
+      await updateUserDepartments({
+        data: { userId, departmentIds: editingDepartments[userId] ?? [] },
+      });
+      await userDepartmentsQuery.refetch();
+      toast.success("تم حفظ أقسام الوصول للحساب");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "تعذر حفظ أقسام الوصول");
+    }
   };
   const handleCreateAccount = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -134,9 +179,11 @@ function AccountsPage() {
           email: createForm.email,
           password: createForm.password,
           role: createForm.role,
+          departmentIds,
         },
       });
       setCreateForm({ fullName: "", email: "", password: "", role: "data_entry" });
+      setDepartmentIds([]);
       setShowCreateForm(false);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["accounts", "profiles"] }),
@@ -168,8 +215,13 @@ function AccountsPage() {
     }
   };
 
-  const loading = profilesQuery.isLoading || rolesQuery.isLoading;
-  const error = profilesQuery.error ?? rolesQuery.error;
+  const loading =
+    profilesQuery.isLoading ||
+    rolesQuery.isLoading ||
+    departmentsQuery.isLoading ||
+    userDepartmentsQuery.isLoading;
+  const error =
+    profilesQuery.error ?? rolesQuery.error ?? departmentsQuery.error ?? userDepartmentsQuery.error;
 
   return (
     <div className="space-y-6">
@@ -259,6 +311,23 @@ function AccountsPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="rounded-lg border p-3 md:col-span-2">
+                <Label>أقسام الوصول (اختياري)</Label>
+                <p className="mb-2 text-xs text-muted-foreground">اتركها فارغة للوصول العام حسب الدور، أو حدد أقساماً بعينها.</p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {departments.map((department) => (
+                    <label key={department.id} className="flex items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={departmentIds.includes(department.id)}
+                        onCheckedChange={(checked) => setDepartmentIds((current) => checked === true
+                          ? [...new Set([...current, department.id])]
+                          : current.filter((id) => id !== department.id))}
+                      />
+                      {department.name}
+                    </label>
+                  ))}
+                </div>
               </div>
               <div className="flex gap-2 md:col-span-2">
                 <Button type="submit" disabled={actionBusy}>
@@ -425,6 +494,38 @@ function AccountsPage() {
                           </span>
                         </label>
                       ))}
+                      <div className="rounded-lg border p-3 md:col-span-2">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <div>
+                            <p className="font-medium">الأقسام المسموحة</p>
+                            <p className="text-xs text-muted-foreground">تُطبق على متابعة الفريق ومهام الفريق والتقارير المرتبطة بالموظفين.</p>
+                          </div>
+                          <Button size="sm" onClick={() => void saveDepartments(profile.id)}>
+                            <Save className="ml-2 h-4 w-4" /> حفظ الأقسام
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          {departments.map((department) => {
+                            const selected = (editingDepartments[profile.id] ?? departmentIdsByUser.get(profile.id) ?? []).includes(department.id);
+                            return (
+                              <label key={department.id} className="flex items-center gap-2 text-sm">
+                                <Checkbox
+                                  checked={selected}
+                                  onCheckedChange={(checked) => setEditingDepartments((current) => {
+                                    const ids = current[profile.id] ?? departmentIdsByUser.get(profile.id) ?? [];
+                                    return { ...current, [profile.id]: checked === true ? [...new Set([...ids, department.id])] : ids.filter((id) => id !== department.id) };
+                                  })}
+                                />
+                                {department.name}
+                              </label>
+                            );
+                          })}
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {(departmentIdsByUser.get(profile.id) ?? []).map((id) => <Badge key={id} variant="outline">{departments.find((department) => department.id === id)?.name ?? id}</Badge>)}
+                          {!departmentIdsByUser.get(profile.id)?.length && <Badge variant="secondary">وصول عام حسب الدور</Badge>}
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>

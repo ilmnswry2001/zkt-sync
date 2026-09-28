@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedWagesRouteImport } from './routes/_authenticated/wages'
 import { Route as AuthenticatedUploadRouteImport } from './routes/_authenticated/upload'
+import { Route as AuthenticatedTeamTasksRouteImport } from './routes/_authenticated/team-tasks'
 import { Route as AuthenticatedTeamFollowUpRouteImport } from './routes/_authenticated/team-follow-up'
 import { Route as AuthenticatedTasksRouteImport } from './routes/_authenticated/tasks'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
@@ -53,6 +54,11 @@ const AuthenticatedWagesRoute = AuthenticatedWagesRouteImport.update({
 const AuthenticatedUploadRoute = AuthenticatedUploadRouteImport.update({
   id: '/upload',
   path: '/upload',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedTeamTasksRoute = AuthenticatedTeamTasksRouteImport.update({
+  id: '/team-tasks',
+  path: '/team-tasks',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedTeamFollowUpRoute =
@@ -158,6 +164,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/tasks': typeof AuthenticatedTasksRoute
   '/team-follow-up': typeof AuthenticatedTeamFollowUpRoute
+  '/team-tasks': typeof AuthenticatedTeamTasksRoute
   '/upload': typeof AuthenticatedUploadRoute
   '/wages': typeof AuthenticatedWagesRoute
 }
@@ -180,6 +187,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRoute
   '/tasks': typeof AuthenticatedTasksRoute
   '/team-follow-up': typeof AuthenticatedTeamFollowUpRoute
+  '/team-tasks': typeof AuthenticatedTeamTasksRoute
   '/upload': typeof AuthenticatedUploadRoute
   '/wages': typeof AuthenticatedWagesRoute
 }
@@ -204,6 +212,7 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/tasks': typeof AuthenticatedTasksRoute
   '/_authenticated/team-follow-up': typeof AuthenticatedTeamFollowUpRoute
+  '/_authenticated/team-tasks': typeof AuthenticatedTeamTasksRoute
   '/_authenticated/upload': typeof AuthenticatedUploadRoute
   '/_authenticated/wages': typeof AuthenticatedWagesRoute
 }
@@ -228,6 +237,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/tasks'
     | '/team-follow-up'
+    | '/team-tasks'
     | '/upload'
     | '/wages'
   fileRoutesByTo: FileRoutesByTo
@@ -250,6 +260,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/tasks'
     | '/team-follow-up'
+    | '/team-tasks'
     | '/upload'
     | '/wages'
   id:
@@ -273,6 +284,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/_authenticated/tasks'
     | '/_authenticated/team-follow-up'
+    | '/_authenticated/team-tasks'
     | '/_authenticated/upload'
     | '/_authenticated/wages'
   fileRoutesById: FileRoutesById
@@ -318,6 +330,13 @@ declare module '@tanstack/react-router' {
       path: '/upload'
       fullPath: '/upload'
       preLoaderRoute: typeof AuthenticatedUploadRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/team-tasks': {
+      id: '/_authenticated/team-tasks'
+      path: '/team-tasks'
+      fullPath: '/team-tasks'
+      preLoaderRoute: typeof AuthenticatedTeamTasksRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/team-follow-up': {
@@ -452,6 +471,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedTasksRoute: typeof AuthenticatedTasksRoute
   AuthenticatedTeamFollowUpRoute: typeof AuthenticatedTeamFollowUpRoute
+  AuthenticatedTeamTasksRoute: typeof AuthenticatedTeamTasksRoute
   AuthenticatedUploadRoute: typeof AuthenticatedUploadRoute
   AuthenticatedWagesRoute: typeof AuthenticatedWagesRoute
 }
@@ -473,6 +493,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedTasksRoute: AuthenticatedTasksRoute,
   AuthenticatedTeamFollowUpRoute: AuthenticatedTeamFollowUpRoute,
+  AuthenticatedTeamTasksRoute: AuthenticatedTeamTasksRoute,
   AuthenticatedUploadRoute: AuthenticatedUploadRoute,
   AuthenticatedWagesRoute: AuthenticatedWagesRoute,
 }

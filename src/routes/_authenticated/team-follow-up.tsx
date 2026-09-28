@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { permissionsDb } from "@/lib/permissions-client";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +32,8 @@ import {
   MessageSquare,
   Users,
   XCircle,
+  Clock3,
+  ListChecks,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/team-follow-up")({
@@ -56,6 +59,18 @@ type SiteReport = {
   notes: string | null;
   created_by: string | null;
 };
+type TeamTask = {
+  id: string;
+  task_date: string;
+  title: string;
+  description: string | null;
+  status: "completed" | "in_progress";
+  duration_minutes: number;
+  created_by: string;
+  department_id: string | null;
+  manager_note: string | null;
+};
+type Profile = { id: string; full_name: string | null; email: string | null };
 
 const today = new Date().toISOString().slice(0, 10);
 const isSiteAdministrator = (employee: Employee) =>
@@ -65,7 +80,7 @@ function TeamFollowUpPage() {
   const { isAdmin, isHR, roles } = useAuth();
   const [date, setDate] = useState(today);
   const [departmentId, setDepartmentId] = useState("all");
-  const canSeeAll = isAdmin || isHR || roles.includes("supervisor");
+  const canSeeAll = isAdmin || isHR;
 
   const departmentsQuery = useQuery({
     queryKey: ["team-follow-up-departments"],
@@ -76,7 +91,23 @@ function TeamFollowUpPage() {
     },
   });
   const departments = departmentsQuery.data ?? [];
-  const allowedDepartmentIds = canSeeAll ? departments.map((department) => department.id) : [];
+  const assignedDepartmentsQuery = useQuery({
+    queryKey: ["team-follow-up-assigned-departments"],
+    enabled: !canSeeAll,
+    queryFn: async () => {
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) return [] as string[];
+      const { data, error } = await permissionsDb
+        .from("user_departments")
+        .select("department_id")
+        .eq("user_id", authData.user.id);
+      if (error) throw error;
+      return (data ?? []).map((item) => item.department_id as string);
+    },
+  });
+  const allowedDepartmentIds = canSeeAll
+    ? departments.map((department) => department.id)
+    : assignedDepartmentsQuery.data ?? [];
   const effectiveDepartmentId =
     departmentId !== "all" && allowedDepartmentIds.includes(departmentId) ? departmentId : "all";
 
@@ -138,6 +169,53 @@ function TeamFollowUpPage() {
   const coveredSites = siteIds.filter((siteId) => reportBySite.has(siteId)).length;
   const notesCount = reports.filter((report) => report.notes?.trim()).length;
   const reportCoverage = siteIds.length ? Math.round((coveredSites / siteIds.length) * 100) : 0;
+
+  const monthStart = `${date.slice(0, 7)}-01`;
+  const monthEndDate = new Date(`${monthStart}T00:00:00`);
+  monthEndDate.setMonth(monthEndDate.getMonth() + 1);
+  const monthEnd = new Date(monthEndDate.getTime() - 86400000).toISOString().slice(0, 10);
+  const teamTasksQuery = useQuery({
+    queryKey: ["team-follow-up-tasks", allowedDepartmentIds, monthStart, monthEnd],
+    enabled: allowedDepartmentIds.length > 0,
+    queryFn: async () => {
+      let query = (supabase as unknown as { from: (table: string) => any })
+        .from("employee_tasks")
+        .select("id, task_date, title, description, status, duration_minutes, created_by, department_id, manager_note")
+        .gte("task_date", monthStart)
+        .lte("task_date", monthEnd)
+        .order("task_date", { ascending: false })
+        .order("created_at", { ascending: false });
+      if (!canSeeAll) query = query.in("department_id", allowedDepartmentIds);
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data ?? []) as TeamTask[];
+    },
+  });
+  const profilesQuery = useQuery({
+    queryKey: ["team-follow-up-task-profiles"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("profiles").select("id, full_name, email");
+      if (error) throw error;
+      return (data ?? []) as Profile[];
+    },
+  });
+  const teamTasks = teamTasksQuery.data ?? [];
+  const profileById = new Map((profilesQuery.data ?? []).map((profile) => [profile.id, profile]));
+  const dailyTasks = teamTasks.filter((task) => task.task_date === date);
+  const monthlyTaskStats = [...new Set(teamTasks.map((task) => task.created_by))]
+    .map((userId) => {
+      const tasks = teamTasks.filter((task) => task.created_by === userId);
+      return {
+        userId,
+        profile: profileById.get(userId),
+        total: tasks.length,
+        completed: tasks.filter((task) => task.status === "completed").length,
+        minutes: tasks.reduce((sum, task) => sum + Number(task.duration_minutes || 0), 0),
+        today: tasks.filter((task) => task.task_date === date).length,
+        tasks,
+      };
+    })
+    .sort((a, b) => b.total - a.total);
 
   const siteRows = siteIds
     .map((siteId) => {
@@ -231,6 +309,45 @@ function TeamFollowUpPage() {
         />
         <Stat icon={MessageSquare} label="تقارير بها ملاحظات" value={notesCount} tone="orange" />
       </div>
+      <Card className="border-primary/20">
+        <CardHeader>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle className="flex items-center gap-2"><ListChecks className="h-5 w-5 text-primary" /> مهام الفريق</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">تقرير مهام اليوم مع ملخص أداء كل حساب خلال شهر {date.slice(0, 7)}</p>
+            </div>
+            <Badge variant="outline">{teamTasks.length} مهمة هذا الشهر</Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <Stat icon={ListChecks} label="مهام الشهر" value={teamTasks.length} />
+            <Stat icon={CheckCircle2} label="مهام منجزة" value={teamTasks.filter((task) => task.status === "completed").length} tone="green" />
+            <Stat icon={Clock3} label="قيد التنفيذ" value={teamTasks.filter((task) => task.status === "in_progress").length} tone="orange" />
+            <Stat icon={Users} label="حسابات نشطة" value={monthlyTaskStats.length} tone="blue" />
+          </div>
+          <div>
+            <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold"><ClipboardList className="h-5 w-5" /> تقرير مهام اليوم — {date}</h3>
+            <div className="space-y-2">
+              {dailyTasks.map((task) => {
+                const profile = profileById.get(task.created_by);
+                return <div key={task.id} className="flex flex-col gap-2 rounded-lg border p-3 md:flex-row md:items-center md:justify-between">
+                  <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-medium">{task.title}</span><Badge variant={task.status === "completed" ? "default" : "secondary"}>{task.status === "completed" ? "منجزة" : "قيد التنفيذ"}</Badge></div><p className="mt-1 text-xs text-muted-foreground">{profile?.full_name ?? profile?.email ?? "حساب غير معروف"}{task.duration_minutes ? ` · ${task.duration_minutes} دقيقة` : ""}</p>{task.description && <p className="mt-1 text-sm text-muted-foreground">{task.description}</p>}</div>
+                  {task.manager_note && <div className="max-w-md rounded-md bg-muted/50 px-3 py-2 text-sm"><span className="font-medium">ملاحظة المدير: </span>{task.manager_note}</div>}
+                </div>;
+              })}
+              {!dailyTasks.length && <div className="rounded-lg border border-dashed p-6 text-center text-muted-foreground">لا توجد مهام مسجلة لهذا الفريق في التاريخ المحدد.</div>}
+            </div>
+          </div>
+          <div>
+            <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold"><Users className="h-5 w-5" /> إحصائيات الحسابات خلال الشهر</h3>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {monthlyTaskStats.map((member) => <div key={member.userId} className="rounded-xl border bg-card p-4 shadow-sm"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold">{member.profile?.full_name ?? member.profile?.email ?? "حساب الفريق"}</p><p className="text-xs text-muted-foreground">{member.profile?.email ?? ""}</p></div><Badge variant="outline">{member.today} اليوم</Badge></div><div className="mt-4 grid grid-cols-3 gap-2 text-center"><div className="rounded-md bg-muted/50 p-2"><p className="text-lg font-bold">{member.total}</p><p className="text-[11px] text-muted-foreground">كل المهام</p></div><div className="rounded-md bg-emerald-50 p-2 dark:bg-emerald-950/30"><p className="text-lg font-bold text-emerald-700 dark:text-emerald-400">{member.completed}</p><p className="text-[11px] text-muted-foreground">منجزة</p></div><div className="rounded-md bg-blue-50 p-2 dark:bg-blue-950/30"><p className="text-lg font-bold text-blue-700 dark:text-blue-400">{member.minutes}</p><p className="text-[11px] text-muted-foreground">دقيقة</p></div></div><div className="mt-3 space-y-1">{member.tasks.slice(0, 3).map((task) => <div key={task.id} className="flex items-center justify-between gap-2 text-xs"><span className="truncate">{task.title}</span><span className="shrink-0 text-muted-foreground">{task.task_date}</span></div>)}{member.tasks.length > 3 && <p className="text-xs text-muted-foreground">+ {member.tasks.length - 3} مهام أخرى</p>}</div></div>)}
+              {!monthlyTaskStats.length && <div className="rounded-lg border border-dashed p-6 text-center text-muted-foreground md:col-span-2 xl:col-span-3">لا توجد مهام مسجلة خلال هذا الشهر للأقسام المسموحة.</div>}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader>
           <CardTitle>

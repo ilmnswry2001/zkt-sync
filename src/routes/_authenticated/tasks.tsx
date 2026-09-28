@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { permissionsDb } from "@/lib/permissions-client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,6 +41,7 @@ type Task = {
   duration_minutes: number;
   archived_at: string | null;
   created_by: string;
+  department_id: string | null;
 };
 
 const today = new Date().toISOString().slice(0, 10);
@@ -60,6 +62,16 @@ function EmployeeTasksPage() {
   const [archiveTo, setArchiveTo] = useState("");
   const [form, setForm] = useState(emptyForm);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const departmentsQuery = useQuery({
+    queryKey: ["employee-tasks", "assigned-departments", user?.id],
+    enabled: Boolean(user),
+    queryFn: async () => {
+      const { data, error } = await permissionsDb.from("user_departments").select("department_id").eq("user_id", user!.id);
+      if (error) throw error;
+      return (data ?? []).map((item) => item.department_id as string);
+    },
+  });
+  const assignedDepartmentId = departmentsQuery.data?.[0] ?? null;
 
   const activeTasksQuery = useQuery({
     queryKey: ["employee-tasks", "active", selectedDate],
@@ -67,7 +79,7 @@ function EmployeeTasksPage() {
       let query = supabase
         .from("employee_tasks")
         .select(
-          "id, employee_id, task_date, title, description, status, duration_minutes, archived_at, created_by",
+          "id, employee_id, task_date, title, description, status, duration_minutes, archived_at, created_by, department_id",
         )
         .eq("task_date", selectedDate)
         .is("archived_at", null)
@@ -86,7 +98,7 @@ function EmployeeTasksPage() {
       let query = supabase
         .from("employee_tasks")
         .select(
-          "id, employee_id, task_date, title, description, status, duration_minutes, archived_at, created_by",
+          "id, employee_id, task_date, title, description, status, duration_minutes, archived_at, created_by, department_id",
         )
         .not("archived_at", "is", null)
         .order("task_date", { ascending: false })
@@ -138,6 +150,7 @@ function EmployeeTasksPage() {
       status: form.status,
       duration_minutes: Math.max(0, Number(form.duration) || 0),
       created_by: editingTask?.created_by ?? user.id,
+      department_id: editingTask?.department_id ?? assignedDepartmentId,
     };
     const result = editingTask
       ? await supabase.from("employee_tasks").update(payload).eq("id", editingTask.id)

@@ -31,6 +31,7 @@ const nav = [
   { to: "/attendance", label: "التقارير اليومية", icon: ClockIcon },
   { to: "/tasks", label: "مهامي اليومية", icon: ClipboardCheck },
   { to: "/team-follow-up", label: "متابعة الفريق", icon: Users },
+  { to: "/team-tasks", label: "مهام الفريق", icon: ClipboardCheck },
   { to: "/company-report", label: "تقرير الشركة الكامل", icon: BarChart3, access: "hr" },
   { to: "/projects", label: "المشاريع", icon: MapPinned, access: "hr" },
   { to: "/monthly", label: "التقرير الشهري", icon: CalendarDays },
@@ -101,7 +102,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             return (
               <Link
                 key={item.to}
-                to={item.to}
+                to={item.to as any}
                 className={cn(
                   "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
                   active

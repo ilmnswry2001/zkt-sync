@@ -4,9 +4,16 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { z } from "zod";
 
-type Role = "admin" | "hr" | "supervisor" | "data_entry";
+type Role = "admin" | "hr" | "supervisor" | "data_entry" | "site_admin" | "department_manager";
 
-const roleSchema = z.enum(["admin", "hr", "supervisor", "data_entry"] satisfies [Role, ...Role[]]);
+const roleSchema = z.enum([
+  "admin",
+  "hr",
+  "supervisor",
+  "data_entry",
+  "site_admin",
+  "department_manager",
+] satisfies [Role, ...Role[]]);
 const passwordSchema = z.string().min(8, "كلمة المرور يجب أن تكون 8 أحرف على الأقل").max(72);
 
 const createAccountSchema = z.object({
@@ -14,11 +21,17 @@ const createAccountSchema = z.object({
   email: z.string().trim().email("البريد الإلكتروني غير صالح").max(320),
   password: passwordSchema,
   role: roleSchema,
+  departmentIds: z.array(z.string().uuid()).optional().default([]),
 });
 
 const updatePasswordSchema = z.object({
   userId: z.string().uuid(),
   password: passwordSchema,
+});
+
+const updateDepartmentsSchema = z.object({
+  userId: z.string().uuid(),
+  departmentIds: z.array(z.string().uuid()).max(200),
 });
 
 function translateAuthError(error: { message?: string; status?: number } | null | undefined) {
@@ -93,12 +106,42 @@ export const createAccount = createServerFn({ method: "POST" })
 
     const { error: roleError } = await supabaseAdmin
       .from("user_roles")
-      .insert({ user_id: created.user.id, role: data.role });
+      .insert({ user_id: created.user.id, role: data.role } as never);
     if (roleError) {
       await supabaseAdmin.auth.admin.deleteUser(created.user.id);
       throw new Error(`تم التراجع عن إنشاء الحساب: ${translateAuthError(roleError)}`);
     }
+    if (data.departmentIds.length > 0) {
+      const { error: departmentError } = await (supabaseAdmin as any).from("user_departments").insert(
+        data.departmentIds.map((departmentId) => ({ user_id: created.user.id, department_id: departmentId })),
+      );
+      if (departmentError) {
+        await supabaseAdmin.from("user_roles").delete().eq("user_id", created.user.id);
+        await supabaseAdmin.auth.admin.deleteUser(created.user.id);
+        throw new Error(`تم التراجع عن إنشاء الحساب: ${departmentError.message}`);
+      }
+    }
     return { userId: created.user.id };
+  });
+
+export const updateUserDepartments = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((value: unknown) => updateDepartmentsSchema.parse(value))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error: deleteError } = await (supabaseAdmin as any)
+      .from("user_departments")
+      .delete()
+      .eq("user_id", data.userId);
+    if (deleteError) throw new Error(deleteError.message);
+    if (data.departmentIds.length > 0) {
+      const { error } = await (supabaseAdmin as any).from("user_departments").insert(
+        data.departmentIds.map((departmentId) => ({ user_id: data.userId, department_id: departmentId })),
+      );
+      if (error) throw new Error(error.message);
+    }
+    return { userId: data.userId, departmentIds: data.departmentIds };
   });
 
 export const updateAccountPassword = createServerFn({ method: "POST" })
