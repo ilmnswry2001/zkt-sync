@@ -6,6 +6,9 @@ import { z } from "zod";
 
 type Role = "admin" | "hr" | "supervisor" | "data_entry" | "site_admin" | "department_manager";
 
+const SERVICE_ROLE_ERROR =
+  "تعذر إنشاء الحساب لأن إعدادات الخادم لـ Supabase غير مفعّلة في هذا المشروع. أضف SUPABASE_URL و SUPABASE_SERVICE_ROLE_KEY في إعدادات Lovable Cloud أو بيئة التشغيل.";
+
 const roleSchema = z.enum([
   "admin",
   "hr",
@@ -79,12 +82,22 @@ async function assertAdmin(context: { supabase: SupabaseClient<Database>; userId
   if (!data) throw new Error("هذه العملية متاحة لمدير النظام فقط");
 }
 
+const getSupabaseAdmin = async () => {
+  try {
+    const mod = await import("@/integrations/supabase/client.server");
+    return mod.supabaseAdmin;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "تعذر الاتصال بخادم Supabase.";
+    throw new Error(message.includes("Missing Supabase environment variable") ? SERVICE_ROLE_ERROR : message);
+  }
+};
+
 export const createAccount = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((value: unknown) => createAccountSchema.parse(value))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const supabaseAdmin = await getSupabaseAdmin();
     const email = data.email.toLowerCase();
     const { data: existingProfile } = await supabaseAdmin
       .from("profiles")

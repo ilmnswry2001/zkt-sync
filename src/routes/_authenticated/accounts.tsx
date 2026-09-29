@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { KeyRound, Loader2, Plus, RefreshCw, ShieldCheck, UserCog, Users, Save } from "lucide-react";
 import { toast } from "sonner";
-import { createAccount, updateAccountPassword, updateUserDepartments } from "@/lib/accounts.functions";
+import { createAccount, updateAccountPassword } from "@/lib/accounts.functions";
 import { permissionsDb, type UserDepartment } from "@/lib/permissions-client";
 
 export const Route = createFileRoute("/_authenticated/accounts")({
@@ -44,7 +44,7 @@ const roles: { key: Role; label: string; description: string }[] = [
   { key: "supervisor", label: "مشرف", description: "المتابعة والإشراف على التقارير والمهام" },
   { key: "data_entry", label: "مدخل بيانات", description: "إدخال التقارير والمهام المسموحة" },
   { key: "site_admin", label: "إداري موقع", description: "رفع تقارير الموقع والنوافذ التي يحددها المدير" },
-  { key: "department_manager", label: "مدير إدارة", description: "متابعة فريق الأقسام المخصصة له" },
+  { key: "department_manager", label: "مدير القسم", description: "إدارة قسم محدد ومتابعة بياناته" },
 ];
 
 function AccountsPage() {
@@ -60,9 +60,7 @@ function AccountsPage() {
     employeeId: "",
     managedDepartmentId: "",
   });
-  const [departmentIds, setDepartmentIds] = useState<string[]>([]);
   const [editingDepartmentManager, setEditingDepartmentManager] = useState<Record<string, string>>({});
-  const [editingDepartments, setEditingDepartments] = useState<Record<string, string[]>>({});
   const [resetUserId, setResetUserId] = useState<string | null>(null);
   const [resetPassword, setResetPassword] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
@@ -193,17 +191,6 @@ function AccountsPage() {
     await queryClient.invalidateQueries({ queryKey: ["accounts", "roles"] });
     toast.success("تم تحديث صلاحيات الحساب");
   };
-  const saveDepartments = async (userId: string) => {
-    try {
-      await updateUserDepartments({
-        data: { userId, departmentIds: editingDepartments[userId] ?? [] },
-      });
-      await userDepartmentsQuery.refetch();
-      toast.success("تم حفظ أقسام الوصول للحساب");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "تعذر حفظ أقسام الوصول");
-    }
-  };
   const saveDepartmentManager = async (userId: string) => {
     const selectedDepartmentId = editingDepartmentManager[userId] ?? departmentManagerByUser.get(userId) ?? "";
     try {
@@ -248,11 +235,10 @@ function AccountsPage() {
           role: createForm.role,
           employeeId: createForm.employeeId || null,
           managedDepartmentId: createForm.role === "department_manager" ? createForm.managedDepartmentId : null,
-          departmentIds,
+          departmentIds: [],
         },
       });
       setCreateForm({ fullName: "", email: "", password: "", role: "data_entry", employeeId: "", managedDepartmentId: "" });
-      setDepartmentIds([]);
       setShowCreateForm(false);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["accounts", "profiles"] }),
@@ -426,23 +412,6 @@ function AccountsPage() {
                   </select>
                 </div>
               )}
-              <div className="rounded-lg border p-3 md:col-span-2">
-                <Label>الأقسام المسموحة لهذا الحساب</Label>
-                <p className="mb-2 text-xs text-muted-foreground">اختر أقسام النظام التي يمكن لهذا الحساب الدخول إليها، أو اتركها فارغة في حال السماح الكامل حسب الدور.</p>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {departments.map((department) => (
-                    <label key={department.id} className="flex items-center gap-2 text-sm">
-                      <Checkbox
-                        checked={departmentIds.includes(department.id)}
-                        onCheckedChange={(checked) => setDepartmentIds((current) => checked === true
-                          ? [...new Set([...current, department.id])]
-                          : current.filter((id) => id !== department.id))}
-                      />
-                      {department.name}
-                    </label>
-                  ))}
-                </div>
-              </div>
               <div className="flex gap-2 md:col-span-2">
                 <Button type="submit" disabled={actionBusy}>
                   {actionBusy && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}حفظ الحساب
@@ -638,38 +607,6 @@ function AccountsPage() {
                           </select>
                         </div>
                       )}
-                      <div className="rounded-lg border p-3 md:col-span-2">
-                        <div className="mb-2 flex items-center justify-between gap-2">
-                          <div>
-                            <p className="font-medium">الأقسام المسموحة</p>
-                            <p className="text-xs text-muted-foreground">تُطبق على متابعة الفريق ومهام الفريق والتقارير المرتبطة بالموظفين.</p>
-                          </div>
-                          <Button size="sm" onClick={() => void saveDepartments(profile.id)}>
-                            <Save className="ml-2 h-4 w-4" /> حفظ الأقسام
-                          </Button>
-                        </div>
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                          {departments.map((department) => {
-                            const selected = (editingDepartments[profile.id] ?? departmentIdsByUser.get(profile.id) ?? []).includes(department.id);
-                            return (
-                              <label key={department.id} className="flex items-center gap-2 text-sm">
-                                <Checkbox
-                                  checked={selected}
-                                  onCheckedChange={(checked) => setEditingDepartments((current) => {
-                                    const ids = current[profile.id] ?? departmentIdsByUser.get(profile.id) ?? [];
-                                    return { ...current, [profile.id]: checked === true ? [...new Set([...ids, department.id])] : ids.filter((id) => id !== department.id) };
-                                  })}
-                                />
-                                {department.name}
-                              </label>
-                            );
-                          })}
-                        </div>
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          {(departmentIdsByUser.get(profile.id) ?? []).map((id) => <Badge key={id} variant="outline">{departments.find((department) => department.id === id)?.name ?? id}</Badge>)}
-                          {!departmentIdsByUser.get(profile.id)?.length && <Badge variant="secondary">وصول عام حسب الدور</Badge>}
-                        </div>
-                      </div>
                     </div>
                   )}
                 </div>
