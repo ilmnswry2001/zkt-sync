@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { permissionsDb } from "@/lib/permissions-client";
 import { useAuth } from "@/hooks/use-auth";
@@ -9,6 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { toast } from "sonner";
 import {
   Select,
   SelectContent,
@@ -34,6 +37,8 @@ import {
   XCircle,
   Clock3,
   ListChecks,
+  Eye,
+  Save,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/team-follow-up")({
@@ -71,6 +76,8 @@ type TeamTask = {
   manager_note: string | null;
 };
 type Profile = { id: string; full_name: string | null; email: string | null };
+type GuidanceNote = { id: string; department_id: string | null; note_date: string; content: string; author_id: string; created_at: string };
+type MemberTaskStats = { userId: string; profile: Profile | undefined; total: number; completed: number; minutes: number; today: number; tasks: TeamTask[] };
 
 const today = new Date().toISOString().slice(0, 10);
 const isSiteAdministrator = (employee: Employee) =>
@@ -78,8 +85,12 @@ const isSiteAdministrator = (employee: Employee) =>
 
 function TeamFollowUpPage() {
   const { isAdmin, isHR, roles } = useAuth();
+  const queryClient = useQueryClient();
   const [date, setDate] = useState(today);
   const [departmentId, setDepartmentId] = useState("all");
+  const [detailsMember, setDetailsMember] = useState<MemberTaskStats | null>(null);
+  const [taskNotes, setTaskNotes] = useState<Record<string, string>>({});
+  const [generalNote, setGeneralNote] = useState("");
   const canSeeAll = isAdmin || isHR;
 
   const departmentsQuery = useQuery({
@@ -216,6 +227,48 @@ function TeamFollowUpPage() {
       };
     })
     .sort((a, b) => b.total - a.total);
+  const guidanceDepartmentId = effectiveDepartmentId === "all" ? allowedDepartmentIds[0] ?? null : effectiveDepartmentId;
+  const guidanceQuery = useQuery({
+    queryKey: ["team-follow-up-guidance", guidanceDepartmentId, date],
+    enabled: Boolean(guidanceDepartmentId),
+    queryFn: async () => {
+      const { data, error } = await (supabase as unknown as { from: (table: string) => any })
+        .from("team_guidance_notes")
+        .select("id, department_id, note_date, content, author_id, created_at")
+        .eq("department_id", guidanceDepartmentId)
+        .eq("note_date", date)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (error) throw error;
+      return ((data ?? [])[0] ?? null) as GuidanceNote | null;
+    },
+  });
+  useEffect(() => {
+    setGeneralNote(guidanceQuery.data?.content ?? "");
+  }, [guidanceQuery.data?.id, guidanceQuery.data?.content]);
+  const updateTaskNote = async (task: TeamTask) => {
+    const managerNote = taskNotes[task.id] ?? task.manager_note ?? "";
+    const { error } = await (supabase as unknown as { from: (table: string) => any })
+      .from("employee_tasks")
+      .update({ manager_note: managerNote.trim() || null })
+      .eq("id", task.id);
+    if (error) return toast.error(`تعذر حفظ ملاحظة المهمة: ${error.message}`);
+    await queryClient.invalidateQueries({ queryKey: ["team-follow-up-tasks"] });
+    toast.success("تم حفظ ملاحظة المهمة");
+  };
+  const saveGeneralNote = async () => {
+    if (!guidanceDepartmentId) return toast.error("لا يوجد قسم محدد لحفظ التوجيه");
+    const client = supabase as unknown as { from: (table: string) => any };
+    const { data: authData } = await supabase.auth.getUser();
+    if (!authData.user) return toast.error("يجب تسجيل الدخول أولاً");
+    const payload = { department_id: guidanceDepartmentId, note_date: date, content: generalNote.trim(), author_id: authData.user.id };
+    const result = guidanceQuery.data?.id
+      ? await client.from("team_guidance_notes").update({ content: payload.content }).eq("id", guidanceQuery.data.id)
+      : await client.from("team_guidance_notes").insert(payload);
+    if (result.error) return toast.error(`تعذر حفظ التوجيه العام: ${result.error.message}`);
+    await queryClient.invalidateQueries({ queryKey: ["team-follow-up-guidance"] });
+    toast.success("تم حفظ التوجيه العام للفريق");
+  };
 
   const siteRows = siteIds
     .map((siteId) => {
@@ -326,6 +379,13 @@ function TeamFollowUpPage() {
             <Stat icon={Clock3} label="قيد التنفيذ" value={teamTasks.filter((task) => task.status === "in_progress").length} tone="orange" />
             <Stat icon={Users} label="حسابات نشطة" value={monthlyTaskStats.length} tone="blue" />
           </div>
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <div><h3 className="font-semibold">توجيه عام للفريق</h3><p className="text-xs text-muted-foreground">يُحفظ على قسم {departments.find((item) => item.id === guidanceDepartmentId)?.name ?? "المحدد"} بتاريخ {date}</p></div>
+              <Button size="sm" onClick={() => void saveGeneralNote()}><Save className="ml-2 h-4 w-4" /> حفظ التوجيه</Button>
+            </div>
+            <Textarea value={generalNote} onChange={(event) => setGeneralNote(event.target.value)} placeholder="اكتب توجيهاً عاماً للفريق أو أهداف اليوم أو ملاحظات المتابعة..." rows={3} />
+          </div>
           <div>
             <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold"><ClipboardList className="h-5 w-5" /> تقرير مهام اليوم — {date}</h3>
             <div className="space-y-2">
@@ -342,12 +402,24 @@ function TeamFollowUpPage() {
           <div>
             <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold"><Users className="h-5 w-5" /> إحصائيات الحسابات خلال الشهر</h3>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {monthlyTaskStats.map((member) => <div key={member.userId} className="rounded-xl border bg-card p-4 shadow-sm"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold">{member.profile?.full_name ?? member.profile?.email ?? "حساب الفريق"}</p><p className="text-xs text-muted-foreground">{member.profile?.email ?? ""}</p></div><Badge variant="outline">{member.today} اليوم</Badge></div><div className="mt-4 grid grid-cols-3 gap-2 text-center"><div className="rounded-md bg-muted/50 p-2"><p className="text-lg font-bold">{member.total}</p><p className="text-[11px] text-muted-foreground">كل المهام</p></div><div className="rounded-md bg-emerald-50 p-2 dark:bg-emerald-950/30"><p className="text-lg font-bold text-emerald-700 dark:text-emerald-400">{member.completed}</p><p className="text-[11px] text-muted-foreground">منجزة</p></div><div className="rounded-md bg-blue-50 p-2 dark:bg-blue-950/30"><p className="text-lg font-bold text-blue-700 dark:text-blue-400">{member.minutes}</p><p className="text-[11px] text-muted-foreground">دقيقة</p></div></div><div className="mt-3 space-y-1">{member.tasks.slice(0, 3).map((task) => <div key={task.id} className="flex items-center justify-between gap-2 text-xs"><span className="truncate">{task.title}</span><span className="shrink-0 text-muted-foreground">{task.task_date}</span></div>)}{member.tasks.length > 3 && <p className="text-xs text-muted-foreground">+ {member.tasks.length - 3} مهام أخرى</p>}</div></div>)}
+              {monthlyTaskStats.map((member) => <div key={member.userId} className="rounded-xl border bg-card p-4 shadow-sm"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold">{member.profile?.full_name ?? member.profile?.email ?? "حساب الفريق"}</p><p className="text-xs text-muted-foreground">{member.profile?.email ?? ""}</p></div><Badge variant="outline">{member.today} اليوم</Badge></div><div className="mt-4 grid grid-cols-3 gap-2 text-center"><div className="rounded-md bg-muted/50 p-2"><p className="text-lg font-bold">{member.total}</p><p className="text-[11px] text-muted-foreground">كل المهام</p></div><div className="rounded-md bg-emerald-50 p-2 dark:bg-emerald-950/30"><p className="text-lg font-bold text-emerald-700 dark:text-emerald-400">{member.completed}</p><p className="text-[11px] text-muted-foreground">منجزة</p></div><div className="rounded-md bg-blue-50 p-2 dark:bg-blue-950/30"><p className="text-lg font-bold text-blue-700 dark:text-blue-400">{member.minutes}</p><p className="text-[11px] text-muted-foreground">دقيقة</p></div></div><div className="mt-3 space-y-1">{member.tasks.slice(0, 3).map((task) => <div key={task.id} className="flex items-center justify-between gap-2 text-xs"><span className="truncate">{task.title}</span><span className="shrink-0 text-muted-foreground">{task.task_date}</span></div>)}{member.tasks.length > 3 && <p className="text-xs text-muted-foreground">+ {member.tasks.length - 3} مهام أخرى</p>}<Button variant="outline" size="sm" className="mt-3 w-full" onClick={() => setDetailsMember(member)}><Eye className="ml-2 h-4 w-4" /> عرض التفاصيل ({member.tasks.length})</Button></div></div>)}
               {!monthlyTaskStats.length && <div className="rounded-lg border border-dashed p-6 text-center text-muted-foreground md:col-span-2 xl:col-span-3">لا توجد مهام مسجلة خلال هذا الشهر للأقسام المسموحة.</div>}
             </div>
           </div>
         </CardContent>
       </Card>
+      <Dialog open={Boolean(detailsMember)} onOpenChange={(open) => !open && setDetailsMember(null)}>
+        <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>تفاصيل مهام {detailsMember?.profile?.full_name ?? detailsMember?.profile?.email ?? "عضو الفريق"}</DialogTitle>
+            <DialogDescription>جميع مهام العضو خلال شهر {date.slice(0, 7)} مع إمكانية إضافة ملاحظة لكل مهمة.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            {detailsMember?.tasks.map((task) => <div key={task.id} className="rounded-lg border p-3"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="font-medium">{task.title}</p><p className="text-xs text-muted-foreground">{task.task_date}{task.duration_minutes ? ` · ${task.duration_minutes} دقيقة` : ""}</p></div><Badge variant={task.status === "completed" ? "default" : "secondary"}>{task.status === "completed" ? "منجزة" : "قيد التنفيذ"}</Badge></div>{task.description && <p className="mt-2 text-sm text-muted-foreground">{task.description}</p>}<div className="mt-3 flex flex-col gap-2 sm:flex-row"><Input value={taskNotes[task.id] ?? task.manager_note ?? ""} onChange={(event) => setTaskNotes((current) => ({ ...current, [task.id]: event.target.value }))} placeholder="ملاحظة على هذه المهمة..." /><Button size="sm" onClick={() => void updateTaskNote(task)}><Save className="ml-2 h-4 w-4" /> حفظ</Button></div></div>)}
+            {!detailsMember?.tasks.length && <p className="py-8 text-center text-muted-foreground">لا توجد مهام لهذا العضو.</p>}
+          </div>
+        </DialogContent>
+      </Dialog>
       <Card>
         <CardHeader>
           <CardTitle>
