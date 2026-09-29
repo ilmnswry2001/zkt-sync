@@ -31,6 +31,7 @@ type Role = "admin" | "hr" | "supervisor" | "data_entry" | "site_admin" | "depar
 type Profile = { id: string; full_name: string | null; email: string | null; created_at: string; employee_id?: string | null };
 type UserRole = { id: string; user_id: string; role: Role };
 type Department = { id: string; name: string };
+type DepartmentManager = { id: string; user_id: string; department_id: string; created_at: string };
 type EmployeeOption = { id: string; full_name: string; employee_no: string; status: string; department_id: string | null };
 
 const roles: { key: Role; label: string; description: string }[] = [
@@ -57,8 +58,10 @@ function AccountsPage() {
     password: "",
     role: "data_entry" as Role,
     employeeId: "",
+    managedDepartmentId: "",
   });
   const [departmentIds, setDepartmentIds] = useState<string[]>([]);
+  const [editingDepartmentManager, setEditingDepartmentManager] = useState<Record<string, string>>({});
   const [editingDepartments, setEditingDepartments] = useState<Record<string, string[]>>({});
   const [resetUserId, setResetUserId] = useState<string | null>(null);
   const [resetPassword, setResetPassword] = useState("");
@@ -114,16 +117,34 @@ function AccountsPage() {
       return (data ?? []) as UserDepartment[];
     },
   });
+  const departmentManagersQuery = useQuery({
+    queryKey: ["accounts", "department-managers"],
+    queryFn: async () => {
+      const { data, error } = await permissionsDb
+        .from("department_managers")
+        .select("id, user_id, department_id, created_at");
+      if (error) throw error;
+      return (data ?? []) as DepartmentManager[];
+    },
+  });
   const profiles = useMemo(() => profilesQuery.data ?? [], [profilesQuery.data]);
   const userRoles = useMemo(() => rolesQuery.data ?? [], [rolesQuery.data]);
   const departments = departmentsQuery.data ?? [];
   const employees = employeesQuery.data ?? [];
   const userDepartments = userDepartmentsQuery.data ?? [];
+  const departmentManagers = departmentManagersQuery.data ?? [];
   const departmentIdsByUser = useMemo(() => {
     const map = new Map<string, string[]>();
     userDepartments.forEach((item) => map.set(item.user_id, [...(map.get(item.user_id) ?? []), item.department_id]));
     return map;
   }, [userDepartments]);
+  const departmentManagerByUser = useMemo(() => {
+    const map = new Map<string, string>();
+    departmentManagers.forEach((item) => {
+      if (!map.has(item.user_id)) map.set(item.user_id, item.department_id);
+    });
+    return map;
+  }, [departmentManagers]);
   const rolesByUser = useMemo(() => {
     const map = new Map<string, UserRole[]>();
     userRoles.forEach((item) => map.set(item.user_id, [...(map.get(item.user_id) ?? []), item]));
@@ -145,6 +166,7 @@ function AccountsPage() {
       rolesQuery.refetch(),
       departmentsQuery.refetch(),
       userDepartmentsQuery.refetch(),
+      departmentManagersQuery.refetch(),
     ]);
     toast.success("تم تحديث الحسابات والصلاحيات");
   };
@@ -182,10 +204,40 @@ function AccountsPage() {
       toast.error(error instanceof Error ? error.message : "تعذر حفظ أقسام الوصول");
     }
   };
+  const saveDepartmentManager = async (userId: string) => {
+    const selectedDepartmentId = editingDepartmentManager[userId] ?? departmentManagerByUser.get(userId) ?? "";
+    try {
+      const existingAssignment = departmentManagers.find((item) => item.user_id === userId);
+      if (selectedDepartmentId) {
+        if (existingAssignment) {
+          const { error } = await permissionsDb
+            .from("department_managers")
+            .update({ department_id: selectedDepartmentId })
+            .eq("id", existingAssignment.id);
+          if (error) throw error;
+        } else {
+          const { error } = await permissionsDb
+            .from("department_managers")
+            .insert({ user_id: userId, department_id: selectedDepartmentId });
+          if (error) throw error;
+        }
+      } else if (existingAssignment) {
+        const { error } = await permissionsDb.from("department_managers").delete().eq("id", existingAssignment.id);
+        if (error) throw error;
+      }
+      await departmentManagersQuery.refetch();
+      toast.success("تم حفظ القسم الذي يديره الحساب");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "تعذر حفظ القسم");
+    }
+  };
   const handleCreateAccount = async (event: React.FormEvent) => {
     event.preventDefault();
     if (createForm.password.length < 8)
       return toast.error("كلمة المرور يجب أن تكون 8 أحرف على الأقل");
+    if (createForm.role === "department_manager" && !createForm.managedDepartmentId) {
+      return toast.error("اختر القسم الذي سيُدار من خلال هذا الحساب");
+    }
     setActionBusy(true);
     try {
       await createAccount({
@@ -195,10 +247,11 @@ function AccountsPage() {
           password: createForm.password,
           role: createForm.role,
           employeeId: createForm.employeeId || null,
+          managedDepartmentId: createForm.role === "department_manager" ? createForm.managedDepartmentId : null,
           departmentIds,
         },
       });
-      setCreateForm({ fullName: "", email: "", password: "", role: "data_entry", employeeId: "" });
+      setCreateForm({ fullName: "", email: "", password: "", role: "data_entry", employeeId: "", managedDepartmentId: "" });
       setDepartmentIds([]);
       setShowCreateForm(false);
       await Promise.all([
@@ -236,9 +289,15 @@ function AccountsPage() {
     rolesQuery.isLoading ||
     departmentsQuery.isLoading ||
     employeesQuery.isLoading ||
-    userDepartmentsQuery.isLoading;
+    userDepartmentsQuery.isLoading ||
+    departmentManagersQuery.isLoading;
   const error =
-    profilesQuery.error ?? rolesQuery.error ?? departmentsQuery.error ?? employeesQuery.error ?? userDepartmentsQuery.error;
+    profilesQuery.error ??
+    rolesQuery.error ??
+    departmentsQuery.error ??
+    employeesQuery.error ??
+    userDepartmentsQuery.error ??
+    departmentManagersQuery.error;
 
   return (
     <div className="space-y-6">
@@ -347,6 +406,26 @@ function AccountsPage() {
                   ))}
                 </select>
               </div>
+              {createForm.role === "department_manager" && (
+                <div className="md:col-span-2">
+                  <Label htmlFor="new-account-managed-department">القسم الذي يديره هذا الحساب</Label>
+                  <select
+                    id="new-account-managed-department"
+                    className="mt-1 flex h-10 w-full rounded-md border bg-background px-3 text-sm"
+                    value={createForm.managedDepartmentId}
+                    onChange={(event) =>
+                      setCreateForm((current) => ({ ...current, managedDepartmentId: event.target.value }))
+                    }
+                  >
+                    <option value="">اختر القسم</option>
+                    {departments.map((department) => (
+                      <option key={department.id} value={department.id}>
+                        {department.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="rounded-lg border p-3 md:col-span-2">
                 <Label>الأقسام المسموحة لهذا الحساب</Label>
                 <p className="mb-2 text-xs text-muted-foreground">اختر أقسام النظام التي يمكن لهذا الحساب الدخول إليها، أو اتركها فارغة في حال السماح الكامل حسب الدور.</p>
@@ -529,6 +608,36 @@ function AccountsPage() {
                           </span>
                         </label>
                       ))}
+                      {hasRole(profile.id, "department_manager") && (
+                        <div className="rounded-lg border p-3 md:col-span-2">
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            <div>
+                              <p className="font-medium">القسم الذي يديره هذا الحساب</p>
+                              <p className="text-xs text-muted-foreground">يحدد القسم الخاص الذي يتبع له مدير القسم.</p>
+                            </div>
+                            <Button size="sm" onClick={() => void saveDepartmentManager(profile.id)}>
+                              <Save className="ml-2 h-4 w-4" /> حفظ القسم
+                            </Button>
+                          </div>
+                          <select
+                            className="mt-1 flex h-10 w-full rounded-md border bg-background px-3 text-sm"
+                            value={editingDepartmentManager[profile.id] ?? departmentManagerByUser.get(profile.id) ?? ""}
+                            onChange={(event) =>
+                              setEditingDepartmentManager((current) => ({
+                                ...current,
+                                [profile.id]: event.target.value,
+                              }))
+                            }
+                          >
+                            <option value="">اختر القسم</option>
+                            {departments.map((department) => (
+                              <option key={department.id} value={department.id}>
+                                {department.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                       <div className="rounded-lg border p-3 md:col-span-2">
                         <div className="mb-2 flex items-center justify-between gap-2">
                           <div>

@@ -95,6 +95,19 @@ type TeamTask = {
 type Profile = { id: string; full_name: string | null; email: string | null };
 type GuidanceNote = { id: string; department_id: string | null; note_date: string; content: string; author_id: string; created_at: string };
 type MemberTaskStats = { userId: string; profile: Profile | undefined; total: number; completed: number; minutes: number; today: number; tasks: TeamTask[] };
+type MemberDetails = {
+  employee: Employee;
+  profile: Profile | undefined;
+  total: number;
+  completed: number;
+  minutes: number;
+  today: number;
+  tasks: TeamTask[];
+  daysPresent: number;
+  evaluation?: Evaluation;
+  departmentName: string;
+  siteName: string | null;
+};
 type Evaluation = { id: string; employee_id: string; evaluation_month: string; score: number; created_by: string; created_at: string };
 
 const today = new Date().toISOString().slice(0, 10);
@@ -106,7 +119,7 @@ function TeamFollowUpPage() {
   const queryClient = useQueryClient();
   const [date, setDate] = useState(today);
   const [departmentId, setDepartmentId] = useState("all");
-  const [detailsMember, setDetailsMember] = useState<MemberTaskStats | null>(null);
+  const [detailsMember, setDetailsMember] = useState<MemberDetails | null>(null);
   const [taskNotes, setTaskNotes] = useState<Record<string, string>>({});
   const [generalNote, setGeneralNote] = useState("");
   const [activeTab, setActiveTab] = useState("tasks");
@@ -274,7 +287,18 @@ function TeamFollowUpPage() {
   const employeeTaskStats = visibleEmployees.map((employee) => {
     const profile = employee.email ? profileByEmail.get(employee.email.toLowerCase()) : undefined;
     const tasks = profile ? teamTasks.filter((task) => task.created_by === profile.id) : [];
-    return { employee, profile, tasks, total: tasks.length, today: tasks.filter((task) => task.task_date === date).length, completed: tasks.filter((task) => task.status === "completed").length, daysPresent: attendanceByEmployee.get(employee.id)?.size ?? 0, evaluation: evaluationByEmployee.get(employee.id) };
+    return {
+      employee,
+      profile,
+      tasks,
+      total: tasks.length,
+      today: tasks.filter((task) => task.task_date === date).length,
+      completed: tasks.filter((task) => task.status === "completed").length,
+      daysPresent: attendanceByEmployee.get(employee.id)?.size ?? 0,
+      evaluation: evaluationByEmployee.get(employee.id),
+      departmentName: departmentById.get(employee.department_id ?? "")?.name ?? "غير محدد",
+      siteName: siteById.get(employee.site_id ?? "")?.name ?? "غير محدد",
+    };
   });
   const submitEvaluation = async () => {
     if (!evaluationEmployee) return;
@@ -705,9 +729,10 @@ function TeamFollowUpPage() {
         </CardContent>
       </Card>
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid h-auto w-full grid-cols-3">
+        <TabsList className="grid h-auto w-full grid-cols-4">
           <TabsTrigger value="tasks">مهام الفريق</TabsTrigger>
           <TabsTrigger value="stats">الإحصائيات</TabsTrigger>
+          <TabsTrigger value="team">فريقي</TabsTrigger>
           <TabsTrigger value="evaluation">تقييم الموظفين</TabsTrigger>
         </TabsList>
         <TabsContent value="tasks" className="space-y-5">
@@ -733,7 +758,7 @@ function TeamFollowUpPage() {
               </p>
             </CardHeader>
             <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {employeeTaskStats.map(({ employee, profile, tasks, today: todayCount, completed, total }) => (
+              {employeeTaskStats.map(({ employee, profile, tasks, today: todayCount, completed, total, daysPresent, evaluation, departmentName, siteName }) => (
                 <Card key={employee.id} className="border-muted">
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-3">
@@ -768,13 +793,17 @@ function TeamFollowUpPage() {
                       className="mt-3 w-full"
                       onClick={() =>
                         setDetailsMember({
-                          userId: employee.id,
+                          employee,
                           profile,
                           total,
                           completed,
                           minutes: tasks.reduce((sum, task) => sum + Number(task.duration_minutes || 0), 0),
                           today: todayCount,
                           tasks,
+                          daysPresent,
+                          evaluation,
+                          departmentName,
+                          siteName,
                         })
                       }
                     >
@@ -793,8 +822,157 @@ function TeamFollowUpPage() {
           {top_stats}
           {sites}
         </TabsContent>
+
+        <TabsContent value="team" className="space-y-5">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-primary" /> فريق القسم
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                أسماء الموظفين المسندين إلى هذا القسم فقط، مع بطاقة مختصرة وتقييمهم وسجل مهامهم.
+              </p>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
+              {visibleEmployees.map((employee) => {
+                const employeeProfile = employee.email ? profileByEmail.get(employee.email.toLowerCase()) : undefined;
+                const employeeTasks = employeeProfile ? teamTasks.filter((task) => task.created_by === employeeProfile.id) : [];
+                const employeeDays = attendanceByEmployee.get(employee.id)?.size ?? 0;
+                const existingEvaluation = evaluationByEmployee.get(employee.id);
+                return (
+                  <div key={employee.id} className="rounded-2xl border bg-gradient-to-br from-background via-muted/30 to-primary/5 p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-lg font-semibold">{employee.full_name}</h3>
+                        <p className="text-xs text-muted-foreground">{employee.employee_no}</p>
+                      </div>
+                      <Badge variant="outline">{employee.status}</Badge>
+                    </div>
+                    <div className="mt-4 space-y-2 text-sm text-muted-foreground">
+                      <p>القسم: {departmentById.get(employee.department_id ?? "")?.name ?? "غير محدد"}</p>
+                      <p>الموقع: {siteById.get(employee.site_id ?? "")?.name ?? "غير محدد"}</p>
+                      <p>المنصب: {employee.position ?? "غير محدد"}</p>
+                    </div>
+                    <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                      <div className="rounded-md bg-muted/50 p-2">
+                        <p className="text-lg font-bold">{employeeDays}</p>
+                        <p className="text-[10px] text-muted-foreground">أيام الحضور</p>
+                      </div>
+                      <div className="rounded-md bg-emerald-50 p-2 dark:bg-emerald-950/30">
+                        <p className="text-lg font-bold text-emerald-700 dark:text-emerald-400">{existingEvaluation?.score ?? "—"}</p>
+                        <p className="text-[10px] text-muted-foreground">التقييم</p>
+                      </div>
+                      <div className="rounded-md bg-purple-50 p-2 dark:bg-purple-950/30">
+                        <p className="text-lg font-bold text-purple-700 dark:text-purple-400">{employeeTasks.length}</p>
+                        <p className="text-[10px] text-muted-foreground">المهام</p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      className="mt-4 w-full"
+                      onClick={() => setDetailsMember({
+                        employee,
+                        profile: employeeProfile,
+                        total: employeeTasks.length,
+                        completed: employeeTasks.filter((task) => task.status === "completed").length,
+                        minutes: employeeTasks.reduce((sum, task) => sum + Number(task.duration_minutes || 0), 0),
+                        today: employeeTasks.filter((task) => task.task_date === date).length,
+                        tasks: employeeTasks,
+                        daysPresent: employeeDays,
+                        evaluation: existingEvaluation,
+                        departmentName: departmentById.get(employee.department_id ?? "")?.name ?? "غير محدد",
+                        siteName: siteById.get(employee.site_id ?? "")?.name ?? "غير محدد",
+                      })}
+                    >
+                      <Eye className="ml-2 h-4 w-4" /> عرض التفاصيل
+                    </Button>
+                  </div>
+                );
+              })}
+              {!visibleEmployees.length && (
+                <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground lg:col-span-2 xl:col-span-3">
+                  لا يوجد موظفون مسندون لهذا القسم حاليًا.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
         {evaluation}
       </Tabs>
+
+      <Dialog
+        open={Boolean(detailsMember)}
+        onOpenChange={(open) => {
+          if (!open) setDetailsMember(null);
+        }}
+      >
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>تفاصيل الموظف — {detailsMember?.employee.full_name}</DialogTitle>
+            <DialogDescription>
+              {detailsMember?.employee.employee_no} · {detailsMember?.departmentName} · {detailsMember?.siteName ?? "غير محدد"}
+            </DialogDescription>
+          </DialogHeader>
+          {detailsMember && (
+            <div className="space-y-5 pt-2">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">البريد الإلكتروني</p>
+                  <p className="font-medium">{detailsMember.profile?.email ?? detailsMember.employee.email ?? "غير متوفر"}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">المنصب</p>
+                  <p className="font-medium">{detailsMember.employee.position ?? "غير محدد"}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">أيام الحضور</p>
+                  <p className="font-medium">{detailsMember.daysPresent}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">التقييم الشهري</p>
+                  <p className="font-medium">{detailsMember.evaluation?.score ?? "لا يوجد تقييم"}</p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-lg bg-muted/50 p-3 text-center">
+                  <p className="text-2xl font-bold">{detailsMember.total}</p>
+                  <p className="text-xs text-muted-foreground">إجمالي المهام</p>
+                </div>
+                <div className="rounded-lg bg-emerald-50 p-3 text-center dark:bg-emerald-950/30">
+                  <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{detailsMember.completed}</p>
+                  <p className="text-xs text-muted-foreground">منجزة</p>
+                </div>
+                <div className="rounded-lg bg-amber-50 p-3 text-center dark:bg-amber-950/30">
+                  <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">{detailsMember.minutes}</p>
+                  <p className="text-xs text-muted-foreground">دقائق</p>
+                </div>
+              </div>
+
+              <div className="rounded-lg border p-3">
+                <p className="mb-2 font-medium">مهام الموظف</p>
+                {detailsMember.tasks.length ? (
+                  <div className="space-y-2">
+                    {detailsMember.tasks.slice(0, 6).map((task) => (
+                      <div key={task.id} className="rounded-md border p-2 text-sm">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium">{task.title}</span>
+                          <Badge variant={task.status === "completed" ? "default" : "secondary"}>
+                            {task.status === "completed" ? "منجزة" : "قيد التنفيذ"}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-muted-foreground">{task.task_date} · {task.duration_minutes} دقيقة</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">لا توجد مهام مسجلة لهذا الموظف.</p>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

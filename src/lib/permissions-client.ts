@@ -8,6 +8,13 @@ type DepartmentAssignment = {
   created_at: string;
 };
 
+type DepartmentManagerAssignment = {
+  id: string;
+  user_id: string;
+  department_id: string;
+  created_at: string;
+};
+
 type PermissionDatabase = {
   public: {
     Tables: {
@@ -15,6 +22,12 @@ type PermissionDatabase = {
         Row: DepartmentAssignment;
         Insert: { id?: string; user_id: string; department_id: string; created_at?: string };
         Update: Partial<DepartmentAssignment>;
+        Relationships: [];
+      };
+      department_managers: {
+        Row: DepartmentManagerAssignment;
+        Insert: { id?: string; user_id: string; department_id: string; created_at?: string };
+        Update: Partial<DepartmentManagerAssignment>;
         Relationships: [];
       };
     };

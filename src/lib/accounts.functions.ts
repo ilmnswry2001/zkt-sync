@@ -22,6 +22,7 @@ const createAccountSchema = z.object({
   password: passwordSchema,
   role: roleSchema,
   employeeId: z.string().uuid().nullable().optional().default(null),
+  managedDepartmentId: z.string().uuid().nullable().optional().default(null),
   departmentIds: z.array(z.string().uuid()).optional().default([]),
 });
 
@@ -123,6 +124,22 @@ export const createAccount = createServerFn({ method: "POST" })
         await supabaseAdmin.from("user_roles").delete().eq("user_id", created.user.id);
         await supabaseAdmin.auth.admin.deleteUser(created.user.id);
         throw new Error(`تم التراجع عن إنشاء الحساب: ${translateAuthError(profileError)}`);
+      }
+    }
+
+    if (data.role === "department_manager") {
+      if (!data.managedDepartmentId) {
+        await supabaseAdmin.from("user_roles").delete().eq("user_id", created.user.id);
+        await supabaseAdmin.auth.admin.deleteUser(created.user.id);
+        throw new Error("يجب اختيار القسم الذي يديره مدير القسم");
+      }
+      const { error: departmentManagerError } = await (supabaseAdmin as any)
+        .from("department_managers")
+        .insert({ user_id: created.user.id, department_id: data.managedDepartmentId });
+      if (departmentManagerError) {
+        await supabaseAdmin.from("user_roles").delete().eq("user_id", created.user.id);
+        await supabaseAdmin.auth.admin.deleteUser(created.user.id);
+        throw new Error(`تم التراجع عن إنشاء الحساب: ${departmentManagerError.message}`);
       }
     }
 
