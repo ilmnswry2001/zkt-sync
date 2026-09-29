@@ -254,19 +254,51 @@ function PlanningPage() {
   const [requestSiteId, setRequestSiteId] = useState<string>(sites[0]?.id ?? "");
   const [requestDate, setRequestDate] = useState(new Date().toISOString().slice(0, 10));
   const [requestNotes, setRequestNotes] = useState("");
+  const { data: specialtyCatalog = [] } = useQuery({
+    queryKey: ["work-plan-specialty-catalog"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("report_catalog_items")
+        .select("name")
+        .eq("kind", "worker_specialty")
+        .eq("is_archived", false)
+        .order("sort_order");
+      if (error || !data?.length) {
+        return WORK_PLAN_SPECIALTIES;
+      }
+      return Array.from(new Set([...WORK_PLAN_SPECIALTIES, ...data.map((item: any) => item.name)]));
+    },
+  });
+  const specialtyOptions = useMemo(
+    () => Array.from(new Set([...(specialtyCatalog ?? []), ...WORK_PLAN_SPECIALTIES])).filter(Boolean),
+    [specialtyCatalog],
+  );
   const [draftSpecialties, setDraftSpecialties] = useState<WorkPlanSpecialty[]>([
-    newPlanSpecialty(0),
-    newPlanSpecialty(1),
-    newPlanSpecialty(2),
+    { ...newPlanSpecialty(0), specialty: specialtyOptions[0] ?? "عامل بناء" },
+    { ...newPlanSpecialty(1), specialty: specialtyOptions[1] ?? "حداد" },
+    { ...newPlanSpecialty(2), specialty: specialtyOptions[2] ?? "نجار" },
   ]);
   const [managementNote, setManagementNote] = useState<Record<string, string>>({});
   const [managementDraft, setManagementDraft] = useState<Record<string, WorkPlanAssignment>>({});
+  const [managementAssignments, setManagementAssignments] = useState<
+    Record<string, Record<string, { employeeName: string; employeeId: string | null }>>
+  >({});
   const [finalPlanTitle, setFinalPlanTitle] = useState<Record<string, string>>({});
   const [finalPlanNotes, setFinalPlanNotes] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (sites.length && !requestSiteId) setRequestSiteId(sites[0].id);
   }, [sites, requestSiteId]);
+
+  useEffect(() => {
+    if (specialtyOptions.length && draftSpecialties.every((item) => !item.specialty.trim())) {
+      setDraftSpecialties([
+        { ...newPlanSpecialty(0), specialty: specialtyOptions[0] ?? "عامل بناء" },
+        { ...newPlanSpecialty(1), specialty: specialtyOptions[1] ?? "حداد" },
+        { ...newPlanSpecialty(2), specialty: specialtyOptions[2] ?? "نجار" },
+      ]);
+    }
+  }, [specialtyOptions, draftSpecialties]);
 
   const workPlansQuery = useQuery({
     queryKey: ["site-work-plans"],
@@ -392,7 +424,13 @@ function PlanningPage() {
   });
 
   const addPlanSpecialty = () => {
-    setDraftSpecialties((current) => [...current, newPlanSpecialty(current.length)]);
+    setDraftSpecialties((current) => [
+      ...current,
+      {
+        ...newPlanSpecialty(current.length),
+        specialty: specialtyOptions[current.length % specialtyOptions.length] ?? "عامل بناء",
+      },
+    ]);
   };
 
   const updateDraftSpecialty = (
@@ -412,14 +450,22 @@ function PlanningPage() {
     setDraftSpecialties((current) => current.filter((_, idx) => idx !== index));
   };
 
-  const addManagementAssignment = (planId: string) => {
-    const draft = managementDraft[planId] ?? { name: "", specialty: "", notes: "", source: "manual" as const };
-    if (!draft.name.trim() || !draft.specialty.trim()) {
-      toast.error("أدخل اسم الكادر والتخصص أولاً");
+  const addManagementAssignment = (planId: string, specialtyName: string, employeeName: string) => {
+    const cleanedName = employeeName.trim();
+    if (!cleanedName || !specialtyName.trim()) {
+      toast.error("اختر اسم الموظف أو أضفه يدويًا ثم أضف التخصص");
       return;
     }
     const plan = workPlans.find((item) => item.id === planId);
-    const nextAssignments = [...(plan?.assigned_staff ?? []), { ...draft, name: draft.name.trim(), specialty: draft.specialty.trim(), notes: draft.notes.trim() }];
+    const nextAssignments = [
+      ...(plan?.assigned_staff ?? []).filter((entry) => !(entry.specialty === specialtyName && entry.name === cleanedName)),
+      {
+        name: cleanedName,
+        specialty: specialtyName.trim(),
+        notes: "",
+        source: "manual" as const,
+      },
+    ];
     supabase
       .from("site_work_plans")
       .update({ assigned_staff: nextAssignments, status: "management_review" })
@@ -427,7 +473,13 @@ function PlanningPage() {
       .then(({ error }) => {
         if (error) throw error;
         qc.invalidateQueries({ queryKey: ["site-work-plans"] });
-        setManagementDraft((current) => ({ ...current, [planId]: { name: "", specialty: "", notes: "", source: "manual" } }));
+        setManagementAssignments((current) => ({
+          ...current,
+          [planId]: {
+            ...(current[planId] ?? {}),
+            [specialtyName]: { employeeName: "", employeeId: null },
+          },
+        }));
         toast.success("تم إدراج الكادر في الخطة");
       })
       .catch((error: any) => toast.error(error?.message ?? "تعذر إدراج الكادر"));
@@ -702,8 +754,14 @@ function PlanningPage() {
                       <Input
                         value={item.specialty}
                         onChange={(e) => updateDraftSpecialty(index, "specialty", e.target.value)}
+                        list={`specialty-options-${index}`}
                         placeholder="مثل: كهربائي"
                       />
+                      <datalist id={`specialty-options-${index}`}>
+                        {specialtyOptions.map((option) => (
+                          <option key={option} value={option} />
+                        ))}
+                      </datalist>
                     </div>
                     <div>
                       <Label>العدد</Label>
@@ -810,58 +868,83 @@ function PlanningPage() {
                       <Badge variant="outline">موافق عليه</Badge>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                      <Input
-                        value={(managementDraft[plan.id]?.name ?? "")}
-                        onChange={(e) =>
-                          setManagementDraft((current) => ({
-                            ...current,
-                            [plan.id]: {
-                              name: e.target.value,
-                              specialty: current[plan.id]?.specialty ?? "",
-                              notes: current[plan.id]?.notes ?? "",
-                              source: "manual",
-                            },
-                          }))
-                        }
-                        placeholder="اسم الكادر أو الموظف"
-                      />
-                      <Input
-                        value={(managementDraft[plan.id]?.specialty ?? "")}
-                        onChange={(e) =>
-                          setManagementDraft((current) => ({
-                            ...current,
-                            [plan.id]: {
-                              name: current[plan.id]?.name ?? "",
-                              specialty: e.target.value,
-                              notes: current[plan.id]?.notes ?? "",
-                              source: "manual",
-                            },
-                          }))
-                        }
-                        placeholder="التخصص"
-                      />
-                      <Input
-                        value={(managementDraft[plan.id]?.notes ?? "")}
-                        onChange={(e) =>
-                          setManagementDraft((current) => ({
-                            ...current,
-                            [plan.id]: {
-                              name: current[plan.id]?.name ?? "",
-                              specialty: current[plan.id]?.specialty ?? "",
-                              notes: e.target.value,
-                              source: "manual",
-                            },
-                          }))
-                        }
-                        placeholder="ملاحظات الكادر"
-                      />
+                    <div className="space-y-3">
+                      {(plan.specialties ?? []).map((item) => {
+                        const currentSelection = managementAssignments[plan.id]?.[item.specialty] ?? {
+                          employeeName: "",
+                          employeeId: null,
+                        };
+                        return (
+                          <div key={`${plan.id}-${item.specialty}`} className="rounded-lg border bg-muted/10 p-3 space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="font-semibold">{item.specialty}</div>
+                              <Badge variant="outline">العدد: {item.quantity}</Badge>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr_auto] gap-2">
+                              <Select
+                                value={currentSelection.employeeId ?? "manual"}
+                                onValueChange={(value) => {
+                                  if (value === "manual") {
+                                    setManagementAssignments((current) => ({
+                                      ...current,
+                                      [plan.id]: {
+                                        ...(current[plan.id] ?? {}),
+                                        [item.specialty]: { employeeName: currentSelection.employeeName, employeeId: null },
+                                      },
+                                    }));
+                                    return;
+                                  }
+                                  const selectedEmployee = (siteAdmins as any[]).find((employee) => employee.id === value);
+                                  setManagementAssignments((current) => ({
+                                    ...current,
+                                    [plan.id]: {
+                                      ...(current[plan.id] ?? {}),
+                                      [item.specialty]: {
+                                        employeeName: selectedEmployee?.full_name ?? currentSelection.employeeName,
+                                        employeeId: value,
+                                      },
+                                    },
+                                  }));
+                                }}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="اختر موظفاً" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="manual">إدخال يدوي</SelectItem>
+                                  {(siteAdmins as any[]).map((employee) => (
+                                    <SelectItem key={employee.id} value={employee.id}>
+                                      {employee.full_name} {employee.employee_no ? `(${employee.employee_no})` : ""}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Input
+                                value={currentSelection.employeeName}
+                                onChange={(e) =>
+                                  setManagementAssignments((current) => ({
+                                    ...current,
+                                    [plan.id]: {
+                                      ...(current[plan.id] ?? {}),
+                                      [item.specialty]: {
+                                        employeeName: e.target.value,
+                                        employeeId: currentSelection.employeeId,
+                                      },
+                                    },
+                                  }))
+                                }
+                                placeholder="اسم الموظف أو اكتب يدويًا"
+                              />
+                              <Button type="button" onClick={() => addManagementAssignment(plan.id, item.specialty, currentSelection.employeeName)}>
+                                إضافة
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
 
                     <div className="flex gap-2 flex-wrap">
-                      <Button type="button" onClick={() => addManagementAssignment(plan.id)}>
-                        إضافة الكادر إلى الخطة
-                      </Button>
                       <Input
                         value={managementNote[plan.id] ?? ""}
                         onChange={(e) => setManagementNote((current) => ({ ...current, [plan.id]: e.target.value }))}
@@ -962,21 +1045,82 @@ function PlanningPage() {
                 <div className="space-y-3">
                   <h3 className="font-bold">الخطة النهائية المعتمدة</h3>
                   {finalPlans.map((plan) => (
-                    <div key={plan.id} className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
+                    <div key={plan.id} className="rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-50 via-white to-sky-50 p-4 space-y-4 print:shadow-none">
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <div className="font-bold">{plan.final_plan?.title ?? `الخطة النهائية - ${plan.site_name}`}</div>
+                          <div className="text-xs text-muted-foreground">خطة عمل يومية</div>
+                          <div className="font-black text-xl text-emerald-700">{plan.final_plan?.title ?? `الخطة النهائية - ${plan.site_name}`}</div>
                           <div className="text-sm text-muted-foreground">{plan.site_name} · {plan.request_date}</div>
                         </div>
-                        <Badge className="bg-emerald-600 text-white">{planStatusLabel[plan.status]}</Badge>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              if (typeof window !== "undefined") {
+                                window.print();
+                              }
+                            }}
+                          >
+                            تصدير PDF
+                          </Button>
+                          <Badge className="bg-emerald-600 text-white">{planStatusLabel[plan.status]}</Badge>
+                        </div>
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        {(plan.final_plan?.specialties ?? plan.specialties ?? []).map((item) => (
-                          <Badge key={`${plan.id}-${item.specialty}`} style={{ backgroundColor: `${item.color}22`, color: item.color, borderColor: item.color }}>
-                            {item.specialty} ({item.quantity})
-                          </Badge>
-                        ))}
+
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                        <div className="rounded-xl border bg-white p-3">
+                          <div className="text-xs text-muted-foreground">الموقع</div>
+                          <div className="font-bold mt-1">{plan.site_name}</div>
+                        </div>
+                        <div className="rounded-xl border bg-white p-3">
+                          <div className="text-xs text-muted-foreground">التاريخ</div>
+                          <div className="font-bold mt-1">{plan.request_date}</div>
+                        </div>
+                        <div className="rounded-xl border bg-white p-3">
+                          <div className="text-xs text-muted-foreground">إجمالي التخصصات</div>
+                          <div className="font-bold mt-1">{(plan.final_plan?.specialties ?? plan.specialties ?? []).reduce((sum, item) => sum + Number(item.quantity || 0), 0)}</div>
+                        </div>
+                        <div className="rounded-xl border bg-white p-3">
+                          <div className="text-xs text-muted-foreground">عدد الكوادر</div>
+                          <div className="font-bold mt-1">{(plan.assigned_staff ?? []).length}</div>
+                        </div>
                       </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="rounded-xl border bg-white p-3">
+                          <div className="font-bold mb-2">التخصصات المطلوبة</div>
+                          <div className="space-y-2">
+                            {(plan.final_plan?.specialties ?? plan.specialties ?? []).map((item) => (
+                              <div key={`${plan.id}-${item.specialty}`} className="flex items-center justify-between rounded-lg border px-3 py-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color || "#2563eb" }} />
+                                  <span>{item.specialty}</span>
+                                </div>
+                                <Badge variant="secondary">{item.quantity}</Badge>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border bg-white p-3">
+                          <div className="font-bold mb-2">كوادر الخطة</div>
+                          <div className="space-y-2">
+                            {(plan.assigned_staff ?? []).length > 0 ? (
+                              (plan.assigned_staff ?? []).map((member, index) => (
+                                <div key={`${plan.id}-member-${index}`} className="flex items-center justify-between rounded-lg border px-3 py-2">
+                                  <span>{member.name}</span>
+                                  <Badge variant="outline">{member.specialty}</Badge>
+                                </div>
+                              ))
+                            ) : (
+                              <div className="text-sm text-muted-foreground">لا توجد كوادر مضافة بعد</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
                       <div className="rounded-lg border bg-background p-3 text-sm whitespace-pre-line">
                         {plan.final_plan?.notes ?? plan.management_notes ?? "لا توجد ملاحظات"}
                       </div>
