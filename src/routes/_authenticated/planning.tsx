@@ -67,6 +67,7 @@ type WorkPlanSpecialty = {
   specialty: string;
   quantity: number;
   heavy_equipment: boolean;
+  equipment_name: string;
   notes: string;
   color: string;
 };
@@ -144,6 +145,7 @@ function newPlanSpecialty(index = 0): WorkPlanSpecialty {
     specialty: WORK_PLAN_SPECIALTIES[index % WORK_PLAN_SPECIALTIES.length],
     quantity: 1,
     heavy_equipment: index === 9,
+    equipment_name: "",
     notes: "",
     color: WORK_PLAN_COLORS[index % WORK_PLAN_COLORS.length],
   };
@@ -269,9 +271,28 @@ function PlanningPage() {
       return Array.from(new Set([...WORK_PLAN_SPECIALTIES, ...data.map((item: any) => item.name)]));
     },
   });
+  const { data: equipmentCatalog = [] } = useQuery({
+    queryKey: ["work-plan-equipment-catalog"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("report_catalog_items")
+        .select("name")
+        .eq("kind", "equipment_type")
+        .eq("is_archived", false)
+        .order("sort_order");
+      if (error || !data?.length) {
+        return ["حفارة", "جرافة", "لودر", "سيارة حمل", "مقطورة", "آلة رصف", "مكبس"].filter(Boolean);
+      }
+      return Array.from(new Set([...data.map((item: any) => item.name)]));
+    },
+  });
   const specialtyOptions = useMemo(
     () => Array.from(new Set([...(specialtyCatalog ?? []), ...WORK_PLAN_SPECIALTIES])).filter(Boolean),
     [specialtyCatalog],
+  );
+  const equipmentOptions = useMemo(
+    () => Array.from(new Set([...(equipmentCatalog ?? []), "حفارة", "جرافة", "لودر", "سيارة حمل", "مقطورة", "آلة رصف", "مكبس"])).filter(Boolean),
+    [equipmentCatalog],
   );
   const [draftSpecialties, setDraftSpecialties] = useState<WorkPlanSpecialty[]>([
     { ...newPlanSpecialty(0), specialty: specialtyOptions[0] ?? "عامل بناء" },
@@ -357,6 +378,7 @@ function PlanningPage() {
           specialty: item.specialty.trim(),
           quantity: Number(item.quantity),
           heavy_equipment: Boolean(item.heavy_equipment),
+          equipment_name: item.heavy_equipment ? (item.equipment_name || "آلة") : "",
           notes: item.notes.trim(),
           color: item.color,
         })),
@@ -748,52 +770,84 @@ function PlanningPage() {
                 </div>
 
                 {draftSpecialties.map((item, index) => (
-                  <div key={`${item.specialty}-${index}`} className="grid grid-cols-1 md:grid-cols-5 gap-2 rounded-lg border bg-background p-3">
-                    <div className="md:col-span-2">
-                      <Label>التخصص</Label>
-                      <Input
-                        value={item.specialty}
-                        onChange={(e) => updateDraftSpecialty(index, "specialty", e.target.value)}
-                        list={`specialty-options-${index}`}
-                        placeholder="مثل: كهربائي"
-                      />
-                      <datalist id={`specialty-options-${index}`}>
-                        {specialtyOptions.map((option) => (
-                          <option key={option} value={option} />
-                        ))}
-                      </datalist>
-                    </div>
-                    <div>
-                      <Label>العدد</Label>
-                      <Input
-                        type="number"
-                        min={1}
-                        value={item.quantity}
-                        onChange={(e) => updateDraftSpecialty(index, "quantity", Number(e.target.value || 0))}
-                      />
-                    </div>
-                    <div className="flex items-end">
-                      <label className="flex items-center gap-2 rounded-md border px-2 py-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={item.heavy_equipment}
-                          onChange={(e) => updateDraftSpecialty(index, "heavy_equipment", e.target.checked)}
+                  <div key={`${item.specialty}-${index}`} className="rounded-xl border bg-white p-3 shadow-sm">
+                    <div className="flex flex-wrap items-center gap-2 md:gap-3">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                        {index + 1}
+                      </div>
+                      <div className="flex-1 min-w-[180px]">
+                        <Label>التخصص</Label>
+                        <Select
+                          value={item.specialty || specialtyOptions[0]}
+                          onValueChange={(value) => updateDraftSpecialty(index, "specialty", value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="اختر التخصص" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {specialtyOptions.map((option) => (
+                              <SelectItem key={option} value={option}>
+                                {option}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="w-24">
+                        <Label>العدد</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={item.quantity}
+                          onChange={(e) => updateDraftSpecialty(index, "quantity", Number(e.target.value || 0))}
                         />
-                        آليات ثقيلة
-                      </label>
+                      </div>
+                      <div className="flex items-end">
+                        <label className="flex items-center gap-2 rounded-md border px-2 py-2 text-sm text-muted-foreground">
+                          <input
+                            type="checkbox"
+                            checked={item.heavy_equipment}
+                            onChange={(e) => updateDraftSpecialty(index, "heavy_equipment", e.target.checked)}
+                          />
+                          آلية
+                        </label>
+                      </div>
+                      <div className="ml-auto">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeDraftSpecialty(index)}>
+                          حذف
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex items-end justify-end">
-                      <Button type="button" variant="ghost" size="sm" onClick={() => removeDraftSpecialty(index)}>
-                        حذف
-                      </Button>
-                    </div>
-                    <div className="md:col-span-5">
-                      <Label>ملاحظات التخصص</Label>
-                      <Input
-                        value={item.notes}
-                        onChange={(e) => updateDraftSpecialty(index, "notes", e.target.value)}
-                        placeholder="ملاحظات خاصة أو متطلبات إضافية"
-                      />
+
+                    <div className="mt-3 grid grid-cols-1 md:grid-cols-[1fr_1.3fr] gap-2">
+                      {item.heavy_equipment && (
+                        <div>
+                          <Label>نوع الآلية</Label>
+                          <Select
+                            value={item.equipment_name || equipmentOptions[0]}
+                            onValueChange={(value) => updateDraftSpecialty(index, "equipment_name", value)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="اختر الآلية" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {equipmentOptions.map((option) => (
+                                <SelectItem key={option} value={option}>
+                                  {option}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                      <div>
+                        <Label>ملاحظات التخصص</Label>
+                        <Input
+                          value={item.notes}
+                          onChange={(e) => updateDraftSpecialty(index, "notes", e.target.value)}
+                          placeholder={item.heavy_equipment ? "ملاحظات الآلية أو الموقع" : "ملاحظات خاصة أو متطلبات إضافية"}
+                        />
+                      </div>
                     </div>
                   </div>
                 ))}
