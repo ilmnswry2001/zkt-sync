@@ -35,9 +35,10 @@ export function useAuth() {
     loading,
     isAdmin: roles.includes("admin"),
     isHR: roles.includes("hr") || roles.includes("admin"),
-    canManageEmployees: roles.some((r) => ["admin", "hr", "data_entry"].includes(r)),
+    canManageEmployees: roles.some((r) => ["admin", "hr", "data_entry", "department_manager", "site_admin"].includes(r)),
     isDepartmentManager: roles.includes("department_manager"),
     isSiteAdmin: roles.includes("site_admin"),
+    canCreateTasks: roles.some((r) => ["admin", "hr", "data_entry", "site_admin"].includes(r)) && !roles.includes("department_manager"),
     signOut: () => supabase.auth.signOut(),
   };
 }

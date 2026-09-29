@@ -53,7 +53,7 @@ const emptyForm = {
 };
 
 function EmployeeTasksPage() {
-  const { user, isAdmin, isHR, roles } = useAuth();
+  const { user, isAdmin, isHR, roles, canCreateTasks } = useAuth();
   const queryClient = useQueryClient();
   const canManageAll = isAdmin || isHR || roles.includes("supervisor");
   const [activeTab, setActiveTab] = useState<"daily" | "archive">("daily");
@@ -141,6 +141,7 @@ function EmployeeTasksPage() {
   };
   const saveTask = async () => {
     if (!user) return toast.error("يجب تسجيل الدخول أولاً");
+    if (!canCreateTasks) return toast.error("لا يسمح لك بإضافة أو تعديل المهام. يسمح بذلك مدخل البيانات وإداري الموقع فقط.");
     if (selectedDate > today) return toast.error("لا يمكن تسجيل مهمة بتاريخ مستقبلي");
     if (form.title.trim().length < 2) return toast.error("اكتب عنوان المهمة بوضوح");
     const payload = {

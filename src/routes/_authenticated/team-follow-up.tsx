@@ -115,7 +115,7 @@ const isSiteAdministrator = (employee: Employee) =>
   /ادار|إدار|site\s*admin|administrator/i.test(employee.position ?? "");
 
 function TeamFollowUpPage() {
-  const { isAdmin, isHR, roles } = useAuth();
+  const { isAdmin, isHR, roles, isDepartmentManager } = useAuth();
   const queryClient = useQueryClient();
   const [date, setDate] = useState(today);
   const [departmentId, setDepartmentId] = useState("all");
@@ -142,12 +142,19 @@ function TeamFollowUpPage() {
     queryFn: async () => {
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) return [] as string[];
-      const { data, error } = await permissionsDb
-        .from("user_departments")
-        .select("department_id")
-        .eq("user_id", authData.user.id);
-      if (error) throw error;
-      return (data ?? []).map((item) => item.department_id as string);
+
+      const [userDepartmentsResult, departmentManagersResult] = await Promise.all([
+        permissionsDb.from("user_departments").select("department_id").eq("user_id", authData.user.id),
+        permissionsDb.from("department_managers").select("department_id").eq("user_id", authData.user.id),
+      ]);
+
+      if (userDepartmentsResult.error) throw userDepartmentsResult.error;
+      if (departmentManagersResult.error) throw departmentManagersResult.error;
+
+      const departmentIds = new Set<string>();
+      (userDepartmentsResult.data ?? []).forEach((item) => departmentIds.add(item.department_id as string));
+      (departmentManagersResult.data ?? []).forEach((item) => departmentIds.add(item.department_id as string));
+      return [...departmentIds];
     },
   });
   const allowedDepartmentIds = canSeeAll
@@ -688,9 +695,11 @@ function TeamFollowUpPage() {
           الصلاحية:{" "}
           {canSeeAll
             ? "مدير النظام / الموارد البشرية"
-            : roles.includes("supervisor")
-              ? "رئيس قسم"
-              : "مشاهدة محدودة"}
+            : isDepartmentManager
+              ? "مدير القسم"
+              : roles.includes("supervisor")
+                ? "مشرف"
+                : "مشاهدة محدودة"}
         </Badge>
       </div>
       <Card>
