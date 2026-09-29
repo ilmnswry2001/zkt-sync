@@ -214,6 +214,41 @@ export type Database = {
         }
         Relationships: []
       }
+      employee_monthly_evaluations: {
+        Row: {
+          created_at: string
+          created_by: string
+          employee_id: string
+          evaluation_month: string
+          id: string
+          score: number
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          employee_id: string
+          evaluation_month: string
+          id?: string
+          score: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          employee_id?: string
+          evaluation_month?: string
+          id?: string
+          score?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_monthly_evaluations_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employee_penalties: {
         Row: {
           created_at: string
@@ -923,6 +958,44 @@ export type Database = {
           },
         ]
       }
+      team_guidance_notes: {
+        Row: {
+          author_id: string
+          content: string
+          created_at: string
+          department_id: string
+          id: string
+          note_date: string
+          updated_at: string
+        }
+        Insert: {
+          author_id: string
+          content: string
+          created_at?: string
+          department_id: string
+          id?: string
+          note_date?: string
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string
+          content?: string
+          created_at?: string
+          department_id?: string
+          id?: string
+          note_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_guidance_notes_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       uploaded_files: {
         Row: {
           content_hash: string | null
@@ -1098,6 +1171,17 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      submit_employee_monthly_evaluation: {
+        Args: {
+          _employee_id: string
+          _evaluation_month: string
+          _score: number
+        }
+        Returns: {
+          bonus_added: number
+          evaluation_id: string
+        }[]
+      }
     }
     Enums: {
       app_role:
