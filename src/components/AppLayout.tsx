@@ -20,6 +20,7 @@ import {
   PanelRightOpen,
   ClipboardCheck,
   UserCog,
+  UserCircle2,
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
@@ -130,6 +131,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               {isAdmin && <span className="text-[10px] opacity-70">مدير</span>}
             </div>
           </div>
+          <Link
+            to="/profile"
+            className="flex w-full items-center justify-start gap-2 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-border/40"
+          >
+            <UserCircle2 className="w-4 h-4" /> الملف الشخصي
+          </Link>
           <Button
             variant="ghost"
             size="sm"
