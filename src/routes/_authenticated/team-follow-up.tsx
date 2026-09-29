@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   Select,
@@ -52,6 +53,7 @@ type Employee = {
   id: string;
   employee_no: string;
   full_name: string;
+  email: string | null;
   position: string | null;
   department_id: string | null;
   site_id: string | null;
@@ -78,6 +80,7 @@ type TeamTask = {
 type Profile = { id: string; full_name: string | null; email: string | null };
 type GuidanceNote = { id: string; department_id: string | null; note_date: string; content: string; author_id: string; created_at: string };
 type MemberTaskStats = { userId: string; profile: Profile | undefined; total: number; completed: number; minutes: number; today: number; tasks: TeamTask[] };
+type Evaluation = { id: string; employee_id: string; evaluation_month: string; score: number; created_by: string; created_at: string };
 
 const today = new Date().toISOString().slice(0, 10);
 const isSiteAdministrator = (employee: Employee) =>
@@ -91,6 +94,9 @@ function TeamFollowUpPage() {
   const [detailsMember, setDetailsMember] = useState<MemberTaskStats | null>(null);
   const [taskNotes, setTaskNotes] = useState<Record<string, string>>({});
   const [generalNote, setGeneralNote] = useState("");
+  const [activeTab, setActiveTab] = useState("tasks");
+  const [evaluationEmployee, setEvaluationEmployee] = useState<Employee | null>(null);
+  const [evaluationScore, setEvaluationScore] = useState("");
   const canSeeAll = isAdmin || isHR;
 
   const departmentsQuery = useQuery({
@@ -128,7 +134,7 @@ function TeamFollowUpPage() {
     queryFn: async () => {
       const query = supabase
         .from("employees")
-        .select("id, employee_no, full_name, position, department_id, site_id, status")
+        .select("id, employee_no, full_name, email, position, department_id, site_id, status")
         .eq("status", "active");
       const { data, error } = await (canSeeAll
         ? query
@@ -227,6 +233,45 @@ function TeamFollowUpPage() {
       };
     })
     .sort((a, b) => b.total - a.total);
+  const employeeIds = visibleEmployees.map((employee) => employee.id);
+  const attendanceMonthQuery = useQuery({
+    queryKey: ["team-follow-up-attendance", employeeIds, monthStart, monthEnd],
+    enabled: employeeIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("attendance_logs").select("employee_id, verify_time").in("employee_id", employeeIds).gte("verify_time", `${monthStart}T00:00:00`).lte("verify_time", `${monthEnd}T23:59:59`);
+      if (error) throw error;
+      return (data ?? []) as { employee_id: string | null; verify_time: string }[];
+    },
+  });
+  const evaluationsQuery = useQuery({
+    queryKey: ["team-follow-up-evaluations", employeeIds, monthStart],
+    enabled: employeeIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await (supabase as unknown as { from: (table: string) => any }).from("employee_monthly_evaluations").select("id, employee_id, evaluation_month, score, created_by, created_at").in("employee_id", employeeIds).eq("evaluation_month", monthStart);
+      if (error) throw error;
+      return (data ?? []) as Evaluation[];
+    },
+  });
+  const attendanceByEmployee = new Map<string, Set<string>>();
+  (attendanceMonthQuery.data ?? []).forEach((row) => { if (!row.employee_id) return; const days = attendanceByEmployee.get(row.employee_id) ?? new Set<string>(); days.add(row.verify_time.slice(0, 10)); attendanceByEmployee.set(row.employee_id, days); });
+  const evaluationByEmployee = new Map((evaluationsQuery.data ?? []).map((evaluation) => [evaluation.employee_id, evaluation]));
+  const profileByEmail = new Map((profilesQuery.data ?? []).filter((profile) => profile.email).map((profile) => [profile.email!.toLowerCase(), profile]));
+  const employeeTaskStats = visibleEmployees.map((employee) => {
+    const profile = employee.email ? profileByEmail.get(employee.email.toLowerCase()) : undefined;
+    const tasks = profile ? teamTasks.filter((task) => task.created_by === profile.id) : [];
+    return { employee, profile, tasks, total: tasks.length, today: tasks.filter((task) => task.task_date === date).length, completed: tasks.filter((task) => task.status === "completed").length, daysPresent: attendanceByEmployee.get(employee.id)?.size ?? 0, evaluation: evaluationByEmployee.get(employee.id) };
+  });
+  const submitEvaluation = async () => {
+    if (!evaluationEmployee) return;
+    const score = Number(evaluationScore);
+    if (!Number.isInteger(score) || score < 0 || score > 100) return toast.error("أدخل درجة صحيحة من 0 إلى 100");
+    if (evaluationByEmployee.has(evaluationEmployee.id)) return toast.error("تم تقييم هذا الموظف هذا الشهر بالفعل");
+    const { data, error } = await (supabase as unknown as { rpc: (fn: string, args: Record<string, unknown>) => any }).rpc("submit_employee_monthly_evaluation", { _employee_id: evaluationEmployee.id, _evaluation_month: monthStart, _score: score });
+    if (error) return toast.error(error.message.includes("تم تقييم") ? "تم تقييم هذا الموظف هذا الشهر بالفعل" : error.message);
+    await queryClient.invalidateQueries({ queryKey: ["team-follow-up-evaluations"] });
+    setEvaluationEmployee(null); setEvaluationScore("");
+    toast.success(Number(data?.[0]?.bonus_added ?? 0) > 0 ? "تم حفظ التقييم وإضافة مكافأة 100,000 دينار عراقي" : "تم حفظ التقييم بدون مكافأة");
+  };
   const guidanceDepartmentId = effectiveDepartmentId === "all" ? allowedDepartmentIds[0] ?? null : effectiveDepartmentId;
   const guidanceQuery = useQuery({
     queryKey: ["team-follow-up-guidance", guidanceDepartmentId, date],
@@ -350,226 +395,28 @@ function TeamFollowUpPage() {
           </Button>
         </CardContent>
       </Card>
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
-        <Stat icon={Users} label="موظفو الفريق" value={visibleEmployees.length} />
-        <Stat icon={Users} label="إداريو المواقع" value={siteAdminCount} tone="blue" />
-        <Stat icon={ClipboardList} label="المواقع" value={siteIds.length} tone="purple" />
-        <Stat
-          icon={CheckCircle2}
-          label="تقارير مرفوعة"
-          value={`${coveredSites} / ${siteIds.length}`}
-          tone="green"
-        />
-        <Stat icon={MessageSquare} label="تقارير بها ملاحظات" value={notesCount} tone="orange" />
-      </div>
-      <Card className="border-primary/20">
-        <CardHeader>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <CardTitle className="flex items-center gap-2"><ListChecks className="h-5 w-5 text-primary" /> مهام الفريق</CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">تقرير مهام اليوم مع ملخص أداء كل حساب خلال شهر {date.slice(0, 7)}</p>
-            </div>
-            <Badge variant="outline">{teamTasks.length} مهمة هذا الشهر</Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <Stat icon={ListChecks} label="مهام الشهر" value={teamTasks.length} />
-            <Stat icon={CheckCircle2} label="مهام منجزة" value={teamTasks.filter((task) => task.status === "completed").length} tone="green" />
-            <Stat icon={Clock3} label="قيد التنفيذ" value={teamTasks.filter((task) => task.status === "in_progress").length} tone="orange" />
-            <Stat icon={Users} label="حسابات نشطة" value={monthlyTaskStats.length} tone="blue" />
-          </div>
-          <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <div><h3 className="font-semibold">توجيه عام للفريق</h3><p className="text-xs text-muted-foreground">يُحفظ على قسم {departments.find((item) => item.id === guidanceDepartmentId)?.name ?? "المحدد"} بتاريخ {date}</p></div>
-              <Button size="sm" onClick={() => void saveGeneralNote()}><Save className="ml-2 h-4 w-4" /> حفظ التوجيه</Button>
-            </div>
-            <Textarea value={generalNote} onChange={(event) => setGeneralNote(event.target.value)} placeholder="اكتب توجيهاً عاماً للفريق أو أهداف اليوم أو ملاحظات المتابعة..." rows={3} />
-          </div>
-          <div>
-            <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold"><ClipboardList className="h-5 w-5" /> تقرير مهام اليوم — {date}</h3>
-            <div className="space-y-2">
-              {dailyTasks.map((task) => {
-                const profile = profileById.get(task.created_by);
-                return <div key={task.id} className="flex flex-col gap-2 rounded-lg border p-3 md:flex-row md:items-center md:justify-between">
-                  <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-medium">{task.title}</span><Badge variant={task.status === "completed" ? "default" : "secondary"}>{task.status === "completed" ? "منجزة" : "قيد التنفيذ"}</Badge></div><p className="mt-1 text-xs text-muted-foreground">{profile?.full_name ?? profile?.email ?? "حساب غير معروف"}{task.duration_minutes ? ` · ${task.duration_minutes} دقيقة` : ""}</p>{task.description && <p className="mt-1 text-sm text-muted-foreground">{task.description}</p>}</div>
-                  {task.manager_note && <div className="max-w-md rounded-md bg-muted/50 px-3 py-2 text-sm"><span className="font-medium">ملاحظة المدير: </span>{task.manager_note}</div>}
-                </div>;
-              })}
-              {!dailyTasks.length && <div className="rounded-lg border border-dashed p-6 text-center text-muted-foreground">لا توجد مهام مسجلة لهذا الفريق في التاريخ المحدد.</div>}
-            </div>
-          </div>
-          <div>
-            <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold"><Users className="h-5 w-5" /> إحصائيات الحسابات خلال الشهر</h3>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {monthlyTaskStats.map((member) => <div key={member.userId} className="rounded-xl border bg-card p-4 shadow-sm"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold">{member.profile?.full_name ?? member.profile?.email ?? "حساب الفريق"}</p><p className="text-xs text-muted-foreground">{member.profile?.email ?? ""}</p></div><Badge variant="outline">{member.today} اليوم</Badge></div><div className="mt-4 grid grid-cols-3 gap-2 text-center"><div className="rounded-md bg-muted/50 p-2"><p className="text-lg font-bold">{member.total}</p><p className="text-[11px] text-muted-foreground">كل المهام</p></div><div className="rounded-md bg-emerald-50 p-2 dark:bg-emerald-950/30"><p className="text-lg font-bold text-emerald-700 dark:text-emerald-400">{member.completed}</p><p className="text-[11px] text-muted-foreground">منجزة</p></div><div className="rounded-md bg-blue-50 p-2 dark:bg-blue-950/30"><p className="text-lg font-bold text-blue-700 dark:text-blue-400">{member.minutes}</p><p className="text-[11px] text-muted-foreground">دقيقة</p></div></div><div className="mt-3 space-y-1">{member.tasks.slice(0, 3).map((task) => <div key={task.id} className="flex items-center justify-between gap-2 text-xs"><span className="truncate">{task.title}</span><span className="shrink-0 text-muted-foreground">{task.task_date}</span></div>)}{member.tasks.length > 3 && <p className="text-xs text-muted-foreground">+ {member.tasks.length - 3} مهام أخرى</p>}<Button variant="outline" size="sm" className="mt-3 w-full" onClick={() => setDetailsMember(member)}><Eye className="ml-2 h-4 w-4" /> عرض التفاصيل ({member.tasks.length})</Button></div></div>)}
-              {!monthlyTaskStats.length && <div className="rounded-lg border border-dashed p-6 text-center text-muted-foreground md:col-span-2 xl:col-span-3">لا توجد مهام مسجلة خلال هذا الشهر للأقسام المسموحة.</div>}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-      <Dialog open={Boolean(detailsMember)} onOpenChange={(open) => !open && setDetailsMember(null)}>
-        <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>تفاصيل مهام {detailsMember?.profile?.full_name ?? detailsMember?.profile?.email ?? "عضو الفريق"}</DialogTitle>
-            <DialogDescription>جميع مهام العضو خلال شهر {date.slice(0, 7)} مع إمكانية إضافة ملاحظة لكل مهمة.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            {detailsMember?.tasks.map((task) => <div key={task.id} className="rounded-lg border p-3"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="font-medium">{task.title}</p><p className="text-xs text-muted-foreground">{task.task_date}{task.duration_minutes ? ` · ${task.duration_minutes} دقيقة` : ""}</p></div><Badge variant={task.status === "completed" ? "default" : "secondary"}>{task.status === "completed" ? "منجزة" : "قيد التنفيذ"}</Badge></div>{task.description && <p className="mt-2 text-sm text-muted-foreground">{task.description}</p>}<div className="mt-3 flex flex-col gap-2 sm:flex-row"><Input value={taskNotes[task.id] ?? task.manager_note ?? ""} onChange={(event) => setTaskNotes((current) => ({ ...current, [task.id]: event.target.value }))} placeholder="ملاحظة على هذه المهمة..." /><Button size="sm" onClick={() => void updateTaskNote(task)}><Save className="ml-2 h-4 w-4" /> حفظ</Button></div></div>)}
-            {!detailsMember?.tasks.length && <p className="py-8 text-center text-muted-foreground">لا توجد مهام لهذا العضو.</p>}
-          </div>
-        </DialogContent>
-      </Dialog>
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            تغطية تقارير المواقع — {date} ({reportCoverage}%)
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-3 rounded-full bg-muted overflow-hidden">
-            <div
-              className="h-full bg-primary transition-all"
-              style={{ width: `${reportCoverage}%` }}
-            />
-          </div>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>حالة المواقع والفرق الإدارية</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>الموقع</TableHead>
-                <TableHead>القسم</TableHead>
-                <TableHead>إداريو الموقع</TableHead>
-                <TableHead>إجمالي الفريق</TableHead>
-                <TableHead>التقرير اليومي</TableHead>
-                <TableHead>الملاحظات</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {siteRows.map(({ site, team, administrators, report }) => (
-                <TableRow key={site?.id}>
-                  <TableCell className="font-medium">
-                    {site?.name ?? "موقع غير محدد"}
-                    <div className="text-xs text-muted-foreground">{site?.ctr_code ?? ""}</div>
-                  </TableCell>
-                  <TableCell>
-                    {[
-                      ...new Set(
-                        team
-                          .map((employee) => departmentById.get(employee.department_id ?? "")?.name)
-                          .filter(Boolean),
-                      ),
-                    ].join("، ") || "-"}
-                  </TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      {administrators.length ? (
-                        administrators.map((employee) => (
-                          <div key={employee.id}>
-                            {employee.full_name}
-                            <span className="text-xs text-muted-foreground mr-2">
-                              {employee.position}
-                            </span>
-                          </div>
-                        ))
-                      ) : (
-                        <span className="text-warning">لم يُصنف إداري موقع</span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>{team.length}</TableCell>
-                  <TableCell>
-                    {report ? (
-                      <Badge>
-                        <CheckCircle2 className="w-3 h-3 ml-1" /> مرفوع
-                      </Badge>
-                    ) : (
-                      <Badge variant="destructive">
-                        <XCircle className="w-3 h-3 ml-1" /> لم يرفع
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="max-w-xs">
-                    {report?.notes?.trim() ? (
-                      <span className="inline-flex items-center gap-1">
-                        <FileText className="w-4 h-4 text-primary" />
-                        {report.notes}
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground">لا توجد ملاحظات</span>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {!siteRows.length && (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
-                    لا توجد مواقع أو موظفون تابعون للنطاق المحدد
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>الموظفون التابعون للقسم</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>الرقم</TableHead>
-                <TableHead>الموظف</TableHead>
-                <TableHead>التخصص</TableHead>
-                <TableHead>الموقع</TableHead>
-                <TableHead>حالة تقرير الموقع</TableHead>
-                <TableHead>دور المتابعة</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {visibleEmployees.map((employee) => {
-                const report = employee.site_id ? reportBySite.get(employee.site_id) : undefined;
-                return (
-                  <TableRow key={employee.id}>
-                    <TableCell>{employee.employee_no}</TableCell>
-                    <TableCell className="font-medium">{employee.full_name}</TableCell>
-                    <TableCell>{employee.position ?? "-"}</TableCell>
-                    <TableCell>
-                      {siteById.get(employee.site_id ?? "")?.name ?? "غير محدد"}
-                    </TableCell>
-                    <TableCell>
-                      {report ? (
-                        <Badge>
-                          <CheckCircle2 className="w-3 h-3 ml-1" /> مرفوع
-                        </Badge>
-                      ) : (
-                        <Badge variant="destructive">
-                          <XCircle className="w-3 h-3 ml-1" /> لم يرفع
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {isSiteAdministrator(employee) ? (
-                        <Badge variant="outline">رافع تقرير الموقع</Badge>
-                      ) : (
-                        <span className="text-muted-foreground">عضو فريق</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList className="grid h-auto w-full grid-cols-3">
+          <TabsTrigger value="tasks">مهام الفريق</TabsTrigger>
+          <TabsTrigger value="stats">الإحصائيات</TabsTrigger>
+          <TabsTrigger value="evaluation">تقييم الموظفين</TabsTrigger>
+        </TabsList>
+        <TabsContent value="tasks" className="space-y-5">
+          <Card className="border-primary/20"><CardHeader><CardTitle className="flex items-center gap-2"><ListChecks className="h-5 w-5 text-primary" /> مهام الفريق اليومية</CardTitle><p className="text-sm text-muted-foreground">مهام اليوم الحالي مع إمكانية الاطلاع وإضافة الملاحظات.</p></CardHeader><CardContent className="space-y-5">{tasks}</CardContent></Card>
+        </TabsContent>
+        <TabsContent value="stats" className="space-y-5">
+          <Card>
+            <CardHeader><CardTitle>إحصائيات الموظفين — {date.slice(0, 7)}</CardTitle><p className="text-sm text-muted-foreground">عدد مهام اليوم، تفاصيل مهام اليوم، والمهام المنجزة لكل موظف.</p></CardHeader>
+            <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {employeeTaskStats.map(({ employee, profile, tasks, today: todayCount, completed, total }) => <Card key={employee.id} className="border-muted"><CardContent className="p-4"><div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold">{employee.full_name}</h3><p className="text-xs text-muted-foreground">{employee.employee_no} · {profile?.email ?? employee.email ?? ""}</p></div><Badge variant="outline">{todayCount} اليوم</Badge></div><div className="mt-4 grid grid-cols-2 gap-2 text-center"><div className="rounded-md bg-muted/50 p-2"><p className="text-xl font-bold">{todayCount}</p><p className="text-[11px] text-muted-foreground">مهام اليوم</p></div><div className="rounded-md bg-emerald-50 p-2 dark:bg-emerald-950/30"><p className="text-xl font-bold text-emerald-700 dark:text-emerald-400">{completed}</p><p className="text-[11px] text-muted-foreground">منجزة الشهر</p></div></div><div className="mt-3 rounded-md border p-2">{tasks.filter((task) => task.task_date === date).length ? tasks.filter((task) => task.task_date === date).map((task) => <p key={task.id} className="truncate text-sm">• {task.title}</p>) : <p className="text-sm text-muted-foreground">لا توجد مهام اليوم</p>}<p className="mt-2 text-xs text-muted-foreground">إجمالي الشهر: {total} مهمة</p></div><Button variant="outline" className="mt-3 w-full" onClick={() => setDetailsMember({ userId: employee.id, profile, total, completed, minutes: tasks.reduce((sum, task) => sum + Number(task.duration_minutes || 0), 0), today: todayCount, tasks })}><Eye className="ml-2 h-4 w-4" /> عرض سجل الموظف</Button></CardContent></Card>)}
+              {!employeeTaskStats.length && <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground md:col-span-2 xl:col-span-3">لا يوجد موظفون ضمن نطاق الأقسام المحدد.</div>}
+            </CardContent>
+          </Card>
+          {top_stats}
+          {sites}
+        </TabsContent>
+        {evaluation}
+      </Tabs>
     </div>
   );
 }

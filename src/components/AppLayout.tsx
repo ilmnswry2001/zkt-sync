@@ -31,7 +31,6 @@ const nav = [
   { to: "/attendance", label: "التقارير اليومية", icon: ClockIcon },
   { to: "/tasks", label: "مهامي اليومية", icon: ClipboardCheck },
   { to: "/team-follow-up", label: "متابعة الفريق", icon: Users },
-  { to: "/team-tasks", label: "مهام الفريق", icon: ClipboardCheck },
   { to: "/company-report", label: "تقرير الشركة الكامل", icon: BarChart3, access: "hr" },
   { to: "/projects", label: "المشاريع", icon: MapPinned, access: "hr" },
   { to: "/monthly", label: "التقرير الشهري", icon: CalendarDays },
