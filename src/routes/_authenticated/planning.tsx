@@ -302,7 +302,7 @@ function PlanningPage() {
   const [managementNote, setManagementNote] = useState<Record<string, string>>({});
   const [managementDraft, setManagementDraft] = useState<Record<string, WorkPlanAssignment>>({});
   const [managementAssignments, setManagementAssignments] = useState<
-    Record<string, Record<string, { employeeName: string; employeeId: string | null }>>
+    Record<string, Record<string, { employeeNames: string[]; employeeId: string | null }>>
   >({});
   const [finalPlanTitle, setFinalPlanTitle] = useState<Record<string, string>>({});
   const [finalPlanNotes, setFinalPlanNotes] = useState<Record<string, string>>({});
@@ -472,25 +472,32 @@ function PlanningPage() {
     setDraftSpecialties((current) => current.filter((_, idx) => idx !== index));
   };
 
-  const addManagementAssignment = (planId: string, specialtyName: string, employeeName: string) => {
-    const cleanedName = employeeName.trim();
-    if (!cleanedName || !specialtyName.trim()) {
-      toast.error("اختر اسم الموظف أو أضفه يدويًا ثم أضف التخصص");
+  const addManagementAssignment = (planId: string, specialtyName: string, rawNames: string) => {
+    const names = rawNames
+      .split(/[\n,]+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    if (!names.length || !specialtyName.trim()) {
+      toast.error("اكتب أسماء الكوادر أو اختر اسمًا واحدًا على الأقل ثم أضفهم");
       return;
     }
+
     const plan = workPlans.find((item) => item.id === planId);
+    const existingAssignments = plan?.assigned_staff ?? [];
     const nextAssignments = [
-      ...(plan?.assigned_staff ?? []).filter((entry) => !(entry.specialty === specialtyName && entry.name === cleanedName)),
-      {
-        name: cleanedName,
+      ...existingAssignments.filter((entry) => entry.specialty !== specialtyName),
+      ...names.map((name) => ({
+        name,
         specialty: specialtyName.trim(),
         notes: "",
         source: "manual" as const,
-      },
+      })),
     ];
+
     supabase
       .from("site_work_plans")
-      .update({ assigned_staff: nextAssignments, status: "management_review" })
+      .update({ assigned_staff: nextAssignments })
       .eq("id", planId)
       .then(({ error }) => {
         if (error) throw error;
@@ -499,10 +506,13 @@ function PlanningPage() {
           ...current,
           [planId]: {
             ...(current[planId] ?? {}),
-            [specialtyName]: { employeeName: "", employeeId: null },
+            [specialtyName]: {
+              employeeNames: names,
+              employeeId: null,
+            },
           },
         }));
-        toast.success("تم إدراج الكادر في الخطة");
+        toast.success(`تم حفظ ${names.length} كوادر في تخصص ${specialtyName}`);
       })
       .catch((error: any) => toast.error(error?.message ?? "تعذر إدراج الكادر"));
   };
@@ -913,119 +923,103 @@ function PlanningPage() {
                 </div>
               ) : (
                 planningApprovedPlans.map((plan) => (
-                  <div key={plan.id} className="rounded-xl border bg-background p-4 space-y-3">
+                  <div key={plan.id} className="rounded-2xl border border-primary/20 bg-gradient-to-br from-sky-50 via-white to-indigo-50 p-4 space-y-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <h3 className="font-bold">{plan.site_name}</h3>
-                        <p className="text-sm text-muted-foreground">الطلب: {plan.request_date}</p>
+                        <h3 className="font-black text-xl text-slate-800">{plan.site_name}</h3>
+                        <p className="text-sm text-muted-foreground">تاريخ الخطة: {plan.request_date}</p>
                       </div>
-                      <Badge variant="outline">موافق عليه</Badge>
+                      <Badge className="bg-emerald-600 text-white">موافق عليه</Badge>
                     </div>
 
                     <div className="space-y-3">
                       {(plan.specialties ?? []).map((item) => {
                         const currentSelection = managementAssignments[plan.id]?.[item.specialty] ?? {
-                          employeeName: "",
+                          employeeNames: [],
                           employeeId: null,
                         };
+                        const currentText = currentSelection.employeeNames.join(", ");
+
                         return (
-                          <div key={`${plan.id}-${item.specialty}`} className="rounded-lg border bg-muted/10 p-3 space-y-2">
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="font-semibold">{item.specialty}</div>
-                              <Badge variant="outline">العدد: {item.quantity}</Badge>
+                          <div key={`${plan.id}-${item.specialty}`} className="rounded-2xl border bg-white p-3 shadow-sm">
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <div className="font-bold text-slate-800">{item.specialty}</div>
+                              <Badge variant="outline">العدد المطلوب: {item.quantity}</Badge>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr_auto] gap-2">
-                              <Select
-                                value={currentSelection.employeeId ?? "manual"}
-                                onValueChange={(value) => {
-                                  if (value === "manual") {
+
+                            <div className="grid grid-cols-1 gap-2">
+                              <div>
+                                <Label>اسماء الكوادر لهذا التخصص</Label>
+                                <Input
+                                  value={currentText}
+                                  onChange={(e) =>
                                     setManagementAssignments((current) => ({
                                       ...current,
                                       [plan.id]: {
                                         ...(current[plan.id] ?? {}),
-                                        [item.specialty]: { employeeName: currentSelection.employeeName, employeeId: null },
+                                        [item.specialty]: {
+                                          employeeNames: e.target.value
+                                            .split(/[\n,]+/)
+                                            .map((value) => value.trim())
+                                            .filter(Boolean),
+                                          employeeId: currentSelection.employeeId,
+                                        },
                                       },
-                                    }));
-                                    return;
+                                    }))
                                   }
-                                  const selectedEmployee = (siteAdmins as any[]).find((employee) => employee.id === value);
-                                  setManagementAssignments((current) => ({
-                                    ...current,
-                                    [plan.id]: {
-                                      ...(current[plan.id] ?? {}),
-                                      [item.specialty]: {
-                                        employeeName: selectedEmployee?.full_name ?? currentSelection.employeeName,
-                                        employeeId: value,
-                                      },
-                                    },
-                                  }));
-                                }}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="اختر موظفاً" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="manual">إدخال يدوي</SelectItem>
-                                  {(siteAdmins as any[]).map((employee) => (
-                                    <SelectItem key={employee.id} value={employee.id}>
-                                      {employee.full_name} {employee.employee_no ? `(${employee.employee_no})` : ""}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <Input
-                                value={currentSelection.employeeName}
-                                onChange={(e) =>
-                                  setManagementAssignments((current) => ({
-                                    ...current,
-                                    [plan.id]: {
-                                      ...(current[plan.id] ?? {}),
-                                      [item.specialty]: {
-                                        employeeName: e.target.value,
-                                        employeeId: currentSelection.employeeId,
-                                      },
-                                    },
-                                  }))
-                                }
-                                placeholder="اسم الموظف أو اكتب يدويًا"
-                              />
-                              <Button type="button" onClick={() => addManagementAssignment(plan.id, item.specialty, currentSelection.employeeName)}>
-                                إضافة
-                              </Button>
+                                  placeholder="اكتب أسماء الموظفين مفصولين بفواصل أو سطر جديد"
+                                />
+                              </div>
+
+                              <div className="flex flex-wrap gap-2">
+                                <Button type="button" onClick={() => addManagementAssignment(plan.id, item.specialty, currentText)}>
+                                  إضافة هذا التخصص
+                                </Button>
+                                <Button type="button" variant="outline" onClick={() => setManagementAssignments((current) => ({ ...current, [plan.id]: { ...(current[plan.id] ?? {}), [item.specialty]: { employeeNames: [], employeeId: null } } }))}>
+                                  مسح
+                                </Button>
+                              </div>
                             </div>
                           </div>
                         );
                       })}
                     </div>
 
-                    <div className="flex gap-2 flex-wrap">
-                      <Input
-                        value={managementNote[plan.id] ?? ""}
-                        onChange={(e) => setManagementNote((current) => ({ ...current, [plan.id]: e.target.value }))}
-                        placeholder="ملاحظات الإدارة..."
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() =>
-                          updatePlanStatus.mutate({
-                            id: plan.id,
-                            status: "management_review",
-                            managementNotes: managementNote[plan.id] ?? "",
-                          })
-                        }
-                      >
-                        إرسال إلى الإدارة
-                      </Button>
+                    <div className="rounded-2xl border bg-slate-900 p-3 text-white">
+                      <div className="mb-2 font-bold">إرسال التوزيع النهائي</div>
+                      <div className="flex flex-col md:flex-row gap-2">
+                        <Input
+                          value={managementNote[plan.id] ?? ""}
+                          onChange={(e) => setManagementNote((current) => ({ ...current, [plan.id]: e.target.value }))}
+                          placeholder="ملاحظات الإدارة..."
+                          className="bg-white text-slate-900 border-0"
+                        />
+                        <Button
+                          type="button"
+                          className="bg-white text-slate-900 hover:bg-slate-100"
+                          onClick={() =>
+                            updatePlanStatus.mutate({
+                              id: plan.id,
+                              status: "management_review",
+                              managementNotes: managementNote[plan.id] ?? "",
+                            })
+                          }
+                        >
+                          تأكيد توزيع الكوادر
+                        </Button>
+                      </div>
                     </div>
 
                     {(plan.assigned_staff ?? []).length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {(plan.assigned_staff ?? []).map((member, index) => (
-                          <Badge key={`${plan.id}-${member.name}-${index}`} className="px-3 py-1" style={{ backgroundColor: "#1d4ed8", color: "white" }}>
-                            {member.name} · {member.specialty}
-                          </Badge>
-                        ))}
+                      <div className="rounded-xl border bg-white p-3">
+                        <div className="mb-2 font-bold">الكوادر الحالية</div>
+                        <div className="flex flex-wrap gap-2">
+                          {(plan.assigned_staff ?? []).map((member, index) => (
+                            <Badge key={`${plan.id}-${member.name}-${index}`} className="px-3 py-1" style={{ backgroundColor: "#1d4ed8", color: "white" }}>
+                              {member.name} · {member.specialty}
+                            </Badge>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>

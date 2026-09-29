@@ -57,6 +57,13 @@ type SiteReport = {
   notes: string | null;
   lines: ReportLine[];
 };
+type PublishSummaryItem = {
+  specialty: string;
+  quantity: number;
+  reported: number;
+  missing: number;
+  color: string;
+};
 type AttendanceRow = {
   employee_no: string;
   full_name: string;
@@ -70,7 +77,7 @@ type AttendanceRow = {
 const today = new Date().toISOString().slice(0, 10);
 
 function AttendancePage() {
-  const [activeTab, setActiveTab] = useState<"attendance" | "sites">("sites");
+  const [activeTab, setActiveTab] = useState<"attendance" | "sites" | "publish">("sites");
   const [date, setDate] = useState(today);
   const [siteId, setSiteId] = useState("");
   const [notes, setNotes] = useState("");
@@ -143,6 +150,32 @@ function AttendancePage() {
   const existingReport = reports.find(
     (report) => report.site_id === siteId && report.report_date === date,
   );
+  const finalizedPlanQuery = useQuery({
+    queryKey: ["site-finalized-plan-follow-up", siteId],
+    queryFn: async () => {
+      if (!siteId) return null;
+      const { data, error } = await supabase
+        .from("site_work_plans")
+        .select("*")
+        .eq("site_id", siteId)
+        .eq("status", "finalized")
+        .order("request_date", { ascending: false })
+        .limit(1);
+      if (error) throw error;
+      const row = data?.[0];
+      if (!row) return null;
+      return {
+        id: row.id,
+        site_id: row.site_id,
+        site_name: row.site_name,
+        request_date: row.request_date,
+        assigned_staff: Array.isArray(row.assigned_staff) ? row.assigned_staff : [],
+        final_plan: row.final_plan ?? null,
+        specialtySummary: Array.isArray(row.final_plan?.specialties) ? row.final_plan.specialties : Array.isArray(row.specialties) ? row.specialties : [],
+      };
+    },
+    enabled: activeTab === "publish" && !!siteId,
+  });
 
   const buildRows = useCallback(
     (report?: SiteReport) => {
@@ -284,6 +317,31 @@ function AttendancePage() {
     queryFn: () => fn({ data: { date } }),
     enabled: activeTab === "attendance",
   });
+
+  const publishSummary = useMemo<PublishSummaryItem[]>(() => {
+    const finalizedPlan = finalizedPlanQuery.data;
+    if (!finalizedPlan) return [];
+    const requiredItems = Array.isArray(finalizedPlan.specialtySummary)
+      ? finalizedPlan.specialtySummary
+      : [];
+    const reportLines = existingReport?.lines ?? [];
+    const totalsByName = new Map<string, number>();
+    reportLines.forEach((line) => {
+      const key = line.item_name.trim();
+      totalsByName.set(key, (totalsByName.get(key) ?? 0) + Number(line.total_count || 0));
+    });
+    return requiredItems.map((item: any) => {
+      const requestedCount = Number(item.quantity ?? 0);
+      const reportedCount = totalsByName.get(item.specialty?.trim() ?? item.name?.trim() ?? "") ?? 0;
+      return {
+        specialty: item.specialty ?? item.name ?? "غير محدد",
+        quantity: requestedCount,
+        reported: reportedCount,
+        missing: Math.max(0, requestedCount - reportedCount),
+        color: item.color ?? "#ef4444",
+      };
+    });
+  }, [existingReport, finalizedPlanQuery.data]);
   const attendanceRows = (attendance.data?.rows ?? []) as AttendanceRow[];
   const fmtTime = (value: string | null) =>
     value ? new Date(value).toLocaleTimeString("ar", { hour: "2-digit", minute: "2-digit" }) : "—";
@@ -344,7 +402,7 @@ function AttendancePage() {
           تعذر تحميل التقارير المحفوظة: {reportsQuery.error.message}
         </p>
       )}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <button
           onClick={() => setActiveTab("sites")}
           className={`rounded-xl border p-4 text-right transition ${activeTab === "sites" ? "border-primary bg-accent shadow-sm" : "bg-card hover:bg-muted/50"}`}
@@ -353,7 +411,19 @@ function AttendancePage() {
             <ClipboardList className="w-5 h-5 text-primary" />
             <div>
               <div className="font-semibold">تقرير المواقع</div>
-              <div className="text-xs text-muted-foreground">العاملون والآليات والمركبات</div>
+              <div className="text-xs text-muted-foreground">العاملون والآليات</div>
+            </div>
+          </div>
+        </button>
+        <button
+          onClick={() => setActiveTab("publish")}
+          className={`rounded-xl border p-4 text-right transition ${activeTab === "publish" ? "border-primary bg-accent shadow-sm" : "bg-card hover:bg-muted/50"}`}
+        >
+          <div className="flex items-center gap-3">
+            <FileText className="w-5 h-5 text-primary" />
+            <div>
+              <div className="font-semibold">متابعة النشر</div>
+              <div className="text-xs text-muted-foreground">مقارنة الخطة النهائية بالتقرير اليومي</div>
             </div>
           </div>
         </button>
@@ -365,12 +435,123 @@ function AttendancePage() {
             <UsersRound className="w-5 h-5 text-primary" />
             <div>
               <div className="font-semibold">الحضور والانصراف</div>
-              <div className="text-xs text-muted-foreground">سجلات أجهزة البصمة اليومية</div>
+              <div className="text-xs text-muted-foreground">سجلات البصمة</div>
             </div>
           </div>
         </button>
       </div>
-      {activeTab === "sites" ? (
+      {activeTab === "publish" ? (
+        <Card className="border-primary/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-primary" />
+              متابعة النشر
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label>الموقع</Label>
+                <select
+                  className="flex h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  value={siteId}
+                  onChange={(e) => setSiteId(e.target.value)}
+                >
+                  <option value="">اختر الموقع</option>
+                  {sites.map((site) => (
+                    <option key={site.id} value={site.id}>
+                      {site.name} {site.ctr_code ? `— ${site.ctr_code}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label>تاريخ المتابعة</Label>
+                <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+              </div>
+            </div>
+
+            {!siteId ? (
+              <div className="rounded-xl border border-dashed p-6 text-center text-muted-foreground">
+                اختر موقعًا لعرض متابعة النشر.
+              </div>
+            ) : finalizedPlanQuery.isLoading ? (
+              <div className="rounded-xl border border-dashed p-6 text-center text-muted-foreground">
+                جارٍ تحميل الخطة النهائية...
+              </div>
+            ) : !finalizedPlanQuery.data ? (
+              <div className="rounded-xl border border-dashed p-6 text-center text-muted-foreground">
+                لا توجد خطة نهائية معتمدة لهذا الموقع حتى الآن.
+              </div>
+            ) : (
+              <div className="space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div className="rounded-xl border bg-slate-50 p-3">
+                    <div className="text-xs text-muted-foreground">الموقع</div>
+                    <div className="font-bold mt-1">{finalizedPlanQuery.data.site_name}</div>
+                  </div>
+                  <div className="rounded-xl border bg-slate-50 p-3">
+                    <div className="text-xs text-muted-foreground">تاريخ الخطة</div>
+                    <div className="font-bold mt-1">{finalizedPlanQuery.data.request_date}</div>
+                  </div>
+                  <div className="rounded-xl border bg-slate-50 p-3">
+                    <div className="text-xs text-muted-foreground">مطلوب</div>
+                    <div className="font-bold mt-1">{publishSummary.reduce((sum, item) => sum + item.quantity, 0)}</div>
+                  </div>
+                  <div className="rounded-xl border bg-slate-50 p-3">
+                    <div className="text-xs text-muted-foreground">منشور</div>
+                    <div className="font-bold mt-1">{publishSummary.reduce((sum, item) => sum + item.reported, 0)}</div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border bg-white p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="font-bold">مقارنة الخطة النهائية والتقرير المرفوع</h3>
+                    <Badge variant={publishSummary.some((item) => item.missing > 0) ? "destructive" : "default"}>
+                      {publishSummary.some((item) => item.missing > 0) ? "يوجد نقص" : "مكتمل"}
+                    </Badge>
+                  </div>
+                  <div className="space-y-2">
+                    {publishSummary.map((item) => (
+                      <div
+                        key={`${item.specialty}-${item.quantity}`}
+                        className={`flex flex-col md:flex-row md:items-center md:justify-between gap-2 rounded-xl border px-3 py-2 ${item.missing > 0 ? "border-red-200 bg-red-50" : "border-emerald-200 bg-emerald-50"}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: item.color }} />
+                          <span className="font-medium">{item.specialty}</span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3 text-sm">
+                          <span>مطلوب: <b>{item.quantity}</b></span>
+                          <span>منشور: <b>{item.reported}</b></span>
+                          <span className={item.missing > 0 ? "text-red-600 font-bold" : "text-emerald-600 font-bold"}>
+                            {item.missing > 0 ? `ناقص: ${item.missing}` : "مكتمل"}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border bg-slate-900 p-4 text-white">
+                  <div className="mb-3 font-bold">الكادر المعتمد في الخطة النهائية</div>
+                  <div className="flex flex-wrap gap-2">
+                    {(finalizedPlanQuery.data.assigned_staff ?? []).length ? (
+                      (finalizedPlanQuery.data.assigned_staff ?? []).map((member: any, index: number) => (
+                        <Badge key={`${member.name}-${index}`} className="bg-white text-slate-900">
+                          {member.name} · {member.specialty}
+                        </Badge>
+                      ))
+                    ) : (
+                      <span className="text-sm text-slate-300">لا يوجد كوادر مضافة في الخطة النهائية.</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : activeTab === "sites" ? (
         <>
           <Card className="border-primary/20">
             <CardHeader>
