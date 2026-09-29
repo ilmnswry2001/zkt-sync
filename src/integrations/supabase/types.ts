@@ -263,10 +263,12 @@ export type Database = {
           archived_at: string | null
           created_at: string
           created_by: string
+          department_id: string | null
           description: string | null
           duration_minutes: number
           employee_id: string | null
           id: string
+          manager_note: string | null
           status: string
           task_date: string
           title: string
@@ -276,10 +278,12 @@ export type Database = {
           archived_at?: string | null
           created_at?: string
           created_by?: string
+          department_id?: string | null
           description?: string | null
           duration_minutes?: number
           employee_id?: string | null
           id?: string
+          manager_note?: string | null
           status?: string
           task_date?: string
           title: string
@@ -289,16 +293,25 @@ export type Database = {
           archived_at?: string | null
           created_at?: string
           created_by?: string
+          department_id?: string | null
           description?: string | null
           duration_minutes?: number
           employee_id?: string | null
           id?: string
+          manager_note?: string | null
           status?: string
           task_date?: string
           title?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "employee_tasks_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "employee_tasks_employee_id_fkey"
             columns: ["employee_id"]
@@ -975,6 +988,35 @@ export type Database = {
           },
         ]
       }
+      user_departments: {
+        Row: {
+          created_at: string
+          department_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          department_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          department_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_departments_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -1037,6 +1079,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_access_department: {
+        Args: { _department_id: string; _user_id: string }
+        Returns: boolean
+      }
       has_form_role: {
         Args: {
           _role: Database["public"]["Enums"]["form_role"]
@@ -1054,7 +1100,13 @@ export type Database = {
       is_admin: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
-      app_role: "admin" | "hr" | "supervisor" | "data_entry"
+      app_role:
+        | "admin"
+        | "hr"
+        | "supervisor"
+        | "data_entry"
+        | "site_admin"
+        | "department_manager"
       day_status: "present" | "absent" | "leave" | "holiday" | "rest"
       device_status: "active" | "inactive" | "maintenance"
       employee_status: "active" | "inactive" | "terminated"
@@ -1194,7 +1246,14 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "hr", "supervisor", "data_entry"],
+      app_role: [
+        "admin",
+        "hr",
+        "supervisor",
+        "data_entry",
+        "site_admin",
+        "department_manager",
+      ],
       day_status: ["present", "absent", "leave", "holiday", "rest"],
       device_status: ["active", "inactive", "maintenance"],
       employee_status: ["active", "inactive", "terminated"],
