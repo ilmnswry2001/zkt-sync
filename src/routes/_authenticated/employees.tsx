@@ -97,10 +97,67 @@ function EmployeesPage() {
   const ed = editing as any;
 
 
+  const sanitizeEmployeePayload = (raw: Record<string, any>) => {
+    const toNull = (value: any) => {
+      if (value === undefined || value === null) return null;
+      const str = String(value).trim();
+      return str === "" || str === "none" ? null : str;
+    };
+    const toNumber = (value: any) => {
+      const str = toNull(value);
+      return str === null ? null : Number(str);
+    };
+
+    return {
+      employee_no: String(raw.employee_no ?? "").trim(),
+      full_name: String(raw.full_name ?? "").trim(),
+      department_id: toNull(raw.department_id),
+      site_id: toNull(raw.site_id),
+      wage_rate_id: toNull(raw.wage_rate_id),
+      position: toNull(raw.position),
+      status: raw.status && ["active", "inactive", "terminated"].includes(raw.status) ? raw.status : "active",
+      base_salary: toNumber(raw.base_salary),
+      pay_type: raw.pay_type === "daily" ? "daily" : "monthly",
+      erp_no: toNull(raw.erp_no),
+      id_no: toNull(raw.id_no),
+      ctr_code: toNull(raw.ctr_code),
+      nationality: toNull(raw.nationality),
+      gender: toNull(raw.gender),
+      marital_status: toNull(raw.marital_status),
+      blood_type: toNull(raw.blood_type),
+      education: toNull(raw.education),
+      birth_date: toNull(raw.birth_date),
+      hire_date: toNull(raw.hire_date),
+      last_working_day: toNull(raw.last_working_day),
+      contract_type: toNull(raw.contract_type),
+      contract_end_date: toNull(raw.contract_end_date),
+      email: toNull(raw.email),
+      phone1: toNull(raw.phone1),
+      phone2: toNull(raw.phone2),
+      address: toNull(raw.address),
+      salary_type: toNull(raw.salary_type),
+      salary_structure: toNull(raw.salary_structure),
+      project: toNull(raw.project),
+      passport_no: toNull(raw.passport_no),
+      passport_expiry: toNull(raw.passport_expiry),
+      residency_no: toNull(raw.residency_no),
+      residency_expiry: toNull(raw.residency_expiry),
+      safety_passport_no: toNull(raw.safety_passport_no),
+      safety_passport_expiry: toNull(raw.safety_passport_expiry),
+      bank_name: toNull(raw.bank_name),
+      bank_account: toNull(raw.bank_account),
+      iban: toNull(raw.iban),
+      emergency_contact_name: toNull(raw.emergency_contact_name),
+      emergency_contact_phone: toNull(raw.emergency_contact_phone),
+      notes: toNull(raw.notes),
+    };
+  };
+
   const save = useMutation({
     mutationFn: async (d: any) => {
-      if (editing) { const { error } = await supabase.from("employees").update(d).eq("id", editing.id); if (error) throw error; }
-      else { const { error } = await supabase.from("employees").insert(d); if (error) throw error; }
+      const payload = sanitizeEmployeePayload(d);
+      if (editing) { const { error } = await supabase.from("employees").update(payload).eq("id", editing.id); if (error) throw error; }
+      else { const { error } = await supabase.from("employees").insert(payload); if (error) throw error; }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); qc.invalidateQueries({ queryKey: ["employees_count"] }); setOpen(false); setEditing(null); toast.success("تم الحفظ"); },
     onError: (e: any) => toast.error(e.message),

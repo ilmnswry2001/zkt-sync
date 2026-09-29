@@ -48,11 +48,16 @@ function DepartmentsPage() {
   });
   const save = useMutation({
     mutationFn: async (d: DeptPayload) => {
+      const payload = {
+        name: d.name.trim(),
+        description: d.description?.trim() ? d.description.trim() : null,
+      };
+
       if (editing) {
-        const { error } = await supabase.from("departments").update(d).eq("id", editing.id);
+        const { error } = await supabase.from("departments").update(payload).eq("id", editing.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("departments").insert(d);
+        const { error } = await supabase.from("departments").upsert(payload, { onConflict: "name" });
         if (error) throw error;
       }
     },
