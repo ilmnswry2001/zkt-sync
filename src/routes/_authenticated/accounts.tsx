@@ -28,9 +28,10 @@ export const Route = createFileRoute("/_authenticated/accounts")({
 });
 
 type Role = "admin" | "hr" | "supervisor" | "data_entry" | "site_admin" | "department_manager";
-type Profile = { id: string; full_name: string | null; email: string | null; created_at: string };
+type Profile = { id: string; full_name: string | null; email: string | null; created_at: string; employee_id?: string | null };
 type UserRole = { id: string; user_id: string; role: Role };
 type Department = { id: string; name: string };
+type EmployeeOption = { id: string; full_name: string; employee_no: string; status: string; department_id: string | null };
 
 const roles: { key: Role; label: string; description: string }[] = [
   {
@@ -55,6 +56,7 @@ function AccountsPage() {
     email: "",
     password: "",
     role: "data_entry" as Role,
+    employeeId: "",
   });
   const [departmentIds, setDepartmentIds] = useState<string[]>([]);
   const [editingDepartments, setEditingDepartments] = useState<Record<string, string[]>>({});
@@ -92,6 +94,18 @@ function AccountsPage() {
       return (data ?? []) as Department[];
     },
   });
+  const employeesQuery = useQuery({
+    queryKey: ["accounts", "employees"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("employees")
+        .select("id, full_name, employee_no, status, department_id")
+        .eq("status", "active")
+        .order("full_name", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as EmployeeOption[];
+    },
+  });
   const userDepartmentsQuery = useQuery({
     queryKey: ["accounts", "user-departments"],
     queryFn: async () => {
@@ -103,6 +117,7 @@ function AccountsPage() {
   const profiles = useMemo(() => profilesQuery.data ?? [], [profilesQuery.data]);
   const userRoles = useMemo(() => rolesQuery.data ?? [], [rolesQuery.data]);
   const departments = departmentsQuery.data ?? [];
+  const employees = employeesQuery.data ?? [];
   const userDepartments = userDepartmentsQuery.data ?? [];
   const departmentIdsByUser = useMemo(() => {
     const map = new Map<string, string[]>();
@@ -179,10 +194,11 @@ function AccountsPage() {
           email: createForm.email,
           password: createForm.password,
           role: createForm.role,
+          employeeId: createForm.employeeId || null,
           departmentIds,
         },
       });
-      setCreateForm({ fullName: "", email: "", password: "", role: "data_entry" });
+      setCreateForm({ fullName: "", email: "", password: "", role: "data_entry", employeeId: "" });
       setDepartmentIds([]);
       setShowCreateForm(false);
       await Promise.all([
@@ -219,9 +235,10 @@ function AccountsPage() {
     profilesQuery.isLoading ||
     rolesQuery.isLoading ||
     departmentsQuery.isLoading ||
+    employeesQuery.isLoading ||
     userDepartmentsQuery.isLoading;
   const error =
-    profilesQuery.error ?? rolesQuery.error ?? departmentsQuery.error ?? userDepartmentsQuery.error;
+    profilesQuery.error ?? rolesQuery.error ?? departmentsQuery.error ?? employeesQuery.error ?? userDepartmentsQuery.error;
 
   return (
     <div className="space-y-6">
@@ -312,9 +329,27 @@ function AccountsPage() {
                   ))}
                 </select>
               </div>
+              <div>
+                <Label htmlFor="new-account-employee">الموظف المرتبط بالحساب</Label>
+                <select
+                  id="new-account-employee"
+                  className="mt-1 flex h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  value={createForm.employeeId}
+                  onChange={(event) =>
+                    setCreateForm((current) => ({ ...current, employeeId: event.target.value }))
+                  }
+                >
+                  <option value="">لا يوجد موظف مرتبط</option>
+                  {employees.map((employee) => (
+                    <option key={employee.id} value={employee.id}>
+                      {employee.full_name} — {employee.employee_no}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="rounded-lg border p-3 md:col-span-2">
-                <Label>أقسام الوصول (اختياري)</Label>
-                <p className="mb-2 text-xs text-muted-foreground">اتركها فارغة للوصول العام حسب الدور، أو حدد أقساماً بعينها.</p>
+                <Label>الأقسام المسموحة لهذا الحساب</Label>
+                <p className="mb-2 text-xs text-muted-foreground">اختر أقسام النظام التي يمكن لهذا الحساب الدخول إليها، أو اتركها فارغة في حال السماح الكامل حسب الدور.</p>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {departments.map((department) => (
                     <label key={department.id} className="flex items-center gap-2 text-sm">

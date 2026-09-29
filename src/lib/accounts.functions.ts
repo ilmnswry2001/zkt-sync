@@ -21,6 +21,7 @@ const createAccountSchema = z.object({
   email: z.string().trim().email("البريد الإلكتروني غير صالح").max(320),
   password: passwordSchema,
   role: roleSchema,
+  employeeId: z.string().uuid().nullable().optional().default(null),
   departmentIds: z.array(z.string().uuid()).optional().default([]),
 });
 
@@ -111,6 +112,20 @@ export const createAccount = createServerFn({ method: "POST" })
       await supabaseAdmin.auth.admin.deleteUser(created.user.id);
       throw new Error(`تم التراجع عن إنشاء الحساب: ${translateAuthError(roleError)}`);
     }
+
+    if (data.employeeId) {
+      const profileUpdate = { employee_id: data.employeeId } as Record<string, unknown>;
+      const { error: profileError } = await supabaseAdmin
+        .from("profiles")
+        .update(profileUpdate)
+        .eq("id", created.user.id);
+      if (profileError && !/column .*employee_id.* does not exist/i.test(profileError.message || "")) {
+        await supabaseAdmin.from("user_roles").delete().eq("user_id", created.user.id);
+        await supabaseAdmin.auth.admin.deleteUser(created.user.id);
+        throw new Error(`تم التراجع عن إنشاء الحساب: ${translateAuthError(profileError)}`);
+      }
+    }
+
     if (data.departmentIds.length > 0) {
       const { error: departmentError } = await (supabaseAdmin as any).from("user_departments").insert(
         data.departmentIds.map((departmentId) => ({ user_id: created.user.id, department_id: departmentId })),
