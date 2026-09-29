@@ -905,6 +905,68 @@ export type Database = {
           },
         ]
       }
+      site_work_plans: {
+        Row: {
+          assigned_staff: Json
+          created_at: string
+          final_plan: Json | null
+          id: string
+          management_notes: string | null
+          planning_notes: string | null
+          request_date: string
+          request_notes: string | null
+          requested_by: string | null
+          requested_by_name: string | null
+          site_id: string
+          site_name: string
+          specialties: Json
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_staff?: Json
+          created_at?: string
+          final_plan?: Json | null
+          id?: string
+          management_notes?: string | null
+          planning_notes?: string | null
+          request_date: string
+          request_notes?: string | null
+          requested_by?: string | null
+          requested_by_name?: string | null
+          site_id: string
+          site_name: string
+          specialties?: Json
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_staff?: Json
+          created_at?: string
+          final_plan?: Json | null
+          id?: string
+          management_notes?: string | null
+          planning_notes?: string | null
+          request_date?: string
+          request_notes?: string | null
+          requested_by?: string | null
+          requested_by_name?: string | null
+          site_id?: string
+          site_name?: string
+          specialties?: Json
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_work_plans_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sites: {
         Row: {
           client: string | null
