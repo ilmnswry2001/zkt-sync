@@ -154,8 +154,8 @@ function EmployeeTasksPage() {
       department_id: editingTask?.department_id ?? assignedDepartmentId,
     };
     const result = editingTask
-      ? await supabase.from("employee_tasks").update(payload).eq("id", editingTask.id)
-      : await supabase.from("employee_tasks").insert(payload);
+      ? await supabase.from("employee_tasks").update(payload as never).eq("id", editingTask.id)
+      : await supabase.from("employee_tasks").insert(payload as never);
     if (result.error) {
       if (result.error.code === "23502" && result.error.message.includes("employee_id")) {
         return toast.error(
