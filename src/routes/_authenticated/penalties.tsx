@@ -29,6 +29,7 @@ import {
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
+import { buildPenaltyAttendanceOverride } from "@/lib/monthly-report";
 
 export const Route = createFileRoute("/_authenticated/penalties")({
   head: () => ({ meta: [{ title: "العقوبات والتغييب" }] }),
@@ -169,6 +170,46 @@ function PenaltiesPage() {
     },
     onError: (error: any) => toast.error(error.message),
   });
+  const executePenalty = useMutation({
+    mutationFn: async (penalty: Penalty) => {
+      if (!penalty.employee_id) {
+        throw new Error("لا يمكن تنفيذ العقوبة إلا على موظف مرتبط بقاعدة البيانات");
+      }
+
+      const override = buildPenaltyAttendanceOverride(
+        penalty.penalty_type,
+        penalty.penalty_date,
+        `عقوبة ${typeLabel[penalty.penalty_type]} — ${penalty.employee_name}`,
+      );
+
+      if (!override) {
+        return { executed: false, reason: "غير قابل للتنفيذ وباقي العقوبات تُسجّل فقط في السجل" };
+      }
+
+      const { error } = await supabase.from("attendance_day_status").upsert(
+        {
+          employee_id: penalty.employee_id,
+          work_date: penalty.penalty_date,
+          status: override.status,
+          notes: override.notes,
+          overtime_hours: override.overtime_hours,
+        },
+        { onConflict: "employee_id,work_date" },
+      );
+
+      if (error) throw error;
+      return { executed: true };
+    },
+    onSuccess: (_data, penalty) => {
+      qc.invalidateQueries({ queryKey: ["employee-penalties"] });
+      if (penalty.penalty_type === "absence") {
+        toast.success("تم تنفيذ العقوبة وتغييب الموظف في التاريخ المحدد في التقرير الشهري");
+      } else {
+        toast.info("تم تسجيل العقوبة في السجل فقط لأن نوعها لا يغيّر يوم الحضور");
+      }
+    },
+    onError: (error: any) => toast.error(error.message ?? "تعذر تنفيذ العقوبة"),
+  });
 
   return (
     <div className="space-y-6">
@@ -290,7 +331,15 @@ function PenaltiesPage() {
                         : "—"}
                     </td>
                     <td className="p-3 max-w-md">{penalty.notes || "—"}</td>
-                    <td className="p-3">
+                    <td className="p-3 flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant={penalty.penalty_type === "absence" ? "default" : "secondary"}
+                        disabled={!penalty.employee_id || penalty.penalty_type !== "absence"}
+                        onClick={() => executePenalty.mutate(penalty)}
+                      >
+                        <CheckCircle2 className="w-4 h-4 ml-1" /> تنفيذ
+                      </Button>
                       <Button
                         size="icon"
                         variant="ghost"

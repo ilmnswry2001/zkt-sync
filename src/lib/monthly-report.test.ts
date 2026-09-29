@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildAttendanceDays,
+  buildPenaltyAttendanceOverride,
   dailyTotals,
   loadAllRows,
   monthDates,
@@ -13,6 +14,27 @@ test("calendar handles leap years, short months, and December", () => {
   assert.equal(monthDates("2026-02").length, 28);
   assert.equal(monthDates("2026-09").at(-1), "2026-09-30");
   assert.equal(monthDates("2026-12").at(-1), "2026-12-31");
+});
+
+test("absence penalties override live punches and show as absent in month summary", () => {
+  const override = buildPenaltyAttendanceOverride("absence", "2026-09-01", "عقوبة غياب");
+  const days = buildAttendanceDays(
+    ["2026-09-01"],
+    [{ verify_time: "2026-09-01T08:00:00Z" }, { verify_time: "2026-09-01T17:00:00Z" }],
+    [override],
+    "16:00:00",
+    "2026-09-01",
+  );
+
+  assert.deepEqual(override, {
+    work_date: "2026-09-01",
+    status: "absent",
+    notes: "عقوبة غياب",
+    overtime_hours: 0,
+  });
+  assert.equal(days[0].status, "absent");
+  assert.equal(days[0].manual, true);
+  assert.equal(summarizeDays(days).absentDays, 1);
 });
 
 test("merged punches use first entry and last exit, and manual status takes precedence", () => {

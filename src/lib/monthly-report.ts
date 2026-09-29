@@ -16,6 +16,21 @@ export type AttendanceDay = {
   punches: number;
 };
 
+export function buildPenaltyAttendanceOverride(
+  penaltyType: "absence" | "deduction" | "warning",
+  workDate: string,
+  notes?: string | null,
+) {
+  if (penaltyType !== "absence") return null;
+
+  return {
+    work_date: workDate,
+    status: "absent" as const,
+    notes: (notes ?? "عقوبة غياب").trim() || "عقوبة غياب",
+    overtime_hours: 0,
+  };
+}
+
 export function monthDates(month: string) {
   const [year, number] = month.split("-").map(Number);
   const total = new Date(Date.UTC(year, number, 0)).getUTCDate();
