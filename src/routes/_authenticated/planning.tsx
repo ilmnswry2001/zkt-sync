@@ -132,6 +132,8 @@ const WORK_PLAN_SPECIALTIES = [
   "عامل خراطة",
   "مدخل بيانات",
 ];
+const EMPTY_SPECIALTY_CATALOG: string[] = [];
+const EMPTY_EQUIPMENT_CATALOG: string[] = [];
 
 type WorkPlanTab = "request" | "requested" | "management" | "final";
 
@@ -315,7 +317,7 @@ function PlanningPage() {
   const [requestSiteId, setRequestSiteId] = useState<string>(sites[0]?.id ?? "");
   const [requestDate, setRequestDate] = useState(new Date().toISOString().slice(0, 10));
   const [requestNotes, setRequestNotes] = useState("");
-  const { data: specialtyCatalog = [] } = useQuery({
+  const { data: specialtyCatalog = EMPTY_SPECIALTY_CATALOG } = useQuery({
     queryKey: ["work-plan-specialty-catalog"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -330,7 +332,7 @@ function PlanningPage() {
       return Array.from(new Set([...WORK_PLAN_SPECIALTIES, ...data.map((item: any) => item.name)]));
     },
   });
-  const { data: equipmentCatalog = [] } = useQuery({
+  const { data: equipmentCatalog = EMPTY_EQUIPMENT_CATALOG } = useQuery({
     queryKey: ["work-plan-equipment-catalog"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -353,6 +355,7 @@ function PlanningPage() {
     () => Array.from(new Set([...(equipmentCatalog ?? []), "حفارة", "جرافة", "لودر", "سيارة حمل", "مقطورة", "آلة رصف", "مكبس"])).filter(Boolean),
     [equipmentCatalog],
   );
+  const specialtyOptionsKey = specialtyOptions.join("::");
   const [draftSpecialties, setDraftSpecialties] = useState<WorkPlanSpecialty[]>([]);
   const [managementNote, setManagementNote] = useState<Record<string, string>>({});
   const [managementAssignments, setManagementAssignments] = useState<
@@ -368,12 +371,19 @@ function PlanningPage() {
   useEffect(() => {
     if (!specialtyOptions.length) return;
     setDraftSpecialties((current) => {
+      const currentNames = current.map((item) => item.specialty);
+      const hasSameItems =
+        currentNames.length === specialtyOptions.length &&
+        currentNames.every((name, index) => name === specialtyOptions[index]);
+
+      if (hasSameItems) return current;
+
       const previousByName = new Map(current.map((item) => [item.specialty, item]));
       return specialtyOptions.map((specialty, index) =>
         previousByName.get(specialty) ?? { ...newPlanSpecialty(index), specialty },
       );
     });
-  }, [specialtyOptions]);
+  }, [specialtyOptionsKey]);
 
   const workPlansQuery = useQuery({
     queryKey: ["site-work-plans"],
