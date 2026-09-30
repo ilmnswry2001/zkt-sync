@@ -51,6 +51,8 @@ type Penalty = {
   penalty_date: string;
   deduction_amount: number;
   notes: string | null;
+  executed_at: string | null;
+  executed_by: string | null;
 };
 const today = new Date().toISOString().slice(0, 10);
 const monthStart = (month: string) => `${month}-01`;
@@ -93,7 +95,7 @@ function PenaltiesPage() {
       const { data, error } = await (supabase as any)
         .from("employee_penalties")
         .select(
-          "id, employee_id, employee_name, penalty_type, penalty_date, deduction_amount, notes",
+          "id, employee_id, employee_name, penalty_type, penalty_date, deduction_amount, notes, executed_at, executed_by",
         )
         .gte("penalty_date", monthStart(month))
         .lte("penalty_date", monthEnd(month))
@@ -172,6 +174,7 @@ function PenaltiesPage() {
   });
   const executePenalty = useMutation({
     mutationFn: async (penalty: Penalty) => {
+      if (penalty.executed_at) throw new Error("تم تنفيذ هذه العقوبة مسبقاً");
       if (!penalty.employee_id) {
         throw new Error("لا يمكن تنفيذ العقوبة إلا على موظف مرتبط بقاعدة البيانات");
       }
@@ -198,6 +201,17 @@ function PenaltiesPage() {
       );
 
       if (error) throw error;
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) throw new Error("انتهت الجلسة، سجّل الدخول مجددًا");
+      const { data: updatedPenalty, error: executionError } = await (supabase as any)
+        .from("employee_penalties")
+        .update({ executed_at: new Date().toISOString(), executed_by: authData.user.id })
+        .eq("id", penalty.id)
+        .is("executed_at", null)
+        .select("id")
+        .maybeSingle();
+      if (executionError) throw executionError;
+      if (!updatedPenalty) throw new Error("تم تنفيذ العقوبة مسبقاً أو تعذر العثور على سجلها");
       return { executed: true };
     },
     onSuccess: (_data, penalty) => {
@@ -332,13 +346,17 @@ function PenaltiesPage() {
                     </td>
                     <td className="p-3 max-w-md">{penalty.notes || "—"}</td>
                     <td className="p-3 flex items-center gap-2">
+                      <div className="flex flex-col gap-2">
+                      {penalty.executed_at && (
+                        <Badge className="bg-success text-success-foreground">نُفذت {new Date(penalty.executed_at).toLocaleDateString("ar-IQ")}</Badge>
+                      )}
                       <Button
                         size="sm"
                         variant={penalty.penalty_type === "absence" ? "default" : "secondary"}
-                        disabled={!penalty.employee_id || penalty.penalty_type !== "absence"}
+                        disabled={!penalty.employee_id || penalty.penalty_type !== "absence" || Boolean(penalty.executed_at) || executePenalty.isPending}
                         onClick={() => executePenalty.mutate(penalty)}
                       >
-                        <CheckCircle2 className="w-4 h-4 ml-1" /> تنفيذ
+                        <CheckCircle2 className="w-4 h-4 ml-1" /> {penalty.executed_at ? "تم التنفيذ" : "تنفيذ"}
                       </Button>
                       <Button
                         size="icon"
@@ -349,6 +367,7 @@ function PenaltiesPage() {
                       >
                         <Trash2 className="w-4 h-4 text-destructive" />
                       </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}

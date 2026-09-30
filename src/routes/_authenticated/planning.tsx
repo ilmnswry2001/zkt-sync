@@ -50,6 +50,7 @@ import {
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
+import { createWageRateTitleMap, getEmployeeSiteCost } from "@/lib/site-costs";
 import { getDefaultWage } from "@/lib/wage-defaults";
 import {
   appendStaffNames,
@@ -279,25 +280,10 @@ function PlanningPage() {
       string,
       { employees: number; monthly: number; daily: number; specialties: Record<string, number> }
     > = {};
-    const wagesByTitle = new Map(costData.rates.map((rate: any) => [rate.title.trim(), rate]));
+    const wagesByTitle = createWageRateTitleMap(costData.rates);
     for (const employee of siteEmployees) {
       if (!employee.site_id) continue;
-      const linkedWage = Array.isArray(employee.wage_rates)
-        ? employee.wage_rates[0]
-        : employee.wage_rates;
-      const rawWage = linkedWage ?? wagesByTitle.get(employee.position?.trim());
-      const defaults = getDefaultWage(rawWage?.title ?? employee.position ?? "");
-      const wage = rawWage
-        ? {
-            ...rawWage,
-            daily_rate: Number(rawWage.daily_rate) > 0 ? rawWage.daily_rate : defaults.daily_rate,
-            monthly_rate:
-              Number(rawWage.monthly_rate) > 0 ? rawWage.monthly_rate : defaults.monthly_rate,
-          }
-        : defaults;
-      const monthly =
-        Number(employee.base_salary) > 0 ? Number(employee.base_salary) : Number(wage.monthly_rate);
-      const daily = Number(wage.daily_rate ?? (monthly ? monthly / 26 : 0));
+      const { monthly, daily, specialty } = getEmployeeSiteCost(employee, wagesByTitle);
       const current = result[employee.site_id] ?? {
         employees: 0,
         monthly: 0,
@@ -307,7 +293,6 @@ function PlanningPage() {
       current.employees += 1;
       current.monthly += monthly;
       current.daily += daily;
-      const specialty = wage?.title ?? employee.position ?? "بدون تخصص / أجر";
       current.specialties[specialty] = (current.specialties[specialty] ?? 0) + 1;
       result[employee.site_id] = current;
     }

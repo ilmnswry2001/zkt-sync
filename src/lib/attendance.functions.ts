@@ -168,13 +168,15 @@ export const getDailyReport = createServerFn({ method: "GET" })
     const { supabase } = context;
     const start = new Date(data.date + "T00:00:00Z");
     const end = new Date(start.getTime() + 86400000);
-    const { data: logs } = await supabase.from("attendance_logs")
+    const { data: logs, error: logsError } = await supabase.from("attendance_logs")
       .select("employee_no, employee_id, verify_time, device_id")
       .gte("verify_time", start.toISOString())
       .lt("verify_time", end.toISOString())
       .order("verify_time", { ascending: true });
-    const { data: emps } = await supabase.from("employees")
-      .select("id, employee_no, full_name, department_id, departments(name)");
+    if (logsError) throw new Error(logsError.message);
+    const { data: emps, error: employeesError } = await supabase.from("employees")
+      .select("id, employee_no, full_name, status, department_id, departments(name), shifts(start_time, end_time, grace_minutes)");
+    if (employeesError) throw new Error(employeesError.message);
 
     const byPin = new Map<string, { first: string; last: string; devices: Set<string> }>();
     (logs ?? []).forEach((l: any) => {
@@ -186,19 +188,41 @@ export const getDailyReport = createServerFn({ method: "GET" })
     const rows = (emps ?? []).map((e: any) => {
       const rec = byPin.get(e.employee_no);
       const hours = rec ? (new Date(rec.last).getTime() - new Date(rec.first).getTime()) / 3600000 : 0;
+      const late = rec && e.shifts?.start_time
+        ? isLateArrival(data.date, rec.first, e.shifts.start_time, e.shifts.end_time, e.shifts.grace_minutes ?? 0)
+        : false;
       return {
         employee_no: e.employee_no,
         full_name: e.full_name,
+        active: e.status === "active",
         department: e.departments?.name ?? null,
         check_in: rec?.first ?? null,
         check_out: rec?.last !== rec?.first ? rec?.last ?? null : null,
         hours: rec ? Math.max(0, Math.round(hours * 100) / 100) : 0,
         devices: rec?.devices.size ?? 0,
+        late,
         status: rec ? "present" : "absent",
       };
     });
     return { rows };
   });
+
+function isLateArrival(
+  date: string,
+  checkIn: string,
+  shiftStart: string,
+  shiftEnd: string | null,
+  graceMinutes: number,
+) {
+  const checkInTime = Date.parse(checkIn);
+  let shiftStartTime = Date.parse(`${date}T${shiftStart}Z`);
+  if (!Number.isFinite(checkInTime) || !Number.isFinite(shiftStartTime)) return false;
+
+  if (shiftEnd && shiftEnd < shiftStart && checkInTime < shiftStartTime) {
+    shiftStartTime -= 86400000;
+  }
+  return checkInTime > shiftStartTime + Math.max(0, Number(graceMinutes) || 0) * 60000;
+}
 
 // حذف ملفات مرفوعة مع سجلات البصمة الناتجة عنها
 export const deleteUploads = createServerFn({ method: "POST" })

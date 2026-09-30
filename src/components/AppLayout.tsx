@@ -28,7 +28,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const nav = [
-  { to: "/dashboard", label: "لوحة التحكم", icon: LayoutDashboard },
+  { to: "/dashboard", label: "لوحة التحكم", icon: LayoutDashboard, access: "executive" },
   { to: "/attendance", label: "التقارير اليومية", icon: ClockIcon },
   { to: "/tasks", label: "مهامي اليومية", icon: ClipboardCheck },
   { to: "/team-follow-up", label: "متابعة الفريق", icon: Users },
@@ -50,7 +50,7 @@ const nav = [
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { user, roles, isAdmin, isHR, signOut } = useAuth();
+  const { user, roles, isAdmin, isHR, isCompanyManager, signOut } = useAuth();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     if (typeof window === "undefined") return true;
@@ -97,6 +97,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           {nav.map((item) => {
             if ("access" in item && item.access === "admin" && !isAdmin) return null;
             if ("access" in item && item.access === "hr" && !isHR) return null;
+            if ("access" in item && item.access === "executive" && !isAdmin && !isCompanyManager) return null;
             const active = pathname === item.to || pathname.startsWith(item.to + "/");
             const Icon = item.icon;
             return (

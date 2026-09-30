@@ -69,11 +69,13 @@ type PublishSummaryItem = {
 type AttendanceRow = {
   employee_no: string;
   full_name: string;
+  active?: boolean;
   department?: string | null;
   check_in: string | null;
   check_out: string | null;
   hours: number;
   devices?: number | string | null;
+  late?: boolean;
   status: string;
 };
 const today = new Date().toISOString().slice(0, 10);
@@ -762,6 +764,9 @@ function AttendancePage() {
                   {attendanceRows.length -
                     attendanceRows.filter((row) => row.status === "present").length}
                 </Badge>
+                <Badge className="border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
+                  متأخر: {attendanceRows.filter((row) => row.late).length}
+                </Badge>
               </div>
             </CardContent>
           </Card>
@@ -797,12 +802,15 @@ function AttendancePage() {
                         <TableCell>{row.hours > 0 ? row.hours.toFixed(2) : "—"}</TableCell>
                         <TableCell>{row.devices || "—"}</TableCell>
                         <TableCell>
-                          <Badge
-                            variant={row.status === "present" ? "default" : "destructive"}
-                            className={row.status === "present" ? "bg-success" : ""}
-                          >
-                            {row.status === "present" ? "حاضر" : "غائب"}
-                          </Badge>
+                          <div className="flex flex-wrap gap-1">
+                            <Badge
+                              variant={row.status === "present" ? "default" : "destructive"}
+                              className={row.status === "present" ? "bg-success" : ""}
+                            >
+                              {row.status === "present" ? "حاضر" : "غائب"}
+                            </Badge>
+                            {row.late && <Badge className="bg-amber-500 text-white">متأخر</Badge>}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
