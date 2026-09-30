@@ -9,7 +9,7 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "test": "node --experimental-strip-types --test src/lib/monthly-report.test.ts",
+    "test": "node --experimental-strip-types --test src/lib/monthly-report.test.ts src/lib/planning-staff.test.ts",
     "format": "prettier --write ."
   },
   "dependencies": {

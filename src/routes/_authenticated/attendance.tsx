@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getDailyReport } from "@/lib/attendance.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StaffNameChips } from "@/components/StaffNameChips";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,6 +34,7 @@ import {
 import { printReport } from "@/lib/report-print";
 import { toast } from "sonner";
 import { readLocalCatalog, type CatalogItem, type CatalogKind } from "@/lib/report-catalog";
+import { normalizeStaffAssignments } from "@/lib/planning-staff";
 
 export const Route = createFileRoute("/_authenticated/attendance")({
   head: () => ({ meta: [{ title: "التقارير اليومية" }] }),
@@ -169,7 +171,7 @@ function AttendancePage() {
         site_id: row.site_id,
         site_name: row.site_name,
         request_date: row.request_date,
-        assigned_staff: Array.isArray(row.assigned_staff) ? row.assigned_staff : [],
+        assigned_staff: normalizeStaffAssignments(row.assigned_staff),
         final_plan: row.final_plan ?? null,
         specialtySummary: Array.isArray(row.final_plan?.specialties) ? row.final_plan.specialties : Array.isArray(row.specialties) ? row.specialties : [],
       };
@@ -535,12 +537,13 @@ function AttendancePage() {
 
                 <div className="rounded-2xl border bg-slate-900 p-4 text-white">
                   <div className="mb-3 font-bold">الكادر المعتمد في الخطة النهائية</div>
-                  <div className="flex flex-wrap gap-2">
-                    {(finalizedPlanQuery.data.assigned_staff ?? []).length ? (
-                      (finalizedPlanQuery.data.assigned_staff ?? []).map((member: any, index: number) => (
-                        <Badge key={`${member.name}-${index}`} className="bg-white text-slate-900">
-                          {member.name} · {member.specialty}
-                        </Badge>
+                  <div className="space-y-3">
+                    {(finalizedPlanQuery.data.assigned_staff ?? []).some((group) => group.names.length) ? (
+                      finalizedPlanQuery.data.assigned_staff.map((group) => (
+                        <div key={group.specialty}>
+                          <div className="mb-1 text-sm font-medium text-slate-200">{group.specialty}</div>
+                          <StaffNameChips names={group.names} />
+                        </div>
                       ))
                     ) : (
                       <span className="text-sm text-slate-300">لا يوجد كوادر مضافة في الخطة النهائية.</span>

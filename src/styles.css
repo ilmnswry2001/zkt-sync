@@ -116,3 +116,35 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
+
+.planning-final-stripe { background-color: var(--muted); }
+
+@media print {
+  @page { margin: 12mm; }
+
+  body * { visibility: hidden !important; }
+  .planning-final-print,
+  .planning-final-print * { visibility: visible !important; }
+  .planning-final-print {
+    position: relative !important;
+    width: 100% !important;
+    margin: 0 0 10mm !important;
+    overflow: visible !important;
+    border: 1px solid #aebbb5 !important;
+    background: #fff !important;
+    color: #111 !important;
+    direction: rtl !important;
+    box-shadow: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    break-inside: avoid;
+  }
+  .planning-final-controls { display: none !important; }
+  .planning-final-desktop { display: block !important; max-height: none !important; overflow: visible !important; }
+  .planning-final-mobile { display: none !important; }
+  .planning-final-table { min-width: 0 !important; border-collapse: collapse !important; }
+  .planning-final-table thead { display: table-header-group; }
+  .planning-final-table tr { break-inside: avoid; }
+  .planning-final-print details:not([open]) > :not(summary) { display: block !important; }
+  .planning-final-stripe { background: #f5f8f6 !important; }
+}

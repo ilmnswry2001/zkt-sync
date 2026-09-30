@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { StaffNameChips } from "@/components/StaffNameChips";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,6 +43,7 @@ import {
   Minus,
   NotebookPen,
   Plus,
+  Printer,
   Search,
   Pencil,
   Trash2,
@@ -49,6 +51,12 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { getDefaultWage } from "@/lib/wage-defaults";
+import {
+  appendStaffNames,
+  normalizeStaffAssignments,
+  parsePersonNames,
+  type StaffAssignmentGroup,
+} from "@/lib/planning-staff";
 
 export const Route = createFileRoute("/_authenticated/planning")({
   head: () => ({
@@ -89,13 +97,6 @@ type WorkPlanSpecialty = {
   color: string;
 };
 
-type WorkPlanAssignment = {
-  name: string;
-  specialty: string;
-  notes: string;
-  source: "internal" | "manual";
-};
-
 type SiteWorkPlan = {
   id: string;
   site_id: string;
@@ -107,7 +108,7 @@ type SiteWorkPlan = {
   planning_notes: string | null;
   management_notes: string | null;
   specialties: WorkPlanSpecialty[];
-  assigned_staff: WorkPlanAssignment[];
+  assigned_staff: StaffAssignmentGroup[];
   final_plan: {
     title: string;
     summary: string;
@@ -214,6 +215,7 @@ function PlanningPage() {
   const [requestSiteSearch, setRequestSiteSearch] = useState("");
   const [planSearch, setPlanSearch] = useState("");
   const [planDateFilter, setPlanDateFilter] = useState("");
+  const [finalStaffSearch, setFinalStaffSearch] = useState("");
   const [specialtySearch, setSpecialtySearch] = useState("");
   const [visibleSpecialtyNotes, setVisibleSpecialtyNotes] = useState<Record<string, boolean>>({});
 
@@ -359,8 +361,10 @@ function PlanningPage() {
   const [draftSpecialties, setDraftSpecialties] = useState<WorkPlanSpecialty[]>([]);
   const [managementNote, setManagementNote] = useState<Record<string, string>>({});
   const [managementAssignments, setManagementAssignments] = useState<
-    Record<string, Record<string, { employeeNames: string[]; employeeId: string | null }>>
+    Record<string, Record<string, string>>
   >({});
+  const assignmentSaveQueue = useRef(new Map<string, Promise<void>>());
+  const staffInputRefs = useRef(new Map<string, HTMLInputElement>());
   const [finalPlanTitle, setFinalPlanTitle] = useState<Record<string, string>>({});
   const [finalPlanNotes, setFinalPlanNotes] = useState<Record<string, string>>({});
 
@@ -401,7 +405,7 @@ function PlanningPage() {
         planning_notes: row.planning_notes ?? null,
         management_notes: row.management_notes ?? null,
         specialties: Array.isArray(row.specialties) ? row.specialties : [],
-        assigned_staff: Array.isArray(row.assigned_staff) ? row.assigned_staff : [],
+        assigned_staff: normalizeStaffAssignments(row.assigned_staff),
         final_plan: row.final_plan ?? null,
         created_at: row.created_at,
         updated_at: row.updated_at,
@@ -453,6 +457,16 @@ function PlanningPage() {
         : defaults.daily_rate;
     return sum + dailyRate * Number(item.quantity);
   }, 0);
+  const getFinalSpecialtyRows = (plan: SiteWorkPlan) =>
+    (plan.final_plan?.specialties ?? plan.specialties ?? [])
+      .map((item) => ({
+        item,
+        names: plan.assigned_staff.find((group) => group.specialty === item.specialty)?.names ?? [],
+      }))
+      .filter(({ item, names }) => {
+        const search = finalStaffSearch.trim().toLocaleLowerCase("ar");
+        return !search || `${item.specialty} ${names.join(" ")}`.toLocaleLowerCase("ar").includes(search);
+      });
 
   const createWorkPlanRequest = useMutation({
     mutationFn: async () => {
@@ -567,49 +581,98 @@ function PlanningPage() {
     );
   };
 
-  const addManagementAssignment = (planId: string, specialtyName: string, rawNames: string) => {
-    const names = rawNames
-      .split(/[\n,]+/)
-      .map((item) => item.trim())
-      .filter(Boolean);
+  const queueStaffAssignmentUpdate = (
+    planId: string,
+    update: (current: StaffAssignmentGroup[]) => StaffAssignmentGroup[],
+    successMessage: string | (() => string),
+  ) => {
+    const previous = assignmentSaveQueue.current.get(planId) ?? Promise.resolve();
+    const queued = previous
+      .catch(() => undefined)
+      .then(async () => {
+        const cachedPlans = qc.getQueryData<SiteWorkPlan[]>(["site-work-plans"]);
+        const plan = cachedPlans?.find((item) => item.id === planId) ?? workPlans.find((item) => item.id === planId);
+        const current = normalizeStaffAssignments(plan?.assigned_staff);
+        const nextAssignments = update(current);
+        if (nextAssignments === current) return;
+        const { error } = await supabase
+          .from("site_work_plans")
+          .update({ assigned_staff: nextAssignments })
+          .eq("id", planId);
+        if (error) throw error;
 
-    if (!names.length || !specialtyName.trim()) {
-      toast.error("اكتب أسماء الكوادر أو اختر اسمًا واحدًا على الأقل ثم أضفهم");
+        qc.setQueryData<SiteWorkPlan[]>(["site-work-plans"], (plans) =>
+          plans?.map((item) => item.id === planId ? { ...item, assigned_staff: nextAssignments } : item),
+        );
+        toast.success(typeof successMessage === "function" ? successMessage() : successMessage);
+      })
+      .catch((error: any) => {
+        void qc.invalidateQueries({ queryKey: ["site-work-plans"] });
+        toast.error(error?.message ?? "تعذر حفظ الكوادر");
+      });
+
+    assignmentSaveQueue.current.set(planId, queued);
+    void queued.finally(() => {
+      if (assignmentSaveQueue.current.get(planId) === queued) {
+        assignmentSaveQueue.current.delete(planId);
+      }
+    });
+  };
+
+  const addManagementAssignment = (planId: string, specialtyName: string, rawNames: string) => {
+    const names = parsePersonNames(rawNames);
+    if (!names.length) {
+      toast.error("اكتب اسمًا واحدًا على الأقل؛ افصل الأسماء المتعددة بفاصلة أو سطر جديد");
       return;
     }
 
-    const plan = workPlans.find((item) => item.id === planId);
-    const existingAssignments = plan?.assigned_staff ?? [];
-    const nextAssignments = [
-      ...existingAssignments.filter((entry) => entry.specialty !== specialtyName),
-      ...names.map((name) => ({
-        name,
-        specialty: specialtyName.trim(),
-        notes: "",
-        source: "manual" as const,
-      })),
-    ];
+    const inputKey = `${planId}::${specialtyName}`;
+    setManagementAssignments((current) => ({
+      ...current,
+      [planId]: { ...(current[planId] ?? {}), [specialtyName]: "" },
+    }));
+    requestAnimationFrame(() => staffInputRefs.current.get(inputKey)?.focus());
 
-    supabase
-      .from("site_work_plans")
-      .update({ assigned_staff: nextAssignments })
-      .eq("id", planId)
-      .then(({ error }) => {
-        if (error) throw error;
-        qc.invalidateQueries({ queryKey: ["site-work-plans"] });
-        setManagementAssignments((current) => ({
-          ...current,
-          [planId]: {
-            ...(current[planId] ?? {}),
-            [specialtyName]: {
-              employeeNames: names,
-              employeeId: null,
-            },
-          },
-        }));
-        toast.success(`تم حفظ ${names.length} كوادر في تخصص ${specialtyName}`);
-      })
-      .catch((error: any) => toast.error(error?.message ?? "تعذر إدراج الكادر"));
+    let addedCount = 0;
+    queueStaffAssignmentUpdate(planId, (current) => {
+      const result = appendStaffNames(current, specialtyName, rawNames);
+      const duplicateCount = result.duplicates.length;
+      if (!result.added.length) {
+        toast.warning("هذا الاسم مضاف مسبقًا لهذا التخصص");
+        return current;
+      }
+      addedCount = result.added.length;
+      if (duplicateCount) toast.warning("تم تجاهل الاسم المكرر");
+
+      const required = Number(workPlans.find((item) => item.id === planId)?.specialties
+        .find((item) => item.specialty === specialtyName)?.quantity ?? 0);
+      const assigned = result.assignments.find((item) => item.specialty === specialtyName)?.names.length ?? 0;
+      if (assigned > required) toast.warning(`تم تجاوز العدد المطلوب بمقدار ${assigned - required}`);
+      return result.assignments;
+    }, () => `تمت إضافة ${addedCount} اسم إلى ${specialtyName}`);
+  };
+
+  const removeManagementName = (planId: string, specialtyName: string, name: string) => {
+    queueStaffAssignmentUpdate(planId, (current) =>
+      current
+        .map((group) => group.specialty === specialtyName
+          ? { ...group, names: group.names.filter((item) => item !== name) }
+          : group)
+        .filter((group) => group.names.length > 0),
+    "تم حذف الاسم من التخصص");
+  };
+
+  const clearManagementNames = (planId: string, specialtyName: string) => {
+    const group = workPlans.find((item) => item.id === planId)?.assigned_staff
+      .find((item) => item.specialty === specialtyName);
+    if (!group?.names.length) return;
+    if (!window.confirm(`مسح جميع الأسماء المضافة لتخصص ${specialtyName}؟`)) return;
+
+    queueStaffAssignmentUpdate(
+      planId,
+      (current) => current.filter((item) => item.specialty !== specialtyName),
+      `تم مسح أسماء ${specialtyName}`,
+    );
   };
 
   const save = useMutation({
@@ -1131,52 +1194,70 @@ function PlanningPage() {
                     <div className="space-y-4 border-t p-4">
                     <div className="space-y-3">
                       {(plan.specialties ?? []).map((item) => {
-                        const currentSelection = managementAssignments[plan.id]?.[item.specialty] ?? {
-                          employeeNames: [],
-                          employeeId: null,
-                        };
-                        const currentText = currentSelection.employeeNames.join(", ");
+                        const names = plan.assigned_staff.find((group) => group.specialty === item.specialty)?.names ?? [];
+                        const required = Number(item.quantity) || 0;
+                        const complete = names.length >= required;
+                        const inputKey = `${plan.id}::${item.specialty}`;
 
                         return (
                           <div key={`${plan.id}-${item.specialty}`} className="rounded-xl border bg-background p-3">
                             <div className="mb-2 flex items-center justify-between gap-2">
                               <div className="font-bold">{item.specialty}</div>
-                              <Badge variant="outline">العدد المطلوب: {item.quantity}</Badge>
+                              <Badge className={complete ? "bg-emerald-600 text-white" : "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200"}>
+                                {names.length} / {required}
+                              </Badge>
                             </div>
 
-                            <div className="grid grid-cols-1 gap-2">
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
                               <div>
-                                <Label>اسماء الكوادر لهذا التخصص</Label>
+                                <Label>أسماء الكوادر لهذا التخصص</Label>
                                 <Input
-                                  value={currentText}
-                                  onChange={(e) =>
-                                    setManagementAssignments((current) => ({
-                                      ...current,
-                                      [plan.id]: {
-                                        ...(current[plan.id] ?? {}),
-                                        [item.specialty]: {
-                                          employeeNames: e.target.value
-                                            .split(/[\n,]+/)
-                                            .map((value) => value.trim())
-                                            .filter(Boolean),
-                                          employeeId: currentSelection.employeeId,
-                                        },
-                                      },
-                                    }))
-                                  }
-                                  placeholder="اكتب أسماء الموظفين مفصولين بفواصل أو سطر جديد"
+                                  ref={(element) => {
+                                    if (element) staffInputRefs.current.set(inputKey, element);
+                                    else staffInputRefs.current.delete(inputKey);
+                                  }}
+                                  value={managementAssignments[plan.id]?.[item.specialty] ?? ""}
+                                  onChange={(event) => setManagementAssignments((current) => ({
+                                    ...current,
+                                    [plan.id]: {
+                                      ...(current[plan.id] ?? {}),
+                                      [item.specialty]: event.target.value,
+                                    },
+                                  }))}
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Enter") {
+                                      event.preventDefault();
+                                      addManagementAssignment(plan.id, item.specialty, managementAssignments[plan.id]?.[item.specialty] ?? "");
+                                    }
+                                  }}
+                                  placeholder="اكتب اسمًا، أو افصل الأسماء بفاصلة / سطر جديد"
+                                  className="min-h-11"
                                 />
                               </div>
 
-                              <div className="flex flex-col gap-2 sm:flex-row">
-                                <Button className="min-h-11" type="button" onClick={() => addManagementAssignment(plan.id, item.specialty, currentText)}>
-                                  إضافة هذا التخصص
-                                </Button>
-                                <Button className="min-h-11" type="button" variant="outline" onClick={() => setManagementAssignments((current) => ({ ...current, [plan.id]: { ...(current[plan.id] ?? {}), [item.specialty]: { employeeNames: [], employeeId: null } } }))}>
-                                  مسح
+                              <div className="flex items-end">
+                                <Button className="min-h-11 w-full sm:w-auto" type="button" onClick={() => addManagementAssignment(plan.id, item.specialty, managementAssignments[plan.id]?.[item.specialty] ?? "")}>
+                                  <Plus className="ml-2 h-4 w-4" /> إضافة هذا الشخص
                                 </Button>
                               </div>
                             </div>
+
+                            {names.length > 0 ? (
+                              <div className="mt-3 space-y-2">
+                                <StaffNameChips
+                                  names={names}
+                                  onRemove={(name) => removeManagementName(plan.id, item.specialty, name)}
+                                />
+                                <Button type="button" variant="ghost" className="min-h-11 px-2 text-destructive" onClick={() => clearManagementNames(plan.id, item.specialty)}>
+                                  مسح الكل
+                                </Button>
+                              </div>
+                            ) : (
+                              <p className="mt-2 text-sm text-muted-foreground">لم تُضف أسماء بعد</p>
+                            )}
+                            {names.length > required && (
+                              <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">تم تجاوز العدد المطلوب بمقدار {names.length - required}</p>
+                            )}
                           </div>
                         );
                       })}
@@ -1202,14 +1283,15 @@ function PlanningPage() {
                       </div>
                     </div>
 
-                    {(plan.assigned_staff ?? []).length > 0 && (
+                    {(plan.assigned_staff ?? []).some((group) => group.names.length > 0) && (
                       <div className="rounded-xl border bg-background p-3">
                         <div className="mb-2 font-bold">الكوادر الحالية</div>
-                        <div className="flex flex-wrap gap-2">
-                          {(plan.assigned_staff ?? []).map((member, index) => (
-                            <Badge key={`${plan.id}-${member.name}-${index}`} variant="secondary" className="px-3 py-1">
-                              {member.name} · {member.specialty}
-                            </Badge>
+                        <div className="space-y-3">
+                          {(plan.assigned_staff ?? []).filter((group) => group.names.length > 0).map((group) => (
+                            <div key={`${plan.id}-${group.specialty}`}>
+                              <div className="mb-1 text-sm font-medium">{group.specialty}</div>
+                              <StaffNameChips names={group.names} />
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -1251,14 +1333,15 @@ function PlanningPage() {
                       ))}
                     </div>
 
-                    {(plan.assigned_staff ?? []).length > 0 && (
+                    {(plan.assigned_staff ?? []).some((group) => group.names.length > 0) && (
                       <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
                         <div className="font-semibold">الكوادر المخصصة</div>
-                        <div className="flex flex-wrap gap-2">
-                          {(plan.assigned_staff ?? []).map((member, index) => (
-                            <Badge key={`${plan.id}-member-${index}`} variant="outline">
-                              {member.name} · {member.specialty}
-                            </Badge>
+                        <div className="space-y-3">
+                          {(plan.assigned_staff ?? []).filter((group) => group.names.length > 0).map((group) => (
+                            <div key={`${plan.id}-${group.specialty}`}>
+                              <div className="mb-1 text-sm font-medium">{group.specialty}</div>
+                              <StaffNameChips names={group.names} />
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -1290,84 +1373,121 @@ function PlanningPage() {
                 <div className="space-y-3">
                   <h3 className="font-bold">الخطة النهائية المعتمدة</h3>
                   {visibleFinalPlans.map((plan) => (
-                    <details key={plan.id} className="group rounded-xl border border-primary/30 bg-card shadow-sm print:shadow-none">
-                      <summary className="flex min-h-16 cursor-pointer list-none flex-wrap items-center justify-between gap-3 p-4 [&::-webkit-details-marker]:hidden">
-                        <div className="min-w-0">
-                          <div className="text-xs text-muted-foreground">خطة عمل نهائية · {plan.request_date}</div>
-                          <div className="truncate font-bold text-primary">{plan.final_plan?.title ?? `الخطة النهائية - ${plan.site_name}`}</div>
-                          <div className="text-sm text-muted-foreground">{plan.site_name}</div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge className="bg-emerald-600 text-white">{planStatusLabel[plan.status]}</Badge>
-                          <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
-                        </div>
-                      </summary>
-                      <div className="space-y-4 border-t p-4">
-                      <div className="flex justify-end">
-                        <ResponsivePlanAction
-                          label="تصدير PDF"
-                          variant="outline"
-                          onAction={() => { if (typeof window !== "undefined") window.print(); }}
-                        />
-                      </div>
+                    (() => {
+                      const rows = getFinalSpecialtyRows(plan);
+                      const specialties = plan.final_plan?.specialties ?? plan.specialties ?? [];
+                      const requiredTotal = specialties.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+                      const assignedTotal = plan.assigned_staff.reduce((sum, group) => sum + group.names.length, 0);
+                      const ctrCode = sites.find((site) => site.id === plan.site_id)?.ctr_code;
 
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                        <div className="rounded-xl border bg-background p-3">
-                          <div className="text-xs text-muted-foreground">الموقع</div>
-                          <div className="font-bold mt-1">{plan.site_name}</div>
-                        </div>
-                        <div className="rounded-xl border bg-background p-3">
-                          <div className="text-xs text-muted-foreground">التاريخ</div>
-                          <div className="font-bold mt-1">{plan.request_date}</div>
-                        </div>
-                        <div className="rounded-xl border bg-background p-3">
-                          <div className="text-xs text-muted-foreground">إجمالي التخصصات</div>
-                          <div className="font-bold mt-1">{(plan.final_plan?.specialties ?? plan.specialties ?? []).reduce((sum, item) => sum + Number(item.quantity || 0), 0)}</div>
-                        </div>
-                        <div className="rounded-xl border bg-background p-3">
-                          <div className="text-xs text-muted-foreground">عدد الكوادر</div>
-                          <div className="font-bold mt-1">{(plan.assigned_staff ?? []).length}</div>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                        <div className="rounded-xl border bg-background p-3">
-                          <div className="font-bold mb-2">التخصصات المطلوبة</div>
-                          <div className="space-y-2">
-                            {(plan.final_plan?.specialties ?? plan.specialties ?? []).map((item) => (
-                              <div key={`${plan.id}-${item.specialty}`} className="flex items-center justify-between rounded-lg border px-3 py-2">
-                                <div className="flex items-center gap-2">
-                                  <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color || "#2563eb" }} />
-                                  <span>{item.specialty}</span>
-                                </div>
-                                <Badge variant="secondary">{item.quantity}</Badge>
+                      return (
+                        <section key={plan.id} dir="rtl" className="planning-final-print overflow-hidden rounded-xl border bg-card shadow-sm">
+                          <header className="flex flex-col gap-4 bg-emerald-50 p-4 text-emerald-950 dark:bg-emerald-950/40 dark:text-emerald-50 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+                            <div className="min-w-0">
+                              <div className="mb-2 flex flex-wrap items-center gap-2">
+                                <Badge variant="outline" className="border-emerald-700/30 bg-background/70 font-mono text-emerald-900 dark:text-emerald-100">
+                                  {ctrCode || plan.site_name}
+                                </Badge>
+                                <span className="text-sm">{plan.request_date}</span>
+                                <Badge className="bg-emerald-700 text-white">{planStatusLabel[plan.status]}</Badge>
                               </div>
-                            ))}
-                          </div>
-                        </div>
+                              <h4 className="truncate text-xl font-bold">{plan.final_plan?.title ?? `الخطة النهائية - ${plan.site_name}`}</h4>
+                              <p className="mt-1 text-sm opacity-80">{plan.site_name}</p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className="rounded-lg bg-white/70 px-3 py-2 text-sm dark:bg-black/20">
+                                <span className="opacity-75">إجمالي المطلوب</span>
+                                <strong className="mr-2 text-lg">{requiredTotal}</strong>
+                              </div>
+                              <Button type="button" variant="outline" className="planning-final-controls min-h-11 shrink-0 bg-background" onClick={() => window.print()}>
+                                <Printer className="ml-2 h-4 w-4" /> طباعة PDF
+                              </Button>
+                            </div>
+                          </header>
 
-                        <div className="rounded-xl border bg-background p-3">
-                          <div className="font-bold mb-2">كوادر الخطة</div>
-                          <div className="space-y-2">
-                            {(plan.assigned_staff ?? []).length > 0 ? (
-                              (plan.assigned_staff ?? []).map((member, index) => (
-                                <div key={`${plan.id}-member-${index}`} className="flex items-center justify-between rounded-lg border px-3 py-2">
-                                  <span>{member.name}</span>
-                                  <Badge variant="outline">{member.specialty}</Badge>
-                                </div>
-                              ))
+                          <div className="space-y-4 p-4 sm:p-5">
+                            <div className="planning-final-controls flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                              <div>
+                                <h5 className="font-bold">التخصصات</h5>
+                                <p className="text-sm text-muted-foreground">{rows.length} تخصص ظاهر</p>
+                              </div>
+                              <div className="relative w-full sm:max-w-xs">
+                                <Search className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
+                                <Input className="min-h-11 pr-9" value={finalStaffSearch} onChange={(event) => setFinalStaffSearch(event.target.value)} placeholder="ابحث عن تخصص أو اسم..." aria-label="بحث في الخطة النهائية" />
+                              </div>
+                            </div>
+
+                            {!rows.length ? (
+                              <div className="rounded-lg border border-dashed p-6 text-center text-muted-foreground">
+                                {specialties.length ? "لا توجد تخصصات مطابقة للبحث." : "لا توجد تخصصات في الخطة النهائية."}
+                              </div>
                             ) : (
-                              <div className="text-sm text-muted-foreground">لا توجد كوادر مضافة بعد</div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
+                              <>
+                                <div className="planning-final-desktop hidden max-h-[70vh] overflow-auto rounded-lg border md:block">
+                                  <table className="planning-final-table w-full min-w-[700px] text-right text-sm">
+                                    <thead className="sticky top-0 z-10 bg-muted text-foreground">
+                                      <tr>
+                                        <th className="px-4 py-3">التخصص</th>
+                                        <th className="w-44 px-4 py-3">العدد المطلوب</th>
+                                        <th className="px-4 py-3">الأسماء المضافة</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {rows.map(({ item, names }, index) => {
+                                        const required = Number(item.quantity) || 0;
+                                        const missing = Math.max(0, required - names.length);
+                                        const complete = missing === 0;
+                                        const progress = required > 0 ? Math.min(100, (names.length / required) * 100) : 100;
+                                        return (
+                                          <tr key={`${plan.id}-${item.specialty}`} className={`${missing ? "bg-amber-50 dark:bg-amber-950/25" : "bg-background"} ${index % 2 ? "planning-final-stripe" : ""}`}>
+                                            <td className="px-4 py-4"><Badge variant="outline" className="min-w-32 justify-center px-3 py-1.5 text-sm">{item.specialty}</Badge></td>
+                                            <td className="px-4 py-4">
+                                              <div className="font-bold">{required}</div>
+                                              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"><div className={`h-full rounded-full ${complete ? "bg-emerald-600" : "bg-amber-500"}`} style={{ width: `${progress}%` }} /></div>
+                                              <div className={`mt-1 text-xs font-medium ${complete ? "text-emerald-700 dark:text-emerald-300" : "text-amber-800 dark:text-amber-300"}`}>
+                                                {complete ? `✓ مكتمل · ${names.length}/${required}` : `ينقص ${missing} · ${names.length}/${required}`}
+                                              </div>
+                                            </td>
+                                            <td className="px-4 py-4"><StaffNameChips names={names} /></td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
 
-                      <div className="rounded-lg border bg-background p-3 text-sm whitespace-pre-line">
-                        {plan.final_plan?.notes ?? plan.management_notes ?? "لا توجد ملاحظات"}
-                      </div>
-                      </div>
-                    </details>
+                                <div className="planning-final-mobile space-y-3 md:hidden">
+                                  {rows.map(({ item, names }) => {
+                                    const required = Number(item.quantity) || 0;
+                                    const missing = Math.max(0, required - names.length);
+                                    const complete = missing === 0;
+                                    const progress = required > 0 ? Math.min(100, (names.length / required) * 100) : 100;
+                                    return (
+                                      <article key={`${plan.id}-mobile-${item.specialty}`} className={`rounded-lg border p-3 ${missing ? "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/25" : "bg-card"}`}>
+                                        <div className="flex items-center justify-between gap-3">
+                                          <Badge variant="outline" className="max-w-[70%] truncate px-3 py-1.5">{item.specialty}</Badge>
+                                          <div className="text-sm"><span className="text-muted-foreground">مطلوب</span> <strong className="text-lg">{required}</strong></div>
+                                        </div>
+                                        <div className="mt-3"><StaffNameChips names={names} /></div>
+                                        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted"><div className={`h-full rounded-full ${complete ? "bg-emerald-600" : "bg-amber-500"}`} style={{ width: `${progress}%` }} /></div>
+                                        <div className={`mt-1 text-xs font-medium ${complete ? "text-emerald-700 dark:text-emerald-300" : "text-amber-800 dark:text-amber-300"}`}>
+                                          {complete ? `✓ مكتمل · ${names.length}/${required}` : `ينقص ${missing} · ${names.length}/${required}`}
+                                        </div>
+                                      </article>
+                                    );
+                                  })}
+                                </div>
+                              </>
+                            )}
+
+                            <div className="rounded-lg border bg-muted/30 p-3 text-sm whitespace-pre-line">
+                              <span className="font-semibold">ملاحظات الخطة: </span>{plan.final_plan?.notes ?? plan.management_notes ?? "لا توجد ملاحظات"}
+                            </div>
+                            <div className="sr-only">إجمالي الأسماء المضافة: {assignedTotal}</div>
+                          </div>
+                        </section>
+                      );
+                    })()
                   ))}
                 </div>
               )}
