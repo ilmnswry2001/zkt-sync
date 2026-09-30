@@ -2,25 +2,24 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import {
   Select,
   SelectContent,
@@ -29,7 +28,25 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Banknote, Plus, Pencil, Trash2, Users } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Banknote,
+  ChevronDown,
+  MapPin,
+  MoreHorizontal,
+  Minus,
+  NotebookPen,
+  Plus,
+  Search,
+  Pencil,
+  Trash2,
+  Users,
+} from "lucide-react";
 import { toast } from "sonner";
 import { getDefaultWage } from "@/lib/wage-defaults";
 
@@ -139,24 +156,66 @@ const planStatusLabel: Record<SiteWorkPlan["status"], string> = {
   management_review: "قيد إدراج الكوادر",
   finalized: "الخطة النهائية",
 };
+const siteStatusLabel: Record<string, string> = {
+  active: "نشط",
+  planned: "مخطط",
+  completed: "منتهي",
+  suspended: "متوقف",
+};
 
 function newPlanSpecialty(index = 0): WorkPlanSpecialty {
   return {
     specialty: WORK_PLAN_SPECIALTIES[index % WORK_PLAN_SPECIALTIES.length],
-    quantity: 1,
-    heavy_equipment: index === 9,
+    quantity: 0,
+    heavy_equipment: false,
     equipment_name: "",
     notes: "",
     color: WORK_PLAN_COLORS[index % WORK_PLAN_COLORS.length],
   };
 }
 
+function ResponsivePlanAction({
+  label,
+  onAction,
+  variant = "default",
+}: {
+  label: string;
+  onAction: () => void;
+  variant?: "default" | "outline";
+}) {
+  return (
+    <>
+      <Button type="button" variant={variant} className="hidden min-h-11 sm:inline-flex" onClick={onAction}>
+        {label}
+      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button type="button" variant="outline" size="icon" className="h-11 w-11 sm:hidden" aria-label={label}>
+            <MoreHorizontal className="h-5 w-5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem className="min-h-11" onSelect={onAction}>{label}</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
+  );
+}
+
 function PlanningPage() {
   const qc = useQueryClient();
+  const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Site | null>(null);
+  const [siteSearch, setSiteSearch] = useState("");
+  const [siteStatusFilter, setSiteStatusFilter] = useState("all");
+  const [requestSiteSearch, setRequestSiteSearch] = useState("");
+  const [planSearch, setPlanSearch] = useState("");
+  const [planDateFilter, setPlanDateFilter] = useState("");
+  const [specialtySearch, setSpecialtySearch] = useState("");
+  const [visibleSpecialtyNotes, setVisibleSpecialtyNotes] = useState<Record<string, boolean>>({});
 
-  const { data: sites = [] } = useQuery({
+  const { data: sites = [], isLoading: sitesLoading, error: sitesError } = useQuery({
     queryKey: ["sites"],
     queryFn: async () => {
       const { data, error } = await supabase.from("sites").select("*").order("name");
@@ -294,13 +353,8 @@ function PlanningPage() {
     () => Array.from(new Set([...(equipmentCatalog ?? []), "حفارة", "جرافة", "لودر", "سيارة حمل", "مقطورة", "آلة رصف", "مكبس"])).filter(Boolean),
     [equipmentCatalog],
   );
-  const [draftSpecialties, setDraftSpecialties] = useState<WorkPlanSpecialty[]>([
-    { ...newPlanSpecialty(0), specialty: specialtyOptions[0] ?? "عامل بناء" },
-    { ...newPlanSpecialty(1), specialty: specialtyOptions[1] ?? "حداد" },
-    { ...newPlanSpecialty(2), specialty: specialtyOptions[2] ?? "نجار" },
-  ]);
+  const [draftSpecialties, setDraftSpecialties] = useState<WorkPlanSpecialty[]>([]);
   const [managementNote, setManagementNote] = useState<Record<string, string>>({});
-  const [managementDraft, setManagementDraft] = useState<Record<string, WorkPlanAssignment>>({});
   const [managementAssignments, setManagementAssignments] = useState<
     Record<string, Record<string, { employeeNames: string[]; employeeId: string | null }>>
   >({});
@@ -312,14 +366,14 @@ function PlanningPage() {
   }, [sites, requestSiteId]);
 
   useEffect(() => {
-    if (specialtyOptions.length && draftSpecialties.every((item) => !item.specialty.trim())) {
-      setDraftSpecialties([
-        { ...newPlanSpecialty(0), specialty: specialtyOptions[0] ?? "عامل بناء" },
-        { ...newPlanSpecialty(1), specialty: specialtyOptions[1] ?? "حداد" },
-        { ...newPlanSpecialty(2), specialty: specialtyOptions[2] ?? "نجار" },
-      ]);
-    }
-  }, [specialtyOptions, draftSpecialties]);
+    if (!specialtyOptions.length) return;
+    setDraftSpecialties((current) => {
+      const previousByName = new Map(current.map((item) => [item.specialty, item]));
+      return specialtyOptions.map((specialty, index) =>
+        previousByName.get(specialty) ?? { ...newPlanSpecialty(index), specialty },
+      );
+    });
+  }, [specialtyOptions]);
 
   const workPlansQuery = useQuery({
     queryKey: ["site-work-plans"],
@@ -351,6 +405,44 @@ function PlanningPage() {
   const planningApprovedPlans = workPlans.filter((plan) => plan.status === "planning_approved");
   const managementReviewPlans = workPlans.filter((plan) => plan.status === "management_review");
   const finalPlans = workPlans.filter((plan) => plan.status === "finalized");
+  const visiblePlans = (plans: SiteWorkPlan[]) =>
+    plans.filter((plan) => {
+      const matchesSearch = `${plan.site_name} ${plan.requested_by_name}`
+        .toLocaleLowerCase("ar")
+        .includes(planSearch.trim().toLocaleLowerCase("ar"));
+      return matchesSearch && (!planDateFilter || plan.request_date === planDateFilter);
+    });
+  const filteredSites = sites.filter((site) =>
+    (siteStatusFilter === "all" || site.status === siteStatusFilter) &&
+    `${site.name} ${site.ctr_code} ${site.client ?? ""}`
+      .toLocaleLowerCase("ar")
+      .includes(siteSearch.trim().toLocaleLowerCase("ar")),
+  );
+  const visibleRequestedPlans = visiblePlans(requestedPlans);
+  const visiblePlanningApprovedPlans = visiblePlans(planningApprovedPlans);
+  const visibleManagementReviewPlans = visiblePlans(managementReviewPlans);
+  const visibleFinalPlans = visiblePlans(finalPlans);
+  const filteredSpecialties = draftSpecialties.filter((item) =>
+    item.specialty.toLocaleLowerCase("ar").includes(specialtySearch.trim().toLocaleLowerCase("ar")),
+  );
+  const selectedSpecialties = draftSpecialties.filter((item) => Number(item.quantity) > 0);
+  const workPlanTabCounts: Record<WorkPlanTab, number> = {
+    request: selectedSpecialties.length,
+    requested: requestedPlans.length,
+    management: planningApprovedPlans.length,
+    final: managementReviewPlans.length + finalPlans.length,
+  };
+  const requestedHeadcount = selectedSpecialties.reduce((sum, item) => sum + Number(item.quantity), 0);
+  const estimatedPlanCost = selectedSpecialties.reduce((sum, item) => {
+    const rate = costData.rates.find((entry: any) => entry.title?.trim() === item.specialty.trim());
+    const defaults = getDefaultWage(item.specialty);
+    const dailyRate = Number(rate?.daily_rate) > 0
+      ? Number(rate.daily_rate)
+      : Number(rate?.monthly_rate) > 0
+        ? Number(rate.monthly_rate) / 26
+        : defaults.daily_rate;
+    return sum + dailyRate * Number(item.quantity);
+  }, 0);
 
   const createWorkPlanRequest = useMutation({
     mutationFn: async () => {
@@ -393,7 +485,14 @@ function PlanningPage() {
       qc.invalidateQueries({ queryKey: ["site-work-plans"] });
       setActiveWorkPlanTab("requested");
       setRequestNotes("");
-      setDraftSpecialties([newPlanSpecialty(0), newPlanSpecialty(1), newPlanSpecialty(2)]);
+      setRequestDate(new Date().toISOString().slice(0, 10));
+      setRequestSiteSearch("");
+      setDraftSpecialties(specialtyOptions.map((specialty, index) => ({
+        ...newPlanSpecialty(index),
+        specialty,
+      })));
+      setSpecialtySearch("");
+      setVisibleSpecialtyNotes({});
       toast.success("تم إرسال الخطة إلى قسم التخطيط");
     },
     onError: (error: any) =>
@@ -445,16 +544,6 @@ function PlanningPage() {
     onError: (error: any) => toast.error(error?.message ?? "تعذر إغلاق الخطة النهائية"),
   });
 
-  const addPlanSpecialty = () => {
-    setDraftSpecialties((current) => [
-      ...current,
-      {
-        ...newPlanSpecialty(current.length),
-        specialty: specialtyOptions[current.length % specialtyOptions.length] ?? "عامل بناء",
-      },
-    ]);
-  };
-
   const updateDraftSpecialty = (
     index: number,
     field: keyof WorkPlanSpecialty,
@@ -466,10 +555,6 @@ function PlanningPage() {
         return { ...item, [field]: value } as WorkPlanSpecialty;
       }),
     );
-  };
-
-  const removeDraftSpecialty = (index: number) => {
-    setDraftSpecialties((current) => current.filter((_, idx) => idx !== index));
   };
 
   const addManagementAssignment = (planId: string, specialtyName: string, rawNames: string) => {
@@ -547,143 +632,167 @@ function PlanningPage() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const siteForm = (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        const formData = new FormData(event.currentTarget);
+        const value = (key: string) => (formData.get(key) as string)?.trim() || null;
+        const siteAdminId = value("site_admin_employee_id");
+        if (!siteAdminId || siteAdminId === "none") {
+          toast.error("اختيار إداري الموقع مطلوب");
+          return;
+        }
+        save.mutate({
+          name: formData.get("name") as string,
+          ctr_code: (formData.get("ctr_code") as string).trim(),
+          client: value("client"),
+          location: value("location"),
+          description: value("description"),
+          start_date: value("start_date"),
+          end_date: value("end_date"),
+          status: formData.get("status") as string,
+          site_admin_employee_id: siteAdminId,
+        });
+      }}
+      className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+    >
+      <div className="sm:col-span-2">
+        <Label>اسم الموقع</Label>
+        <Input name="name" required defaultValue={editing?.name} className="mt-1 min-h-11" />
+      </div>
+      <div>
+        <Label>كود التكلفة CTR</Label>
+        <Input name="ctr_code" required defaultValue={editing?.ctr_code} className="mt-1 min-h-11 font-mono" />
+      </div>
+      <div>
+        <Label>الجهة / العميل</Label>
+        <Input name="client" defaultValue={editing?.client ?? ""} className="mt-1 min-h-11" />
+      </div>
+      <div>
+        <Label>الموقع الجغرافي</Label>
+        <Input name="location" defaultValue={editing?.location ?? ""} className="mt-1 min-h-11" />
+      </div>
+      <div>
+        <Label>الحالة</Label>
+        <Select name="status" defaultValue={editing?.status ?? "active"}>
+          <SelectTrigger className="mt-1 min-h-11"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="active">نشط</SelectItem>
+            <SelectItem value="planned">مخطط</SelectItem>
+            <SelectItem value="completed">منتهي</SelectItem>
+            <SelectItem value="suspended">متوقف</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label>تاريخ البدء</Label>
+        <Input type="date" name="start_date" defaultValue={editing?.start_date ?? ""} className="mt-1 min-h-11" />
+      </div>
+      <div>
+        <Label>تاريخ الانتهاء</Label>
+        <Input type="date" name="end_date" defaultValue={editing?.end_date ?? ""} className="mt-1 min-h-11" />
+      </div>
+      <div className="sm:col-span-2">
+        <Label>إداري الموقع المسؤول عن التقرير *</Label>
+        <Select name="site_admin_employee_id" defaultValue={editing?.site_admin_employee_id ?? "none"}>
+          <SelectTrigger className="mt-1 min-h-11"><SelectValue placeholder="اختر إداري الموقع" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">— اختر إداري الموقع —</SelectItem>
+            {(siteAdmins as any[]).map((employee) => (
+              <SelectItem key={employee.id} value={employee.id}>{employee.full_name} — {employee.employee_no}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {!siteAdmins.length && <p className="mt-1 text-xs text-warning">لا توجد أسماء موظفين نشطين متاحة.</p>}
+      </div>
+      <div className="sm:col-span-2">
+        <Label>وصف</Label>
+        <Input name="description" defaultValue={editing?.description ?? ""} className="mt-1 min-h-11" />
+      </div>
+      <Button type="submit" className="min-h-11 sm:col-span-2" disabled={save.isPending}>
+        {save.isPending ? "جارٍ الحفظ..." : "حفظ الموقع"}
+      </Button>
+    </form>
+  );
+  const planFilters = (
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_220px]">
+      <div className="relative">
+        <Search className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
+        <Input
+          className="min-h-11 pr-9"
+          value={planSearch}
+          onChange={(event) => setPlanSearch(event.target.value)}
+          placeholder="ابحث باسم الموقع أو مقدم الطلب..."
+          aria-label="بحث في الخطط"
+        />
+      </div>
+      <Input
+        className="min-h-11"
+        type="date"
+        value={planDateFilter}
+        onChange={(event) => setPlanDateFilter(event.target.value)}
+        aria-label="تصفية الخطط حسب التاريخ"
+      />
+    </div>
+  );
+
   return (
-    <div className="space-y-6">
+    <div dir="rtl" className="space-y-6">
       {siteAdminsError && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
           تعذر تحميل أسماء الإداريين من قاعدة البيانات:{" "}
           {(siteAdminsError as any).message ?? "تحقق من اتصال Lovable Cloud"}
         </div>
       )}
-      <div className="flex justify-between items-center">
+      {sitesError && (
+        <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+          تعذر تحميل المواقع: {(sitesError as any).message ?? "تحقق من اتصال قاعدة البيانات"}
+        </div>
+      )}
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold">التخطيط</h1>
+          <h1 className="text-2xl font-bold sm:text-3xl">التخطيط</h1>
           <p className="text-muted-foreground mt-1">
             مواقع العمل وأكواد التكلفة (CTR) — {sites.length} موقع
           </p>
         </div>
-        <Dialog
-          open={open}
-          onOpenChange={(o) => {
-            setOpen(o);
-            if (!o) setEditing(null);
-          }}
-        >
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="w-4 h-4 ml-2" /> موقع جديد
-            </Button>
-          </DialogTrigger>
-          <DialogContent dir="rtl" className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>{editing ? "تعديل موقع" : "موقع عمل جديد"}</DialogTitle>
-            </DialogHeader>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const f = new FormData(e.currentTarget);
-                const v = (k: string) => (f.get(k) as string)?.trim() || null;
-                const siteAdminId = v("site_admin_employee_id");
-                if (!siteAdminId) {
-                  toast.error("اختيار إداري الموقع مطلوب");
-                  return;
-                }
-                save.mutate({
-                  name: f.get("name") as string,
-                  ctr_code: (f.get("ctr_code") as string).trim(),
-                  client: v("client"),
-                  location: v("location"),
-                  description: v("description"),
-                  start_date: v("start_date"),
-                  end_date: v("end_date"),
-                  status: f.get("status") as string,
-                  site_admin_employee_id: siteAdminId,
-                });
-              }}
-              className="grid grid-cols-2 gap-3"
-            >
-              <div className="col-span-2">
-                <Label>اسم الموقع</Label>
-                <Input name="name" required defaultValue={editing?.name} />
-              </div>
-              <div>
-                <Label>كود التكلفة CTR</Label>
-                <Input
-                  name="ctr_code"
-                  required
-                  defaultValue={editing?.ctr_code}
-                  className="font-mono"
-                />
-              </div>
-              <div>
-                <Label>الجهة / العميل</Label>
-                <Input name="client" defaultValue={editing?.client ?? ""} />
-              </div>
-              <div>
-                <Label>الموقع الجغرافي</Label>
-                <Input name="location" defaultValue={editing?.location ?? ""} />
-              </div>
-              <div>
-                <Label>الحالة</Label>
-                <Select name="status" defaultValue={editing?.status ?? "active"}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">نشط</SelectItem>
-                    <SelectItem value="planned">مخطط</SelectItem>
-                    <SelectItem value="completed">منتهي</SelectItem>
-                    <SelectItem value="suspended">متوقف</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>تاريخ البدء</Label>
-                <Input type="date" name="start_date" defaultValue={editing?.start_date ?? ""} />
-              </div>
-              <div>
-                <Label>تاريخ الانتهاء</Label>
-                <Input type="date" name="end_date" defaultValue={editing?.end_date ?? ""} />
-              </div>
-              <div className="col-span-2">
-                <Label>إداري الموقع المسؤول عن التقرير *</Label>
-                <Select
-                  name="site_admin_employee_id"
-                  defaultValue={editing?.site_admin_employee_id ?? "none"}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="اختر إداري الموقع" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— اختر إداري الموقع —</SelectItem>
-                    {siteAdmins.map((employee: any) => (
-                      <SelectItem key={employee.id} value={employee.id}>
-                        {employee.full_name} — {employee.employee_no}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {!siteAdmins.length && (
-                  <p className="text-xs text-warning mt-1">
-                    لا توجد أسماء موظفين نشطين متاحة. تحقق من اتصال قاعدة البيانات وصلاحية القراءة.
-                  </p>
-                )}
-              </div>
-              <div className="col-span-2">
-                <Label>وصف</Label>
-                <Input name="description" defaultValue={editing?.description ?? ""} />
-              </div>
-              <Button type="submit" className="col-span-2">
-                حفظ
-              </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <Button className="hidden min-h-11 sm:inline-flex" onClick={() => { setEditing(null); setOpen(true); }}>
+          <Plus className="ml-2 h-4 w-4" /> موقع جديد
+        </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
+      {isMobile ? (
+        <Drawer open={open} onOpenChange={(value) => { setOpen(value); if (!value) setEditing(null); }}>
+          <DrawerContent dir="rtl" className="max-h-[92dvh] overflow-y-auto">
+            <DrawerHeader className="text-right">
+              <DrawerTitle>{editing ? "تعديل موقع" : "موقع عمل جديد"}</DrawerTitle>
+            </DrawerHeader>
+            <div className="overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">{siteForm}</div>
+          </DrawerContent>
+        </Drawer>
+      ) : (
+        <Dialog open={open} onOpenChange={(value) => { setOpen(value); if (!value) setEditing(null); }}>
+          <DialogContent dir="rtl" className="max-h-[90vh] max-w-2xl overflow-y-auto">
+            <DialogHeader><DialogTitle>{editing ? "تعديل موقع" : "موقع عمل جديد"}</DialogTitle></DialogHeader>
+            {siteForm}
+          </DialogContent>
+        </Dialog>
+      )}
+      {isMobile && (
+        <Button
+          aria-label="إضافة موقع جديد"
+          className={`fixed ${activeWorkPlanTab === "request" ? "bottom-24" : "bottom-5"} left-5 z-30 h-14 w-14 rounded-full shadow-lg sm:hidden`}
+          size="icon"
+          onClick={() => { setEditing(null); setOpen(true); }}
+        >
+          <Plus className="h-6 w-6" />
+        </Button>
+      )}
+
+      <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-3">
+        <Card className="min-w-[250px] snap-start sm:min-w-0">
+          <CardContent className="flex items-center gap-3 p-3 sm:p-4">
             <div className="rounded-xl bg-primary p-3">
               <Users className="w-5 h-5 text-white" />
             </div>
@@ -695,8 +804,8 @@ function PlanningPage() {
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
+        <Card className="min-w-[250px] snap-start sm:min-w-0">
+          <CardContent className="flex items-center gap-3 p-3 sm:p-4">
             <div className="rounded-xl bg-emerald-600 p-3">
               <Banknote className="w-5 h-5 text-white" />
             </div>
@@ -706,8 +815,8 @@ function PlanningPage() {
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-4">
+        <Card className="min-w-[250px] snap-start sm:min-w-0">
+          <CardContent className="p-3 sm:p-4">
             <p className="text-sm text-muted-foreground">قاعدة الحساب</p>
             <p className="font-semibold mt-1">
               الراتب الأساسي، ثم أجر التخصص الافتراضي عند عدم وجود راتب خاص
@@ -721,217 +830,295 @@ function PlanningPage() {
           <CardTitle>خطط الأعمال</CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
-          <div className="flex flex-wrap gap-2">
+          <div className="sticky top-0 z-20 -mx-6 flex snap-x gap-2 overflow-x-auto border-b bg-card px-4 py-2 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
             {(["request", "requested", "management", "final"] as WorkPlanTab[]).map((tab) => (
               <Button
                 key={tab}
                 type="button"
-                variant={activeWorkPlanTab === tab ? "default" : "outline"}
+                variant={activeWorkPlanTab === tab ? "default" : "ghost"}
                 size="sm"
+                className="min-h-11 shrink-0 snap-start gap-2 rounded-full"
                 onClick={() => setActiveWorkPlanTab(tab)}
               >
                 {tab === "request" && "طلب خطة"}
                 {tab === "requested" && "الخطط المطلوبة"}
                 {tab === "management" && "الخطط المرسلة للإدارة"}
                 {tab === "final" && "الخطة النهائية ليوم"}
+                <Badge variant={activeWorkPlanTab === tab ? "secondary" : "outline"} className="min-w-6 justify-center px-1.5">
+                  {workPlanTabCounts[tab]}
+                </Badge>
               </Button>
             ))}
           </div>
+          {workPlansQuery.error && (
+            <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              تعذر تحميل خطط الأعمال: {(workPlansQuery.error as any).message ?? "تحقق من الاتصال بقاعدة البيانات"}
+            </div>
+          )}
+          {workPlansQuery.isLoading && activeWorkPlanTab !== "request" && (
+            <div className="space-y-2" aria-label="جارٍ تحميل الخطط">
+              {[0, 1].map((item) => <div key={item} className="h-20 animate-pulse rounded-xl border bg-muted/40" />)}
+            </div>
+          )}
 
           {activeWorkPlanTab === "request" && (
-            <div className="space-y-4 rounded-xl border bg-muted/20 p-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label>الموقع</Label>
+            <div className="space-y-5 pb-28 md:pb-4">
+              <div className="grid grid-cols-1 gap-3 rounded-xl border bg-card p-3 sm:grid-cols-2 lg:grid-cols-[1.2fr_0.8fr_1.5fr]">
+                <div className="space-y-2">
+                  <Label>موقع العمل</Label>
+                  <Input
+                    value={requestSiteSearch}
+                    onChange={(event) => setRequestSiteSearch(event.target.value)}
+                    placeholder="ابحث عن موقع..."
+                    aria-label="ابحث عن موقع للخطة"
+                  />
                   <Select value={requestSiteId} onValueChange={setRequestSiteId}>
-                    <SelectTrigger>
+                    <SelectTrigger className="min-h-11">
                       <SelectValue placeholder="اختر الموقع" />
                     </SelectTrigger>
                     <SelectContent>
-                      {sites.map((site) => (
-                        <SelectItem key={site.id} value={site.id}>
-                          {site.name} ({site.ctr_code})
-                        </SelectItem>
-                      ))}
+                      {sites
+                        .filter((site) => `${site.name} ${site.ctr_code}`.toLocaleLowerCase("ar").includes(requestSiteSearch.trim().toLocaleLowerCase("ar")))
+                        .map((site) => (
+                          <SelectItem key={site.id} value={site.id}>
+                            {site.name} ({site.ctr_code})
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
+                <div className="space-y-2">
                   <Label>تاريخ الخطة</Label>
-                  <Input type="date" value={requestDate} onChange={(e) => setRequestDate(e.target.value)} />
+                  <Input className="min-h-11" type="date" value={requestDate} onChange={(event) => setRequestDate(event.target.value)} />
+                </div>
+                <div className="space-y-2 sm:col-span-2 lg:col-span-1">
+                  <Label>ملاحظات الطلب</Label>
+                  <Input
+                    className="min-h-11"
+                    value={requestNotes}
+                    onChange={(event) => setRequestNotes(event.target.value)}
+                    placeholder="الأولويات أو متطلبات الموقع..."
+                  />
                 </div>
               </div>
 
-              <div>
-                <Label>ملاحظات الطلب</Label>
-                <Input
-                  value={requestNotes}
-                  onChange={(e) => setRequestNotes(e.target.value)}
-                  placeholder="هدف الخطة، أولويات الموقع، ملاحظات خاصة..."
-                />
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h2 className="text-lg font-bold">التخصصات والآليات</h2>
+                  <p className="text-sm text-muted-foreground">أدخل العدد المطلوب، واترك الباقي صفرًا.</p>
+                </div>
+                <div className="relative w-full sm:max-w-xs">
+                  <Search className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    className="min-h-11 pr-9"
+                    value={specialtySearch}
+                    onChange={(event) => setSpecialtySearch(event.target.value)}
+                    placeholder="تصفية التخصصات..."
+                    aria-label="تصفية التخصصات"
+                  />
+                </div>
               </div>
 
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label>التخصصات المطلوبة</Label>
-                  <Button type="button" variant="outline" size="sm" onClick={addPlanSpecialty}>
-                    <Plus className="w-4 h-4 ml-1" /> إضافة تخصص
-                  </Button>
+              {specialtyOptions.length === 0 ? (
+                <div className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">
+                  لا توجد تخصصات نشطة في دليل النظام.
                 </div>
-
-                {draftSpecialties.map((item, index) => (
-                  <div key={`${item.specialty}-${index}`} className="rounded-xl border bg-white p-3 shadow-sm">
-                    <div className="flex flex-wrap items-center gap-2 md:gap-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-                        {index + 1}
-                      </div>
-                      <div className="flex-1 min-w-[180px]">
-                        <Label>التخصص</Label>
-                        <Select
-                          value={item.specialty || specialtyOptions[0]}
-                          onValueChange={(value) => updateDraftSpecialty(index, "specialty", value)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="اختر التخصص" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {specialtyOptions.map((option) => (
-                              <SelectItem key={option} value={option}>
-                                {option}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="w-24">
-                        <Label>العدد</Label>
-                        <Input
-                          type="number"
-                          min={1}
-                          value={item.quantity}
-                          onChange={(e) => updateDraftSpecialty(index, "quantity", Number(e.target.value || 0))}
-                        />
-                      </div>
-                      <div className="flex items-end">
-                        <label className="flex items-center gap-2 rounded-md border px-2 py-2 text-sm text-muted-foreground">
-                          <input
-                            type="checkbox"
-                            checked={item.heavy_equipment}
-                            onChange={(e) => updateDraftSpecialty(index, "heavy_equipment", e.target.checked)}
-                          />
-                          آلية
-                        </label>
-                      </div>
-                      <div className="ml-auto">
-                        <Button type="button" variant="ghost" size="sm" onClick={() => removeDraftSpecialty(index)}>
-                          حذف
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 grid grid-cols-1 md:grid-cols-[1fr_1.3fr] gap-2">
-                      {item.heavy_equipment && (
-                        <div>
-                          <Label>نوع الآلية</Label>
+              ) : (
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {filteredSpecialties.map((item) => {
+                    const index = draftSpecialties.findIndex((entry) => entry.specialty === item.specialty);
+                    const chosen = Number(item.quantity) > 0;
+                    return (
+                      <div
+                        key={item.specialty}
+                        className={`rounded-xl border p-3 transition-colors ${chosen ? "border-primary/50 bg-primary/5" : "bg-card"}`}
+                      >
+                        <div className="flex min-h-11 items-center justify-between gap-2">
+                          <span className="font-semibold leading-snug">{item.specialty}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-11 w-11 shrink-0"
+                            aria-label={`${visibleSpecialtyNotes[item.specialty] ? "إخفاء" : "إظهار"} ملاحظات ${item.specialty}`}
+                            onClick={() => setVisibleSpecialtyNotes((current) => ({ ...current, [item.specialty]: !current[item.specialty] }))}
+                          >
+                            <NotebookPen className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-1" dir="ltr">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              className="h-11 w-11"
+                              aria-label={`تقليل عدد ${item.specialty}`}
+                              disabled={item.quantity <= 0}
+                              onClick={() => updateDraftSpecialty(index, "quantity", Math.max(0, item.quantity - 1))}
+                            >
+                              <Minus className="h-4 w-4" />
+                            </Button>
+                            <Input
+                              className="h-11 w-16 text-center text-lg font-bold tabular-nums"
+                              aria-label={`العدد المطلوب من ${item.specialty}`}
+                              type="number"
+                              min={0}
+                              value={item.quantity}
+                              onChange={(event) => updateDraftSpecialty(index, "quantity", Math.max(0, Number(event.target.value) || 0))}
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              className="h-11 w-11"
+                              aria-label={`زيادة عدد ${item.specialty}`}
+                              onClick={() => updateDraftSpecialty(index, "quantity", item.quantity + 1)}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border px-3 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={item.heavy_equipment}
+                              onChange={(event) => updateDraftSpecialty(index, "heavy_equipment", event.target.checked)}
+                            />
+                            آلية
+                          </label>
+                        </div>
+                        {item.heavy_equipment && (
                           <Select
                             value={item.equipment_name || equipmentOptions[0]}
                             onValueChange={(value) => updateDraftSpecialty(index, "equipment_name", value)}
                           >
-                            <SelectTrigger>
-                              <SelectValue placeholder="اختر الآلية" />
+                            <SelectTrigger className="mt-2 min-h-11">
+                              <SelectValue placeholder="نوع الآلية" />
                             </SelectTrigger>
                             <SelectContent>
-                              {equipmentOptions.map((option) => (
-                                <SelectItem key={option} value={option}>
-                                  {option}
-                                </SelectItem>
-                              ))}
+                              {equipmentOptions.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}
                             </SelectContent>
                           </Select>
-                        </div>
-                      )}
-                      <div>
-                        <Label>ملاحظات التخصص</Label>
-                        <Input
-                          value={item.notes}
-                          onChange={(e) => updateDraftSpecialty(index, "notes", e.target.value)}
-                          placeholder={item.heavy_equipment ? "ملاحظات الآلية أو الموقع" : "ملاحظات خاصة أو متطلبات إضافية"}
-                        />
+                        )}
+                        {visibleSpecialtyNotes[item.specialty] && (
+                          <Input
+                            className="mt-2 min-h-11"
+                            value={item.notes}
+                            onChange={(event) => updateDraftSpecialty(index, "notes", event.target.value)}
+                            placeholder="ملاحظات اختيارية لهذا التخصص"
+                          />
+                        )}
                       </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
 
-              <Button type="button" className="w-full" onClick={() => createWorkPlanRequest.mutate()} disabled={createWorkPlanRequest.isPending}>
-                {createWorkPlanRequest.isPending ? "جارٍ الإرسال..." : "إرسال الخطة إلى قسم التخطيط"}
-              </Button>
+              <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-lg backdrop-blur md:sticky md:bottom-0 md:rounded-xl md:border md:px-4">
+                <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2">
+                  <div className="text-sm"><span className="text-muted-foreground">التخصصات:</span> <b>{selectedSpecialties.length}</b></div>
+                  <div className="text-sm"><span className="text-muted-foreground">إجمالي العدد:</span> <b>{requestedHeadcount}</b></div>
+                  <div className="text-sm"><span className="text-muted-foreground">التكلفة اليومية التقديرية:</span> <b>{estimatedPlanCost.toLocaleString()} د.ع</b></div>
+                  <Button
+                    type="button"
+                    className="min-h-11 w-full sm:mr-auto sm:w-auto"
+                    onClick={() => createWorkPlanRequest.mutate()}
+                    disabled={!requestSiteId || selectedSpecialties.length === 0 || createWorkPlanRequest.isPending}
+                  >
+                    {createWorkPlanRequest.isPending ? "جارٍ الإرسال..." : "إرسال الخطة إلى التخطيط"}
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
 
-          {activeWorkPlanTab === "requested" && (
+          {activeWorkPlanTab === "requested" && !workPlansQuery.isLoading && (
             <div className="space-y-3">
-              {requestedPlans.length === 0 ? (
+              {planFilters}
+              {visibleRequestedPlans.length === 0 ? (
                 <div className="rounded-xl border border-dashed p-6 text-center text-muted-foreground">
-                  لا توجد خطط جديدة في انتظار اعتماد قسم التخطيط.
+                  {requestedPlans.length ? "لا توجد نتائج مطابقة للبحث والتاريخ." : "لا توجد خطط جديدة في انتظار اعتماد قسم التخطيط."}
                 </div>
               ) : (
-                requestedPlans.map((plan) => (
-                  <div key={plan.id} className="rounded-xl border bg-background p-4 space-y-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <h3 className="font-bold">{plan.site_name}</h3>
-                        <p className="text-sm text-muted-foreground">بواسطة {plan.requested_by_name} · {plan.request_date}</p>
+                visibleRequestedPlans.map((plan) => (
+                  <details key={plan.id} className="group rounded-xl border bg-card shadow-sm">
+                    <summary className="flex min-h-16 cursor-pointer list-none flex-wrap items-center justify-between gap-3 p-4 [&::-webkit-details-marker]:hidden">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <MapPin className="h-5 w-5 shrink-0 text-primary" />
+                        <div className="min-w-0">
+                          <h3 className="truncate font-bold">{plan.site_name}</h3>
+                          <p className="text-sm text-muted-foreground">{plan.request_date} · {plan.requested_by_name}</p>
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {(plan.specialties ?? []).slice(0, 2).map((item) => <Badge key={`${plan.id}-summary-${item.specialty}`} variant="outline" className="text-xs">{item.specialty} · {item.quantity}</Badge>)}
+                            {(plan.specialties?.length ?? 0) > 2 && <Badge variant="outline" className="text-xs">+{(plan.specialties?.length ?? 0) - 2}</Badge>}
+                          </div>
+                        </div>
                       </div>
-                      <Badge variant="secondary">{planStatusLabel[plan.status]}</Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary">{planStatusLabel[plan.status]}</Badge>
+                        <Badge variant="outline">{(plan.specialties ?? []).reduce((sum, item) => sum + Number(item.quantity || 0), 0)} فرد</Badge>
+                        <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+                      </div>
+                    </summary>
+                    <div className="space-y-4 border-t p-4">
+                      <div className="overflow-x-auto rounded-lg border">
+                        <Table>
+                          <TableHeader><TableRow><TableHead>التخصص</TableHead><TableHead>العدد</TableHead><TableHead>الآلية</TableHead><TableHead>الملاحظات</TableHead></TableRow></TableHeader>
+                          <TableBody>
+                            {(plan.specialties ?? []).map((item, index) => (
+                              <TableRow key={`${plan.id}-${item.specialty}-${index}`}>
+                                <TableCell className="font-medium">{item.specialty}</TableCell>
+                                <TableCell>{item.quantity}</TableCell>
+                                <TableCell>{item.heavy_equipment ? item.equipment_name || "آلية" : "—"}</TableCell>
+                                <TableCell>{item.notes || "—"}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                      <div className="rounded-lg bg-muted/30 p-3 text-sm">{plan.request_notes || "لا توجد ملاحظات للطلب."}</div>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
+                        <Input className="min-h-11" value={managementNote[plan.id] ?? plan.planning_notes ?? ""} onChange={(event) => setManagementNote((current) => ({ ...current, [plan.id]: event.target.value }))} placeholder="ملاحظة التخطيط..." />
+                        <ResponsivePlanAction
+                          label="اعتماد من قسم التخطيط"
+                          onAction={() => updatePlanStatus.mutate({ id: plan.id, status: "planning_approved", planningNotes: managementNote[plan.id] ?? plan.planning_notes ?? "" })}
+                        />
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {plan.specialties.map((item) => (
-                        <Badge key={`${plan.id}-${item.specialty}`} style={{ backgroundColor: `${item.color}22`, color: item.color, borderColor: item.color }}>
-                          {item.specialty} ({item.quantity})
-                        </Badge>
-                      ))}
-                    </div>
-                    <div className="rounded-lg bg-muted/20 p-3 text-sm whitespace-pre-line">{plan.request_notes || "لا توجد ملاحظات"}</div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      <Input
-                        value={plan.planning_notes ?? ""}
-                        onChange={(e) => {
-                          const next = e.target.value;
-                          setManagementNote((current) => ({ ...current, [plan.id]: next }));
-                        }}
-                        placeholder="ملاحظة التخطيط..."
-                      />
-                      <Button
-                        type="button"
-                        onClick={() => updatePlanStatus.mutate({ id: plan.id, status: "planning_approved", planningNotes: managementNote[plan.id] ?? "" })}
-                      >
-                        اعتماد من قسم التخطيط
-                      </Button>
-                    </div>
-                  </div>
+                  </details>
                 ))
               )}
             </div>
           )}
 
-          {activeWorkPlanTab === "management" && (
+          {activeWorkPlanTab === "management" && !workPlansQuery.isLoading && (
             <div className="space-y-3">
-              {planningApprovedPlans.length === 0 ? (
+              {planFilters}
+              {visiblePlanningApprovedPlans.length === 0 ? (
                 <div className="rounded-xl border border-dashed p-6 text-center text-muted-foreground">
-                  لا توجد خطط تمت الموافقة عليها من قسم التخطيط حتى الآن.
+                  {planningApprovedPlans.length ? "لا توجد نتائج مطابقة للبحث والتاريخ." : "لا توجد خطط تمت الموافقة عليها من قسم التخطيط حتى الآن."}
                 </div>
               ) : (
-                planningApprovedPlans.map((plan) => (
-                  <div key={plan.id} className="rounded-2xl border border-primary/20 bg-gradient-to-br from-sky-50 via-white to-indigo-50 p-4 space-y-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <h3 className="font-black text-xl text-slate-800">{plan.site_name}</h3>
-                        <p className="text-sm text-muted-foreground">تاريخ الخطة: {plan.request_date}</p>
+                visiblePlanningApprovedPlans.map((plan) => (
+                  <details key={plan.id} className="group rounded-xl border bg-card shadow-sm">
+                    <summary className="flex min-h-16 cursor-pointer list-none flex-wrap items-center justify-between gap-3 p-4 [&::-webkit-details-marker]:hidden">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <MapPin className="h-5 w-5 shrink-0 text-primary" />
+                        <div className="min-w-0">
+                          <h3 className="truncate font-bold">{plan.site_name}</h3>
+                          <p className="text-sm text-muted-foreground">{plan.request_date} · {(plan.specialties ?? []).reduce((sum, item) => sum + Number(item.quantity || 0), 0)} مطلوب</p>
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {(plan.specialties ?? []).slice(0, 2).map((item) => <Badge key={`${plan.id}-summary-${item.specialty}`} variant="outline" className="text-xs">{item.specialty} · {item.quantity}</Badge>)}
+                            {(plan.specialties?.length ?? 0) > 2 && <Badge variant="outline" className="text-xs">+{(plan.specialties?.length ?? 0) - 2}</Badge>}
+                          </div>
+                        </div>
                       </div>
-                      <Badge className="bg-emerald-600 text-white">موافق عليه</Badge>
-                    </div>
-
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary">موافق عليه</Badge>
+                        <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+                      </div>
+                    </summary>
+                    <div className="space-y-4 border-t p-4">
                     <div className="space-y-3">
                       {(plan.specialties ?? []).map((item) => {
                         const currentSelection = managementAssignments[plan.id]?.[item.specialty] ?? {
@@ -941,9 +1128,9 @@ function PlanningPage() {
                         const currentText = currentSelection.employeeNames.join(", ");
 
                         return (
-                          <div key={`${plan.id}-${item.specialty}`} className="rounded-2xl border bg-white p-3 shadow-sm">
+                          <div key={`${plan.id}-${item.specialty}`} className="rounded-xl border bg-background p-3">
                             <div className="mb-2 flex items-center justify-between gap-2">
-                              <div className="font-bold text-slate-800">{item.specialty}</div>
+                              <div className="font-bold">{item.specialty}</div>
                               <Badge variant="outline">العدد المطلوب: {item.quantity}</Badge>
                             </div>
 
@@ -971,11 +1158,11 @@ function PlanningPage() {
                                 />
                               </div>
 
-                              <div className="flex flex-wrap gap-2">
-                                <Button type="button" onClick={() => addManagementAssignment(plan.id, item.specialty, currentText)}>
+                              <div className="flex flex-col gap-2 sm:flex-row">
+                                <Button className="min-h-11" type="button" onClick={() => addManagementAssignment(plan.id, item.specialty, currentText)}>
                                   إضافة هذا التخصص
                                 </Button>
-                                <Button type="button" variant="outline" onClick={() => setManagementAssignments((current) => ({ ...current, [plan.id]: { ...(current[plan.id] ?? {}), [item.specialty]: { employeeNames: [], employeeId: null } } }))}>
+                                <Button className="min-h-11" type="button" variant="outline" onClick={() => setManagementAssignments((current) => ({ ...current, [plan.id]: { ...(current[plan.id] ?? {}), [item.specialty]: { employeeNames: [], employeeId: null } } }))}>
                                   مسح
                                 </Button>
                               </div>
@@ -985,65 +1172,66 @@ function PlanningPage() {
                       })}
                     </div>
 
-                    <div className="rounded-2xl border bg-slate-900 p-3 text-white">
-                      <div className="mb-2 font-bold">إرسال التوزيع النهائي</div>
+                    <div className="rounded-xl border bg-muted/30 p-3">
+                      <div className="mb-2 font-bold">تأكيد توزيع الكوادر</div>
                       <div className="flex flex-col md:flex-row gap-2">
                         <Input
+                          className="min-h-11"
                           value={managementNote[plan.id] ?? ""}
                           onChange={(e) => setManagementNote((current) => ({ ...current, [plan.id]: e.target.value }))}
                           placeholder="ملاحظات الإدارة..."
-                          className="bg-white text-slate-900 border-0"
                         />
-                        <Button
-                          type="button"
-                          className="bg-white text-slate-900 hover:bg-slate-100"
-                          onClick={() =>
-                            updatePlanStatus.mutate({
-                              id: plan.id,
-                              status: "management_review",
-                              managementNotes: managementNote[plan.id] ?? "",
-                            })
-                          }
-                        >
-                          تأكيد توزيع الكوادر
-                        </Button>
+                        <ResponsivePlanAction
+                          label="تأكيد توزيع الكوادر"
+                          onAction={() => updatePlanStatus.mutate({
+                            id: plan.id,
+                            status: "management_review",
+                            managementNotes: managementNote[plan.id] ?? "",
+                          })}
+                        />
                       </div>
                     </div>
 
                     {(plan.assigned_staff ?? []).length > 0 && (
-                      <div className="rounded-xl border bg-white p-3">
+                      <div className="rounded-xl border bg-background p-3">
                         <div className="mb-2 font-bold">الكوادر الحالية</div>
                         <div className="flex flex-wrap gap-2">
                           {(plan.assigned_staff ?? []).map((member, index) => (
-                            <Badge key={`${plan.id}-${member.name}-${index}`} className="px-3 py-1" style={{ backgroundColor: "#1d4ed8", color: "white" }}>
+                            <Badge key={`${plan.id}-${member.name}-${index}`} variant="secondary" className="px-3 py-1">
                               {member.name} · {member.specialty}
                             </Badge>
                           ))}
                         </div>
                       </div>
                     )}
-                  </div>
+                    </div>
+                  </details>
                 ))
               )}
             </div>
           )}
 
-          {activeWorkPlanTab === "final" && (
+          {activeWorkPlanTab === "final" && !workPlansQuery.isLoading && (
             <div className="space-y-3">
-              {managementReviewPlans.length === 0 ? (
+              {planFilters}
+              {visibleManagementReviewPlans.length === 0 && visibleFinalPlans.length === 0 ? (
                 <div className="rounded-xl border border-dashed p-6 text-center text-muted-foreground">
-                  لا توجد خطط في مرحلة التحضير أو الإغلاق النهائي بعد إدراج الكوادر.
+                  {managementReviewPlans.length || finalPlans.length ? "لا توجد نتائج مطابقة للبحث والتاريخ." : "لا توجد خطط في مرحلة التحضير أو الإغلاق النهائي بعد إدراج الكوادر."}
                 </div>
               ) : (
-                managementReviewPlans.map((plan) => (
-                  <div key={plan.id} className="rounded-xl border bg-background p-4 space-y-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <h3 className="font-bold">{plan.site_name}</h3>
-                        <p className="text-sm text-muted-foreground">{plan.request_date}</p>
+                visibleManagementReviewPlans.map((plan) => (
+                  <details key={plan.id} className="group rounded-xl border bg-card shadow-sm">
+                    <summary className="flex min-h-16 cursor-pointer list-none flex-wrap items-center justify-between gap-3 p-4 [&::-webkit-details-marker]:hidden">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <MapPin className="h-5 w-5 shrink-0 text-primary" />
+                        <div className="min-w-0">
+                          <h3 className="truncate font-bold">{plan.site_name}</h3>
+                          <p className="text-sm text-muted-foreground">{plan.request_date} · {(plan.specialties ?? []).reduce((sum, item) => sum + Number(item.quantity || 0), 0)} مطلوب</p>
+                        </div>
                       </div>
-                      <Badge>{planStatusLabel[plan.status]}</Badge>
-                    </div>
+                      <div className="flex items-center gap-2"><Badge>{planStatusLabel[plan.status]}</Badge><ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /></div>
+                    </summary>
+                    <div className="space-y-3 border-t p-4">
 
                     <div className="flex flex-wrap gap-2">
                       {(plan.specialties ?? []).map((item) => (
@@ -1079,65 +1267,61 @@ function PlanningPage() {
                       />
                     </div>
 
-                    <Button
-                      type="button"
-                      onClick={() => finalizePlan.mutate({ id: plan.id, finalTitle: finalPlanTitle[plan.id] ?? `الخطة النهائية - ${plan.site_name}`, finalNotes: finalPlanNotes[plan.id] ?? "" })}
-                    >
-                      تأكيد الخطة النهائية ليوم
-                    </Button>
-                  </div>
+                    <ResponsivePlanAction
+                      label="تأكيد الخطة النهائية ليوم"
+                      onAction={() => finalizePlan.mutate({ id: plan.id, finalTitle: finalPlanTitle[plan.id] ?? `الخطة النهائية - ${plan.site_name}`, finalNotes: finalPlanNotes[plan.id] ?? "" })}
+                    />
+                    </div>
+                  </details>
                 ))
               )}
 
-              {finalPlans.length > 0 && (
+              {visibleFinalPlans.length > 0 && (
                 <div className="space-y-3">
                   <h3 className="font-bold">الخطة النهائية المعتمدة</h3>
-                  {finalPlans.map((plan) => (
-                    <div key={plan.id} className="rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-50 via-white to-sky-50 p-4 space-y-4 print:shadow-none">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <div className="text-xs text-muted-foreground">خطة عمل يومية</div>
-                          <div className="font-black text-xl text-emerald-700">{plan.final_plan?.title ?? `الخطة النهائية - ${plan.site_name}`}</div>
-                          <div className="text-sm text-muted-foreground">{plan.site_name} · {plan.request_date}</div>
+                  {visibleFinalPlans.map((plan) => (
+                    <details key={plan.id} className="group rounded-xl border border-primary/30 bg-card shadow-sm print:shadow-none">
+                      <summary className="flex min-h-16 cursor-pointer list-none flex-wrap items-center justify-between gap-3 p-4 [&::-webkit-details-marker]:hidden">
+                        <div className="min-w-0">
+                          <div className="text-xs text-muted-foreground">خطة عمل نهائية · {plan.request_date}</div>
+                          <div className="truncate font-bold text-primary">{plan.final_plan?.title ?? `الخطة النهائية - ${plan.site_name}`}</div>
+                          <div className="text-sm text-muted-foreground">{plan.site_name}</div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              if (typeof window !== "undefined") {
-                                window.print();
-                              }
-                            }}
-                          >
-                            تصدير PDF
-                          </Button>
                           <Badge className="bg-emerald-600 text-white">{planStatusLabel[plan.status]}</Badge>
+                          <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
                         </div>
+                      </summary>
+                      <div className="space-y-4 border-t p-4">
+                      <div className="flex justify-end">
+                        <ResponsivePlanAction
+                          label="تصدير PDF"
+                          variant="outline"
+                          onAction={() => { if (typeof window !== "undefined") window.print(); }}
+                        />
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                        <div className="rounded-xl border bg-white p-3">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        <div className="rounded-xl border bg-background p-3">
                           <div className="text-xs text-muted-foreground">الموقع</div>
                           <div className="font-bold mt-1">{plan.site_name}</div>
                         </div>
-                        <div className="rounded-xl border bg-white p-3">
+                        <div className="rounded-xl border bg-background p-3">
                           <div className="text-xs text-muted-foreground">التاريخ</div>
                           <div className="font-bold mt-1">{plan.request_date}</div>
                         </div>
-                        <div className="rounded-xl border bg-white p-3">
+                        <div className="rounded-xl border bg-background p-3">
                           <div className="text-xs text-muted-foreground">إجمالي التخصصات</div>
                           <div className="font-bold mt-1">{(plan.final_plan?.specialties ?? plan.specialties ?? []).reduce((sum, item) => sum + Number(item.quantity || 0), 0)}</div>
                         </div>
-                        <div className="rounded-xl border bg-white p-3">
+                        <div className="rounded-xl border bg-background p-3">
                           <div className="text-xs text-muted-foreground">عدد الكوادر</div>
                           <div className="font-bold mt-1">{(plan.assigned_staff ?? []).length}</div>
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div className="rounded-xl border bg-white p-3">
+                      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                        <div className="rounded-xl border bg-background p-3">
                           <div className="font-bold mb-2">التخصصات المطلوبة</div>
                           <div className="space-y-2">
                             {(plan.final_plan?.specialties ?? plan.specialties ?? []).map((item) => (
@@ -1152,7 +1336,7 @@ function PlanningPage() {
                           </div>
                         </div>
 
-                        <div className="rounded-xl border bg-white p-3">
+                        <div className="rounded-xl border bg-background p-3">
                           <div className="font-bold mb-2">كوادر الخطة</div>
                           <div className="space-y-2">
                             {(plan.assigned_staff ?? []).length > 0 ? (
@@ -1172,7 +1356,8 @@ function PlanningPage() {
                       <div className="rounded-lg border bg-background p-3 text-sm whitespace-pre-line">
                         {plan.final_plan?.notes ?? plan.management_notes ?? "لا توجد ملاحظات"}
                       </div>
-                    </div>
+                      </div>
+                    </details>
                   ))}
                 </div>
               )}
@@ -1181,95 +1366,87 @@ function PlanningPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>مواقع العمل</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>كود التكلفة</TableHead>
-                <TableHead>الموقع</TableHead>
-                <TableHead>التخصصات العاملة</TableHead>
-                <TableHead>إداري الموقع</TableHead>
-                <TableHead>الموظفون</TableHead>
-                <TableHead>التكلفة الشهرية</TableHead>
-                <TableHead>الحالة</TableHead>
-                <TableHead></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sites.map((s) => (
-                <TableRow key={s.id}>
-                  <TableCell className="font-mono font-semibold">{s.ctr_code}</TableCell>
-                  <TableCell className="font-medium">{s.name}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1 max-w-xs">
-                      {Object.entries(siteSummary[s.id]?.specialties ?? {}).map(
-                        ([title, count]) => (
-                          <Badge key={title} variant="outline">
-                            {title} ({count})
-                          </Badge>
-                        ),
-                      )}
-                      {!siteSummary[s.id]?.employees && (
-                        <span className="text-muted-foreground">لا يوجد موظفون</span>
-                      )}
+      <section className="space-y-4" aria-labelledby="sites-heading">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 id="sites-heading" className="text-xl font-bold">مواقع العمل</h2>
+            <p className="text-sm text-muted-foreground">{filteredSites.length} من {sites.length} موقع</p>
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(220px,1fr)_180px]">
+            <div className="relative">
+              <Search className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input className="min-h-11 pr-9" value={siteSearch} onChange={(event) => setSiteSearch(event.target.value)} placeholder="ابحث عن موقع أو CTR..." aria-label="بحث المواقع" />
+            </div>
+            <Select value={siteStatusFilter} onValueChange={setSiteStatusFilter}>
+              <SelectTrigger className="min-h-11"><SelectValue placeholder="كل الحالات" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">كل الحالات</SelectItem>
+                <SelectItem value="active">نشط</SelectItem>
+                <SelectItem value="planned">مخطط</SelectItem>
+                <SelectItem value="completed">منتهي</SelectItem>
+                <SelectItem value="suspended">متوقف</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {sitesLoading ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="جارٍ تحميل المواقع">
+            {[0, 1, 2].map((item) => <div key={item} className="h-44 animate-pulse rounded-xl border bg-muted/40" />)}
+          </div>
+        ) : filteredSites.length ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {filteredSites.map((site) => {
+              const summary = siteSummary[site.id];
+              const administrator = (siteAdmins as any[]).find((employee) => employee.id === site.site_admin_employee_id);
+              return (
+                <Card key={site.id} className="overflow-hidden rounded-xl">
+                  <CardContent className="space-y-4 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="truncate text-lg font-bold">{site.name}</h3>
+                        <p className="mt-1 font-mono text-sm text-muted-foreground">CTR · {site.ctr_code}</p>
+                      </div>
+                      <Badge variant={site.status === "active" ? "default" : "secondary"}>{siteStatusLabel[site.status] ?? site.status}</Badge>
                     </div>
-                  </TableCell>
-                  <TableCell>
-                    {(siteAdmins as any[]).find(
-                      (employee) => employee.id === s.site_admin_employee_id,
-                    )?.full_name ?? <span className="text-warning">غير محدد</span>}
-                  </TableCell>
-                  <TableCell>
-                    {siteSummary[s.id]?.employees ?? (counts as any)[s.id] ?? 0}
-                  </TableCell>
-                  <TableCell className="font-semibold">
-                    {(siteSummary[s.id]?.monthly ?? 0).toLocaleString()} د.ع
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={s.status === "active" ? "default" : "secondary"}>
-                      {s.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => {
-                          setEditing(s);
-                          setOpen(true);
-                        }}
-                      >
-                        <Pencil className="w-4 h-4" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-lg bg-muted/40 p-3">
+                        <p className="text-xs text-muted-foreground">الموظفون</p>
+                        <p className="mt-1 text-lg font-bold">{summary?.employees ?? (counts as any)[site.id] ?? 0}</p>
+                      </div>
+                      <div className="rounded-lg bg-muted/40 p-3">
+                        <p className="text-xs text-muted-foreground">التكلفة الشهرية</p>
+                        <p className="mt-1 truncate text-lg font-bold">{(summary?.monthly ?? 0).toLocaleString()} <span className="text-xs font-normal">د.ع</span></p>
+                      </div>
+                    </div>
+                    <div className="flex min-h-6 flex-wrap gap-1">
+                      {Object.entries(summary?.specialties ?? {}).slice(0, 3).map(([title, count]) => (
+                        <Badge key={title} variant="outline" className="max-w-full truncate">{title} ({count})</Badge>
+                      ))}
+                      {!summary?.employees && <span className="text-sm text-muted-foreground">لا يوجد موظفون مرتبطون</span>}
+                      {administrator && <span className="w-full truncate text-xs text-muted-foreground">إداري الموقع: {administrator.full_name}</span>}
+                    </div>
+                    <div className="flex gap-2 border-t pt-3">
+                      <Button className="min-h-11 flex-1" variant="outline" onClick={() => { setEditing(site); setOpen(true); }}>
+                        <Pencil className="ml-2 h-4 w-4" /> تعديل
                       </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => {
-                          if (confirm("حذف الموقع؟")) del.mutate(s.id);
-                        }}
-                      >
-                        <Trash2 className="w-4 h-4 text-destructive" />
+                      <Button className="min-h-11 flex-1" variant="outline" onClick={() => { if (confirm("حذف الموقع؟")) del.mutate(site.id); }} disabled={del.isPending}>
+                        <Trash2 className="ml-2 h-4 w-4 text-destructive" /> حذف
                       </Button>
                     </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {!sites.length && (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                    لا توجد مواقع بعد
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed p-8 text-center">
+            <MapPin className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
+            <p className="font-semibold">{sites.length ? "لا توجد مواقع مطابقة" : "لا توجد مواقع بعد"}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{sites.length ? "جرّب تغيير البحث أو الفلتر." : "أضف موقع العمل الأول للبدء."}</p>
+          </div>
+        )}
+      </section>
     </div>
   );
 }
