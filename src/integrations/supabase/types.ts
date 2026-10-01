@@ -696,18 +696,21 @@ export type Database = {
       }
       profiles: {
         Row: {
+          allowed_sections: string[] | null
           created_at: string
           email: string | null
           full_name: string | null
           id: string
         }
         Insert: {
+          allowed_sections?: string[] | null
           created_at?: string
           email?: string | null
           full_name?: string | null
           id: string
         }
         Update: {
+          allowed_sections?: string[] | null
           created_at?: string
           email?: string | null
           full_name?: string | null
@@ -1253,6 +1256,7 @@ export type Database = {
         | "data_entry"
         | "site_admin"
         | "department_manager"
+        | "engineer"
       day_status: "present" | "absent" | "leave" | "holiday" | "rest"
       device_status: "active" | "inactive" | "maintenance"
       employee_status: "active" | "inactive" | "terminated"
@@ -1399,6 +1403,7 @@ export const Constants = {
         "data_entry",
         "site_admin",
         "department_manager",
+        "engineer",
       ],
       day_status: ["present", "absent", "leave", "holiday", "rest"],
       device_status: ["active", "inactive", "maintenance"],

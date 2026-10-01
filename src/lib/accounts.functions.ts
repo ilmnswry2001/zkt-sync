@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { z } from "zod";
 
-type Role = "admin" | "hr" | "supervisor" | "data_entry" | "site_admin" | "department_manager";
+type Role = "admin" | "hr" | "supervisor" | "data_entry" | "site_admin" | "department_manager" | "engineer";
 
 const SERVICE_ROLE_ERROR =
   "تعذر إنشاء الحساب لأن إعدادات الخادم لـ Supabase غير مفعّلة في هذا المشروع. أضف SUPABASE_URL و SUPABASE_SERVICE_ROLE_KEY في إعدادات Lovable Cloud أو بيئة التشغيل.";
@@ -16,6 +16,7 @@ const roleSchema = z.enum([
   "data_entry",
   "site_admin",
   "department_manager",
+  "engineer",
 ] satisfies [Role, ...Role[]]);
 const passwordSchema = z.string().min(8, "كلمة المرور يجب أن تكون 8 أحرف على الأقل").max(72);
 
@@ -27,6 +28,7 @@ const createAccountSchema = z.object({
   employeeId: z.string().uuid().nullable().optional().default(null),
   managedDepartmentId: z.string().uuid().nullable().optional().default(null),
   departmentIds: z.array(z.string().uuid()).optional().default([]),
+  allowedSections: z.array(z.string().max(60)).max(50).nullable().optional().default(null),
 });
 
 const updatePasswordSchema = z.object({
@@ -119,9 +121,15 @@ export const createAccount = createServerFn({ method: "POST" })
       throw new Error(translateAuthError(createError));
     }
 
+    // The signup trigger already gives every new user a default role; replace it.
+    await supabaseAdmin.from("user_roles").delete().eq("user_id", created.user.id);
     const { error: roleError } = await supabaseAdmin
       .from("user_roles")
       .insert({ user_id: created.user.id, role: data.role } as never);
+    const sections = data.role === "engineer" ? ["/planning"] : data.allowedSections;
+    await (supabaseAdmin as any)
+      .from("profiles")
+      .upsert({ id: created.user.id, full_name: data.fullName, email, allowed_sections: sections && sections.length ? sections : null });
     if (roleError) {
       await supabaseAdmin.auth.admin.deleteUser(created.user.id);
       throw new Error(`تم التراجع عن إنشاء الحساب: ${translateAuthError(roleError)}`);
@@ -200,4 +208,20 @@ export const updateAccountPassword = createServerFn({ method: "POST" })
     });
     if (error) throw new Error(translateAuthError(error));
     return { userId: data.userId };
+  });
+
+export const updateAllowedSections = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((value: unknown) =>
+    z.object({ userId: z.string().uuid(), sections: z.array(z.string().max(60)).max(50).nullable() }).parse(value),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await (supabaseAdmin as any)
+      .from("profiles")
+      .update({ allowed_sections: data.sections && data.sections.length ? data.sections : null })
+      .eq("id", data.userId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });
