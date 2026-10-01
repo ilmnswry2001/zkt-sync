@@ -520,6 +520,17 @@ function PlanningPage() {
     },
     onError: (error: any) => toast.error(error?.message ?? "تعذر تحديث الخطة"),
   });
+  const deleteWorkPlan = useMutation({
+    mutationFn: async (plan: SiteWorkPlan) => {
+      const { error } = await supabase.from("site_work_plans").delete().eq("id", plan.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["site-work-plans"] });
+      toast.success("تم حذف خطة العمل");
+    },
+    onError: (error: any) => toast.error(error?.message ?? "تعذر حذف خطة العمل"),
+  });
 
   const finalizePlan = useMutation({
     mutationFn: async ({ id, finalTitle, finalNotes }: { id: string; finalTitle: string; finalNotes: string }) => {
@@ -1133,6 +1144,19 @@ function PlanningPage() {
                           label="اعتماد من قسم التخطيط"
                           onAction={() => updatePlanStatus.mutate({ id: plan.id, status: "planning_approved", planningNotes: managementNote[plan.id] ?? plan.planning_notes ?? "" })}
                         />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="min-h-11 text-destructive"
+                          disabled={deleteWorkPlan.isPending}
+                          onClick={() => {
+                            if (confirm(`حذف خطة «${plan.site_name}»؟ لا يمكن التراجع عن هذا الإجراء.`)) {
+                              deleteWorkPlan.mutate(plan);
+                            }
+                          }}
+                        >
+                          <Trash2 className="ml-2 h-4 w-4" /> حذف الخطة
+                        </Button>
                       </div>
                     </div>
                   </details>
