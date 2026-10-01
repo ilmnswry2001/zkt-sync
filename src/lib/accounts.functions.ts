@@ -4,20 +4,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { z } from "zod";
 
-type Role = "admin" | "hr" | "supervisor" | "data_entry" | "site_admin" | "department_manager" | "engineer";
+type Role = "admin" | "hr" | "supervisor" | "data_entry";
 
-const SERVICE_ROLE_ERROR =
-  "تعذر إنشاء الحساب لأن إعدادات الخادم لـ Supabase غير مفعّلة في هذا المشروع. أضف SUPABASE_URL و SUPABASE_SERVICE_ROLE_KEY في إعدادات Lovable Cloud أو بيئة التشغيل.";
-
-const roleSchema = z.enum([
-  "admin",
-  "hr",
-  "supervisor",
-  "data_entry",
-  "site_admin",
-  "department_manager",
-  "engineer",
-] satisfies [Role, ...Role[]]);
+const roleSchema = z.enum(["admin", "hr", "supervisor", "data_entry"] satisfies [Role, ...Role[]]);
 const passwordSchema = z.string().min(8, "كلمة المرور يجب أن تكون 8 أحرف على الأقل").max(72);
 
 const createAccountSchema = z.object({
@@ -25,10 +14,7 @@ const createAccountSchema = z.object({
   email: z.string().trim().email("البريد الإلكتروني غير صالح").max(320),
   password: passwordSchema,
   role: roleSchema,
-  employeeId: z.string().uuid().nullable().optional().default(null),
-  managedDepartmentId: z.string().uuid().nullable().optional().default(null),
-  departmentIds: z.array(z.string().uuid()).optional().default([]),
-  allowedSections: z.array(z.string().max(60)).max(50).nullable().optional().default(null),
+  departmentIds: z.array(z.string().uuid()).optional(),
 });
 
 const updatePasswordSchema = z.object({
@@ -38,7 +24,7 @@ const updatePasswordSchema = z.object({
 
 const updateDepartmentsSchema = z.object({
   userId: z.string().uuid(),
-  departmentIds: z.array(z.string().uuid()).max(200),
+  departmentIds: z.array(z.string().uuid()),
 });
 
 function translateAuthError(error: { message?: string; status?: number } | null | undefined) {
@@ -84,22 +70,12 @@ async function assertAdmin(context: { supabase: SupabaseClient<Database>; userId
   if (!data) throw new Error("هذه العملية متاحة لمدير النظام فقط");
 }
 
-const getSupabaseAdmin = async () => {
-  try {
-    const mod = await import("@/integrations/supabase/client.server");
-    return mod.supabaseAdmin;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "تعذر الاتصال بخادم Supabase.";
-    throw new Error(message.includes("Missing Supabase environment variable") ? SERVICE_ROLE_ERROR : message);
-  }
-};
-
 export const createAccount = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((value: unknown) => createAccountSchema.parse(value))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    const supabaseAdmin = await getSupabaseAdmin();
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const email = data.email.toLowerCase();
     const { data: existingProfile } = await supabaseAdmin
       .from("profiles")
@@ -121,57 +97,26 @@ export const createAccount = createServerFn({ method: "POST" })
       throw new Error(translateAuthError(createError));
     }
 
-    // The signup trigger already gives every new user a default role; replace it.
-    await supabaseAdmin.from("user_roles").delete().eq("user_id", created.user.id);
     const { error: roleError } = await supabaseAdmin
       .from("user_roles")
-      .insert({ user_id: created.user.id, role: data.role } as never);
-    const sections = data.role === "engineer" ? ["/planning"] : data.allowedSections;
-    await (supabaseAdmin as any)
-      .from("profiles")
-      .upsert({ id: created.user.id, full_name: data.fullName, email, allowed_sections: sections && sections.length ? sections : null });
+      .insert({ user_id: created.user.id, role: data.role });
     if (roleError) {
       await supabaseAdmin.auth.admin.deleteUser(created.user.id);
       throw new Error(`تم التراجع عن إنشاء الحساب: ${translateAuthError(roleError)}`);
     }
-
-    if (data.employeeId) {
-      const profileUpdate = { employee_id: data.employeeId } as Record<string, unknown>;
-      const { error: profileError } = await supabaseAdmin
-        .from("profiles")
-        .update(profileUpdate as any)
-        .eq("id", created.user.id);
-      if (profileError && !/column .*employee_id.* does not exist/i.test(profileError.message || "")) {
+    if (data.departmentIds?.length) {
+      // The generated Lovable types are refreshed only after the SQL migration is applied.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const accessClient = supabaseAdmin as SupabaseClient<any>;
+      const { error } = await accessClient
+        .from("user_departments")
+        .insert(
+          data.departmentIds.map((department_id) => ({ user_id: created.user.id, department_id })),
+        );
+      if (error) {
         await supabaseAdmin.from("user_roles").delete().eq("user_id", created.user.id);
         await supabaseAdmin.auth.admin.deleteUser(created.user.id);
-        throw new Error(`تم التراجع عن إنشاء الحساب: ${translateAuthError(profileError)}`);
-      }
-    }
-
-    if (data.role === "department_manager") {
-      if (!data.managedDepartmentId) {
-        await supabaseAdmin.from("user_roles").delete().eq("user_id", created.user.id);
-        await supabaseAdmin.auth.admin.deleteUser(created.user.id);
-        throw new Error("يجب اختيار القسم الذي يديره مدير القسم");
-      }
-      const { error: departmentManagerError } = await (supabaseAdmin as any)
-        .from("department_managers")
-        .insert({ user_id: created.user.id, department_id: data.managedDepartmentId });
-      if (departmentManagerError) {
-        await supabaseAdmin.from("user_roles").delete().eq("user_id", created.user.id);
-        await supabaseAdmin.auth.admin.deleteUser(created.user.id);
-        throw new Error(`تم التراجع عن إنشاء الحساب: ${departmentManagerError.message}`);
-      }
-    }
-
-    if (data.departmentIds.length > 0) {
-      const { error: departmentError } = await (supabaseAdmin as any).from("user_departments").insert(
-        data.departmentIds.map((departmentId) => ({ user_id: created.user.id, department_id: departmentId })),
-      );
-      if (departmentError) {
-        await supabaseAdmin.from("user_roles").delete().eq("user_id", created.user.id);
-        await supabaseAdmin.auth.admin.deleteUser(created.user.id);
-        throw new Error(`تم التراجع عن إنشاء الحساب: ${departmentError.message}`);
+        throw new Error(`تم التراجع عن إنشاء الحساب: ${error.message}`);
       }
     }
     return { userId: created.user.id };
@@ -183,15 +128,20 @@ export const updateUserDepartments = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error: deleteError } = await (supabaseAdmin as any)
+    // The generated Lovable types are refreshed only after the SQL migration is applied.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const accessClient = supabaseAdmin as SupabaseClient<any>;
+    const { error: deleteError } = await accessClient
       .from("user_departments")
       .delete()
       .eq("user_id", data.userId);
     if (deleteError) throw new Error(deleteError.message);
-    if (data.departmentIds.length > 0) {
-      const { error } = await (supabaseAdmin as any).from("user_departments").insert(
-        data.departmentIds.map((departmentId) => ({ user_id: data.userId, department_id: departmentId })),
-      );
+    if (data.departmentIds.length) {
+      const { error } = await accessClient
+        .from("user_departments")
+        .insert(
+          data.departmentIds.map((department_id) => ({ user_id: data.userId, department_id })),
+        );
       if (error) throw new Error(error.message);
     }
     return { userId: data.userId, departmentIds: data.departmentIds };
@@ -208,20 +158,4 @@ export const updateAccountPassword = createServerFn({ method: "POST" })
     });
     if (error) throw new Error(translateAuthError(error));
     return { userId: data.userId };
-  });
-
-export const updateAllowedSections = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((value: unknown) =>
-    z.object({ userId: z.string().uuid(), sections: z.array(z.string().max(60)).max(50).nullable() }).parse(value),
-  )
-  .handler(async ({ data, context }) => {
-    await assertAdmin(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await (supabaseAdmin as any)
-      .from("profiles")
-      .update({ allowed_sections: data.sections && data.sections.length ? data.sections : null })
-      .eq("id", data.userId);
-    if (error) throw new Error(error.message);
-    return { ok: true };
   });

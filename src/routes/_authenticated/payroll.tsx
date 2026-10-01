@@ -10,6 +10,12 @@ import { Badge } from "@/components/ui/badge";
 import { Banknote, Printer, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { printReport, escapeHtml } from "@/lib/report-print";
+import {
+  buildAttendanceDays,
+  calculatePayroll,
+  monthDates,
+  summarizeDays,
+} from "@/lib/monthly-report";
 
 export const Route = createFileRoute("/_authenticated/payroll")({
   head: () => ({ meta: [{ title: "الرواتب" }] }),
@@ -32,10 +38,17 @@ type Employee = {
   full_name: string;
   base_salary: number | null;
   pay_type: string | null;
-  wage_rates: { monthly_rate: number | null; daily_rate: number | null; currency: string } | null;
+  wage_rates: {
+    monthly_rate: number | null;
+    daily_rate: number | null;
+    overtime_hour_rate: number | null;
+    currency: string;
+  } | null;
+  shifts: { end_time: string | null; grace_minutes: number | null } | null;
 };
 type Addition = { employee_id: string; amount: number; kind: string };
 type Penalty = { employee_id: string | null; deduction_amount: number };
+type AttendanceLog = { employee_no: string; verify_time: string };
 
 function PayrollPage() {
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -51,11 +64,12 @@ function PayrollPage() {
         { data: employees, error: employeesError },
         { data: additions, error: additionsError },
         { data: penalties, error: penaltiesError },
+        { data: logs, error: logsError },
       ] = await Promise.all([
         supabase
           .from("employees")
           .select(
-            "id, employee_no, full_name, base_salary, pay_type, wage_rates(monthly_rate, daily_rate, currency)",
+            "id, employee_no, full_name, base_salary, pay_type, wage_rates(monthly_rate, daily_rate, overtime_hour_rate, currency), shifts(end_time, grace_minutes)",
           )
           .order("employee_no")
           .limit(2000),
@@ -68,25 +82,53 @@ function PayrollPage() {
           .select("employee_id, deduction_amount")
           .gte("penalty_date", `${month}-01`)
           .lt("penalty_date", nextMonth),
+        supabase
+          .from("attendance_logs")
+          .select("employee_no, verify_time")
+          .gte("verify_time", `${month}-01T00:00:00Z`)
+          .lt("verify_time", `${nextMonth}T00:00:00Z`)
+          .order("verify_time"),
       ]);
       if (employeesError) throw employeesError;
       if (additionsError) throw additionsError;
       if (penaltiesError) throw penaltiesError;
+      if (logsError) throw logsError;
       return {
         employees: (employees ?? []) as Employee[],
         additions: (additions ?? []) as Addition[],
         penalties: (penalties ?? []) as Penalty[],
+        logs: (logs ?? []) as AttendanceLog[],
       };
     },
   });
   const rows = useMemo(
     () =>
       (query.data?.employees ?? []).map((employee) => {
-        const gross = Number(
-          employee.base_salary ??
-            employee.wage_rates?.monthly_rate ??
-            Number(employee.wage_rates?.daily_rate ?? 0) * 26,
+        const payType = employee.pay_type === "daily" ? "daily" : "monthly";
+        const days = buildAttendanceDays(
+          monthDates(month),
+          (query.data?.logs ?? []).filter((log) => log.employee_no === employee.employee_no),
+          [],
+          employee.shifts?.end_time,
+          new Date().toISOString().slice(0, 10),
+          payType,
+          employee.shifts?.grace_minutes ?? 0,
         );
+        const summary = summarizeDays(days);
+        const monthlySalary = Number(
+          employee.base_salary ?? employee.wage_rates?.monthly_rate ?? 0,
+        );
+        const dailyRate = Number(
+          employee.wage_rates?.daily_rate ?? (monthlySalary ? monthlySalary / 26 : 0),
+        );
+        const payroll = calculatePayroll({
+          payType,
+          monthlySalary,
+          dailyRate,
+          daysInMonth: days.length,
+          summary,
+        });
+        const gross = payroll.basePay;
         const additions = (query.data?.additions ?? [])
           .filter((item) => item.employee_id === employee.id)
           .reduce((sum, item) => sum + Number(item.amount || 0), 0);

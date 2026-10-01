@@ -8,10 +8,13 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { KeyRound, Loader2, Plus, RefreshCw, ShieldCheck, UserCog, Users, Save } from "lucide-react";
+import { KeyRound, Loader2, Plus, RefreshCw, ShieldCheck, UserCog, Users } from "lucide-react";
 import { toast } from "sonner";
-import { createAccount, updateAccountPassword } from "@/lib/accounts.functions";
-import { permissionsDb, type UserDepartment } from "@/lib/permissions-client";
+import {
+  createAccount,
+  updateAccountPassword,
+  updateUserDepartments,
+} from "@/lib/accounts.functions";
 
 export const Route = createFileRoute("/_authenticated/accounts")({
   head: () => ({ meta: [{ title: "الحسابات والصلاحيات" }] }),
@@ -27,12 +30,11 @@ export const Route = createFileRoute("/_authenticated/accounts")({
   component: AccountsPage,
 });
 
-type Role = "admin" | "hr" | "supervisor" | "data_entry" | "site_admin" | "department_manager";
-type Profile = { id: string; full_name: string | null; email: string | null; created_at: string; employee_id?: string | null };
+type Role = "admin" | "hr" | "supervisor" | "data_entry";
+type Profile = { id: string; full_name: string | null; email: string | null; created_at: string };
 type UserRole = { id: string; user_id: string; role: Role };
 type Department = { id: string; name: string };
-type DepartmentManager = { id: string; user_id: string; department_id: string; created_at: string };
-type EmployeeOption = { id: string; full_name: string; employee_no: string; status: string; department_id: string | null };
+type UserDepartment = { id: string; user_id: string; department_id: string };
 
 const roles: { key: Role; label: string; description: string }[] = [
   {
@@ -43,8 +45,6 @@ const roles: { key: Role; label: string; description: string }[] = [
   { key: "hr", label: "الموارد البشرية", description: "الموظفون والأجور والتقارير الإدارية" },
   { key: "supervisor", label: "مشرف", description: "المتابعة والإشراف على التقارير والمهام" },
   { key: "data_entry", label: "مدخل بيانات", description: "إدخال التقارير والمهام المسموحة" },
-  { key: "site_admin", label: "إداري موقع", description: "رفع تقارير الموقع والنوافذ التي يحددها المدير" },
-  { key: "department_manager", label: "مدير القسم", description: "إدارة قسم محدد ومتابعة بياناته" },
 ];
 
 function AccountsPage() {
@@ -57,13 +57,12 @@ function AccountsPage() {
     email: "",
     password: "",
     role: "data_entry" as Role,
-    employeeId: "",
-    managedDepartmentId: "",
+    departmentIds: [] as string[],
   });
-  const [editingDepartmentManager, setEditingDepartmentManager] = useState<Record<string, string>>({});
   const [resetUserId, setResetUserId] = useState<string | null>(null);
   const [resetPassword, setResetPassword] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
+  const [editingDepartmentIds, setEditingDepartmentIds] = useState<string[]>([]);
   const profilesQuery = useQuery({
     queryKey: ["accounts", "profiles"],
     queryFn: async () => {
@@ -95,54 +94,35 @@ function AccountsPage() {
       return (data ?? []) as Department[];
     },
   });
-  const employeesQuery = useQuery({
-    queryKey: ["accounts", "employees"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("employees")
-        .select("id, full_name, employee_no, status, department_id")
-        .eq("status", "active")
-        .order("full_name", { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as EmployeeOption[];
-    },
-  });
   const userDepartmentsQuery = useQuery({
     queryKey: ["accounts", "user-departments"],
     queryFn: async () => {
-      const { data, error } = await permissionsDb.from("user_departments").select("id, user_id, department_id, created_at");
+      // The generated Lovable types are refreshed after the migration is applied.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const client = supabase as typeof supabase & { from: (table: string) => any };
+      const { data, error } = await client
+        .from("user_departments")
+        .select("id, user_id, department_id");
       if (error) throw error;
       return (data ?? []) as UserDepartment[];
-    },
-  });
-  const departmentManagersQuery = useQuery({
-    queryKey: ["accounts", "department-managers"],
-    queryFn: async () => {
-      const { data, error } = await permissionsDb
-        .from("department_managers")
-        .select("id, user_id, department_id, created_at");
-      if (error) throw error;
-      return (data ?? []) as DepartmentManager[];
     },
   });
   const profiles = useMemo(() => profilesQuery.data ?? [], [profilesQuery.data]);
   const userRoles = useMemo(() => rolesQuery.data ?? [], [rolesQuery.data]);
   const departments = departmentsQuery.data ?? [];
-  const employees = employeesQuery.data ?? [];
-  const userDepartments = userDepartmentsQuery.data ?? [];
-  const departmentManagers = departmentManagersQuery.data ?? [];
-  const departmentIdsByUser = useMemo(() => {
+  const userDepartments = useMemo(
+    () => userDepartmentsQuery.data ?? [],
+    [userDepartmentsQuery.data],
+  );
+  const departmentsByUser = useMemo(() => {
     const map = new Map<string, string[]>();
-    userDepartments.forEach((item) => map.set(item.user_id, [...(map.get(item.user_id) ?? []), item.department_id]));
+    userDepartments.forEach((item) =>
+      map.set(item.user_id, [...(map.get(item.user_id) ?? []), item.department_id]),
+    );
     return map;
   }, [userDepartments]);
-  const departmentManagerByUser = useMemo(() => {
-    const map = new Map<string, string>();
-    departmentManagers.forEach((item) => {
-      if (!map.has(item.user_id)) map.set(item.user_id, item.department_id);
-    });
-    return map;
-  }, [departmentManagers]);
+  const departmentName = (id: string) =>
+    departments.find((department) => department.id === id)?.name ?? id;
   const rolesByUser = useMemo(() => {
     const map = new Map<string, UserRole[]>();
     userRoles.forEach((item) => map.set(item.user_id, [...(map.get(item.user_id) ?? []), item]));
@@ -164,7 +144,6 @@ function AccountsPage() {
       rolesQuery.refetch(),
       departmentsQuery.refetch(),
       userDepartmentsQuery.refetch(),
-      departmentManagersQuery.refetch(),
     ]);
     toast.success("تم تحديث الحسابات والصلاحيات");
   };
@@ -180,7 +159,7 @@ function AccountsPage() {
       if (adminCount <= 1) return toast.error("لا يمكن إزالة صلاحية المدير الوحيد في النظام");
     }
     if (enabled) {
-      const { error } = await supabase.from("user_roles").insert({ user_id: userId, role } as never);
+      const { error } = await supabase.from("user_roles").insert({ user_id: userId, role });
       if (error) return toast.error(error.message);
     } else {
       const assignment = rolesByUser.get(userId)?.find((item) => item.role === role);
@@ -191,40 +170,10 @@ function AccountsPage() {
     await queryClient.invalidateQueries({ queryKey: ["accounts", "roles"] });
     toast.success("تم تحديث صلاحيات الحساب");
   };
-  const saveDepartmentManager = async (userId: string) => {
-    const selectedDepartmentId = editingDepartmentManager[userId] ?? departmentManagerByUser.get(userId) ?? "";
-    try {
-      const existingAssignment = departmentManagers.find((item) => item.user_id === userId);
-      if (selectedDepartmentId) {
-        if (existingAssignment) {
-          const { error } = await permissionsDb
-            .from("department_managers")
-            .update({ department_id: selectedDepartmentId })
-            .eq("id", existingAssignment.id);
-          if (error) throw error;
-        } else {
-          const { error } = await permissionsDb
-            .from("department_managers")
-            .insert({ user_id: userId, department_id: selectedDepartmentId });
-          if (error) throw error;
-        }
-      } else if (existingAssignment) {
-        const { error } = await permissionsDb.from("department_managers").delete().eq("id", existingAssignment.id);
-        if (error) throw error;
-      }
-      await departmentManagersQuery.refetch();
-      toast.success("تم حفظ القسم الذي يديره الحساب");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "تعذر حفظ القسم");
-    }
-  };
   const handleCreateAccount = async (event: React.FormEvent) => {
     event.preventDefault();
     if (createForm.password.length < 8)
       return toast.error("كلمة المرور يجب أن تكون 8 أحرف على الأقل");
-    if (createForm.role === "department_manager" && !createForm.managedDepartmentId) {
-      return toast.error("اختر القسم الذي سيُدار من خلال هذا الحساب");
-    }
     setActionBusy(true);
     try {
       await createAccount({
@@ -233,12 +182,16 @@ function AccountsPage() {
           email: createForm.email,
           password: createForm.password,
           role: createForm.role,
-          employeeId: createForm.employeeId || null,
-          managedDepartmentId: createForm.role === "department_manager" ? createForm.managedDepartmentId : null,
-          departmentIds: [],
+          departmentIds: createForm.departmentIds,
         },
       });
-      setCreateForm({ fullName: "", email: "", password: "", role: "data_entry", employeeId: "", managedDepartmentId: "" });
+      setCreateForm({
+        fullName: "",
+        email: "",
+        password: "",
+        role: "data_entry",
+        departmentIds: [],
+      });
       setShowCreateForm(false);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["accounts", "profiles"] }),
@@ -270,20 +223,25 @@ function AccountsPage() {
     }
   };
 
+  const saveDepartments = async (userId: string) => {
+    setActionBusy(true);
+    try {
+      await updateUserDepartments({ data: { userId, departmentIds: editingDepartmentIds } });
+      await userDepartmentsQuery.refetch();
+      toast.success("تم تحديث الأقسام المسموح بها");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "تعذر تحديث الأقسام");
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
   const loading =
     profilesQuery.isLoading ||
     rolesQuery.isLoading ||
     departmentsQuery.isLoading ||
-    employeesQuery.isLoading ||
-    userDepartmentsQuery.isLoading ||
-    departmentManagersQuery.isLoading;
-  const error =
-    profilesQuery.error ??
-    rolesQuery.error ??
-    departmentsQuery.error ??
-    employeesQuery.error ??
-    userDepartmentsQuery.error ??
-    departmentManagersQuery.error;
+    userDepartmentsQuery.isLoading;
+  const error = profilesQuery.error ?? rolesQuery.error;
 
   return (
     <div className="space-y-6">
@@ -374,44 +332,28 @@ function AccountsPage() {
                   ))}
                 </select>
               </div>
-              <div>
-                <Label htmlFor="new-account-employee">الموظف المرتبط بالحساب</Label>
-                <select
-                  id="new-account-employee"
-                  className="mt-1 flex h-10 w-full rounded-md border bg-background px-3 text-sm"
-                  value={createForm.employeeId}
-                  onChange={(event) =>
-                    setCreateForm((current) => ({ ...current, employeeId: event.target.value }))
-                  }
-                >
-                  <option value="">لا يوجد موظف مرتبط</option>
-                  {employees.map((employee) => (
-                    <option key={employee.id} value={employee.id}>
-                      {employee.full_name} — {employee.employee_no}
-                    </option>
+              <div className="md:col-span-2">
+                <Label>الأقسام المسموح بها (اتركها فارغة للوصول الكامل)</Label>
+                <div className="mt-2 flex flex-wrap gap-2 rounded-lg border p-3">
+                  {departments.map((department) => (
+                    <label key={department.id} className="flex items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={createForm.departmentIds.includes(department.id)}
+                        onCheckedChange={(checked) =>
+                          setCreateForm((current) => ({
+                            ...current,
+                            departmentIds:
+                              checked === true
+                                ? [...current.departmentIds, department.id]
+                                : current.departmentIds.filter((id) => id !== department.id),
+                          }))
+                        }
+                      />
+                      {department.name}
+                    </label>
                   ))}
-                </select>
-              </div>
-              {createForm.role === "department_manager" && (
-                <div className="md:col-span-2">
-                  <Label htmlFor="new-account-managed-department">القسم الذي يديره هذا الحساب</Label>
-                  <select
-                    id="new-account-managed-department"
-                    className="mt-1 flex h-10 w-full rounded-md border bg-background px-3 text-sm"
-                    value={createForm.managedDepartmentId}
-                    onChange={(event) =>
-                      setCreateForm((current) => ({ ...current, managedDepartmentId: event.target.value }))
-                    }
-                  >
-                    <option value="">اختر القسم</option>
-                    {departments.map((department) => (
-                      <option key={department.id} value={department.id}>
-                        {department.name}
-                      </option>
-                    ))}
-                  </select>
                 </div>
-              )}
+              </div>
               <div className="flex gap-2 md:col-span-2">
                 <Button type="submit" disabled={actionBusy}>
                   {actionBusy && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}حفظ الحساب
@@ -514,12 +456,24 @@ function AccountsPage() {
                         </Badge>
                       ))}
                       {!rolesByUser.has(profile.id) && <Badge variant="outline">بدون صلاحية</Badge>}
+                      {(departmentsByUser.get(profile.id) ?? []).length ? (
+                        (departmentsByUser.get(profile.id) ?? []).map((id) => (
+                          <Badge key={id} variant="outline">
+                            {departmentName(id)}
+                          </Badge>
+                        ))
+                      ) : (
+                        <Badge variant="outline">كافة الأقسام</Badge>
+                      )}
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() =>
-                          setEditingUserId(editingUserId === profile.id ? null : profile.id)
-                        }
+                        onClick={() => {
+                          const opening = editingUserId !== profile.id;
+                          setEditingUserId(opening ? profile.id : null);
+                          if (opening)
+                            setEditingDepartmentIds(departmentsByUser.get(profile.id) ?? []);
+                        }}
                       >
                         {editingUserId === profile.id ? "إغلاق" : "تعديل الصلاحيات"}
                       </Button>
@@ -577,36 +531,34 @@ function AccountsPage() {
                           </span>
                         </label>
                       ))}
-                      {hasRole(profile.id, "department_manager") && (
-                        <div className="rounded-lg border p-3 md:col-span-2">
-                          <div className="mb-2 flex items-center justify-between gap-2">
-                            <div>
-                              <p className="font-medium">القسم الذي يديره هذا الحساب</p>
-                              <p className="text-xs text-muted-foreground">يحدد القسم الخاص الذي يتبع له مدير القسم.</p>
-                            </div>
-                            <Button size="sm" onClick={() => void saveDepartmentManager(profile.id)}>
-                              <Save className="ml-2 h-4 w-4" /> حفظ القسم
-                            </Button>
-                          </div>
-                          <select
-                            className="mt-1 flex h-10 w-full rounded-md border bg-background px-3 text-sm"
-                            value={editingDepartmentManager[profile.id] ?? departmentManagerByUser.get(profile.id) ?? ""}
-                            onChange={(event) =>
-                              setEditingDepartmentManager((current) => ({
-                                ...current,
-                                [profile.id]: event.target.value,
-                              }))
-                            }
-                          >
-                            <option value="">اختر القسم</option>
-                            {departments.map((department) => (
-                              <option key={department.id} value={department.id}>
-                                {department.name}
-                              </option>
-                            ))}
-                          </select>
+                      <div className="md:col-span-2 rounded-lg border p-3">
+                        <p className="mb-2 font-medium">الأقسام المصرح بها (فارغ = كافة الأقسام)</p>
+                        <div className="flex flex-wrap gap-2">
+                          {departments.map((department) => (
+                            <label key={department.id} className="flex items-center gap-2 text-sm">
+                              <Checkbox
+                                checked={editingDepartmentIds.includes(department.id)}
+                                onCheckedChange={(checked) =>
+                                  setEditingDepartmentIds((current) =>
+                                    checked === true
+                                      ? [...new Set([...current, department.id])]
+                                      : current.filter((id) => id !== department.id),
+                                  )
+                                }
+                              />
+                              {department.name}
+                            </label>
+                          ))}
                         </div>
-                      )}
+                        <Button
+                          className="mt-3"
+                          size="sm"
+                          disabled={actionBusy}
+                          onClick={() => saveDepartments(profile.id)}
+                        >
+                          حفظ الأقسام
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </div>
