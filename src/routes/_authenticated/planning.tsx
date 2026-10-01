@@ -58,6 +58,7 @@ import {
   parsePersonNames,
   type StaffAssignmentGroup,
 } from "@/lib/planning-staff";
+import { escapeHtml, printReport } from "@/lib/report-print";
 
 export const Route = createFileRoute("/_authenticated/planning")({
   head: () => ({
@@ -102,6 +103,7 @@ type SiteWorkPlan = {
   id: string;
   site_id: string;
   site_name: string;
+  requested_by: string | null;
   requested_by_name: string;
   request_date: string;
   status: "requested" | "planning_approved" | "management_review" | "finalized";
@@ -167,6 +169,41 @@ const siteStatusLabel: Record<string, string> = {
   suspended: "متوقف",
 };
 
+function planCreatorLabel(plan: SiteWorkPlan) {
+  return plan.requested_by_name?.trim() || "حساب غير محدد";
+}
+
+function planPdfMarkup(plan: SiteWorkPlan, site?: Site) {
+  const specialties = plan.final_plan?.specialties ?? plan.specialties ?? [];
+  const assigned = new Map(plan.assigned_staff.map((group) => [group.specialty, group.names]));
+  const totalRequired = specialties.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const totalAssigned = specialties.reduce((sum, item) => sum + (assigned.get(item.specialty)?.length ?? 0), 0);
+  const rows = specialties.map((item) => {
+    const names = assigned.get(item.specialty) ?? [];
+    const color = item.color || "#0f766e";
+    return `<tr>
+      <td style="border-right:5px solid ${escapeHtml(color)}"><strong>${escapeHtml(item.specialty)}</strong><br><span style="color:#64748b;font-size:11px">${item.heavy_equipment ? `آلية: ${escapeHtml(item.equipment_name || "مطلوبة")}` : ""}</span></td>
+      <td style="text-align:center;font-weight:700">${Number(item.quantity || 0)}</td>
+      <td>${names.length ? names.map((name) => `<span class="name-chip" style="border-color:${escapeHtml(color)};color:${escapeHtml(color)}">${escapeHtml(name)}</span>`).join(" ") : "<span style=\"color:#94a3b8\">لم يتم تخصيص أسماء</span>"}</td>
+    </tr>`;
+  }).join("");
+
+  return `<section class="plan-sheet">
+    <header class="plan-header">
+      <div><div class="eyebrow">الخطة النهائية المعتمدة</div><h2>${escapeHtml(plan.final_plan?.title || `الخطة النهائية - ${plan.site_name}`)}</h2><p>${escapeHtml(plan.site_name)}${site?.ctr_code ? ` · CTR ${escapeHtml(site.ctr_code)}` : ""}</p></div>
+      <div class="status">${escapeHtml(planStatusLabel[plan.status])}</div>
+    </header>
+    <div class="meta-grid">
+      <div><span>تاريخ الخطة</span><strong>${escapeHtml(plan.request_date)}</strong></div>
+      <div><span>منشئ الخطة</span><strong>${escapeHtml(planCreatorLabel(plan))}</strong></div>
+      <div><span>إجمالي المطلوب</span><strong>${totalRequired}</strong></div>
+      <div><span>الأسماء المخصصة</span><strong>${totalAssigned}</strong></div>
+    </div>
+    <table class="plan-table"><thead><tr><th>التخصص</th><th>المطلوب</th><th>الأسماء المخصصة</th></tr></thead><tbody>${rows || `<tr><td colspan="3">لا توجد تخصصات</td></tr>`}</tbody></table>
+    <div class="note"><strong>ملاحظات الخطة:</strong> ${escapeHtml(plan.final_plan?.notes || plan.management_notes || plan.planning_notes || "لا توجد ملاحظات")}</div>
+  </section>`;
+}
+
 function newPlanSpecialty(index = 0): WorkPlanSpecialty {
   return {
     specialty: WORK_PLAN_SPECIALTIES[index % WORK_PLAN_SPECIALTIES.length],
@@ -203,6 +240,19 @@ function ResponsivePlanAction({
         </DropdownMenuContent>
       </DropdownMenu>
     </>
+  );
+}
+
+function ColoredNameChips({ names, color }: { names: string[]; color: string }) {
+  if (!names.length) return <span className="text-sm text-muted-foreground">لم يتم تخصيص أسماء</span>;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {names.map((name) => (
+        <span key={name} className="rounded-full border px-2.5 py-1 text-xs font-medium" style={{ borderColor: `${color}66`, backgroundColor: `${color}12`, color }}>
+          {name}
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -375,6 +425,7 @@ function PlanningPage() {
         id: row.id,
         site_id: row.site_id,
         site_name: (row.site_name ?? row.site?.name ?? "موقع غير محدد"),
+        requested_by: row.requested_by ?? null,
         requested_by_name: row.requested_by_name ?? "غير محدد",
         request_date: row.request_date,
         status: row.status,
@@ -444,6 +495,26 @@ function PlanningPage() {
         const search = finalStaffSearch.trim().toLocaleLowerCase("ar");
         return !search || `${item.specialty} ${names.join(" ")}`.toLocaleLowerCase("ar").includes(search);
       });
+
+  const exportPlanPdf = (plan: SiteWorkPlan) => {
+    const ok = printReport(
+      `الخطة النهائية - ${plan.site_name}`,
+      `<div class="pdf-report">${planPdfMarkup(plan, sites.find((site) => site.id === plan.site_id))}</div>`,
+    );
+    if (!ok) toast.error("تعذر فتح نافذة تصدير PDF؛ اسمح بالنوافذ المنبثقة ثم حاول مرة أخرى.");
+  };
+
+  const exportAllPlansPdf = () => {
+    if (!finalPlans.length) {
+      toast.info("لا توجد خطط نهائية لتصديرها");
+      return;
+    }
+    const ok = printReport(
+      "الخطط النهائية المعتمدة",
+      `<div class="pdf-report">${finalPlans.map((plan) => planPdfMarkup(plan, sites.find((site) => site.id === plan.site_id))).join("")}</div>`,
+    );
+    if (!ok) toast.error("تعذر فتح نافذة تصدير PDF؛ اسمح بالنوافذ المنبثقة ثم حاول مرة أخرى.");
+  };
 
   const createWorkPlanRequest = useMutation({
     mutationFn: async () => {
@@ -1291,7 +1362,7 @@ function PlanningPage() {
                           {(plan.assigned_staff ?? []).filter((group) => group.names.length > 0).map((group) => (
                             <div key={`${plan.id}-${group.specialty}`}>
                               <div className="mb-1 text-sm font-medium">{group.specialty}</div>
-                              <StaffNameChips names={group.names} />
+                              <ColoredNameChips color={plan.specialties.find((item) => item.specialty === group.specialty)?.color ?? "#0f766e"} names={group.names} />
                             </div>
                           ))}
                         </div>
@@ -1306,6 +1377,15 @@ function PlanningPage() {
 
           {activeWorkPlanTab === "final" && !workPlansQuery.isLoading && (
             <div className="space-y-3">
+              <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 dark:border-emerald-900 dark:bg-emerald-950/20 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-semibold text-emerald-950 dark:text-emerald-100">تصدير الخطط النهائية</p>
+                  <p className="text-xs text-emerald-800/80 dark:text-emerald-200/80">يتم إنشاء نافذة PDF تحتوي الخطط فقط، مع مقاس A4 وفاصل مستقل لكل خطة.</p>
+                </div>
+                <Button type="button" variant="outline" className="min-h-11 shrink-0 bg-background" onClick={exportAllPlansPdf}>
+                  <Printer className="ml-2 h-4 w-4" /> تصدير جميع الخطط
+                </Button>
+              </div>
               {planFilters}
               {visibleManagementReviewPlans.length === 0 && visibleFinalPlans.length === 0 ? (
                 <div className="rounded-xl border border-dashed p-6 text-center text-muted-foreground">
@@ -1341,7 +1421,7 @@ function PlanningPage() {
                           {(plan.assigned_staff ?? []).filter((group) => group.names.length > 0).map((group) => (
                             <div key={`${plan.id}-${group.specialty}`}>
                               <div className="mb-1 text-sm font-medium">{group.specialty}</div>
-                              <StaffNameChips names={group.names} />
+                              <ColoredNameChips color={plan.specialties.find((item) => item.specialty === group.specialty)?.color ?? "#0f766e"} names={group.names} />
                             </div>
                           ))}
                         </div>
@@ -1394,14 +1474,15 @@ function PlanningPage() {
                               </div>
                               <h4 className="truncate text-xl font-bold">{plan.final_plan?.title ?? `الخطة النهائية - ${plan.site_name}`}</h4>
                               <p className="mt-1 text-sm opacity-80">{plan.site_name}</p>
+                              <p className="mt-1 text-xs font-medium text-emerald-800 dark:text-emerald-200">منشئ الخطة: {planCreatorLabel(plan)}</p>
                             </div>
                             <div className="flex items-center gap-3">
                               <div className="rounded-lg bg-white/70 px-3 py-2 text-sm dark:bg-black/20">
                                 <span className="opacity-75">إجمالي المطلوب</span>
                                 <strong className="mr-2 text-lg">{requiredTotal}</strong>
                               </div>
-                              <Button type="button" variant="outline" className="planning-final-controls min-h-11 shrink-0 bg-background" onClick={() => window.print()}>
-                                <Printer className="ml-2 h-4 w-4" /> طباعة PDF
+                              <Button type="button" variant="outline" className="planning-final-controls min-h-11 shrink-0 bg-background" onClick={() => exportPlanPdf(plan)}>
+                                <Printer className="ml-2 h-4 w-4" /> تصدير PDF
                               </Button>
                             </div>
                           </header>
@@ -1409,7 +1490,7 @@ function PlanningPage() {
                           <div className="space-y-4 p-4 sm:p-5">
                             <div className="planning-final-controls flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                               <div>
-                                <h5 className="font-bold">التخصصات</h5>
+                                <h5 className="font-bold">التخصصات والكوادر المخصصة</h5>
                                 <p className="text-sm text-muted-foreground">{rows.length} تخصص ظاهر</p>
                               </div>
                               <div className="relative w-full sm:max-w-xs">
@@ -1449,7 +1530,7 @@ function PlanningPage() {
                                                 {complete ? `✓ مكتمل · ${names.length}/${required}` : `ينقص ${missing} · ${names.length}/${required}`}
                                               </div>
                                             </td>
-                                            <td className="px-4 py-4"><StaffNameChips names={names} /></td>
+                                            <td className="px-4 py-4"><ColoredNameChips color={item.color || "#0f766e"} names={names} /></td>
                                           </tr>
                                         );
                                       })}
@@ -1469,7 +1550,7 @@ function PlanningPage() {
                                           <Badge variant="outline" className="max-w-[70%] truncate px-3 py-1.5">{item.specialty}</Badge>
                                           <div className="text-sm"><span className="text-muted-foreground">مطلوب</span> <strong className="text-lg">{required}</strong></div>
                                         </div>
-                                        <div className="mt-3"><StaffNameChips names={names} /></div>
+                                        <div className="mt-3"><ColoredNameChips color={item.color || "#0f766e"} names={names} /></div>
                                         <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted"><div className={`h-full rounded-full ${complete ? "bg-emerald-600" : "bg-amber-500"}`} style={{ width: `${progress}%` }} /></div>
                                         <div className={`mt-1 text-xs font-medium ${complete ? "text-emerald-700 dark:text-emerald-300" : "text-amber-800 dark:text-amber-300"}`}>
                                           {complete ? `✓ مكتمل · ${names.length}/${required}` : `ينقص ${missing} · ${names.length}/${required}`}
