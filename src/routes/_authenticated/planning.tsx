@@ -297,6 +297,7 @@ function PlanningPage() {
         .from("employees")
         .select("id, full_name, employee_no, position, site_id")
         .eq("status", "active")
+        .ilike("position", "%مهندس%")
         .order("full_name");
       if (error) throw error;
       // لا نرشح حسب المسمى؛ قاعدة البيانات لا تضمن أن كلمة إداري موجودة في position.

@@ -8,7 +8,7 @@ function escapeHtml(value: unknown): string {
 }
 
 export function printReport(title: string, body: string) {
-  const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1100,height=800");
+  const printWindow = window.open("about:blank", "_blank", "width=1100,height=800");
   if (!printWindow) return false;
   printWindow.document
     .write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>
@@ -16,7 +16,7 @@ export function printReport(title: string, body: string) {
   </style></head><body><h1>${escapeHtml(title)}</h1>${body}</body></html>`);
   printWindow.document.close();
   printWindow.focus();
-  window.setTimeout(() => printWindow.print(), 250);
+  window.setTimeout(() => printWindow.print(), 500);
   return true;
 }
 

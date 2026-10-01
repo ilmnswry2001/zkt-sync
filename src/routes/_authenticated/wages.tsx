@@ -46,7 +46,7 @@ export const Route = createFileRoute("/_authenticated/wages")({
   },
   head: () => ({
     meta: [
-      { title: "الأجور والمكافآت" },
+      { title: "الأجور" },
       {
         name: "description",
         content: "تحديد أجر كل تخصص وإضافة المكافآت والمهام الإضافية على راتب الموظف.",
@@ -273,8 +273,8 @@ function WagesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">الأجور والمكافآت</h1>
-        <p className="text-muted-foreground mt-1">أجر كل تخصص + الإضافات على الراتب</p>
+        <h1 className="text-3xl font-bold">الأجور</h1>
+        <p className="text-muted-foreground mt-1">تحديد أجور الكوادر ومعدلات العمل الإضافي</p>
       </div>
 
       <Card>
