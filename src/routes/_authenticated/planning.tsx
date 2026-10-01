@@ -305,18 +305,13 @@ function PlanningPage() {
   const [requestDate, setRequestDate] = useState(new Date().toISOString().slice(0, 10));
   const [requestNotes, setRequestNotes] = useState("");
   const { data: specialtyCatalog = EMPTY_SPECIALTY_CATALOG } = useQuery({
-    queryKey: ["work-plan-specialty-catalog"],
+    queryKey: ["work-plan-specialty-catalog", "wage-rates"],
+    staleTime: 0,
+    refetchOnMount: "always",
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("report_catalog_items")
-        .select("name")
-        .eq("kind", "worker_specialty")
-        .eq("is_archived", false)
-        .order("sort_order");
-      if (error || !data?.length) {
-        return WORK_PLAN_SPECIALTIES;
-      }
-      return Array.from(new Set([...WORK_PLAN_SPECIALTIES, ...data.map((item: any) => item.name)]));
+      const { data, error } = await supabase.from("wage_rates").select("title").order("title");
+      if (error) throw error;
+      return Array.from(new Set((data ?? []).map((item: any) => String(item.title ?? "").trim()).filter(Boolean)));
     },
   });
   const { data: equipmentCatalog = EMPTY_EQUIPMENT_CATALOG } = useQuery({
@@ -334,10 +329,7 @@ function PlanningPage() {
       return Array.from(new Set([...data.map((item: any) => item.name)]));
     },
   });
-  const specialtyOptions = useMemo(
-    () => Array.from(new Set([...(specialtyCatalog ?? []), ...WORK_PLAN_SPECIALTIES])).filter(Boolean),
-    [specialtyCatalog],
-  );
+  const specialtyOptions = useMemo(() => specialtyCatalog ?? [], [specialtyCatalog]);
   const equipmentOptions = useMemo(
     () => Array.from(new Set([...(equipmentCatalog ?? []), "حفارة", "جرافة", "لودر", "سيارة حمل", "مقطورة", "آلة رصف", "مكبس"])).filter(Boolean),
     [equipmentCatalog],
