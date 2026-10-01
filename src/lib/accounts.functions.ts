@@ -131,7 +131,7 @@ export const createAccount = createServerFn({ method: "POST" })
       const profileUpdate = { employee_id: data.employeeId } as Record<string, unknown>;
       const { error: profileError } = await supabaseAdmin
         .from("profiles")
-        .update(profileUpdate)
+        .update(profileUpdate as any)
         .eq("id", created.user.id);
       if (profileError && !/column .*employee_id.* does not exist/i.test(profileError.message || "")) {
         await supabaseAdmin.from("user_roles").delete().eq("user_id", created.user.id);

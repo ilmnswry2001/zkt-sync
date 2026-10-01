@@ -175,7 +175,7 @@ function AttendancePage() {
         request_date: row.request_date,
         assigned_staff: normalizeStaffAssignments(row.assigned_staff),
         final_plan: row.final_plan ?? null,
-        specialtySummary: Array.isArray(row.final_plan?.specialties) ? row.final_plan.specialties : Array.isArray(row.specialties) ? row.specialties : [],
+        specialtySummary: Array.isArray((row.final_plan as any)?.specialties) ? (row.final_plan as any).specialties : Array.isArray(row.specialties) ? row.specialties : [],
       };
     },
     enabled: activeTab === "publish" && !!siteId,

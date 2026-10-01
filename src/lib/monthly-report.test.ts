@@ -21,7 +21,7 @@ test("absence penalties override live punches and show as absent in month summar
   const days = buildAttendanceDays(
     ["2026-09-01"],
     [{ verify_time: "2026-09-01T08:00:00Z" }, { verify_time: "2026-09-01T17:00:00Z" }],
-    [override],
+    [override!],
     "16:00:00",
     "2026-09-01",
   );

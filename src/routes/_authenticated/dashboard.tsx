@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
@@ -282,11 +282,11 @@ function Dashboard() {
         <div className="flex items-center justify-between"><h2 className="text-lg font-bold">الأجهزة</h2><Link to="/devices" className="text-sm font-medium text-primary hover:underline">إدارة الأجهزة</Link></div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><StatCard title="متصلة خلال آخر 24 ساعة" value={formatCount(connectedDevices)} icon={Fingerprint} loading={devicesQuery.isLoading} detail={<span className="text-xs text-muted-foreground">حالة نشطة ومزامنة حديثة</span>} /><StatCard title="نشطة ولم تزامن خلال 24 ساعة" value={formatCount(staleDevices.length)} icon={AlertTriangle} loading={devicesQuery.isLoading} detail={<span className="text-xs text-muted-foreground">أجهزة غير نشطة: {formatCount(inactiveDevices)}</span>} /></div>
         {devicesQuery.data?.length === 0 && !devicesQuery.isLoading ? <Card><CardContent className="p-4 text-sm text-muted-foreground">لا توجد أجهزة مسجلة بعد.</CardContent></Card> : staleDevices.length > 0 && <Card className="border-amber-400/60 bg-amber-50/70 dark:bg-amber-950/20"><CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base text-amber-900 dark:text-amber-200"><AlertTriangle className="h-5 w-5" /> أجهزة لم تزامن منذ أكثر من 24 ساعة</CardTitle></CardHeader><CardContent className="space-y-2">{staleDevices.map((device) => <div key={device.id} className="flex flex-col justify-between gap-1 border-b border-amber-200/70 pb-2 last:border-0 sm:flex-row sm:items-center"><span className="font-medium">{device.name}</span><span className="text-sm text-muted-foreground">آخر مزامنة: {formatDateTime(device.last_sync_at)}</span></div>)}</CardContent></Card>}
-        {devicesQuery.data?.length > 0 && (
+        {(devicesQuery.data?.length ?? 0) > 0 && (
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-base">حالة المزامنة لكل جهاز</CardTitle></CardHeader>
             <CardContent className="space-y-2">
-              {devicesQuery.data.map((device) => {
+              {(devicesQuery.data ?? []).map((device) => {
                 const isConnected = isDeviceConnected(device.status, device.last_sync_at, now.getTime());
                 const isStale = staleDevices.some((staleDevice) => staleDevice.id === device.id);
                 return (

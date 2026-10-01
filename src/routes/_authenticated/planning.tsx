@@ -514,7 +514,7 @@ function PlanningPage() {
 
   const updatePlanStatus = useMutation({
     mutationFn: async ({ id, status, planningNotes, managementNotes }: { id: string; status: SiteWorkPlan["status"]; planningNotes?: string; managementNotes?: string }) => {
-      const payload: Record<string, string | null> = {};
+      const payload: any = {};
       if (planningNotes !== undefined) payload.planning_notes = planningNotes.trim() || null;
       if (managementNotes !== undefined) payload.management_notes = managementNotes.trim() || null;
       payload.status = status;
