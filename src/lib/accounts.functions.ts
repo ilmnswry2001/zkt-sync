@@ -4,9 +4,24 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { z } from "zod";
 
-type Role = "admin" | "hr" | "supervisor" | "data_entry";
+type Role =
+  | "admin"
+  | "hr"
+  | "supervisor"
+  | "data_entry"
+  | "site_admin"
+  | "department_manager"
+  | "engineer";
 
-const roleSchema = z.enum(["admin", "hr", "supervisor", "data_entry"] satisfies [Role, ...Role[]]);
+const roleSchema = z.enum([
+  "admin",
+  "hr",
+  "supervisor",
+  "data_entry",
+  "site_admin",
+  "department_manager",
+  "engineer",
+] satisfies [Role, ...Role[]]);
 const passwordSchema = z.string().min(8, "كلمة المرور يجب أن تكون 8 أحرف على الأقل").max(72);
 
 const createAccountSchema = z.object({
@@ -15,6 +30,7 @@ const createAccountSchema = z.object({
   password: passwordSchema,
   role: roleSchema,
   departmentIds: z.array(z.string().uuid()).optional(),
+  allowedSections: z.array(z.string().max(60)).max(40).optional(),
 });
 
 const updatePasswordSchema = z.object({
@@ -97,6 +113,8 @@ export const createAccount = createServerFn({ method: "POST" })
       throw new Error(translateAuthError(createError));
     }
 
+    // A trigger gives every new user a default role; replace it with the chosen one.
+    await supabaseAdmin.from("user_roles").delete().eq("user_id", created.user.id);
     const { error: roleError } = await supabaseAdmin
       .from("user_roles")
       .insert({ user_id: created.user.id, role: data.role });
@@ -104,6 +122,11 @@ export const createAccount = createServerFn({ method: "POST" })
       await supabaseAdmin.auth.admin.deleteUser(created.user.id);
       throw new Error(`تم التراجع عن إنشاء الحساب: ${translateAuthError(roleError)}`);
     }
+    const sections = data.role === "engineer" ? ["/planning"] : (data.allowedSections ?? []);
+    await supabaseAdmin
+      .from("profiles")
+      .update({ allowed_sections: sections.length ? sections : null, full_name: data.fullName })
+      .eq("id", created.user.id);
     if (data.departmentIds?.length) {
       // The generated Lovable types are refreshed only after the SQL migration is applied.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

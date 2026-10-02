@@ -15,6 +15,7 @@ import {
   updateAccountPassword,
   updateUserDepartments,
 } from "@/lib/accounts.functions";
+import { SECTION_OPTIONS } from "@/components/AppLayout";
 
 export const Route = createFileRoute("/_authenticated/accounts")({
   head: () => ({ meta: [{ title: "الحسابات والصلاحيات" }] }),
@@ -30,7 +31,14 @@ export const Route = createFileRoute("/_authenticated/accounts")({
   component: AccountsPage,
 });
 
-type Role = "admin" | "hr" | "supervisor" | "data_entry";
+type Role =
+  | "admin"
+  | "hr"
+  | "supervisor"
+  | "data_entry"
+  | "site_admin"
+  | "department_manager"
+  | "engineer";
 type Profile = { id: string; full_name: string | null; email: string | null; created_at: string };
 type UserRole = { id: string; user_id: string; role: Role };
 type Department = { id: string; name: string };
@@ -45,6 +53,9 @@ const roles: { key: Role; label: string; description: string }[] = [
   { key: "hr", label: "الموارد البشرية", description: "الموظفون والأجور والتقارير الإدارية" },
   { key: "supervisor", label: "مشرف", description: "المتابعة والإشراف على التقارير والمهام" },
   { key: "data_entry", label: "مدخل بيانات", description: "إدخال التقارير والمهام المسموحة" },
+  { key: "department_manager", label: "مدير قسم", description: "متابعة فريق القسم" },
+  { key: "site_admin", label: "إداري موقع", description: "إدارة الموقع ومهامه" },
+  { key: "engineer", label: "مهندس", description: "طلب الخطة فقط من قسم التخطيط" },
 ];
 
 function AccountsPage() {
@@ -58,6 +69,7 @@ function AccountsPage() {
     password: "",
     role: "data_entry" as Role,
     departmentIds: [] as string[],
+    allowedSections: [] as string[],
   });
   const [resetUserId, setResetUserId] = useState<string | null>(null);
   const [resetPassword, setResetPassword] = useState("");
@@ -183,6 +195,7 @@ function AccountsPage() {
           password: createForm.password,
           role: createForm.role,
           departmentIds: createForm.departmentIds,
+          allowedSections: createForm.allowedSections,
         },
       });
       setCreateForm({
@@ -191,6 +204,7 @@ function AccountsPage() {
         password: "",
         role: "data_entry",
         departmentIds: [],
+        allowedSections: [],
       });
       setShowCreateForm(false);
       await Promise.all([
@@ -332,6 +346,35 @@ function AccountsPage() {
                   ))}
                 </select>
               </div>
+              {createForm.role !== "engineer" && createForm.role !== "admin" && (
+                <div className="md:col-span-2">
+                  <Label>أقسام النظام المتاحة له (اتركها فارغة لإتاحة الكل)</Label>
+                  <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg border p-3 md:grid-cols-4">
+                    {SECTION_OPTIONS.map((section) => (
+                      <label key={section.to} className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={createForm.allowedSections.includes(section.to)}
+                          onCheckedChange={(checked) =>
+                            setCreateForm((current) => ({
+                              ...current,
+                              allowedSections:
+                                checked === true
+                                  ? [...current.allowedSections, section.to]
+                                  : current.allowedSections.filter((s) => s !== section.to),
+                            }))
+                          }
+                        />
+                        {section.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {createForm.role === "engineer" && (
+                <p className="md:col-span-2 text-sm text-muted-foreground">
+                  حساب المهندس يستطيع فقط طلب خطة من قسم التخطيط.
+                </p>
+              )}
               <div className="md:col-span-2">
                 <Label>الأقسام المسموح بها (اتركها فارغة للوصول الكامل)</Label>
                 <div className="mt-2 flex flex-wrap gap-2 rounded-lg border p-3">

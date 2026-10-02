@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -281,6 +282,7 @@ function ColoredNameChips({ names, color }: { names: string[]; color: string }) 
 
 function PlanningPage() {
   const qc = useQueryClient();
+  const { isEngineer } = useAuth();
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Site | null>(null);
@@ -1131,7 +1133,7 @@ function PlanningPage() {
           </DialogContent>
         </Dialog>
       )}
-      {isMobile && (
+      {isMobile && !isEngineer && (
         <Button
           aria-label="إضافة موقع جديد"
           className={`fixed ${activeWorkPlanTab === "request" ? "bottom-24" : "bottom-5"} left-5 z-30 h-14 w-14 rounded-full shadow-lg sm:hidden`}
@@ -1145,6 +1147,7 @@ function PlanningPage() {
         </Button>
       )}
 
+      {!isEngineer && (
       <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-3">
         <Card className="min-w-[250px] snap-start sm:min-w-0">
           <CardContent className="flex items-center gap-3 p-3 sm:p-4">
@@ -1179,6 +1182,7 @@ function PlanningPage() {
           </CardContent>
         </Card>
       </div>
+      )}
 
       <Card className="border-primary/20">
         <CardHeader>
@@ -1186,7 +1190,7 @@ function PlanningPage() {
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="sticky top-0 z-20 -mx-6 flex snap-x gap-2 overflow-x-auto border-b bg-card px-4 py-2 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
-            {(["request", "requested", "management", "final"] as WorkPlanTab[]).map((tab) => (
+            {(isEngineer ? (["request"] as WorkPlanTab[]) : (["request", "requested", "management", "final"] as WorkPlanTab[])).map((tab) => (
               <Button
                 key={tab}
                 type="button"
