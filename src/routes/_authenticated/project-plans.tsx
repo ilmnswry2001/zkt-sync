@@ -383,7 +383,9 @@ function PlanningPage() {
   }, [costData.rates, siteEmployees]);
   const totalMonthly = Object.values(siteSummary).reduce((sum, item) => sum + item.monthly, 0);
 
-  const [activeWorkPlanTab, setActiveWorkPlanTab] = useState<WorkPlanTab>("request");
+  const [activeWorkPlanTab, setActiveWorkPlanTab] = useState<WorkPlanTab>(
+    isEngineer ? "request" : "requested",
+  );
   const [requestSiteId, setRequestSiteId] = useState<string>(sites[0]?.id ?? "");
   const [requestDate, setRequestDate] = useState(new Date().toISOString().slice(0, 10));
   const [applicantName, setApplicantName] = useState("");
@@ -601,6 +603,7 @@ function PlanningPage() {
 
   const createWorkPlanRequest = useMutation({
     mutationFn: async () => {
+      if (!isEngineer) throw new Error("إنشاء الخطط متاح للمهندس فقط من قسم خطط المشاريع");
       const { data: userData } = await supabase.auth.getUser();
       const user = userData.user;
       const validSpecialties = draftSpecialties.filter(
@@ -638,7 +641,12 @@ function PlanningPage() {
 
       // جرّب المخطط الكامل أولاً، ثم أعد الإرسال بالحقول الأساسية إذا لم تُطبّق Migration بعد.
       let { error } = await (supabase as any).from("site_work_plans").insert(payload);
-      if (error && /(applicant_name|engineer_notes|column .* does not exist|schema cache)/i.test(error.message ?? "")) {
+      if (
+        error &&
+        /(applicant_name|engineer_notes|column .* does not exist|schema cache)/i.test(
+          error.message ?? "",
+        )
+      ) {
         const legacyPayload = { ...payload } as Record<string, unknown>;
         delete legacyPayload.applicant_name;
         delete legacyPayload.engineer_notes;
@@ -732,11 +740,11 @@ function PlanningPage() {
         },
       };
       // جرّب الحقول الكاملة أولاً، ثم أعد الحفظ بالحقول الأساسية إذا لم تُطبّق Migration بعد.
-      let { error } = await (supabase as any)
-        .from("site_work_plans")
-        .update(payload)
-        .eq("id", id);
-      if (error && /(engineer_notes|column .* does not exist|schema cache)/i.test(error.message ?? "")) {
+      let { error } = await (supabase as any).from("site_work_plans").update(payload).eq("id", id);
+      if (
+        error &&
+        /(engineer_notes|column .* does not exist|schema cache)/i.test(error.message ?? "")
+      ) {
         const legacyPayload = { ...payload } as Record<string, unknown>;
         delete legacyPayload.engineer_notes;
         const retry = await (supabase as any)
@@ -1099,7 +1107,8 @@ function PlanningPage() {
         </div>
       )}
       <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm text-muted-foreground">
-        هذه الصفحة مخصصة لطلب خطط المشاريع ومتابعة الخطط المرسلة والاعتماد النهائي. لإدارة المواقع استخدم قسم «المواقع».
+        هذه الصفحة مخصصة لطلب خطط المشاريع ومتابعة الخطط المرسلة والاعتماد النهائي. لإدارة المواقع
+        استخدم قسم «المواقع».
       </div>
 
       <Card className="border-primary/20">
@@ -1108,7 +1117,10 @@ function PlanningPage() {
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="sticky top-0 z-20 -mx-6 flex snap-x gap-2 overflow-x-auto border-b bg-card px-4 py-2 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
-            {(isEngineer ? (["request"] as WorkPlanTab[]) : (["request", "requested", "management", "final"] as WorkPlanTab[])).map((tab) => (
+            {(isEngineer
+              ? (["request"] as WorkPlanTab[])
+              : (["requested", "management", "final"] as WorkPlanTab[])
+            ).map((tab) => (
               <Button
                 key={tab}
                 type="button"
@@ -1147,7 +1159,7 @@ function PlanningPage() {
             </div>
           )}
 
-          {activeWorkPlanTab === "request" && (
+          {activeWorkPlanTab === "request" && isEngineer && (
             <div className="space-y-5 pb-28 md:pb-4">
               <div className="grid grid-cols-1 gap-3 rounded-xl border bg-card p-3 sm:grid-cols-2 lg:grid-cols-[1.2fr_0.8fr_1.5fr]">
                 <div className="space-y-2">
