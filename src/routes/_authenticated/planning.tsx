@@ -193,11 +193,17 @@ function planPdfMarkup(plan: SiteWorkPlan, site?: Site) {
     .map((item) => {
       const names = assigned.get(item.specialty) ?? [];
       const color = item.color || "#0f766e";
-      return `<tr>
-      <td style="border-right:5px solid ${escapeHtml(color)}"><strong>${escapeHtml(item.specialty)}</strong><br><span style="color:#64748b;font-size:11px">${item.heavy_equipment ? `آلية: ${escapeHtml(item.equipment_name || "مطلوبة")}` : ""}</span></td>
-      <td style="text-align:center;font-weight:700">${Number(item.quantity || 0)}</td>
-      <td>${names.length ? names.map((name) => `<span class="name-chip" style="border-color:${escapeHtml(color)};color:${escapeHtml(color)}">${escapeHtml(name)}</span>`).join(" ") : '<span style="color:#94a3b8">لم يتم تخصيص أسماء</span>'}</td>
-    </tr>`;
+      const required = Number(item.quantity || 0);
+      const missing = Math.max(0, required - names.length);
+      const progress = required ? Math.min(100, Math.round((names.length / required) * 100)) : 100;
+      return `<article class="plan-item" style="--item-color:${escapeHtml(color)}">
+        <div class="plan-item-head"><div><span class="plan-label">التخصص</span><strong class="plan-specialty">${escapeHtml(item.specialty)}</strong></div><div class="plan-count"><span>مطلوب</span><b>${required}</b></div></div>
+        <div class="plan-progress-label"><span>حالة التوزيع</span><b>${missing ? `متبقٍ ${missing}` : "مكتمل"} · ${names.length}/${required}</b></div>
+        <div class="plan-progress"><i style="width:${progress}%"></i></div>
+        <div class="plan-staff"><div class="plan-staff-title">الكوادر المسندة <b>${names.length} فرد</b></div>${names.length ? names.map((name) => `<span class="name-chip">${escapeHtml(name)}</span>`).join(" ") : '<span class="plan-empty">لم يتم تخصيص أسماء بعد</span>'}</div>
+        ${item.heavy_equipment ? `<div class="plan-item-note"><b>الآلية:</b> ${escapeHtml(item.equipment_name || "مطلوبة")}</div>` : ""}
+        ${item.notes ? `<div class="plan-item-note"><b>ملاحظة التخصص:</b> ${escapeHtml(item.notes)}</div>` : ""}
+      </article>`;
     })
     .join("");
 
@@ -213,8 +219,9 @@ function planPdfMarkup(plan: SiteWorkPlan, site?: Site) {
       <div><span>إجمالي المطلوب</span><strong>${totalRequired}</strong></div>
       <div><span>الأسماء المخصصة</span><strong>${totalAssigned}</strong></div>
     </div>
-    <table class="plan-table"><thead><tr><th>التخصص</th><th>المطلوب</th><th>الأسماء المخصصة</th></tr></thead><tbody>${rows || `<tr><td colspan="3">لا توجد تخصصات</td></tr>`}</tbody></table>
-    <div class="note"><strong>ملاحظات المهندس:</strong> ${escapeHtml(plan.engineer_notes || plan.final_plan?.notes || plan.management_notes || plan.planning_notes || "لا توجد ملاحظات")}</div>
+    <div class="plan-grid">${rows || `<div class="plan-empty">لا توجد تخصصات في هذه الخطة</div>`}</div>
+    <div class="plan-summary"><div><span>الاحتياج</span><b>${totalRequired} فرد</b></div><div><span>تم التوزيع</span><b>${totalAssigned} فرد</b></div><div><span>المتبقي</span><b>${Math.max(0, totalRequired-totalAssigned)} فرد</b></div></div>
+    <div class="note"><strong>ملاحظات المهندس</strong><p>${escapeHtml(plan.engineer_notes || plan.final_plan?.notes || plan.management_notes || plan.planning_notes || "لا توجد ملاحظات")}</p></div>
     <footer class="plan-footer"><span>وثيقة تشغيلية · نظام إدارة المشاريع والموارد</span><span>تم إصدارها في ${new Date().toLocaleDateString("ar-IQ")}</span></footer>
   </section>`;
 }
@@ -1980,6 +1987,10 @@ function PlanningPage() {
                         (sum, group) => sum + group.names.length,
                         0,
                       );
+                      const remainingTotal = Math.max(0, requiredTotal - assignedTotal);
+                      const staffingProgress = requiredTotal
+                        ? Math.min(100, Math.round((assignedTotal / requiredTotal) * 100))
+                        : 100;
                       const ctrCode = sites.find((site) => site.id === plan.site_id)?.ctr_code;
 
                       return (
@@ -2034,157 +2045,70 @@ function PlanningPage() {
                           </header>
 
                           <div className="space-y-4 p-4 sm:p-5">
-                            <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/20">
-                              <span className="font-semibold">ملاحظات المهندس:</span>{" "}
-                              {plan.engineer_notes || plan.final_plan?.notes || "لا توجد ملاحظات"}
+                            <div className="flex gap-3 rounded-2xl border border-amber-200/80 bg-gradient-to-l from-amber-50 to-white p-4 text-sm shadow-sm dark:border-amber-900 dark:from-amber-950/30 dark:to-card">
+                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-400/15 text-amber-700 dark:text-amber-300"><NotebookPen className="h-4 w-4" /></span>
+                              <div><span className="font-bold">ملاحظات المهندس</span><p className="mt-1 whitespace-pre-line text-muted-foreground">{plan.engineer_notes || plan.final_plan?.notes || "لا توجد ملاحظات مرفقة."}</p></div>
                             </div>
-                            <div className="planning-final-controls flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                              <div>
-                                <h5 className="font-bold">التخصصات والكوادر المخصصة</h5>
-                                <p className="text-sm text-muted-foreground">
-                                  {rows.length} تخصص ظاهر
-                                </p>
+                            <div className="rounded-2xl border bg-card p-4 shadow-sm sm:p-5">
+                              <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                                <div className="flex items-start gap-3">
+                                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary"><Users className="h-5 w-5" /></span>
+                                  <div><h5 className="text-lg font-extrabold">توزيع القوى العاملة</h5><p className="mt-0.5 text-sm text-muted-foreground">تفاصيل كل تخصص والكوادر المسندة إليه</p></div>
+                                </div>
+                                <div className="planning-final-controls flex flex-col gap-3 sm:flex-row sm:items-center">
+                                  <div className="w-full sm:w-56"><div className="mb-1 flex justify-between text-[11px] text-muted-foreground"><span>اكتمال التوزيع</span><strong className="text-foreground">{staffingProgress}٪</strong></div><div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-gradient-to-l from-teal-500 to-emerald-400" style={{ width: `${staffingProgress}%` }} /></div></div>
+                                  <div className="relative w-full sm:w-64">
+                                    <Search className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
+                                    <Input className="min-h-11 rounded-xl pr-9" value={finalStaffSearch} onChange={(event) => setFinalStaffSearch(event.target.value)} placeholder="ابحث عن تخصص أو اسم..." aria-label="بحث في الخطة النهائية" />
+                                  </div>
+                                </div>
                               </div>
-                              <div className="relative w-full sm:max-w-xs">
-                                <Search className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                  className="min-h-11 pr-9"
-                                  value={finalStaffSearch}
-                                  onChange={(event) => setFinalStaffSearch(event.target.value)}
-                                  placeholder="ابحث عن تخصص أو اسم..."
-                                  aria-label="بحث في الخطة النهائية"
-                                />
-                              </div>
-                            </div>
 
                             {!rows.length ? (
-                              <div className="rounded-lg border border-dashed p-6 text-center text-muted-foreground">
+                              <div className="rounded-2xl border border-dashed bg-muted/20 p-10 text-center text-muted-foreground">
                                 {specialties.length
                                   ? "لا توجد تخصصات مطابقة للبحث."
                                   : "لا توجد تخصصات في الخطة النهائية."}
                               </div>
                             ) : (
-                              <>
-                                <div className="planning-final-desktop hidden max-h-[70vh] overflow-auto rounded-lg border md:block">
-                                  <table className="planning-final-table w-full min-w-[700px] text-right text-sm">
-                                    <thead className="sticky top-0 z-10 bg-muted text-foreground">
-                                      <tr>
-                                        <th className="px-4 py-3">التخصص</th>
-                                        <th className="w-44 px-4 py-3">العدد المطلوب</th>
-                                        <th className="px-4 py-3">الأسماء المضافة</th>
-                                        <th className="px-4 py-3">ملاحظات التخصص</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {rows.map(({ item, names }, index) => {
-                                        const required = Number(item.quantity) || 0;
-                                        const missing = Math.max(0, required - names.length);
-                                        const complete = missing === 0;
-                                        const progress =
-                                          required > 0
-                                            ? Math.min(100, (names.length / required) * 100)
-                                            : 100;
-                                        return (
-                                          <tr
-                                            key={`${plan.id}-${item.specialty}`}
-                                            className={`${missing ? "bg-amber-50 dark:bg-amber-950/25" : "bg-background"} ${index % 2 ? "planning-final-stripe" : ""}`}
-                                          >
-                                            <td className="px-4 py-4">
-                                              <Badge
-                                                variant="outline"
-                                                className="min-w-32 justify-center px-3 py-1.5 text-sm"
-                                              >
-                                                {item.specialty}
-                                              </Badge>
-                                            </td>
-                                            <td className="px-4 py-4">
-                                              <div className="font-bold">{required}</div>
-                                              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-                                                <div
-                                                  className={`h-full rounded-full ${complete ? "bg-emerald-600" : "bg-amber-500"}`}
-                                                  style={{ width: `${progress}%` }}
-                                                />
-                                              </div>
-                                              <div
-                                                className={`mt-1 text-xs font-medium ${complete ? "text-emerald-700 dark:text-emerald-300" : "text-amber-800 dark:text-amber-300"}`}
-                                              >
-                                                {complete
-                                                  ? `✓ مكتمل · ${names.length}/${required}`
-                                                  : `ينقص ${missing} · ${names.length}/${required}`}
-                                              </div>
-                                            </td>
-                                            <td className="px-4 py-4">
-                                              <ColoredNameChips
-                                                color={item.color || "#0f766e"}
-                                                names={names}
-                                              />
-                                            </td>
-                                            <td className="max-w-xs px-4 py-4 text-xs text-muted-foreground">
-                                              {item.notes || "—"}
-                                            </td>
-                                          </tr>
-                                        );
-                                      })}
-                                    </tbody>
-                                  </table>
-                                </div>
-
-                                <div className="planning-final-mobile space-y-3 md:hidden">
-                                  {rows.map(({ item, names }) => {
-                                    const required = Number(item.quantity) || 0;
-                                    const missing = Math.max(0, required - names.length);
-                                    const complete = missing === 0;
-                                    const progress =
-                                      required > 0
-                                        ? Math.min(100, (names.length / required) * 100)
-                                        : 100;
-                                    return (
-                                      <article
-                                        key={`${plan.id}-mobile-${item.specialty}`}
-                                        className={`rounded-lg border p-3 ${missing ? "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/25" : "bg-card"}`}
-                                      >
+                              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                                {rows.map(({ item, names }) => {
+                                  const required = Number(item.quantity) || 0;
+                                  const missing = Math.max(0, required - names.length);
+                                  const complete = missing === 0;
+                                  const progress = required > 0 ? Math.min(100, (names.length / required) * 100) : 100;
+                                  const specialtyColor = item.color || "#0f766e";
+                                  return (
+                                    <article key={`${plan.id}-${item.specialty}`} className="group relative overflow-hidden rounded-2xl border bg-card shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
+                                      <div className="h-1.5" style={{ background: `linear-gradient(90deg, ${specialtyColor}55, ${specialtyColor})` }} />
+                                      <div className="space-y-4 p-4 sm:p-5">
                                         <div className="flex items-center justify-between gap-3">
-                                          <Badge
-                                            variant="outline"
-                                            className="max-w-[70%] truncate px-3 py-1.5"
-                                          >
-                                            {item.specialty}
-                                          </Badge>
-                                          <div className="text-sm">
-                                            <span className="text-muted-foreground">مطلوب</span>{" "}
-                                            <strong className="text-lg">{required}</strong>
+                                          <div className="flex min-w-0 items-center gap-3">
+                                            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-lg font-black" style={{ backgroundColor: `${specialtyColor}18`, color: specialtyColor }}>{item.specialty.trim().charAt(0)}</span>
+                                            <div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">التخصص</p><h6 className="truncate text-base font-extrabold">{item.specialty}</h6></div>
                                           </div>
+                                          <div className="flex shrink-0 items-center gap-2 rounded-xl border bg-muted/30 px-3 py-2"><span className="text-[10px] text-muted-foreground">العدد المطلوب</span><strong className="text-xl tabular-nums">{required}</strong></div>
                                         </div>
-                                        <div className="mt-3">
-                                          <ColoredNameChips
-                                            color={item.color || "#0f766e"}
-                                            names={names}
-                                          />
+                                        <div>
+                                          <div className="mb-1.5 flex items-center justify-between text-xs"><span className="font-semibold text-muted-foreground">حالة التوزيع</span><span className={`font-bold ${complete ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300"}`}>{complete ? `مكتمل · ${names.length}/${required}` : `متبقٍ ${missing} · ${names.length}/${required}`}</span></div>
+                                          <div className="h-2 overflow-hidden rounded-full bg-muted"><div className={`h-full rounded-full transition-all ${complete ? "bg-gradient-to-l from-emerald-600 to-teal-400" : "bg-gradient-to-l from-amber-500 to-orange-300"}`} style={{ width: `${progress}%` }} /></div>
                                         </div>
-                                        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
-                                          <div
-                                            className={`h-full rounded-full ${complete ? "bg-emerald-600" : "bg-amber-500"}`}
-                                            style={{ width: `${progress}%` }}
-                                          />
-                                        </div>
-                                        <div
-                                          className={`mt-1 text-xs font-medium ${complete ? "text-emerald-700 dark:text-emerald-300" : "text-amber-800 dark:text-amber-300"}`}
-                                        >
-                                          {complete
-                                            ? `✓ مكتمل · ${names.length}/${required}`
-                                            : `ينقص ${missing} · ${names.length}/${required}`}
-                                        </div>
-                                      </article>
-                                    );
-                                  })}
-                                </div>
-                              </>
+                                        <div className="rounded-xl border border-dashed bg-muted/15 p-3"><div className="mb-2 flex items-center justify-between"><span className="text-xs font-bold">الكوادر المسندة</span><Badge variant="secondary" className="rounded-full">{names.length} فرد</Badge></div>{names.length ? <ColoredNameChips color={specialtyColor} names={names} /> : <p className="text-xs text-muted-foreground">لم تُسند كوادر لهذا التخصص.</p>}</div>
+                                        {item.notes && <p className="text-xs leading-6 text-muted-foreground"><span className="font-bold text-foreground">ملاحظة التخصص: </span>{item.notes}</p>}
+                                      </div>
+                                    </article>
+                                  );
+                                })}
+                              </div>
                             )}
-
-                            <div className="rounded-lg border bg-muted/30 p-3 text-sm whitespace-pre-line">
-                              <span className="font-semibold">ملاحظات الخطة: </span>
-                              {plan.final_plan?.notes ?? plan.management_notes ?? "لا توجد ملاحظات"}
                             </div>
+
+                            <div className="grid gap-3 sm:grid-cols-3">
+                              <div className="rounded-2xl border bg-muted/25 p-4"><span className="text-xs text-muted-foreground">إجمالي الاحتياج</span><div className="mt-1 text-2xl font-black tabular-nums">{requiredTotal}<span className="mr-1 text-xs font-medium text-muted-foreground">فرد</span></div></div>
+                              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900 dark:bg-emerald-950/20"><span className="text-xs text-muted-foreground">تم توزيعهم</span><div className="mt-1 text-2xl font-black tabular-nums text-emerald-700 dark:text-emerald-300">{assignedTotal}<span className="mr-1 text-xs font-medium">فرد</span></div></div>
+                              <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900 dark:bg-amber-950/20"><span className="text-xs text-muted-foreground">المتبقي للتوزيع</span><div className="mt-1 text-2xl font-black tabular-nums text-amber-700 dark:text-amber-300">{remainingTotal}<span className="mr-1 text-xs font-medium">فرد</span></div></div>
+                            </div>
+                            <div className="flex gap-3 rounded-2xl border bg-muted/20 p-4 text-sm"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><NotebookPen className="h-4 w-4" /></span><div><span className="font-bold">ملاحظات الخطة</span><p className="mt-1 whitespace-pre-line text-muted-foreground">{plan.final_plan?.notes ?? plan.management_notes ?? "لا توجد ملاحظات إضافية."}</p></div></div>
                             <div className="sr-only">إجمالي الأسماء المضافة: {assignedTotal}</div>
                           </div>
                         </section>
