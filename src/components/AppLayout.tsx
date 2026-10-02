@@ -23,7 +23,8 @@ import {
   UserCog,
   UserCircle2,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+export const SECTION_OPTIONS: { to: string; label: string }[] = [];
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -52,8 +53,16 @@ const nav = [
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { user, roles, isAdmin, isHR, isCompanyManager, signOut } = useAuth();
+  const { user, roles, isAdmin, isHR, isCompanyManager, signOut, canAccessSection, allowedSections, permissionsLoading } = useAuth();
   const navigate = useNavigate();
+  const blocked =
+    !permissionsLoading &&
+    !!allowedSections &&
+    pathname !== "/profile" &&
+    !allowedSections.some((p) => pathname === p || pathname.startsWith(p + "/"));
+  useEffect(() => {
+    if (blocked && allowedSections?.[0]) navigate({ to: allowedSections[0] as any });
+  }, [blocked, allowedSections, navigate]);
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     if (typeof window === "undefined") return true;
     return window.localStorage.getItem("zkt-sidebar-hidden") !== "true";
@@ -97,6 +106,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
         <nav className="flex-1 p-3 space-y-1 min-w-64">
           {nav.map((item) => {
+            if (!canAccessSection(item.to)) return null;
             if ("access" in item && item.access === "admin" && !isAdmin) return null;
             if ("access" in item && item.access === "hr" && !isHR) return null;
             if ("access" in item && item.access === "executive" && !isAdmin && !isCompanyManager) return null;
