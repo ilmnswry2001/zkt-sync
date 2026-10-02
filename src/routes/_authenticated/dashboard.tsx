@@ -81,7 +81,7 @@ function Dashboard() {
     return () => window.clearInterval(timer);
   }, []);
 
-  const today = now.toISOString().slice(0, 10);
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const month = today.slice(0, 7);
   const activeEmployeesQuery = useQuery({
     queryKey: ["executive-dashboard", "active-employees"],
@@ -253,9 +253,12 @@ function Dashboard() {
 
   return (
     <div dir="rtl" className="space-y-6 pb-6">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div><h1 className="text-2xl font-bold sm:text-3xl">نظرة شاملة على النظام</h1><p className="mt-1 text-sm text-muted-foreground">ملخص تشغيلي محدث من سجلات النظام</p></div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground"><RefreshCw className="h-4 w-4" /> آخر تحديث: {updatedAt ? formatDateTime(new Date(updatedAt).toISOString()) : "جارٍ التحميل"}</div>
+      <header className="relative isolate overflow-hidden rounded-3xl bg-gradient-to-l from-[#102b46] via-[#12465a] to-[#087d78] px-5 py-6 text-white shadow-xl shadow-teal-950/10 sm:px-8 sm:py-8">
+        <div aria-hidden="true" className="absolute -left-16 -top-24 -z-10 h-64 w-64 rounded-full border-[38px] border-white/5" />
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div><div className="mb-2 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-teal-100"><Activity className="h-3.5 w-3.5" /> مركز القيادة</div><h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">نظرة شاملة على النظام</h1><p className="mt-2 text-sm text-white/70">ملخص تشغيلي محدث للحضور والموارد والمواقع</p></div>
+          <div className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-xs text-white/80 backdrop-blur"><RefreshCw className="h-4 w-4 text-teal-200" /> آخر تحديث: {updatedAt ? formatDateTime(new Date(updatedAt).toISOString()) : "جارٍ التحميل"}</div>
+        </div>
       </header>
 
       {hasQueryError && <Card role="alert" className="border-destructive/40 bg-destructive/5"><CardContent className="flex items-start gap-2 p-4 text-sm text-destructive"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span>تعذر تحميل جزء من بيانات اللوحة: {errorMessage ?? "تحقق من اتصال قاعدة البيانات والصلاحيات"}. بقية الأقسام تستمر بعرض بياناتها.</span></CardContent></Card>}

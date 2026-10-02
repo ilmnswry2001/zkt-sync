@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -34,6 +34,14 @@ import { toast } from "sonner";
 import { getDefaultWage } from "@/lib/wage-defaults";
 
 export const Route = createFileRoute("/_authenticated/sites")({
+  beforeLoad: async () => {
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) throw redirect({ to: "/auth" });
+    const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", auth.user.id);
+    if (error) throw redirect({ to: "/attendance" });
+    const roles = new Set<string>((data ?? []).map((row) => row.role));
+    if (!["admin", "hr", "supervisor", "department_manager"].some((role) => roles.has(role))) throw redirect({ to: "/attendance" });
+  },
   head: () => ({
     meta: [
       { title: "المواقع — إدارة مواقع العمل وأكواد التكلفة" },

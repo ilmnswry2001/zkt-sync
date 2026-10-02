@@ -17,6 +17,7 @@ export function useAuth() {
   const [allowedSections, setAllowedSections] = useState<string[] | null>(null);
   const [profileName, setProfileName] = useState<string | null>(null);
   const [isCompanyManager, setIsCompanyManager] = useState(false);
+  const [permissionError, setPermissionError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [permissionsLoading, setPermissionsLoading] = useState(true);
 
@@ -30,11 +31,13 @@ export function useAuth() {
         supabase.from("profiles").select("full_name, allowed_sections").eq("id", uid).maybeSingle(),
       ]);
       if (!mounted) return;
-      setRoles((rolesResult.data ?? []).map((role: any) => role.role));
+      const failed = !!(rolesResult.error || formRolesResult.error || profileResult.error);
+      setPermissionError(failed);
+      setRoles(failed ? [] : (rolesResult.data ?? []).map((role: any) => role.role));
       setProfileName(profileResult.data?.full_name?.trim() || null);
-      setIsCompanyManager((formRolesResult.data ?? []).some((role) => role.role === "ceo"));
+      setIsCompanyManager(!failed && (formRolesResult.data ?? []).some((role) => role.role === "ceo"));
       const sections = (profileResult.data as any)?.allowed_sections as string[] | null | undefined;
-      setAllowedSections(sections && sections.length ? sections : null);
+      setAllowedSections(failed ? [] : sections && sections.length ? sections : null);
       setPermissionsLoading(false);
     };
     supabase.auth.getSession().then(({ data }) => {
@@ -52,6 +55,7 @@ export function useAuth() {
         setAllowedSections(null);
         setProfileName(null);
         setIsCompanyManager(false);
+        setPermissionError(false);
         setPermissionsLoading(false);
       }
     });
@@ -70,13 +74,14 @@ export function useAuth() {
   const isAdmin = roles.includes("admin");
   const isEngineer = roles.includes("engineer") && !isAdmin;
   // null = no restriction. Engineers are limited to planning.
-  const sections = isAdmin ? null : isEngineer ? ["/project-plans"] : allowedSections;
+  const sections = permissionError ? [] : isAdmin ? null : isEngineer ? ["/project-plans"] : allowedSections;
 
   return {
     user,
     roles,
     loading,
     permissionsLoading,
+    permissionError,
     isAdmin,
     isEngineer,
     allowedSections: sections,

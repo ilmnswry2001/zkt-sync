@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -59,6 +59,14 @@ import {
 import { escapeHtml, printReport } from "@/lib/report-print";
 
 export const Route = createFileRoute("/_authenticated/project-plans")({
+  beforeLoad: async () => {
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) throw redirect({ to: "/auth" });
+    const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", auth.user.id);
+    if (error) throw redirect({ to: "/attendance" });
+    const roles = new Set<string>((data ?? []).map((row) => row.role));
+    if (!["admin", "hr", "supervisor", "department_manager", "engineer", "site_admin"].some((role) => roles.has(role))) throw redirect({ to: "/attendance" });
+  },
   head: () => ({
     meta: [
       { title: "خطط المشاريع" },
@@ -383,9 +391,7 @@ function PlanningPage() {
   }, [costData.rates, siteEmployees]);
   const totalMonthly = Object.values(siteSummary).reduce((sum, item) => sum + item.monthly, 0);
 
-  const [activeWorkPlanTab, setActiveWorkPlanTab] = useState<WorkPlanTab>(
-    isEngineer ? "request" : "requested",
-  );
+  const [activeWorkPlanTab, setActiveWorkPlanTab] = useState<WorkPlanTab>(isEngineer ? "request" : "management");
   const [requestSiteId, setRequestSiteId] = useState<string>(sites[0]?.id ?? "");
   const [requestDate, setRequestDate] = useState(new Date().toISOString().slice(0, 10));
   const [applicantName, setApplicantName] = useState("");
@@ -657,7 +663,7 @@ function PlanningPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["site-work-plans"] });
-      setActiveWorkPlanTab("requested");
+      setActiveWorkPlanTab(isEngineer ? "request" : "management");
       setRequestNotes("");
       setRequestDate(new Date().toISOString().slice(0, 10));
       setRequestSiteSearch("");
@@ -1153,10 +1159,7 @@ function PlanningPage() {
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="sticky top-0 z-20 -mx-6 flex snap-x gap-2 overflow-x-auto border-b bg-card px-4 py-2 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
-            {(isEngineer
-              ? (["request"] as WorkPlanTab[])
-              : (["requested", "management", "final"] as WorkPlanTab[])
-            ).map((tab) => (
+            {(isEngineer ? (["request"] as WorkPlanTab[]) : (["management"] as WorkPlanTab[])).map((tab) => (
               <Button
                 key={tab}
                 type="button"
@@ -1166,9 +1169,7 @@ function PlanningPage() {
                 onClick={() => setActiveWorkPlanTab(tab)}
               >
                 {tab === "request" && "طلب خطة"}
-                {tab === "requested" && "الخطط المطلوبة"}
-                {tab === "management" && "الخطط المرسلة للإدارة"}
-                {tab === "final" && "الخطة النهائية ليوم"}
+                {tab === "management" && "تعيين الكوادر"}
                 <Badge
                   variant={activeWorkPlanTab === tab ? "secondary" : "outline"}
                   className="min-w-6 justify-center px-1.5"
@@ -1521,16 +1522,6 @@ function PlanningPage() {
                             }))
                           }
                           placeholder="ملاحظة التخطيط..."
-                        />
-                        <ResponsivePlanAction
-                          label="اعتماد من قسم التخطيط"
-                          onAction={() =>
-                            updatePlanStatus.mutate({
-                              id: plan.id,
-                              status: "planning_approved",
-                              planningNotes: managementNote[plan.id] ?? plan.planning_notes ?? "",
-                            })
-                          }
                         />
                         <Button
                           type="button"

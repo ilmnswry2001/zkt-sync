@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -59,6 +59,14 @@ import {
 import { escapeHtml, printReport } from "@/lib/report-print";
 
 export const Route = createFileRoute("/_authenticated/planning")({
+  beforeLoad: async () => {
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) throw redirect({ to: "/auth" });
+    const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", auth.user.id);
+    if (error) throw redirect({ to: "/attendance" });
+    const roles = new Set<string>((data ?? []).map((row) => row.role));
+    if (!["admin", "hr", "supervisor", "department_manager"].some((role) => roles.has(role))) throw redirect({ to: "/attendance" });
+  },
   head: () => ({
     meta: [
       { title: "التخطيط — مواقع العمل وأكواد التكلفة" },
@@ -195,7 +203,7 @@ function planPdfMarkup(plan: SiteWorkPlan, site?: Site) {
 
   return `<section class="plan-sheet">
     <header class="plan-header">
-      <div><div class="eyebrow">الخطة النهائية المعتمدة</div><h2>${escapeHtml(plan.final_plan?.title || `الخطة النهائية - ${plan.site_name}`)}</h2><p>${escapeHtml(plan.site_name)}${site?.ctr_code ? ` · CTR ${escapeHtml(site.ctr_code)}` : ""}</p></div>
+      <div><div class="eyebrow">خطة تشغيل معتمدة · ${escapeHtml(site?.ctr_code || "إدارة المشاريع")}</div><h2>${escapeHtml(plan.final_plan?.title || `الخطة النهائية - ${plan.site_name}`)}</h2><p>${escapeHtml(plan.site_name)}${site?.location ? ` · ${escapeHtml(site.location)}` : ""}</p></div>
       <div class="status">${escapeHtml(planStatusLabel[plan.status])}</div>
     </header>
     <div class="meta-grid">
@@ -207,6 +215,7 @@ function planPdfMarkup(plan: SiteWorkPlan, site?: Site) {
     </div>
     <table class="plan-table"><thead><tr><th>التخصص</th><th>المطلوب</th><th>الأسماء المخصصة</th></tr></thead><tbody>${rows || `<tr><td colspan="3">لا توجد تخصصات</td></tr>`}</tbody></table>
     <div class="note"><strong>ملاحظات المهندس:</strong> ${escapeHtml(plan.engineer_notes || plan.final_plan?.notes || plan.management_notes || plan.planning_notes || "لا توجد ملاحظات")}</div>
+    <footer class="plan-footer"><span>وثيقة تشغيلية · نظام إدارة المشاريع والموارد</span><span>تم إصدارها في ${new Date().toLocaleDateString("ar-IQ")}</span></footer>
   </section>`;
 }
 
@@ -1214,7 +1223,7 @@ function PlanningPage() {
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="sticky top-0 z-20 -mx-6 flex snap-x gap-2 overflow-x-auto border-b bg-card px-4 py-2 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
-            {(["requested", "management", "final"] as WorkPlanTab[]).map((tab) => (
+            {(["requested", "final"] as WorkPlanTab[]).map((tab) => (
               <Button
                 key={tab}
                 type="button"
@@ -1225,8 +1234,7 @@ function PlanningPage() {
               >
                 {tab === "request" && "طلب خطة"}
                 {tab === "requested" && "الخطط المطلوبة"}
-                {tab === "management" && "الخطط المرسلة للإدارة"}
-                {tab === "final" && "الخطة النهائية ليوم"}
+                {tab === "final" && "مراجعة التوزيع والخطة النهائية"}
                 <Badge
                   variant={activeWorkPlanTab === tab ? "secondary" : "outline"}
                   className="min-w-6 justify-center px-1.5"
@@ -1980,42 +1988,44 @@ function PlanningPage() {
                           dir="rtl"
                           className="planning-final-print overflow-hidden rounded-xl border bg-card shadow-sm"
                         >
-                          <header className="flex flex-col gap-4 bg-emerald-50 p-4 text-emerald-950 dark:bg-emerald-950/40 dark:text-emerald-50 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+                          <header className="relative flex flex-col gap-4 overflow-hidden bg-gradient-to-br from-[#102b46] via-[#12465a] to-[#087d78] p-5 text-white sm:flex-row sm:items-center sm:justify-between sm:p-7">
+                            <div className="pointer-events-none absolute -left-12 -top-16 h-48 w-48 rounded-full border-[28px] border-white/5" />
                             <div className="min-w-0">
                               <div className="mb-2 flex flex-wrap items-center gap-2">
                                 <Badge
                                   variant="outline"
-                                  className="border-emerald-700/30 bg-background/70 font-mono text-emerald-900 dark:text-emerald-100"
+                                  className="border-white/25 bg-white/10 font-mono text-white"
                                 >
                                   {ctrCode || plan.site_name}
                                 </Badge>
-                                <span className="text-sm">{plan.request_date}</span>
-                                <Badge className="bg-emerald-700 text-white">
+                                <span className="text-sm text-white/75">{plan.request_date}</span>
+                                <Badge className="bg-teal-200 text-slate-900">
                                   {planStatusLabel[plan.status]}
                                 </Badge>
                               </div>
-                              <h4 className="truncate text-xl font-bold">
+                              <p className="mb-1 text-xs font-semibold tracking-widest text-teal-200">خطة تشغيل معتمدة · توزيع الموارد</p>
+                              <h4 className="truncate text-xl font-bold sm:text-2xl">
                                 {plan.final_plan?.title ?? `الخطة النهائية - ${plan.site_name}`}
                               </h4>
-                              <p className="mt-1 text-sm opacity-80">{plan.site_name}</p>
-                              <div className="mt-2 flex flex-wrap gap-2 text-xs font-medium text-emerald-800 dark:text-emerald-200">
-                                <Badge variant="outline">
+                              <p className="mt-1 text-sm text-white/75">{plan.site_name}</p>
+                              <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium text-white/90">
+                                <Badge variant="outline" className="border-white/25 bg-white/10 text-white">
                                   منشئ الخطة: {planCreatorLabel(plan)}
                                 </Badge>
-                                <Badge variant="outline">
+                                <Badge variant="outline" className="border-white/25 bg-white/10 text-white">
                                   طالب الخطة: {plan.applicant_name || "غير محدد"}
                                 </Badge>
                               </div>
                             </div>
                             <div className="flex items-center gap-3">
-                              <div className="rounded-lg bg-white/70 px-3 py-2 text-sm dark:bg-black/20">
-                                <span className="opacity-75">إجمالي المطلوب</span>
-                                <strong className="mr-2 text-lg">{requiredTotal}</strong>
+                              <div className="grid grid-cols-2 gap-2 sm:min-w-56">
+                                <div className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-center"><span className="block text-[11px] text-white/65">المطلوب</span><strong className="text-xl">{requiredTotal}</strong></div>
+                                <div className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-center"><span className="block text-[11px] text-white/65">تم التعيين</span><strong className="text-xl">{assignedTotal}</strong></div>
                               </div>
                               <Button
                                 type="button"
                                 variant="outline"
-                                className="planning-final-controls min-h-11 shrink-0 bg-background"
+                                className="planning-final-controls min-h-11 shrink-0 border-white/30 bg-white text-slate-900 hover:bg-teal-50"
                                 onClick={() => exportPlanPdf(plan)}
                               >
                                 <Printer className="ml-2 h-4 w-4" /> تصدير PDF
