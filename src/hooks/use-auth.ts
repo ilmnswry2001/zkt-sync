@@ -70,7 +70,7 @@ export function useAuth() {
   const isAdmin = roles.includes("admin");
   const isEngineer = roles.includes("engineer") && !isAdmin;
   // null = no restriction. Engineers are limited to planning.
-  const sections = isAdmin ? null : isEngineer ? ["/planning"] : allowedSections;
+  const sections = isAdmin ? null : isEngineer ? ["/project-plans"] : allowedSections;
 
   return {
     user,
@@ -80,7 +80,7 @@ export function useAuth() {
     isAdmin,
     isEngineer,
     allowedSections: sections,
-    canAccessSection: (path: string) => !sections || sections.includes(path),
+    canAccessSection: (path: string) => !sections || sections.includes(path) || (path === "/project-plans" && sections.includes("/planning")),
     isCompanyManager,
     isHR: roles.includes("hr") || isAdmin,
     canManageEmployees: roles.some((r) => ["admin", "hr", "data_entry", "department_manager", "site_admin"].includes(r)),

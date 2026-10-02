@@ -40,7 +40,8 @@ const nav = [
   { to: "/penalties", label: "العقوبات والتغييب", icon: FileWarning },
   { to: "/employees", label: "الموظفون", icon: Users },
   { to: "/departments", label: "الأقسام", icon: Building2 },
-  { to: "/planning", label: "التخطيط", icon: CalendarRange },
+  { to: "/project-plans", label: "خطط المشاريع", icon: CalendarRange },
+  { to: "/planning", label: "التخطيط وتكلفة المشاريع", icon: BarChart3, access: "planning" },
   { to: "/sites", label: "المواقع", icon: MapPinned },
   { to: "/wages", label: "الأجور", icon: Wallet, access: "hr" },
   { to: "/payroll", label: "الرواتب", icon: Wallet, access: "hr" },  { to: "/devices", label: "الأجهزة", icon: Fingerprint },
@@ -60,7 +61,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     !permissionsLoading &&
     !!allowedSections &&
     pathname !== "/profile" &&
-    !allowedSections.some((p) => pathname === p || pathname.startsWith(p + "/"));
+    !allowedSections.some((p) => pathname === p || pathname.startsWith(p + "/") || (p === "/planning" && pathname === "/project-plans"));
   useEffect(() => {
     if (blocked && allowedSections?.[0]) navigate({ to: allowedSections[0] as any });
   }, [blocked, allowedSections, navigate]);
@@ -111,6 +112,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             if ("access" in item && item.access === "admin" && !isAdmin) return null;
             if ("access" in item && item.access === "hr" && !isHR) return null;
             if ("access" in item && item.access === "executive" && !isAdmin && !isCompanyManager) return null;
+            if ("access" in item && item.access === "planning" && !isAdmin && !isHR && !roles.some((role) => ["supervisor", "department_manager"].includes(role))) return null;
             const active = pathname === item.to || pathname.startsWith(item.to + "/");
             const Icon = item.icon;
             return (

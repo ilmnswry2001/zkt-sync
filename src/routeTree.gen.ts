@@ -20,6 +20,7 @@ import { Route as AuthenticatedTasksRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedSitesRouteImport } from './routes/_authenticated/sites'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedProjectsRouteImport } from './routes/_authenticated/projects'
+import { Route as AuthenticatedProjectPlansRouteImport } from './routes/_authenticated/project-plans'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedPlanningRouteImport } from './routes/_authenticated/planning'
 import { Route as AuthenticatedPenaltiesRouteImport } from './routes/_authenticated/penalties'
@@ -90,6 +91,12 @@ const AuthenticatedProjectsRoute = AuthenticatedProjectsRouteImport.update({
   path: '/projects',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedProjectPlansRoute =
+  AuthenticatedProjectPlansRouteImport.update({
+    id: '/project-plans',
+    path: '/project-plans',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedProfileRoute = AuthenticatedProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
@@ -180,6 +187,7 @@ export interface FileRoutesByFullPath {
   '/penalties': typeof AuthenticatedPenaltiesRoute
   '/planning': typeof AuthenticatedPlanningRoute
   '/profile': typeof AuthenticatedProfileRoute
+  '/project-plans': typeof AuthenticatedProjectPlansRoute
   '/projects': typeof AuthenticatedProjectsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/sites': typeof AuthenticatedSitesRoute
@@ -206,6 +214,7 @@ export interface FileRoutesByTo {
   '/penalties': typeof AuthenticatedPenaltiesRoute
   '/planning': typeof AuthenticatedPlanningRoute
   '/profile': typeof AuthenticatedProfileRoute
+  '/project-plans': typeof AuthenticatedProjectPlansRoute
   '/projects': typeof AuthenticatedProjectsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/sites': typeof AuthenticatedSitesRoute
@@ -234,6 +243,7 @@ export interface FileRoutesById {
   '/_authenticated/penalties': typeof AuthenticatedPenaltiesRoute
   '/_authenticated/planning': typeof AuthenticatedPlanningRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
+  '/_authenticated/project-plans': typeof AuthenticatedProjectPlansRoute
   '/_authenticated/projects': typeof AuthenticatedProjectsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/sites': typeof AuthenticatedSitesRoute
@@ -262,6 +272,7 @@ export interface FileRouteTypes {
     | '/penalties'
     | '/planning'
     | '/profile'
+    | '/project-plans'
     | '/projects'
     | '/settings'
     | '/sites'
@@ -288,6 +299,7 @@ export interface FileRouteTypes {
     | '/penalties'
     | '/planning'
     | '/profile'
+    | '/project-plans'
     | '/projects'
     | '/settings'
     | '/sites'
@@ -315,6 +327,7 @@ export interface FileRouteTypes {
     | '/_authenticated/penalties'
     | '/_authenticated/planning'
     | '/_authenticated/profile'
+    | '/_authenticated/project-plans'
     | '/_authenticated/projects'
     | '/_authenticated/settings'
     | '/_authenticated/sites'
@@ -408,6 +421,13 @@ declare module '@tanstack/react-router' {
       path: '/projects'
       fullPath: '/projects'
       preLoaderRoute: typeof AuthenticatedProjectsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/project-plans': {
+      id: '/_authenticated/project-plans'
+      path: '/project-plans'
+      fullPath: '/project-plans'
+      preLoaderRoute: typeof AuthenticatedProjectPlansRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/profile': {
@@ -526,6 +546,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedPenaltiesRoute: typeof AuthenticatedPenaltiesRoute
   AuthenticatedPlanningRoute: typeof AuthenticatedPlanningRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
+  AuthenticatedProjectPlansRoute: typeof AuthenticatedProjectPlansRoute
   AuthenticatedProjectsRoute: typeof AuthenticatedProjectsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedSitesRoute: typeof AuthenticatedSitesRoute
@@ -551,6 +572,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedPenaltiesRoute: AuthenticatedPenaltiesRoute,
   AuthenticatedPlanningRoute: AuthenticatedPlanningRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
+  AuthenticatedProjectPlansRoute: AuthenticatedProjectPlansRoute,
   AuthenticatedProjectsRoute: AuthenticatedProjectsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedSitesRoute: AuthenticatedSitesRoute,
