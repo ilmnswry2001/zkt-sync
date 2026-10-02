@@ -1089,23 +1089,40 @@ function PlanningPage() {
           تعذر تحميل المواقع: {(sitesError as any).message ?? "تحقق من اتصال قاعدة البيانات"}
         </div>
       )}
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold sm:text-3xl">التخطيط</h1>
-          <p className="text-muted-foreground mt-1">
-            مواقع العمل وأكواد التكلفة (CTR) — {sites.length} موقع
-          </p>
+      <section className="relative isolate overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-emerald-950 via-teal-900 to-cyan-950 p-6 text-white shadow-xl shadow-emerald-950/15 sm:p-8">
+        <div className="pointer-events-none absolute -left-12 -top-20 -z-10 h-64 w-64 rounded-full border border-white/10" />
+        <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-end">
+          <div className="max-w-2xl">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-100/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-emerald-100">
+              <Banknote className="h-4 w-4" /> مركز المراجعة والاعتماد
+            </div>
+            <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">الخطط وتكلفة المشاريع</h1>
+            <p className="mt-2 text-sm leading-7 text-white/70 sm:text-base">
+              راجع احتياج كل مشروع واعتمد تكلفته. بعد الموافقة، تعود الخطة إلى «خطط المشاريع» لتوزيع الكوادر.
+            </p>
+          </div>
+          <Button
+            className="hidden min-h-11 shrink-0 border border-white/25 bg-white/10 text-white hover:bg-white/20 hover:text-white sm:inline-flex"
+            variant="outline"
+            onClick={() => { setEditing(null); setOpen(true); }}
+          >
+            <Plus className="ml-2 h-4 w-4" /> إضافة موقع
+          </Button>
         </div>
-        <Button
-          className="hidden min-h-11 sm:inline-flex"
-          onClick={() => {
-            setEditing(null);
-            setOpen(true);
-          }}
-        >
-          <Plus className="ml-2 h-4 w-4" /> موقع جديد
-        </Button>
-      </div>
+        <div className="mt-6 grid grid-cols-2 gap-2 border-t border-white/10 pt-4 sm:grid-cols-4">
+          {[
+            { label: "مواقع مسجلة", value: sites.length.toLocaleString("ar-IQ"), tone: "text-white" },
+            { label: "بانتظار الاعتماد", value: requestedPlans.length.toLocaleString("ar-IQ"), tone: "text-amber-200" },
+            { label: "بانتظار توزيع الكوادر", value: planningApprovedPlans.length.toLocaleString("ar-IQ"), tone: "text-sky-200" },
+            { label: "التكلفة الشهرية الحالية", value: `${totalMonthly.toLocaleString("ar-IQ")} د.ع`, tone: "text-emerald-200" },
+          ].map((item) => (
+            <div key={item.label} className="rounded-xl border border-white/10 bg-white/[0.07] px-3 py-2.5">
+              <p className="text-xs text-white/60">{item.label}</p>
+              <p className={`mt-1 text-lg font-extrabold tabular-nums ${item.tone}`}>{item.value}</p>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {isMobile ? (
         <Drawer

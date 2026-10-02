@@ -1106,14 +1106,50 @@ function PlanningPage() {
           تعذر تحميل المواقع: {(sitesError as any).message ?? "تحقق من اتصال قاعدة البيانات"}
         </div>
       )}
-      <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm text-muted-foreground">
-        هذه الصفحة مخصصة لطلب خطط المشاريع ومتابعة الخطط المرسلة والاعتماد النهائي. لإدارة المواقع
-        استخدم قسم «المواقع».
-      </div>
+      <section className="relative isolate overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-indigo-950 via-slate-900 to-violet-950 p-6 text-white shadow-xl shadow-indigo-950/20 sm:p-8">
+        <div className="pointer-events-none absolute -left-12 -top-20 -z-10 h-64 w-64 rounded-full border border-white/10" />
+        <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-end">
+          <div className="max-w-2xl">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-indigo-100/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-indigo-100">
+              <NotebookPen className="h-4 w-4" /> بوابة إعداد خطط المشاريع
+            </div>
+            <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">خطط المشاريع</h1>
+            <p className="mt-2 text-sm leading-7 text-white/70 sm:text-base">
+              جهّز احتياج الموقع وأرسله للاعتماد. بعد موافقة التخطيط، عيّن الكوادر حسب التخصص وأكمل الخطة التنفيذية.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            {[
+              { label: "بانتظار المراجعة", value: requestedPlans.length },
+              { label: "بانتظار الكوادر", value: planningApprovedPlans.length },
+              { label: "قيد التنفيذ", value: managementReviewPlans.length + finalPlans.length },
+            ].map((item) => (
+              <div key={item.label} className="min-w-24 rounded-2xl border border-white/10 bg-white/10 px-3 py-3 backdrop-blur">
+                <strong className="block text-2xl tabular-nums">{item.value.toLocaleString("ar-IQ")}</strong>
+                <span className="text-[11px] text-white/65">{item.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-white/10 pt-4 text-sm text-indigo-100/80">
+          <span className="rounded-full bg-white/10 px-3 py-1.5">١ · إعداد الطلب</span>
+          <span aria-hidden="true">←</span>
+          <span className="rounded-full bg-white/10 px-3 py-1.5">٢ · اعتماد التخطيط</span>
+          <span aria-hidden="true">←</span>
+          <span className="rounded-full bg-white/10 px-3 py-1.5">٣ · توزيع الكوادر</span>
+        </div>
+      </section>
 
-      <Card className="border-primary/20">
+      <Card className="overflow-hidden border-indigo-200/70 shadow-lg shadow-indigo-950/5 dark:border-indigo-900">
         <CardHeader>
-          <CardTitle>خطط الأعمال</CardTitle>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="mb-1 text-xs font-bold uppercase tracking-[.16em] text-indigo-600 dark:text-indigo-300">إعداد ومتابعة الطلبات</p>
+              <CardTitle className="text-xl sm:text-2xl">مسار خطط المشاريع</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">أرسل الاحتياج، استلمه بعد الاعتماد، ثم وزّع الكوادر.</p>
+            </div>
+            <Badge variant="outline" className="rounded-full px-3 py-1">{workPlans.length.toLocaleString("ar-IQ")} خطة</Badge>
+          </div>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="sticky top-0 z-20 -mx-6 flex snap-x gap-2 overflow-x-auto border-b bg-card px-4 py-2 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">

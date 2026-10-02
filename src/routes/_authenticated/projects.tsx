@@ -22,7 +22,7 @@ import {
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/projects")({
-  head: () => ({ meta: [{ title: "المشاريع" }] }),
+  head: () => ({ meta: [{ title: "تكلفة المواقع اليومية" }] }),
   beforeLoad: async () => {
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) throw redirect({ to: "/auth" });
@@ -247,25 +247,33 @@ function ProjectsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-        <div>
-          <div className="flex items-center gap-2">
-            <BarChart3 className="h-7 w-7 text-primary" />
-            <h1 className="text-3xl font-bold">المشاريع</h1>
+      <section className="relative isolate overflow-hidden rounded-[1.75rem] bg-gradient-to-l from-emerald-950 via-teal-900 to-cyan-900 p-6 text-white shadow-xl shadow-teal-950/15 sm:p-8">
+        <div className="pointer-events-none absolute -left-10 -top-16 -z-10 h-64 w-64 rounded-full border border-white/10" />
+        <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+          <div>
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-teal-100">
+              <WalletCards className="h-4 w-4" /> لوحة التكاليف والتقارير اليومية
+            </div>
+            <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">تكلفة المواقع اليومية</h1>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-white/70 sm:text-base">
+              تابع توزيع العاملين والآليات وتكلفتهم اليومية لكل موقع.
+            </p>
           </div>
-          <p className="mt-1 text-muted-foreground">
-            لوحة متابعة المشاريع وتقارير المواقع اليومية بشكل مستقل.
-          </p>
+          <Button
+            variant="outline"
+            className="min-h-11 border-white/25 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+            onClick={refresh}
+            disabled={query.isFetching}
+          >
+            {query.isFetching ? (
+              <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="ml-2 h-4 w-4" />
+            )}
+            {query.isFetching ? "جارٍ التحديث..." : "تحديث البيانات"}
+          </Button>
         </div>
-        <Button variant="outline" onClick={refresh} disabled={query.isFetching}>
-          {query.isFetching ? (
-            <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="ml-2 h-4 w-4" />
-          )}
-          {query.isFetching ? "جارٍ التحديث..." : "تحديث"}
-        </Button>
-      </div>
+      </section>
 
       <Card>
         <CardContent className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2">
