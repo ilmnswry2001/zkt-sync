@@ -731,11 +731,20 @@ function PlanningPage() {
           specialties: plan?.specialties ?? [],
         },
       };
-      // applicant_name and engineer_notes arrive after the migration refreshes generated types.
-      const { error } = await (supabase as any)
+      // جرّب الحقول الكاملة أولاً، ثم أعد الحفظ بالحقول الأساسية إذا لم تُطبّق Migration بعد.
+      let { error } = await (supabase as any)
         .from("site_work_plans")
         .update(payload)
         .eq("id", id);
+      if (error && /(engineer_notes|column .* does not exist|schema cache)/i.test(error.message ?? "")) {
+        const legacyPayload = { ...payload } as Record<string, unknown>;
+        delete legacyPayload.engineer_notes;
+        const retry = await (supabase as any)
+          .from("site_work_plans")
+          .update(legacyPayload)
+          .eq("id", id);
+        error = retry.error;
+      }
       if (error) throw error;
     },
     onSuccess: () => {
