@@ -256,6 +256,8 @@ export type Database = {
           deduction_amount: number
           employee_id: string | null
           employee_name: string
+          executed_at: string | null
+          executed_by: string | null
           id: string
           notes: string | null
           penalty_date: string
@@ -267,6 +269,8 @@ export type Database = {
           deduction_amount?: number
           employee_id?: string | null
           employee_name: string
+          executed_at?: string | null
+          executed_by?: string | null
           id?: string
           notes?: string | null
           penalty_date?: string
@@ -278,6 +282,8 @@ export type Database = {
           deduction_amount?: number
           employee_id?: string | null
           employee_name?: string
+          executed_at?: string | null
+          executed_by?: string | null
           id?: string
           notes?: string | null
           penalty_date?: string
