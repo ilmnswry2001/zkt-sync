@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Activity, AlertTriangle, Banknote, CalendarClock, CircleDollarSign, ClipboardCheck, FileSignature, Fingerprint, MapPinned, RefreshCw, ShieldAlert, Users, UserCheck } from "lucide-react";
+import { Activity, AlertTriangle, CalendarClock, CircleDollarSign, ClipboardCheck, FileSignature, Fingerprint, MapPinned, RefreshCw, ShieldAlert, Users, UserCheck } from "lucide-react";
 import { ResponsiveContainer, CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -173,7 +173,7 @@ function Dashboard() {
   const formsQuery = useQuery({
     queryKey: ["executive-dashboard", "pending-forms"],
     queryFn: async () => {
-      const { count, error } = await supabase.from("forms").select("id", { count: "exact", head: true }).in("status", ["pending_manager", "pending_ceo", "pending_execution"]);
+      const { count, error } = await supabase.from("forms").select("id", { count: "exact", head: true }).eq("status", "pending_execution");
       if (error) throw error;
       return count ?? 0;
     },
@@ -215,21 +215,7 @@ function Dashboard() {
     enabled: canView,
     refetchInterval: refreshInterval,
   });
-  const companyReportQuery = useQuery({
-    queryKey: ["executive-dashboard", "company-report-latest"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("site_daily_reports")
-        .select("report_date, updated_at")
-        .order("updated_at", { ascending: false })
-        .limit(1);
-      if (error) throw error;
-      return data?.[0] ?? null;
-    },
-    enabled: canView,
-    refetchInterval: refreshInterval,
-  });
-
-  const queryList = [activeEmployeesQuery, dailyQuery, monthlyQuery, previousMonthQuery, sitesQuery, devicesQuery, formsQuery, tasksQuery, penaltiesQuery, companyReportQuery];
+  const queryList = [activeEmployeesQuery, dailyQuery, monthlyQuery, previousMonthQuery, sitesQuery, devicesQuery, formsQuery, tasksQuery, penaltiesQuery];
   const updatedAt = Math.max(0, ...queryList.map((query) => query.dataUpdatedAt));
   const activeDevices = (devicesQuery.data ?? []).filter((device) => device.status === "active");
   const staleDevices = activeDevices.filter((device) => !isDeviceConnected(device.status, device.last_sync_at, now.getTime()));
@@ -309,17 +295,13 @@ function Dashboard() {
           {penaltiesQuery.isLoading ? <div className="h-20 animate-pulse rounded bg-muted/40" /> : penaltiesQuery.data?.total ? <><div className="grid grid-cols-3 gap-2 text-center"><div className="rounded-lg bg-muted/50 p-3"><p className="text-xs text-muted-foreground">استقطاع</p><p className="mt-1 text-xl font-bold">{formatCount(penaltiesQuery.data.deduction)}</p></div><div className="rounded-lg bg-muted/50 p-3"><p className="text-xs text-muted-foreground">غياب</p><p className="mt-1 text-xl font-bold">{formatCount(penaltiesQuery.data.absence)}</p></div><div className="rounded-lg bg-muted/50 p-3"><p className="text-xs text-muted-foreground">إنذار</p><p className="mt-1 text-xl font-bold">{formatCount(penaltiesQuery.data.warning)}</p></div></div><div className="flex flex-wrap gap-2"><Badge className="bg-emerald-600 text-white">منفذة: {formatCount(penaltiesQuery.data.executed)}</Badge><Badge variant="outline">غير منفذة: {formatCount(penaltiesQuery.data.pending)}</Badge></div></> : <p className="text-sm text-muted-foreground">لا توجد عقوبات هذا الشهر.</p>}
         </CardContent></Card>
         <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><FileSignature className="h-5 w-5 text-primary" /> الاستمارات والموافقات</CardTitle></CardHeader><CardContent>
-          {formsQuery.isLoading ? <div className="h-14 w-24 animate-pulse rounded bg-muted/40" /> : (formsQuery.data ?? 0) > 0 ? <><p className="text-4xl font-bold tabular-nums">{formatCount(formsQuery.data ?? 0)}</p><p className="mt-2 text-sm text-muted-foreground">استمارة بانتظار موافقة</p></> : <p className="text-sm text-muted-foreground">لا توجد استمارات معلقة بانتظار الموافقة.</p>}
+          {formsQuery.isLoading ? <div className="h-14 w-24 animate-pulse rounded bg-muted/40" /> : (formsQuery.data ?? 0) > 0 ? <><p className="text-4xl font-bold tabular-nums">{formatCount(formsQuery.data ?? 0)}</p><p className="mt-2 text-sm text-muted-foreground">استمارة بانتظار التنفيذ</p></> : <p className="text-sm text-muted-foreground">لا توجد استمارات بانتظار التنفيذ.</p>}
         </CardContent></Card>
       </section>
 
-      <section className="grid grid-cols-1 gap-4 lg:grid-cols-2" aria-label="الفريق والتقارير">
+      <section className="grid grid-cols-1 gap-4" aria-label="مهام الفريق">
         <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><ClipboardCheck className="h-5 w-5 text-primary" /> مهام الفريق اليوم</CardTitle></CardHeader><CardContent>
           {tasksQuery.isLoading ? <div className="h-14 w-24 animate-pulse rounded bg-muted/40" /> : tasksQuery.data?.total ? <div className="space-y-3"><div className="flex items-baseline gap-2"><strong className="text-4xl">{formatCount(tasksQuery.data.total)}</strong><span className="text-sm text-muted-foreground">مهمة</span><Badge variant="secondary">منجزة {formatCount(tasksQuery.data.completed)}</Badge></div><Progress value={tasksQuery.data.total ? tasksQuery.data.completed / tasksQuery.data.total * 100 : 0} aria-label="نسبة إنجاز مهام اليوم" /></div> : <p className="text-sm text-muted-foreground">لا توجد مهام مسجلة للفريق اليوم.</p>}
-        </CardContent></Card>
-        <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><Banknote className="h-5 w-5 text-primary" /> تقرير الشركة الكامل</CardTitle></CardHeader><CardContent className="flex flex-wrap items-center justify-between gap-3">
-          <div>{companyReportQuery.data ? <><p className="text-sm text-muted-foreground">آخر تقرير موقع تم تحديثه</p><p className="mt-1 font-semibold">{formatDateTime(companyReportQuery.data.updated_at)} · تاريخ التقرير {companyReportQuery.data.report_date}</p></> : companyReportQuery.isLoading ? <p className="text-sm text-muted-foreground">جارٍ قراءة آخر تحديث...</p> : <p className="text-sm text-muted-foreground">لا توجد تقارير مواقع مرفوعة بعد.</p>}</div>
-          <Button asChild variant="outline" className="min-h-11"><Link to="/company-report">فتح التقرير الكامل</Link></Button>
         </CardContent></Card>
       </section>
     </div>

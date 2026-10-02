@@ -186,8 +186,11 @@ function EmployeesPage() {
           </Button>
         <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setEditing(null); }}>
           <DialogTrigger asChild><Button><Plus className="w-4 h-4 ml-2" /> موظف جديد</Button></DialogTrigger>
-          <DialogContent dir="rtl" className="max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader><DialogTitle>{editing ? "تعديل موظف" : "موظف جديد"}</DialogTitle></DialogHeader>
+          <DialogContent dir="rtl" className="flex max-h-[92vh] max-w-5xl flex-col overflow-hidden rounded-2xl border-0 p-0 shadow-2xl">
+            <DialogHeader className="shrink-0 border-b bg-gradient-to-l from-teal-950 via-teal-800 to-cyan-700 px-6 py-5 text-white">
+              <DialogTitle className="text-xl text-white">{editing ? "تحديث بيانات الموظف" : "إضافة موظف جديد"}</DialogTitle>
+              <p className="text-sm text-teal-50/80">ابدأ بالبيانات الأساسية والتكليف؛ بقية التفاصيل اختيارية ويمكن إضافتها لاحقاً.</p>
+            </DialogHeader>
             <form onSubmit={(e) => { e.preventDefault(); const f = new FormData(e.currentTarget);
               const g = (k: string) => { const v = (f.get(k) as string ?? "").trim(); return v === "" || v === "none" ? null : v; };
               const n = (k: string) => { const v = g(k); return v === null ? null : Number(v); };
@@ -215,12 +218,12 @@ function EmployeesPage() {
                 emergency_contact_name: g("emergency_contact_name"), emergency_contact_phone: g("emergency_contact_phone"),
                 notes: g("notes"),
               });
-            }} className="space-y-5">
-              <section className="space-y-3">
-                <h3 className="font-semibold text-sm text-muted-foreground">المعلومات الأساسية</h3>
+            }} className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
+              <section className="space-y-3 rounded-xl border bg-card p-4 shadow-sm">
+                <div><h3 className="font-semibold">البيانات الأساسية</h3><p className="text-xs text-muted-foreground">الحقول ذات النجمة مطلوبة لإتمام الحفظ.</p></div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div><Label>الرقم الوظيفي *</Label><Input name="employee_no" required defaultValue={ed?.employee_no ?? ""} /></div>
-                  <div className="md:col-span-2"><Label>الاسم الكامل *</Label><Input name="full_name" required defaultValue={ed?.full_name ?? ""} /></div>
+                  <div><Label>الرقم الوظيفي *</Label><Input name="employee_no" required autoFocus placeholder="مثال: 10428" defaultValue={ed?.employee_no ?? ""} /></div>
+                  <div className="md:col-span-2"><Label>الاسم الكامل *</Label><Input name="full_name" required placeholder="الاسم كما في المستندات الرسمية" defaultValue={ed?.full_name ?? ""} /></div>
                   <div><Label>المسمى الوظيفي</Label><Input name="position" defaultValue={ed?.position ?? ""} /></div>
                   <div>
                     <Label>القسم</Label>
@@ -249,8 +252,8 @@ function EmployeesPage() {
                 </div>
               </section>
 
-              <section className="space-y-3">
-                <h3 className="font-semibold text-sm text-muted-foreground">موقع العمل والأجر</h3>
+              <section className="space-y-3 rounded-xl border border-teal-900/10 bg-teal-50/40 p-4 shadow-sm dark:bg-teal-950/10">
+                <div><h3 className="font-semibold">التكليف والأجر</h3><p className="text-xs text-muted-foreground">حدد القسم وموقع العمل ونوع الأجر لتسهيل توزيع الموظف واحتساب التكلفة.</p></div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>
                     <Label>موقع العمل</Label>
@@ -289,6 +292,9 @@ function EmployeesPage() {
                 </div>
               </section>
 
+              <details className="group rounded-xl border bg-card p-4 shadow-sm">
+                <summary className="cursor-pointer list-none font-semibold marker:hidden"><span className="flex items-center justify-between">البيانات الإضافية <span className="text-xs font-normal text-muted-foreground group-open:hidden">الجنسية، التواصل، العقد والحساب البنكي</span><span className="hidden text-xs font-normal text-muted-foreground group-open:inline">إخفاء التفاصيل</span></span></summary>
+                <div className="mt-4 space-y-5 border-t pt-4">
               <section className="space-y-3">
                 <h3 className="font-semibold text-sm text-muted-foreground">البيانات الشخصية</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -348,8 +354,12 @@ function EmployeesPage() {
                   <div className="md:col-span-3"><Label>ملاحظات</Label><Textarea name="notes" defaultValue={ed?.notes ?? ""} /></div>
                 </div>
               </section>
-
-              <Button type="submit" className="w-full" disabled={save.isPending}>حفظ</Button>
+                </div>
+              </details>
+              <div className="sticky bottom-0 -mx-6 -mb-6 flex flex-col-reverse gap-2 border-t bg-background/95 p-4 backdrop-blur sm:flex-row sm:justify-end">
+                <Button type="button" variant="outline" onClick={() => { setOpen(false); setEditing(null); }}>إلغاء</Button>
+                <Button type="submit" className="min-w-36 bg-gradient-to-l from-teal-800 to-emerald-600 shadow-md" disabled={save.isPending}>{save.isPending ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : null}{save.isPending ? "جارٍ الحفظ..." : editing ? "حفظ التعديلات" : "حفظ بيانات الموظف"}</Button>
+              </div>
             </form>
           </DialogContent>
         </Dialog>

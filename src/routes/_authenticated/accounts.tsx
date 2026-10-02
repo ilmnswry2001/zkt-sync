@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { KeyRound, Loader2, Plus, RefreshCw, ShieldCheck, UserCog, Users, Trash2 } from "lucide-react";
+import { KeyRound, Loader2, Plus, RefreshCw, ShieldCheck, UserCog, Users, Trash2, Save } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -50,7 +50,7 @@ type Role =
   | "site_admin"
   | "department_manager"
   | "engineer";
-type Profile = { id: string; full_name: string | null; email: string | null; created_at: string };
+type Profile = { id: string; full_name: string | null; email: string | null; created_at: string; allowed_sections: string[] | null };
 type UserRole = { id: string; user_id: string; role: Role };
 type Department = { id: string; name: string };
 type UserDepartment = { id: string; user_id: string; department_id: string };
@@ -87,13 +87,14 @@ function AccountsPage() {
   const [resetPassword, setResetPassword] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
   const [editingDepartmentIds, setEditingDepartmentIds] = useState<string[]>([]);
+  const [editingAllowedSections, setEditingAllowedSections] = useState<string[]>([]);
   const [accountPendingDelete, setAccountPendingDelete] = useState<Profile | null>(null);
   const profilesQuery = useQuery({
     queryKey: ["accounts", "profiles"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, email, created_at")
+        .select("id, full_name, email, created_at, allowed_sections")
         .order("created_at", { ascending: false })
         .limit(500);
       if (error) throw error;
@@ -274,9 +275,10 @@ function AccountsPage() {
   const saveDepartments = async (userId: string) => {
     setActionBusy(true);
     try {
-      await updateUserDepartments({ data: { userId, departmentIds: editingDepartmentIds } });
-      await userDepartmentsQuery.refetch();
-      toast.success("تم تحديث الأقسام المسموح بها");
+      const allowedSections = hasRole(userId, "engineer") ? ["/project-plans"] : editingAllowedSections;
+      await updateUserDepartments({ data: { userId, departmentIds: editingDepartmentIds, allowedSections } });
+      await Promise.all([userDepartmentsQuery.refetch(), profilesQuery.refetch()]);
+      toast.success("تم تحديث نطاق الوصول والصلاحيات");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "تعذر تحديث الأقسام");
     } finally {
@@ -548,8 +550,14 @@ function AccountsPage() {
                         onClick={() => {
                           const opening = editingUserId !== profile.id;
                           setEditingUserId(opening ? profile.id : null);
-                          if (opening)
+                          if (opening) {
                             setEditingDepartmentIds(departmentsByUser.get(profile.id) ?? []);
+                            setEditingAllowedSections(
+                              hasRole(profile.id, "engineer")
+                                ? ["/project-plans"]
+                                : profile.allowed_sections ?? [],
+                            );
+                          }
                         }}
                       >
                         {editingUserId === profile.id ? "إغلاق" : "تعديل الصلاحيات"}
@@ -619,7 +627,7 @@ function AccountsPage() {
                           </span>
                         </label>
                       ))}
-                      <div className="md:col-span-2 rounded-lg border p-3">
+                      <div className="md:col-span-2 rounded-xl border bg-muted/20 p-4">
                         <p className="mb-2 font-medium">الأقسام المصرح بها (فارغ = كافة الأقسام)</p>
                         <div className="flex flex-wrap gap-2">
                           {departments.map((department) => (
@@ -638,13 +646,32 @@ function AccountsPage() {
                             </label>
                           ))}
                         </div>
-                        <Button
-                          className="mt-3"
-                          size="sm"
-                          disabled={actionBusy}
-                          onClick={() => saveDepartments(profile.id)}
-                        >
-                          حفظ الأقسام
+                      </div>
+                      <div className="md:col-span-2 rounded-xl border border-primary/20 bg-primary/[0.035] p-4">
+                        <div className="mb-3">
+                          <p className="font-semibold">صفحات النظام المسموح بها</p>
+                          <p className="text-xs text-muted-foreground">اختر نطاق بيانات الأقسام والواجهات التي تظهر للحساب. ترك الصفحات فارغة يتيح الصفحات المسموحة بحسب الدور.</p>
+                        </div>
+                        <p className="mb-2 text-sm font-medium">صفحات النظام</p>
+                        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                          {SECTION_OPTIONS.map((section) => (
+                            <label key={section.to} className="flex cursor-pointer items-center gap-2 rounded-lg border bg-background p-2.5 text-sm">
+                              <Checkbox
+                                disabled={hasRole(profile.id, "engineer")}
+                                checked={editingAllowedSections.includes(section.to)}
+                                onCheckedChange={(checked) => setEditingAllowedSections((current) =>
+                                  checked === true
+                                    ? [...new Set([...current, section.to])]
+                                    : current.filter((path) => path !== section.to),
+                                )}
+                              />
+                              {section.label}
+                            </label>
+                          ))}
+                        </div>
+                        {hasRole(profile.id, "engineer") && <p className="mt-2 text-xs text-muted-foreground">حساب المهندس مقيد تلقائياً بواجهة خطط المشاريع.</p>}
+                        <Button className="mt-4" size="sm" disabled={actionBusy} onClick={() => saveDepartments(profile.id)}>
+                          <Save className="ml-2 h-4 w-4" /> حفظ الأقسام والصفحات
                         </Button>
                       </div>
                     </div>
