@@ -183,7 +183,7 @@ function FormsPage() {
       qc.invalidateQueries({ queryKey: ["forms"] });
       setOpen(false);
       setEmployeeId("");
-      toast.success("تم إرسال الاستمارة إلى مدير القسم");
+      toast.success("تم إرسال الاستمارة إلى قائمة التنفيذ");
     },
     onError: (e: any) => toast.error(e.message ?? "فشل إرسال الاستمارة"),
   });
@@ -335,7 +335,7 @@ function FormsPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         <StatCard title="إجمالي الاستمارات" value={statistics.total} icon={ListChecks} tone="bg-primary" />
-        <StatCard title="قيد الاعتماد" value={statistics.pending} icon={Clock3} tone="bg-warning" />
+        <StatCard title="معلّقة" value={statistics.pending} icon={Clock3} tone="bg-warning" />
         <StatCard title="منفذة" value={statistics.executed} icon={Check} tone="bg-success" />
         <StatCard title="مرفوضة" value={statistics.rejected} icon={X} tone="bg-destructive" />
         <StatCard title="ساعات إضافية" value={statistics.overtime.toLocaleString("ar")} icon={FileSignature} tone="bg-accent-foreground" />

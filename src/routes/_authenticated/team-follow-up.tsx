@@ -89,6 +89,7 @@ type TeamTask = {
   status: "completed" | "in_progress";
   duration_minutes: number;
   created_by: string;
+  employee_id: string | null;
   department_id: string | null;
   manager_note: string | null;
 };
@@ -232,7 +233,7 @@ function TeamFollowUpPage() {
     queryFn: async () => {
       let query = (supabase as unknown as { from: (table: string) => any })
         .from("employee_tasks")
-        .select("id, task_date, title, description, status, duration_minutes, created_by, department_id, manager_note")
+        .select("id, task_date, title, description, status, duration_minutes, created_by, employee_id, department_id, manager_note")
         .gte("task_date", monthStart)
         .lte("task_date", monthEnd)
         .order("task_date", { ascending: false })
@@ -254,20 +255,6 @@ function TeamFollowUpPage() {
   const teamTasks = teamTasksQuery.data ?? [];
   const profileById = new Map((profilesQuery.data ?? []).map((profile) => [profile.id, profile]));
   const dailyTasks = teamTasks.filter((task) => task.task_date === date);
-  const monthlyTaskStats = [...new Set(teamTasks.map((task) => task.created_by))]
-    .map((userId) => {
-      const tasks = teamTasks.filter((task) => task.created_by === userId);
-      return {
-        userId,
-        profile: profileById.get(userId),
-        total: tasks.length,
-        completed: tasks.filter((task) => task.status === "completed").length,
-        minutes: tasks.reduce((sum, task) => sum + Number(task.duration_minutes || 0), 0),
-        today: tasks.filter((task) => task.task_date === date).length,
-        tasks,
-      };
-    })
-    .sort((a, b) => b.total - a.total);
   const employeeIds = visibleEmployees.map((employee) => employee.id);
   const attendanceMonthQuery = useQuery({
     queryKey: ["team-follow-up-attendance", employeeIds, monthStart, monthEnd],
@@ -293,7 +280,9 @@ function TeamFollowUpPage() {
   const profileByEmail = new Map((profilesQuery.data ?? []).filter((profile) => profile.email).map((profile) => [profile.email!.toLowerCase(), profile]));
   const employeeTaskStats = visibleEmployees.map((employee) => {
     const profile = employee.email ? profileByEmail.get(employee.email.toLowerCase()) : undefined;
-    const tasks = profile ? teamTasks.filter((task) => task.created_by === profile.id) : [];
+    const tasks = teamTasks.filter((task) => task.employee_id
+      ? task.employee_id === employee.id
+      : Boolean(profile && task.created_by === profile.id));
     return {
       employee,
       profile,
@@ -767,8 +756,11 @@ function TeamFollowUpPage() {
               </p>
             </CardHeader>
             <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {employeeTaskStats.map(({ employee, profile, tasks, today: todayCount, completed, total, daysPresent, evaluation, departmentName, siteName }) => (
-                <Card key={employee.id} className="border-muted">
+              {employeeTaskStats.map(({ employee, profile, tasks, today: todayCount, completed, total, daysPresent, evaluation, departmentName, siteName }) => {
+                const taskCompletion = total ? Math.round((completed / total) * 100) : 0;
+                const taskMinutes = tasks.reduce((sum, task) => sum + Number(task.duration_minutes || 0), 0);
+                return <Card key={employee.id} className="group overflow-hidden border-slate-200 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg dark:border-slate-800">
+                  <div className="h-1.5 bg-gradient-to-l from-cyan-500 via-teal-500 to-emerald-400" />
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -777,17 +769,23 @@ function TeamFollowUpPage() {
                       </div>
                       <Badge variant="outline">{todayCount} اليوم</Badge>
                     </div>
-                    <div className="mt-4 grid grid-cols-2 gap-2 text-center">
-                      <div className="rounded-md bg-muted/50 p-2">
+                    <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                      <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900/70">
                         <p className="text-xl font-bold">{todayCount}</p>
                         <p className="text-[11px] text-muted-foreground">مهام اليوم</p>
                       </div>
-                      <div className="rounded-md bg-emerald-50 p-2 dark:bg-emerald-950/30">
+                      <div className="rounded-xl bg-emerald-50 p-3 dark:bg-emerald-950/30">
                         <p className="text-xl font-bold text-emerald-700 dark:text-emerald-400">{completed}</p>
-                        <p className="text-[11px] text-muted-foreground">منجزة الشهر</p>
+                        <p className="text-[11px] text-muted-foreground">مكتملة</p>
                       </div>
+                      <div className="rounded-xl bg-cyan-50 p-3 dark:bg-cyan-950/30"><p className="text-xl font-bold text-cyan-800 dark:text-cyan-300">{total}</p><p className="text-[11px] text-muted-foreground">إجمالي الشهر</p></div>
                     </div>
-                    <div className="mt-3 rounded-md border p-2">
+                    <div className="mt-3 rounded-xl border bg-background/70 p-3">
+                      <div className="mb-2 flex items-center justify-between text-xs"><span className="text-muted-foreground">إنجاز المهام الشهرية</span><span className="font-semibold text-emerald-700 dark:text-emerald-400">{taskCompletion}%</span></div>
+                      <div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-gradient-to-l from-emerald-500 to-teal-400 transition-all" style={{ width: `${taskCompletion}%` }} /></div>
+                      <p className="mt-2 text-xs text-muted-foreground">الوقت المسجل: {Math.floor(taskMinutes / 60)} س {taskMinutes % 60} د · الحضور: {daysPresent} يوم</p>
+                    </div>
+                    <div className="mt-3 rounded-xl border p-3">
                       {tasks.filter((task) => task.task_date === date).length ? (
                         tasks.filter((task) => task.task_date === date).map((task) => (
                           <p key={task.id} className="truncate text-sm">• {task.title}</p>
@@ -795,7 +793,6 @@ function TeamFollowUpPage() {
                       ) : (
                         <p className="text-sm text-muted-foreground">لا توجد مهام اليوم</p>
                       )}
-                      <p className="mt-2 text-xs text-muted-foreground">إجمالي الشهر: {total} مهمة</p>
                     </div>
                     <Button
                       variant="outline"
@@ -819,8 +816,8 @@ function TeamFollowUpPage() {
                       <Eye className="ml-2 h-4 w-4" /> عرض سجل الموظف
                     </Button>
                   </CardContent>
-                </Card>
-              ))}
+                </Card>;
+              })}
               {!employeeTaskStats.length && (
                 <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground md:col-span-2 xl:col-span-3">
                   لا يوجد موظفون ضمن نطاق الأقسام المحدد.
@@ -845,7 +842,9 @@ function TeamFollowUpPage() {
             <CardContent className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
               {visibleEmployees.map((employee) => {
                 const employeeProfile = employee.email ? profileByEmail.get(employee.email.toLowerCase()) : undefined;
-                const employeeTasks = employeeProfile ? teamTasks.filter((task) => task.created_by === employeeProfile.id) : [];
+                const employeeTasks = teamTasks.filter((task) => task.employee_id
+                  ? task.employee_id === employee.id
+                  : Boolean(employeeProfile && task.created_by === employeeProfile.id));
                 const employeeDays = attendanceByEmployee.get(employee.id)?.size ?? 0;
                 const existingEvaluation = evaluationByEmployee.get(employee.id);
                 return (

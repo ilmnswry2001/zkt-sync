@@ -38,7 +38,7 @@ async function actorPowers(
     hr: admin || a.includes("hr"),
     manager: admin || f.includes("dept_manager"),
     ceo: admin || f.includes("ceo"),
-    executor: admin || f.includes("executor"),
+    executor: admin || a.includes("data_entry") || f.includes("executor"),
   };
 }
 
@@ -69,7 +69,7 @@ export const createForm = createServerFn({ method: "POST" })
         check_in: data.check_in || null,
         check_out: data.check_out || null,
         reason: data.reason,
-        status: "pending_manager",
+        status: "pending_execution",
         created_by: userId,
       })
       .select("id, form_no")

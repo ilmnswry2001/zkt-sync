@@ -41,6 +41,7 @@ const updatePasswordSchema = z.object({
 const updateDepartmentsSchema = z.object({
   userId: z.string().uuid(),
   departmentIds: z.array(z.string().uuid()),
+  allowedSections: z.array(z.string().max(60)).max(40).default([]),
 });
 const deleteAccountSchema = z.object({ userId: z.string().uuid() });
 
@@ -168,7 +169,12 @@ export const updateUserDepartments = createServerFn({ method: "POST" })
         );
       if (error) throw new Error(error.message);
     }
-    return { userId: data.userId, departmentIds: data.departmentIds };
+    const { error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .update({ allowed_sections: data.allowedSections.length ? data.allowedSections : null })
+      .eq("id", data.userId);
+    if (profileError) throw new Error(profileError.message);
+    return { userId: data.userId, departmentIds: data.departmentIds, allowedSections: data.allowedSections };
   });
 
 export const updateAccountPassword = createServerFn({ method: "POST" })

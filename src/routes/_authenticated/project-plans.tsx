@@ -736,7 +736,6 @@ function PlanningPage() {
       const plan = workPlans.find((item) => item.id === id);
       const payload = {
         status: "finalized",
-        management_notes: plan?.management_notes ?? null,
         engineer_notes: finalNotes.trim() || null,
         final_plan: {
           title: finalTitle.trim() || `الخطة النهائية - ${plan?.site_name ?? "الموقع"}`,
@@ -746,7 +745,12 @@ function PlanningPage() {
         },
       };
       // جرّب الحقول الكاملة أولاً، ثم أعد الحفظ بالحقول الأساسية إذا لم تُطبّق Migration بعد.
-      let { error } = await (supabase as any).from("site_work_plans").update(payload).eq("id", id);
+      let { data, error } = await (supabase as any)
+        .from("site_work_plans")
+        .update(payload)
+        .eq("id", id)
+        .select("id")
+        .maybeSingle();
       if (
         error &&
         /(engineer_notes|column .* does not exist|schema cache)/i.test(error.message ?? "")
@@ -756,10 +760,14 @@ function PlanningPage() {
         const retry = await (supabase as any)
           .from("site_work_plans")
           .update(legacyPayload)
-          .eq("id", id);
+          .eq("id", id)
+          .select("id")
+          .maybeSingle();
+        data = retry.data;
         error = retry.error;
       }
       if (error) throw error;
+      if (!data) throw new Error("لم يتم تحديث الخطة. تحقق من صلاحية الاعتماد وحالة الخطة الحالية.");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["site-work-plans"] });
