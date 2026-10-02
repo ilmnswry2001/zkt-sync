@@ -24,7 +24,6 @@ import {
   UserCircle2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-export const SECTION_OPTIONS: { to: string; label: string }[] = [];
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -50,6 +49,8 @@ const nav = [
   { to: "/settings", label: "الإعدادات", icon: Settings2, access: "admin" },
   { to: "/accounts", label: "الحسابات والصلاحيات", icon: UserCog, access: "admin" },
 ] as const;
+
+export const SECTION_OPTIONS = nav.map(({ to, label }) => ({ to, label }));
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -177,7 +178,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <PanelRightOpen className="w-4 h-4" />
             </Button>
           )}
-          {children}
+          {blocked ? null : children}
         </div>
       </main>
     </div>
