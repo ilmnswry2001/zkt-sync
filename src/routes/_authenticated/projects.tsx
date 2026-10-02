@@ -46,6 +46,7 @@ type ProjectLine = {
   total_count: number;
 };
 type WageRate = { title: string; daily_rate: number; currency: string };
+type ProjectPlan = { id: string; site_id: string; status: string; specialties: unknown };
 
 const isoDate = (value: Date) => value.toISOString().slice(0, 10);
 const today = isoDate(new Date());
@@ -82,7 +83,7 @@ function ProjectsPage() {
   const query = useQuery({
     queryKey: ["projects-dashboard", reportDate],
     queryFn: async () => {
-      const [projectsResult, reportsResult, wagesResult] = await Promise.all([
+      const [projectsResult, reportsResult, wagesResult, plansResult] = await Promise.all([
         supabase.from("sites").select("id, name, ctr_code").order("name").limit(500),
         supabase
           .from("site_daily_reports")
@@ -91,10 +92,16 @@ function ProjectsPage() {
           .order("site_id")
           .limit(500),
         supabase.from("wage_rates").select("title, daily_rate, currency").order("title").limit(500),
+        supabase
+          .from("site_work_plans")
+          .select("id, site_id, status, specialties")
+          .order("request_date", { ascending: false })
+          .limit(1000),
       ]);
       if (projectsResult.error) throw projectsResult.error;
       if (reportsResult.error) throw reportsResult.error;
       if (wagesResult.error) throw wagesResult.error;
+      if (plansResult.error) throw plansResult.error;
 
       const reports = (reportsResult.data ?? []) as ProjectReport[];
       const reportIds = reports.map((report) => report.id);
@@ -113,11 +120,18 @@ function ProjectsPage() {
         reports,
         lines,
         wages: (wagesResult.data ?? []) as WageRate[],
+        plans: (plansResult.data ?? []) as ProjectPlan[],
       };
     },
   });
 
-  const data = query.data ?? { projects: [], reports: [], lines: [], wages: [] as WageRate[] };
+  const data = query.data ?? {
+    projects: [],
+    reports: [],
+    lines: [],
+    wages: [] as WageRate[],
+    plans: [] as ProjectPlan[],
+  };
   const wageByTitle = useMemo(
     () => new Map(data.wages.map((wage) => [wage.title.trim(), wage])),
     [data.wages],
@@ -213,6 +227,17 @@ function ProjectsPage() {
     (sum, card) =>
       sum + card.specialtyCosts.filter((item) => item.count > 0 && !item.hasRate).length,
     0,
+  );
+  const planStats = useMemo(
+    () => ({
+      total: data.plans.length,
+      requested: data.plans.filter((plan) => plan.status === "requested").length,
+      inProgress: data.plans.filter(
+        (plan) => plan.status === "planning_approved" || plan.status === "management_review",
+      ).length,
+      finalized: data.plans.filter((plan) => plan.status === "finalized").length,
+    }),
+    [data.plans],
   );
 
   const refresh = async () => {
@@ -310,6 +335,39 @@ function ProjectsPage() {
         />
         <StatCard title="إجمالي العاملين" value={workerTotal} icon={Users} tone="bg-indigo-600" />
       </div>
+      <Card className="border-primary/20">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ClipboardList className="h-5 w-5 text-primary" /> إحصائيات خطط المشاريع
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-2 gap-3 p-4 md:grid-cols-4">
+          <StatCard
+            title="إجمالي الخطط"
+            value={planStats.total}
+            icon={ClipboardList}
+            tone="bg-primary"
+          />
+          <StatCard
+            title="خطط مرسلة"
+            value={planStats.requested}
+            icon={BarChart3}
+            tone="bg-amber-600"
+          />
+          <StatCard
+            title="قيد الاعتماد والتوزيع"
+            value={planStats.inProgress}
+            icon={ClipboardList}
+            tone="bg-sky-600"
+          />
+          <StatCard
+            title="خطط نهائية"
+            value={planStats.finalized}
+            icon={CheckCircle2}
+            tone="bg-emerald-600"
+          />
+        </CardContent>
+      </Card>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <StatCard
           title="إجمالي الآليات والمركبات"
