@@ -8,10 +8,21 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { KeyRound, Loader2, Plus, RefreshCw, ShieldCheck, UserCog, Users } from "lucide-react";
+import { KeyRound, Loader2, Plus, RefreshCw, ShieldCheck, UserCog, Users, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/use-auth";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   createAccount,
+  deleteAccount,
   updateAccountPassword,
   updateUserDepartments,
 } from "@/lib/accounts.functions";
@@ -59,6 +70,7 @@ const roles: { key: Role; label: string; description: string }[] = [
 ];
 
 function AccountsPage() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
@@ -75,6 +87,7 @@ function AccountsPage() {
   const [resetPassword, setResetPassword] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
   const [editingDepartmentIds, setEditingDepartmentIds] = useState<string[]>([]);
+  const [accountPendingDelete, setAccountPendingDelete] = useState<Profile | null>(null);
   const profilesQuery = useQuery({
     queryKey: ["accounts", "profiles"],
     queryFn: async () => {
@@ -140,6 +153,7 @@ function AccountsPage() {
     userRoles.forEach((item) => map.set(item.user_id, [...(map.get(item.user_id) ?? []), item]));
     return map;
   }, [userRoles]);
+  const adminCount = userRoles.filter((assignment) => assignment.role === "admin").length;
   const filteredProfiles = useMemo(() => {
     const value = search.trim().toLocaleLowerCase();
     if (!value) return profiles;
@@ -232,6 +246,26 @@ function AccountsPage() {
       toast.success("تم تغيير كلمة المرور. لا يتم عرضها داخل النظام");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "تعذر تغيير كلمة المرور");
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!accountPendingDelete) return;
+    setActionBusy(true);
+    try {
+      await deleteAccount({ data: { userId: accountPendingDelete.id } });
+      const deletedName = accountPendingDelete.full_name || accountPendingDelete.email || "الحساب";
+      setAccountPendingDelete(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["accounts", "profiles"] }),
+        queryClient.invalidateQueries({ queryKey: ["accounts", "roles"] }),
+        queryClient.invalidateQueries({ queryKey: ["accounts", "user-departments"] }),
+      ]);
+      toast.success(`تم حذف حساب ${deletedName}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "تعذر حذف الحساب");
     } finally {
       setActionBusy(false);
     }
@@ -530,6 +564,17 @@ function AccountsPage() {
                       >
                         <KeyRound className="ml-2 h-4 w-4" /> كلمة مرور جديدة
                       </Button>
+                      {user?.id !== profile.id && (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          disabled={actionBusy || (hasRole(profile.id, "admin") && adminCount <= 1)}
+                          title={hasRole(profile.id, "admin") && adminCount <= 1 ? "لا يمكن حذف المدير الوحيد" : "حذف الحساب نهائياً"}
+                          onClick={() => setAccountPendingDelete(profile)}
+                        >
+                          <Trash2 className="ml-2 h-4 w-4" /> حذف الحساب
+                        </Button>
+                      )}
                     </div>
                   </div>
                   {resetUserId === profile.id && (
@@ -613,6 +658,33 @@ function AccountsPage() {
           )}
         </CardContent>
       </Card>
+      <AlertDialog
+        open={!!accountPendingDelete}
+        onOpenChange={(open) => {
+          if (!open && !actionBusy) setAccountPendingDelete(null);
+        }}
+      >
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" /> تأكيد حذف الحساب
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-right">
+              <span className="block">
+                سيتم حذف حساب <strong className="text-foreground">{accountPendingDelete?.full_name || "بدون اسم"}</strong>
+                {accountPendingDelete?.email ? ` (${accountPendingDelete.email})` : ""} نهائياً ومنعه من تسجيل الدخول.
+              </span>
+              <span className="block">لا يمكن التراجع عن هذا الإجراء. إذا كانت للحساب سجلات تاريخية محمية، سيمنع النظام الحذف ويعرض السبب.</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={actionBusy}>إلغاء</AlertDialogCancel>
+            <Button variant="destructive" disabled={actionBusy} onClick={handleDeleteAccount}>
+              {actionBusy ? <><Loader2 className="ml-2 h-4 w-4 animate-spin" /> جارٍ الحذف...</> : <><Trash2 className="ml-2 h-4 w-4" /> حذف نهائي</>}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

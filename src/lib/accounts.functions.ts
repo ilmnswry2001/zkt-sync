@@ -42,6 +42,7 @@ const updateDepartmentsSchema = z.object({
   userId: z.string().uuid(),
   departmentIds: z.array(z.string().uuid()),
 });
+const deleteAccountSchema = z.object({ userId: z.string().uuid() });
 
 function translateAuthError(error: { message?: string; status?: number } | null | undefined) {
   const message = (error?.message ?? "").toLowerCase();
@@ -180,5 +181,47 @@ export const updateAccountPassword = createServerFn({ method: "POST" })
       password: data.password,
     });
     if (error) throw new Error(translateAuthError(error));
+    return { userId: data.userId };
+  });
+
+export const deleteAccount = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((value: unknown) => deleteAccountSchema.parse(value))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    if (data.userId === context.userId) {
+      throw new Error("لا يمكن حذف الحساب الذي تستخدمه حالياً.");
+    }
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: targetRoles, error: rolesError } = await supabaseAdmin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", data.userId);
+    if (rolesError) throw new Error(rolesError.message);
+
+    if (targetRoles?.some((assignment) => assignment.role === "admin")) {
+      const { count, error: countError } = await supabaseAdmin
+        .from("user_roles")
+        .select("id", { count: "exact", head: true })
+        .eq("role", "admin");
+      if (countError) throw new Error(countError.message);
+      if ((count ?? 0) <= 1) {
+        throw new Error("لا يمكن حذف المدير الوحيد في النظام. عيّن مديراً آخر أولاً.");
+      }
+    }
+
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(data.userId);
+    if (error) {
+      const message = error.message.toLowerCase();
+      if (
+        message.includes("foreign key") ||
+        message.includes("constraint") ||
+        message.includes("database error deleting user")
+      ) {
+        throw new Error("تعذر حذف الحساب لارتباطه بسجلات تاريخية محمية. احتفظ بالحساب وأزل صلاحياته عند الحاجة.");
+      }
+      throw new Error(translateAuthError(error));
+    }
     return { userId: data.userId };
   });
