@@ -54,7 +54,7 @@ export const SECTION_OPTIONS = nav.map(({ to, label }) => ({ to, label }));
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { user, roles, isAdmin, isHR, isCompanyManager, signOut, canAccessSection, allowedSections, permissionsLoading } = useAuth();
+  const { user, profileName, roles, isAdmin, isHR, isCompanyManager, signOut, canAccessSection, allowedSections, permissionsLoading } = useAuth();
   const navigate = useNavigate();
   const blocked =
     !permissionsLoading &&
@@ -132,7 +132,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </nav>
         <div className="p-3 border-t border-sidebar-border space-y-2 min-w-64">
           <div className="px-3 py-2 text-xs">
-            <div className="font-semibold truncate">{user?.email}</div>
+            <div className="font-semibold truncate">{profileName || user?.user_metadata?.full_name || "صاحب الحساب"}</div>
             <div className="flex gap-1 mt-1 flex-wrap">
               {roles.map((role) => (
                 <span

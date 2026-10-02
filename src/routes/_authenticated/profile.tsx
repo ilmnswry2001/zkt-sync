@@ -88,27 +88,40 @@ function ProfilePage() {
       if (!user) throw new Error("لم يتم العثور على حساب مسجل");
       if (!nextName) throw new Error("الاسم الكامل مطلوب");
 
-      const { error: profileError } = await supabase
+      const { data: updatedProfile, error: profileError } = await supabase
         .from("profiles")
         .update({
           full_name: nextName,
           email: nextEmail || user.email || null,
         })
-        .eq("id", user.id);
+        .eq("id", user.id)
+        .select("id")
+        .maybeSingle();
 
       if (profileError) throw profileError;
+      if (!updatedProfile) {
+        throw new Error("تعذر العثور على سجل الملف الشخصي لتحديثه");
+      }
+      window.dispatchEvent(new CustomEvent("profile-name-updated", { detail: nextName }));
+      await queryClient.invalidateQueries({ queryKey: ["auth-profile-name", user.id] });
 
-      const { error: authError } = await supabase.auth.updateUser({
-        email: nextEmail || undefined,
+      const authChanges: { data: { full_name: string }; email?: string } = {
         data: { full_name: nextName },
-      });
-
-      if (authError) throw authError;
-      await queryClient.invalidateQueries({ queryKey: ["profile"] });
+      };
+      if (nextEmail && nextEmail !== (user.email ?? "").trim()) {
+        authChanges.email = nextEmail;
+      }
+      const { error: authError } = await supabase.auth.updateUser(authChanges);
+      await queryClient.invalidateQueries({ queryKey: ["profile", user.id] });
       await queryClient.invalidateQueries({ queryKey: ["profile-employee"] });
+      await queryClient.invalidateQueries({ queryKey: ["accounts", "profiles"] });
+      return authError && authChanges.email ? authError.message : null;
     },
-    onSuccess: () => {
+    onSuccess: (emailErrorMessage) => {
       toast.success("تم حفظ بيانات الملف الشخصي");
+      if (emailErrorMessage) {
+        toast.warning(`تم حفظ الاسم، لكن تعذر تحديث البريد الإلكتروني: ${emailErrorMessage}`);
+      }
     },
     onError: (error: unknown) => {
       const message = error instanceof Error ? error.message : "تعذر حفظ الملف الشخصي";

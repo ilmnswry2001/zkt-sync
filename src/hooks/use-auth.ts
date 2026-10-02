@@ -15,6 +15,7 @@ export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [allowedSections, setAllowedSections] = useState<string[] | null>(null);
+  const [profileName, setProfileName] = useState<string | null>(null);
   const [isCompanyManager, setIsCompanyManager] = useState(false);
   const [loading, setLoading] = useState(true);
   const [permissionsLoading, setPermissionsLoading] = useState(true);
@@ -26,10 +27,11 @@ export function useAuth() {
       const [rolesResult, formRolesResult, profileResult] = await Promise.all([
         supabase.from("user_roles").select("role").eq("user_id", uid),
         supabase.from("form_role_assignments").select("role").eq("user_id", uid).eq("role", "ceo"),
-        supabase.from("profiles").select("allowed_sections").eq("id", uid).maybeSingle(),
+        supabase.from("profiles").select("full_name, allowed_sections").eq("id", uid).maybeSingle(),
       ]);
       if (!mounted) return;
       setRoles((rolesResult.data ?? []).map((role: any) => role.role));
+      setProfileName(profileResult.data?.full_name?.trim() || null);
       setIsCompanyManager((formRolesResult.data ?? []).some((role) => role.role === "ceo"));
       const sections = (profileResult.data as any)?.allowed_sections as string[] | null | undefined;
       setAllowedSections(sections && sections.length ? sections : null);
@@ -48,11 +50,21 @@ export function useAuth() {
       else {
         setRoles([]);
         setAllowedSections(null);
+        setProfileName(null);
         setIsCompanyManager(false);
         setPermissionsLoading(false);
       }
     });
-    return () => { mounted = false; sub.subscription.unsubscribe(); };
+    const onProfileNameUpdated = (event: Event) => {
+      const name = (event as CustomEvent<string>).detail?.trim();
+      if (name) setProfileName(name);
+    };
+    window.addEventListener("profile-name-updated", onProfileNameUpdated);
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+      window.removeEventListener("profile-name-updated", onProfileNameUpdated);
+    };
   }, []);
 
   const isAdmin = roles.includes("admin");
@@ -74,6 +86,7 @@ export function useAuth() {
     canManageEmployees: roles.some((r) => ["admin", "hr", "data_entry", "department_manager", "site_admin"].includes(r)),
     isDepartmentManager: roles.includes("department_manager"),
     isSiteAdmin: roles.includes("site_admin"),
+    profileName,
     canCreateTasks: roles.some((r) => ["admin", "hr", "data_entry", "site_admin"].includes(r)) && !roles.includes("department_manager"),
     signOut: () => supabase.auth.signOut(),
   };
