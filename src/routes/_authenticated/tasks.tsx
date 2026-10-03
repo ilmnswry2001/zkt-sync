@@ -186,6 +186,8 @@ function EmployeeTasksPage() {
   const guidanceQuery = useQuery({
     queryKey: ["employee-guidance", user?.id],
     enabled: Boolean(user) && activeTab === "guidance",
+    refetchInterval: activeTab === "guidance" ? 30_000 : false,
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("employee_guidance_notes")
@@ -196,6 +198,28 @@ function EmployeeTasksPage() {
       return (data ?? []) as GuidanceNote[];
     },
   });
+
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`employee-guidance-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "employee_guidance_notes",
+          filter: `target_user_id=eq.${user.id}`,
+        },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: ["employee-guidance", user.id] });
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [queryClient, user]);
 
   const activeTasksQuery = useQuery({
     queryKey: ["employee-tasks", "active", selectedDate],
@@ -607,6 +631,8 @@ function EmployeeTasksPage() {
             <CardContent className="space-y-3">
               {guidanceQuery.isLoading ? (
                 <p className="text-muted-foreground">جارٍ تحميل التوجيهات...</p>
+              ) : guidanceQuery.error ? (
+                <p className="text-destructive">تعذر تحميل التوجيهات: {guidanceQuery.error.message}</p>
               ) : (guidanceQuery.data ?? []).length ? (
                 (guidanceQuery.data ?? []).map((note) => (
                   <button

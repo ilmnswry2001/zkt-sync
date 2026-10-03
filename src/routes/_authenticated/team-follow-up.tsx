@@ -519,13 +519,24 @@ function TeamFollowUpPage() {
         guidance_date: date,
         author_id: user.id,
       }));
-      const client = supabase as unknown as {
-        from: (table: string) => {
-          insert: (rows: typeof payload) => Promise<{ error: { message: string } | null }>;
+      const guidanceClient = supabase as unknown as {
+        from: (table: "employee_guidance_notes") => {
+          insert: (rows: typeof payload) => {
+            select: (columns: "id") => Promise<{
+              data: { id: string }[] | null;
+              error: { message: string } | null;
+            }>;
+          };
         };
       };
-      const { error } = await client.from("employee_guidance_notes").insert(payload);
+      const { data, error } = await guidanceClient
+        .from("employee_guidance_notes")
+        .insert(payload)
+        .select("id");
       if (error) return toast.error(`تعذر إرسال التوجيه: ${error.message}`);
+      if (!data || data.length !== selected.length) {
+        return toast.error("لم يتم تأكيد حفظ التوجيه لكل المستلمين؛ تحقق من ربط حسابات الموظفين.");
+      }
       setGuidanceTitle("");
       setGuidanceContent("");
       await queryClient.invalidateQueries({ queryKey: ["employee-guidance"] });
