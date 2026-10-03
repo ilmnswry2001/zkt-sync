@@ -1,13 +1,15 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Banknote, Printer, RefreshCw } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Banknote, Download, Printer, RefreshCw, Search, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { printReport, escapeHtml } from "@/lib/report-print";
 import {
@@ -49,9 +51,19 @@ type Employee = {
 type Addition = { employee_id: string; amount: number; kind: string };
 type Penalty = { employee_id: string | null; deduction_amount: number };
 type AttendanceLog = { employee_no: string; verify_time: string };
+type AttendanceOverride = {
+  employee_id: string;
+  work_date: string;
+  status: "present" | "absent" | "leave" | "holiday" | "rest";
+  notes: string | null;
+  overtime_hours: number | null;
+};
+type Vehicle = { id: string; vehicle_no: string; name: string; vehicle_class: "light" | "heavy"; daily_rate: number; currency: string; is_active: boolean };
+type VehicleOperation = { vehicle_id: string; operating_days: number };
 
 function PayrollPage() {
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [search, setSearch] = useState("");
   const nextMonth = useMemo(() => {
     const date = new Date(`${month}-01T00:00:00Z`);
     date.setUTCMonth(date.getUTCMonth() + 1);
@@ -65,6 +77,9 @@ function PayrollPage() {
         { data: additions, error: additionsError },
         { data: penalties, error: penaltiesError },
         { data: logs, error: logsError },
+        { data: overrides, error: overridesError },
+        { data: vehicles, error: vehiclesError },
+        { data: vehicleOperations, error: vehicleOperationsError },
       ] = await Promise.all([
         supabase
           .from("employees")
@@ -73,10 +88,7 @@ function PayrollPage() {
           )
           .order("employee_no")
           .limit(2000),
-        supabase
-          .from("salary_additions")
-          .select("employee_id, amount, kind")
-          .eq("month", `${month}-01`),
+        supabase.from("salary_additions").select("employee_id, amount, kind").eq("month", `${month}-01`),
         supabase
           .from("employee_penalties")
           .select("employee_id, deduction_amount")
@@ -88,16 +100,29 @@ function PayrollPage() {
           .gte("verify_time", `${month}-01T00:00:00Z`)
           .lt("verify_time", `${nextMonth}T00:00:00Z`)
           .order("verify_time"),
+        supabase
+          .from("attendance_day_status")
+          .select("employee_id, work_date, status, notes, overtime_hours")
+          .gte("work_date", `${month}-01`)
+          .lt("work_date", nextMonth),
+        supabase.from("vehicles").select("id, vehicle_no, name, vehicle_class, daily_rate, currency, is_active").eq("is_active", true).order("vehicle_no"),
+        supabase.from("vehicle_monthly_operations").select("vehicle_id, operating_days").eq("month", `${month}-01`),
       ]);
       if (employeesError) throw employeesError;
       if (additionsError) throw additionsError;
       if (penaltiesError) throw penaltiesError;
       if (logsError) throw logsError;
+      if (overridesError) throw overridesError;
+      if (vehiclesError) throw vehiclesError;
+      if (vehicleOperationsError) throw vehicleOperationsError;
       return {
         employees: (employees ?? []) as Employee[],
         additions: (additions ?? []) as Addition[],
         penalties: (penalties ?? []) as Penalty[],
         logs: (logs ?? []) as AttendanceLog[],
+        overrides: (overrides ?? []) as AttendanceOverride[],
+        vehicles: (vehicles ?? []) as Vehicle[],
+        vehicleOperations: (vehicleOperations ?? []) as VehicleOperation[],
       };
     },
   });
@@ -108,111 +133,127 @@ function PayrollPage() {
         const days = buildAttendanceDays(
           monthDates(month),
           (query.data?.logs ?? []).filter((log) => log.employee_no === employee.employee_no),
-          [],
+          (query.data?.overrides ?? []).filter((item) => item.employee_id === employee.id),
           employee.shifts?.end_time,
           new Date().toISOString().slice(0, 10),
           payType,
           employee.shifts?.grace_minutes ?? 0,
         );
         const summary = summarizeDays(days);
-        const monthlySalary = Number(
-          employee.base_salary ?? employee.wage_rates?.monthly_rate ?? 0,
-        );
-        const dailyRate = Number(
-          employee.wage_rates?.daily_rate ?? (monthlySalary ? monthlySalary / 26 : 0),
-        );
+        const monthlySalary = Number(employee.base_salary ?? employee.wage_rates?.monthly_rate ?? 0);
+        const dailyRate = Number(employee.wage_rates?.daily_rate ?? (monthlySalary ? monthlySalary / 26 : 0));
         const payroll = calculatePayroll({
           payType,
           monthlySalary,
           dailyRate,
           daysInMonth: days.length,
           summary,
+          holidayDays: days.filter((day) => day.status === "holiday").length,
+          overtimeHourlyRate: Number(employee.wage_rates?.overtime_hour_rate ?? 0),
         });
-        const gross = payroll.basePay;
         const additions = (query.data?.additions ?? [])
           .filter((item) => item.employee_id === employee.id)
           .reduce((sum, item) => sum + Number(item.amount || 0), 0);
         const deductions = (query.data?.penalties ?? [])
           .filter((item) => item.employee_id === employee.id)
           .reduce((sum, item) => sum + Number(item.deduction_amount || 0), 0);
-        return { employee, gross, additions, deductions, total: gross + additions - deductions };
+        const total = Math.round((payroll.basePay + payroll.overtimePay + additions - deductions) * 100) / 100;
+        return { employee, payroll, summary, additions, deductions, total };
       }),
-    [query.data],
+    [query.data, month],
+  );
+  const filteredRows = rows.filter((row) =>
+    `${row.employee.full_name} ${row.employee.employee_no}`.toLocaleLowerCase("ar").includes(search.trim().toLocaleLowerCase("ar")),
   );
   const total = rows.reduce((sum, row) => sum + row.total, 0);
+  const money = (value: number) => `${value.toLocaleString("en-US", { maximumFractionDigits: 2 })} د.ع`;
+  const vehicleRows = (kind: Vehicle["vehicle_class"]) => (query.data?.vehicles ?? [])
+    .filter((vehicle) => vehicle.vehicle_class === kind)
+    .map((vehicle) => {
+      const operatingDays = Number(query.data?.vehicleOperations.find((op) => op.vehicle_id === vehicle.id)?.operating_days ?? 0);
+      return { vehicle, operatingDays, total: operatingDays * Number(vehicle.daily_rate) };
+    });
+  const exportExcel = (kind: "employees" | Vehicle["vehicle_class"] = "employees") => {
+    const workbook = XLSX.utils.book_new();
+    if (kind !== "employees") {
+      const vehicleSheet = XLSX.utils.json_to_sheet(vehicleRows(kind).map(({ vehicle, operatingDays, total: net }) => ({
+        "رقم المركبة": vehicle.vehicle_no, "اسم / نوع المركبة": vehicle.name, "أيام التشغيل": operatingDays,
+        "الأجر اليومي": Number(vehicle.daily_rate), "صافي المستحق": net, "العملة": vehicle.currency,
+      })));
+      vehicleSheet["!cols"] = [{ wch: 18 }, { wch: 30 }, { wch: 16 }, { wch: 18 }, { wch: 20 }, { wch: 12 }];
+      XLSX.utils.book_append_sheet(workbook, vehicleSheet, kind === "light" ? "رواتب المركبات الخفيفة" : "رواتب المركبات الثقيلة");
+      XLSX.writeFile(workbook, `رواتب_المركبات_${kind === "light" ? "الخفيفة" : "الثقيلة"}_${month}.xlsx`);
+      return;
+    }
+    const sheetRows = filteredRows.map(({ employee, payroll, summary, additions, deductions, total: net }) => ({
+      "رقم الموظف": employee.employee_no,
+      "اسم الموظف": employee.full_name,
+      "نوع الأجر": employee.pay_type === "daily" ? "يومي" : "شهري",
+      "أيام الحضور": summary.presentDays,
+      "أيام الراحة الأسبوعية": payroll.woDays,
+      "أيام العطل المعتمدة": payroll.holidayDays,
+      "ساعات إضافية": payroll.overtimeHours,
+      "الأجر الأساسي": payroll.basePay,
+      "بدل الإضافي": payroll.overtimePay,
+      "الإضافات": additions,
+      "الاستقطاعات": deductions,
+      "صافي الراتب": net,
+      "العملة": employee.wage_rates?.currency ?? "IQD",
+    }));
+    const sheet = XLSX.utils.json_to_sheet(sheetRows);
+    sheet["!cols"] = [{ wch: 16 }, { wch: 30 }, { wch: 14 }, ...Array(9).fill({ wch: 20 }), { wch: 12 }];
+    XLSX.utils.book_append_sheet(workbook, sheet, "رواتب الموظفين");
+    XLSX.writeFile(workbook, `رواتب_الموظفين_${month}.xlsx`);
+  };
   const printSlip = (row: (typeof rows)[number]) => {
-    const body = `<div class="meta"><b>الموظف:</b> ${escapeHtml(row.employee.full_name)}<br/><b>الرقم:</b> ${escapeHtml(row.employee.employee_no)}<br/><b>الشهر:</b> ${escapeHtml(month)}</div><table><tr><th>البند</th><th>المبلغ</th></tr><tr><td>الراتب الإجمالي</td><td>${row.gross.toLocaleString()} د.ع</td></tr><tr><td>الإضافات والمكافآت</td><td>${row.additions.toLocaleString()} د.ع</td></tr><tr><td>الاستقطاعات</td><td>${row.deductions.toLocaleString()} د.ع</td></tr><tr class="total"><td>الصافي المستحق</td><td>${row.total.toLocaleString()} د.ع</td></tr></table>`;
-    if (!printReport(`قصاصة راتب — ${row.employee.full_name}`, body))
-      toast.error("اسمح بالنوافذ المنبثقة للطباعة");
+    const body = `<div class="meta"><b>الموظف:</b> ${escapeHtml(row.employee.full_name)}<br/><b>الرقم:</b> ${escapeHtml(row.employee.employee_no)}<br/><b>الشهر:</b> ${escapeHtml(month)}</div><table><tr><th>البند</th><th>المبلغ</th></tr><tr><td>الأجر الأساسي</td><td>${money(row.payroll.basePay)}</td></tr><tr><td>بدل الساعات الإضافية (${row.payroll.overtimeHours})</td><td>${money(row.payroll.overtimePay)}</td></tr><tr><td>الإضافات والمكافآت</td><td>${money(row.additions)}</td></tr><tr><td>الاستقطاعات</td><td>${money(row.deductions)}</td></tr><tr class="total"><td>الصافي المستحق</td><td>${money(row.total)}</td></tr></table>`;
+    if (!printReport(`قصاصة راتب — ${row.employee.full_name}`, body)) toast.error("اسمح بالنوافذ المنبثقة للطباعة");
   };
   return (
     <div dir="rtl" className="space-y-6">
       <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-        <div className="flex items-center gap-2">
-          <Banknote className="h-7 w-7 text-primary" />
-          <div>
-            <h1 className="text-3xl font-bold">الرواتب</h1>
-            <p className="text-muted-foreground">التقرير المالي الشهري وقصاصة راتب الموظف</p>
-          </div>
+        <div className="flex items-center gap-3">
+          <div className="rounded-2xl bg-primary/10 p-3"><Banknote className="h-6 w-6 text-primary" /></div>
+          <div><h1 className="text-3xl font-bold">الرواتب</h1><p className="text-muted-foreground">تقارير الرواتب والحضور والاستحقاقات الشهرية</p></div>
         </div>
-        <Button variant="outline" onClick={() => query.refetch()}>
-          <RefreshCw className="ml-2 h-4 w-4" /> تحديث
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" asChild><a href="/vehicles"><Truck className="ml-2 h-4 w-4" /> إدارة المركبات</a></Button>
+          <Button variant="outline" onClick={() => query.refetch()} disabled={query.isFetching}><RefreshCw className={`ml-2 h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} /> تحديث</Button>
+          <Button onClick={() => exportExcel()} disabled={!filteredRows.length || query.isLoading}><Download className="ml-2 h-4 w-4" /> تصدير Excel</Button>
+        </div>
       </div>
-      <Card>
-        <CardContent className="p-4">
-          <Label htmlFor="payroll-month">شهر الراتب</Label>
-          <Input
-            id="payroll-month"
-            type="month"
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-            className="mt-1 max-w-xs"
-          />
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>إجمالي رواتب الشركة: {total.toLocaleString()} د.ع</CardTitle>
-        </CardHeader>
-        <CardContent className="overflow-x-auto">
-          <table className="w-full min-w-[850px] text-sm">
-            <thead>
-              <tr className="border-b bg-muted/60 text-right">
-                <th className="p-3">الموظف</th>
-                <th className="p-3">الراتب الإجمالي</th>
-                <th className="p-3">الإضافات</th>
-                <th className="p-3">الاستقطاعات</th>
-                <th className="p-3">الصافي</th>
-                <th className="p-3">الإجراء</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.employee.id} className="border-b">
-                  <td className="p-3">
-                    <b>{row.employee.full_name}</b>
-                    <div className="text-xs text-muted-foreground">{row.employee.employee_no}</div>
-                  </td>
-                  <td className="p-3">{row.gross.toLocaleString()} د.ع</td>
-                  <td className="p-3 text-emerald-700">{row.additions.toLocaleString()} د.ع</td>
-                  <td className="p-3 text-red-600">{row.deductions.toLocaleString()} د.ع</td>
-                  <td className="p-3 font-bold">{row.total.toLocaleString()} د.ع</td>
-                  <td className="p-3">
-                    <Button size="sm" variant="outline" onClick={() => printSlip(row)}>
-                      <Printer className="ml-2 h-4 w-4" /> طباعة القصاصة
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {!rows.length && (
-            <p className="py-8 text-center text-muted-foreground">لا توجد بيانات رواتب.</p>
-          )}
-          <Badge className="mt-4">عدد الموظفين: {rows.length}</Badge>
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="employees" dir="rtl" className="space-y-5">
+        <TabsList className="grid h-auto w-full grid-cols-1 gap-2 bg-transparent sm:grid-cols-3">
+          <TabsTrigger value="employees" className="min-h-11 rounded-xl border bg-card">رواتب الموظفين</TabsTrigger>
+          <TabsTrigger value="light-vehicles" className="min-h-11 rounded-xl border bg-card">رواتب المركبات الخفيفة</TabsTrigger>
+          <TabsTrigger value="heavy-vehicles" className="min-h-11 rounded-xl border bg-card">رواتب المركبات الثقيلة</TabsTrigger>
+        </TabsList>
+        <TabsContent value="employees" className="space-y-5">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Card><CardContent className="p-4"><Label htmlFor="payroll-month">شهر الراتب</Label><Input id="payroll-month" type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="mt-2 max-w-xs" /></CardContent></Card>
+            <Card><CardContent className="flex h-full items-center justify-between p-4"><div><p className="text-sm text-muted-foreground">صافي رواتب الموظفين</p><p className="mt-1 text-2xl font-bold">{money(total)}</p></div><Badge variant="secondary">{rows.length} موظف</Badge></CardContent></Card>
+          </div>
+          <Card className="overflow-hidden">
+            <CardHeader className="gap-3 border-b bg-muted/20 sm:flex-row sm:items-center sm:justify-between"><div><CardTitle>تقرير رواتب الموظفين</CardTitle><p className="mt-1 text-sm text-muted-foreground">يشمل احتساب الحضور والراحة والعطل والإضافي والإضافات والاستقطاعات.</p></div><div className="relative w-full sm:max-w-xs"><Search className="absolute right-3 top-3 h-4 w-4 text-muted-foreground" /><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ابحث بالاسم أو الرقم" className="pr-9" /></div></CardHeader>
+            <CardContent className="p-0">
+              {query.isError ? <div className="p-8 text-center text-destructive">تعذر تحميل تقرير الرواتب: {(query.error as Error).message}</div> : query.isLoading ? <div className="p-8 text-center text-muted-foreground">جارٍ تحميل بيانات الرواتب…</div> : (
+                <div className="overflow-x-auto"><table className="w-full min-w-[1100px] text-sm">
+                  <thead><tr className="border-b bg-muted/40 text-right"><th className="p-3">الموظف</th><th className="p-3">الحضور</th><th className="p-3">الأجر الأساسي</th><th className="p-3">الإضافي</th><th className="p-3">الإضافات</th><th className="p-3">الاستقطاعات</th><th className="p-3">الصافي</th><th className="p-3">القصاصة</th></tr></thead>
+                  <tbody>{filteredRows.map((row) => <tr key={row.employee.id} className="border-b transition-colors hover:bg-muted/20"><td className="p-3"><b>{row.employee.full_name}</b><div className="text-xs text-muted-foreground">{row.employee.employee_no} · {row.employee.pay_type === "daily" ? "يومي" : "شهري"}</div></td><td className="p-3">{row.summary.presentDays} يوم <div className="text-xs text-muted-foreground">{row.payroll.overtimeHours} س إضافي</div></td><td className="p-3">{money(row.payroll.basePay)}</td><td className="p-3">{money(row.payroll.overtimePay)}</td><td className="p-3 text-emerald-700">{money(row.additions)}</td><td className="p-3 text-red-600">{money(row.deductions)}</td><td className="p-3 font-bold">{money(row.total)}</td><td className="p-3"><Button size="sm" variant="outline" onClick={() => printSlip(row)}><Printer className="ml-2 h-4 w-4" /> طباعة</Button></td></tr>)}</tbody>
+                </table>{!filteredRows.length && <p className="py-10 text-center text-muted-foreground">لا توجد بيانات مطابقة.</p>}</div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+        {(["light", "heavy"] as const).map((kind) => {
+          const vehicles = vehicleRows(kind);
+          const vehicleTotal = vehicles.reduce((sum, row) => sum + row.total, 0);
+          return <TabsContent key={kind} value={kind === "light" ? "light-vehicles" : "heavy-vehicles"} className="space-y-5">
+            <div className="flex flex-col justify-between gap-3 rounded-xl border bg-card p-4 sm:flex-row sm:items-center"><div><h2 className="font-semibold">رواتب المركبات {kind === "light" ? "الخفيفة" : "الثقيلة"}</h2><p className="mt-1 text-sm text-muted-foreground">الاستحقاق = أيام التشغيل × الأجر اليومي · شهر {month}</p></div><div className="flex items-center gap-3"><Badge variant="secondary">{vehicles.length} مركبة</Badge><Button onClick={() => exportExcel(kind)} disabled={!vehicles.length}><Download className="ml-2 h-4 w-4" /> تصدير Excel</Button></div></div>
+            <Card><CardHeader><CardTitle>إجمالي المستحق: {money(vehicleTotal)}</CardTitle></CardHeader><CardContent className="overflow-x-auto p-0"><table className="w-full min-w-[700px] text-sm"><thead><tr className="border-b bg-muted/40 text-right"><th className="p-3">المركبة</th><th className="p-3">أيام التشغيل</th><th className="p-3">الأجر اليومي</th><th className="p-3">المستحق</th></tr></thead><tbody>{vehicles.map(({ vehicle, operatingDays, total: net }) => <tr key={vehicle.id} className="border-b"><td className="p-3"><b>{vehicle.name}</b><div className="text-xs text-muted-foreground">{vehicle.vehicle_no}</div></td><td className="p-3">{operatingDays} يوم</td><td className="p-3">{money(Number(vehicle.daily_rate))}</td><td className="p-3 font-bold">{money(net)}</td></tr>)}</tbody></table>{!vehicles.length && <p className="p-8 text-center text-muted-foreground">لا توجد مركبات مسجلة في هذا التصنيف. <a className="text-primary underline" href="/vehicles">إدارة المركبات</a></p>}</CardContent></Card>
+          </TabsContent>;
+        })}
+      </Tabs>
     </div>
   );
 }

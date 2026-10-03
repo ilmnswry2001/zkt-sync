@@ -14,6 +14,18 @@ export type Database = {
   }
   public: {
     Tables: {
+      vehicle_monthly_operations: {
+        Row: { created_at: string; id: string; month: string; notes: string | null; operating_days: number; updated_at: string; vehicle_id: string }
+        Insert: { created_at?: string; id?: string; month: string; notes?: string | null; operating_days?: number; updated_at?: string; vehicle_id: string }
+        Update: { created_at?: string; id?: string; month?: string; notes?: string | null; operating_days?: number; updated_at?: string; vehicle_id?: string }
+        Relationships: [{ foreignKeyName: "vehicle_monthly_operations_vehicle_id_fkey"; columns: ["vehicle_id"]; isOneToOne: false; referencedRelation: "vehicles"; referencedColumns: ["id"] }]
+      }
+      vehicles: {
+        Row: { created_at: string; currency: string; daily_rate: number; id: string; is_active: boolean; name: string; notes: string | null; updated_at: string; vehicle_class: string; vehicle_no: string }
+        Insert: { created_at?: string; currency?: string; daily_rate?: number; id?: string; is_active?: boolean; name: string; notes?: string | null; updated_at?: string; vehicle_class: string; vehicle_no: string }
+        Update: { created_at?: string; currency?: string; daily_rate?: number; id?: string; is_active?: boolean; name?: string; notes?: string | null; updated_at?: string; vehicle_class?: string; vehicle_no?: string }
+        Relationships: []
+      }
       attendance_day_status: {
         Row: {
           created_at: string
