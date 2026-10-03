@@ -568,23 +568,65 @@ function AttendancePage() {
                     </div>
                   );
                 })()}
-
-
-                <div className="rounded-2xl border bg-slate-900 p-4 text-white">
-                  <div className="mb-3 font-bold">الكادر المعتمد في الخطة النهائية</div>
-                  <div className="space-y-3">
-                    {(finalizedPlanQuery.data.assigned_staff ?? []).some((group) => group.names.length) ? (
-                      finalizedPlanQuery.data.assigned_staff.map((group) => (
-                        <div key={group.specialty}>
-                          <div className="mb-1 text-sm font-medium text-slate-200">{group.specialty}</div>
-                          <StaffNameChips names={group.names} />
+                {(() => {
+                  const staffGroups = (finalizedPlanQuery.data.assigned_staff ?? []).filter(
+                    (group) => group.names.length > 0,
+                  );
+                  const staffCount = staffGroups.reduce(
+                    (total, group) => total + group.names.length,
+                    0,
+                  );
+                  return (
+                    <section className="overflow-hidden rounded-2xl border bg-gradient-to-l from-emerald-50/70 via-background to-teal-50/60 shadow-sm dark:from-emerald-950/20 dark:via-card dark:to-teal-950/20">
+                      <div className="flex flex-col gap-3 border-b px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300">
+                            <UsersRound className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <h3 className="font-bold">الكادر المعتمد في الخطة النهائية</h3>
+                            <p className="mt-0.5 text-sm text-muted-foreground">
+                              توزيع الأسماء حسب الاختصاص
+                            </p>
+                          </div>
                         </div>
-                      ))
-                    ) : (
-                      <span className="text-sm text-slate-300">لا يوجد كوادر مضافة في الخطة النهائية.</span>
-                    )}
-                  </div>
-                </div>
+                        <Badge
+                          variant="secondary"
+                          className="w-fit gap-1.5 rounded-full px-3 py-1.5 text-sm"
+                        >
+                          <UsersRound className="h-4 w-4" />
+                          {staffCount.toLocaleString("ar-IQ")} فرد
+                        </Badge>
+                      </div>
+                      {staffGroups.length ? (
+                        <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3 sm:p-5">
+                          {staffGroups.map((group) => (
+                            <article
+                              key={group.specialty}
+                              className="min-w-0 rounded-xl border bg-card p-4 shadow-sm"
+                            >
+                              <div className="mb-3 flex items-start justify-between gap-3">
+                                <h4 className="font-semibold leading-6">{group.specialty}</h4>
+                                <Badge variant="outline" className="shrink-0 rounded-full">
+                                  {group.names.length.toLocaleString("ar-IQ")} أفراد
+                                </Badge>
+                              </div>
+                              <StaffNameChips names={group.names} />
+                            </article>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="m-4 flex flex-col items-center justify-center rounded-xl border border-dashed bg-card/70 px-4 py-8 text-center sm:m-5">
+                          <UsersRound className="mb-2 h-8 w-8 text-muted-foreground/60" />
+                          <p className="font-medium">لا يوجد كادر مضاف إلى الخطة النهائية</p>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            ستظهر الأسماء هنا عند اعتماد توزيع الموظفين.
+                          </p>
+                        </div>
+                      )}
+                    </section>
+                  );
+                })()}
               </div>
             )}
           </CardContent>
