@@ -142,6 +142,27 @@ type Evaluation = {
 };
 
 const today = new Date().toISOString().slice(0, 10);
+function playNewTaskAlert() {
+  if (typeof window === "undefined") return;
+  const AudioContextClass =
+    (window as typeof window & { webkitAudioContext?: typeof AudioContext }).AudioContext ??
+    (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioContextClass) return;
+  const context = new AudioContextClass();
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  oscillator.type = "sine";
+  oscillator.frequency.setValueAtTime(660, context.currentTime);
+  oscillator.frequency.setValueAtTime(990, context.currentTime + 0.14);
+  gain.gain.setValueAtTime(0.0001, context.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.2, context.currentTime + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.32);
+  oscillator.connect(gain);
+  gain.connect(context.destination);
+  oscillator.start();
+  oscillator.stop(context.currentTime + 0.34);
+  oscillator.addEventListener("ended", () => void context.close());
+}
 function normalizeArabic(str: string = "") {
   return str
     .trim()
@@ -313,6 +334,25 @@ function TeamFollowUpPage() {
     },
   });
   const teamTasks = teamTasksQuery.data ?? [];
+  useEffect(() => {
+    const channel = supabase
+      .channel(`team-task-alert-${user?.id ?? "guest"}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "employee_tasks" },
+        (payload) => {
+          const departmentId = (payload.new as { department_id?: string | null }).department_id;
+          if (canSeeAll || (departmentId && allowedDepartmentIds.includes(departmentId))) {
+            playNewTaskAlert();
+            void queryClient.invalidateQueries({ queryKey: ["team-follow-up-tasks"] });
+          }
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [allowedDepartmentIds, canSeeAll, queryClient, user?.id]);
   const profileById = new Map((profilesQuery.data ?? []).map((profile) => [profile.id, profile]));
   const dailyTasks = teamTasks.filter((task) => task.task_date === date);
   const profileByEmail = new Map(

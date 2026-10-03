@@ -43,6 +43,14 @@ type Task = {
   created_by: string;
   department_id: string | null;
 };
+type GuidanceNote = {
+  id: string;
+  title: string;
+  content: string;
+  guidance_date: string;
+  created_at: string;
+  read_at: string | null;
+};
 
 const today = new Date().toISOString().slice(0, 10);
 const normalizePersonName = (value: string = "") =>
@@ -59,6 +67,28 @@ const emptyForm = {
   status: "completed" as TaskStatus,
   duration: "",
 };
+
+function playTaskSavedSound() {
+  if (typeof window === "undefined") return;
+  const AudioContextClass =
+    window.AudioContext ||
+    (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioContextClass) return;
+  const context = new AudioContextClass();
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  oscillator.type = "sine";
+  oscillator.frequency.setValueAtTime(880, context.currentTime);
+  oscillator.frequency.setValueAtTime(1175, context.currentTime + 0.12);
+  gain.gain.setValueAtTime(0.0001, context.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.18, context.currentTime + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.28);
+  oscillator.connect(gain);
+  gain.connect(context.destination);
+  oscillator.start();
+  oscillator.stop(context.currentTime + 0.3);
+  oscillator.addEventListener("ended", () => void context.close());
+}
 
 function EmployeeTasksPage() {
   const { user, isAdmin, isHR, roles, canCreateTasks } = useAuth();
@@ -86,7 +116,8 @@ function EmployeeTasksPage() {
     },
   });
   const currentEmployee = currentEmployeeQuery.data;
-  const [activeTab, setActiveTab] = useState<"daily" | "archive">("daily");
+  const isDepartmentManager = roles.includes("department_manager");
+  const [activeTab, setActiveTab] = useState<"daily" | "archive" | "guidance">("daily");
   const [selectedDate, setSelectedDate] = useState(today);
   const [archiveFrom, setArchiveFrom] = useState("");
   const [archiveTo, setArchiveTo] = useState("");
@@ -105,6 +136,77 @@ function EmployeeTasksPage() {
     },
   });
   const assignedDepartmentId = departmentsQuery.data?.[0] ?? null;
+  const guidanceQuery = useQuery({
+    queryKey: ["employee-guidance", user?.id],
+    enabled: Boolean(user) && activeTab === "guidance",
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("employee_guidance_notes")
+        .select("id, title, content, guidance_date, created_at, read_at")
+        .eq("target_user_id", user!.id)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as GuidanceNote[];
+    },
+  });
+  const managerDepartmentsQuery = useQuery({
+    queryKey: ["employee-guidance", "manager-departments", user?.id],
+    enabled: Boolean(user) && isDepartmentManager,
+    queryFn: async () => {
+      const [assigned, managed] = await Promise.all([
+        permissionsDb.from("user_departments").select("department_id").eq("user_id", user!.id),
+        permissionsDb.from("department_managers").select("department_id").eq("user_id", user!.id),
+      ]);
+      if (assigned.error) throw assigned.error;
+      if (managed.error) throw managed.error;
+      return [
+        ...new Set(
+          [...(assigned.data ?? []), ...(managed.data ?? [])].map(
+            (row) => row.department_id as string,
+          ),
+        ),
+      ];
+    },
+  });
+  const managerDepartmentIds = managerDepartmentsQuery.data ?? [];
+  const guidanceEmployeesQuery = useQuery({
+    queryKey: ["employee-guidance", "employees", managerDepartmentIds],
+    enabled: isDepartmentManager && managerDepartmentIds.length > 0,
+    queryFn: async () => {
+      const [{ data: employees, error: employeesError }, { data: profiles, error: profilesError }] =
+        await Promise.all([
+          supabase
+            .from("employees")
+            .select("id, full_name, email, department_id")
+            .eq("status", "active")
+            .in("department_id", managerDepartmentIds),
+          supabase.from("profiles").select("id, full_name, email"),
+        ]);
+      if (employeesError) throw employeesError;
+      if (profilesError) throw profilesError;
+      return (employees ?? []).flatMap((employee) => {
+        const email = employee.email?.trim().toLowerCase();
+        const profile = (profiles ?? []).find(
+          (item) =>
+            (email && item.email?.trim().toLowerCase() === email) ||
+            normalizePersonName(item.full_name ?? "") === normalizePersonName(employee.full_name),
+        );
+        return profile && profile.id !== user?.id
+          ? [
+              {
+                employeeId: employee.id,
+                userId: profile.id,
+                name: employee.full_name,
+                departmentId: employee.department_id,
+              },
+            ]
+          : [];
+      });
+    },
+  });
+  const [guidanceRecipient, setGuidanceRecipient] = useState("all");
+  const [guidanceTitle, setGuidanceTitle] = useState("");
+  const [guidanceContent, setGuidanceContent] = useState("");
 
   const activeTasksQuery = useQuery({
     queryKey: ["employee-tasks", "active", selectedDate],
@@ -165,6 +267,46 @@ function EmployeeTasksPage() {
     [activeTasks],
   );
 
+  const sendGuidance = async () => {
+    if (!user || !isDepartmentManager) return toast.error("إرسال التوجيهات متاح لمدير القسم فقط");
+    if (!guidanceTitle.trim() || !guidanceContent.trim())
+      return toast.error("أدخل عنوان التوجيه ومحتواه");
+    const recipients = guidanceEmployeesQuery.data ?? [];
+    const selected =
+      guidanceRecipient === "all"
+        ? recipients
+        : recipients.filter((item) => item.userId === guidanceRecipient);
+    if (!selected.length) return toast.error("لم يتم العثور على حسابات موظفين مرتبطة بالقسم");
+    const rows = selected.map((item) => ({
+      department_id: item.departmentId,
+      target_user_id: item.userId,
+      target_employee_id: item.employeeId,
+      title: guidanceTitle.trim(),
+      content: guidanceContent.trim(),
+      author_id: user.id,
+    }));
+    const { error } = await (supabase as any).from("employee_guidance_notes").insert(rows);
+    if (error) return toast.error(error.message);
+    setGuidanceTitle("");
+    setGuidanceContent("");
+    await queryClient.invalidateQueries({ queryKey: ["employee-guidance"] });
+    toast.success(
+      guidanceRecipient === "all"
+        ? "تم إرسال التوجيه إلى جميع موظفي القسم"
+        : "تم إرسال التوجيه إلى الموظف المحدد",
+    );
+  };
+
+  const markGuidanceRead = async (note: GuidanceNote) => {
+    if (note.read_at || !user) return;
+    await (supabase as any)
+      .from("employee_guidance_notes")
+      .update({ read_at: new Date().toISOString() })
+      .eq("id", note.id)
+      .eq("target_user_id", user.id);
+    await queryClient.invalidateQueries({ queryKey: ["employee-guidance", user.id] });
+  };
+
   const invalidate = async () => {
     await queryClient.invalidateQueries({ queryKey: ["employee-tasks"] });
   };
@@ -206,6 +348,7 @@ function EmployeeTasksPage() {
     }
     await invalidate();
     resetForm();
+    playTaskSavedSound();
     toast.success(editingTask ? "تم تعديل المهمة" : "تمت إضافة المهمة");
   };
   const editTask = (task: Task) => {
@@ -347,12 +490,13 @@ function EmployeeTasksPage() {
       </div>
       <Tabs
         value={activeTab}
-        onValueChange={(value) => setActiveTab(value as "daily" | "archive")}
+        onValueChange={(value) => setActiveTab(value as "daily" | "archive" | "guidance")}
         dir="rtl"
       >
         <TabsList>
           <TabsTrigger value="daily">إدخال ومتابعة المهام</TabsTrigger>
           <TabsTrigger value="archive">أرشيف المهام</TabsTrigger>
+          <TabsTrigger value="guidance">توجيهات مدير القسم</TabsTrigger>
         </TabsList>
         <TabsContent value="daily" className="space-y-5">
           <Card className="border-primary/20">
@@ -488,6 +632,80 @@ function EmployeeTasksPage() {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+        <TabsContent value="guidance" className="space-y-5">
+          {isDepartmentManager && (
+            <Card className="border-primary/20">
+              <CardHeader>
+                <CardTitle>إرسال توجيه إلى الفريق</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label>إرسال إلى</Label>
+                  <select
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    value={guidanceRecipient}
+                    onChange={(event) => setGuidanceRecipient(event.target.value)}
+                  >
+                    <option value="all">جميع موظفي القسم</option>
+                    {(guidanceEmployeesQuery.data ?? []).map((employee) => (
+                      <option key={employee.userId} value={employee.userId}>
+                        {employee.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <Input
+                  value={guidanceTitle}
+                  onChange={(event) => setGuidanceTitle(event.target.value)}
+                  placeholder="عنوان التوجيه"
+                  maxLength={200}
+                />
+                <Textarea
+                  value={guidanceContent}
+                  onChange={(event) => setGuidanceContent(event.target.value)}
+                  placeholder="اكتب تعليمات مدير القسم..."
+                  rows={5}
+                />
+                <Button
+                  onClick={() => void sendGuidance()}
+                  disabled={guidanceEmployeesQuery.isLoading}
+                >
+                  إرسال التوجيه
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+          <Card>
+            <CardHeader>
+              <CardTitle>التوجيهات الواردة</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {guidanceQuery.isLoading ? (
+                <p className="text-muted-foreground">جارٍ تحميل التوجيهات...</p>
+              ) : (guidanceQuery.data ?? []).length ? (
+                (guidanceQuery.data ?? []).map((note) => (
+                  <button
+                    key={note.id}
+                    type="button"
+                    className={`w-full rounded-xl border p-4 text-right ${note.read_at ? "bg-card" : "border-primary/50 bg-primary/5"}`}
+                    onClick={() => void markGuidanceRead(note)}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <strong>{note.title}</strong>
+                      {!note.read_at && <Badge>جديد</Badge>}
+                    </div>
+                    <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
+                      {note.content}
+                    </p>
+                    <p className="mt-2 text-xs text-muted-foreground">{note.guidance_date}</p>
+                  </button>
+                ))
+              ) : (
+                <p className="py-8 text-center text-muted-foreground">لا توجد توجيهات واردة.</p>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
