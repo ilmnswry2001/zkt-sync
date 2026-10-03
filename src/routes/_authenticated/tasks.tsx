@@ -118,7 +118,6 @@ function EmployeeTasksPage() {
     },
   });
   const currentEmployee = currentEmployeeQuery.data;
-  const isDepartmentManager = roles.includes("department_manager");
   const [activeTab, setActiveTab] = useState<"daily" | "archive" | "guidance">("daily");
   const [selectedDate, setSelectedDate] = useState(today);
   const [archiveFrom, setArchiveFrom] = useState("");
@@ -197,64 +196,6 @@ function EmployeeTasksPage() {
       return (data ?? []) as GuidanceNote[];
     },
   });
-  const managerDepartmentsQuery = useQuery({
-    queryKey: ["employee-guidance", "manager-departments", user?.id],
-    enabled: Boolean(user) && isDepartmentManager,
-    queryFn: async () => {
-      const [assigned, managed] = await Promise.all([
-        permissionsDb.from("user_departments").select("department_id").eq("user_id", user!.id),
-        permissionsDb.from("department_managers").select("department_id").eq("user_id", user!.id),
-      ]);
-      if (assigned.error) throw assigned.error;
-      if (managed.error) throw managed.error;
-      return [
-        ...new Set(
-          [...(assigned.data ?? []), ...(managed.data ?? [])].map(
-            (row) => row.department_id as string,
-          ),
-        ),
-      ];
-    },
-  });
-  const managerDepartmentIds = managerDepartmentsQuery.data ?? [];
-  const guidanceEmployeesQuery = useQuery({
-    queryKey: ["employee-guidance", "employees", managerDepartmentIds],
-    enabled: isDepartmentManager && managerDepartmentIds.length > 0,
-    queryFn: async () => {
-      const [{ data: employees, error: employeesError }, { data: profiles, error: profilesError }] =
-        await Promise.all([
-          supabase
-            .from("employees")
-            .select("id, full_name, email, department_id")
-            .eq("status", "active")
-            .in("department_id", managerDepartmentIds),
-          supabase.from("profiles").select("id, full_name, email"),
-        ]);
-      if (employeesError) throw employeesError;
-      if (profilesError) throw profilesError;
-      return (employees ?? []).flatMap((employee) => {
-        const email = employee.email?.trim().toLowerCase();
-        const profile = (profiles ?? []).find(
-          (item) =>
-            (email && item.email?.trim().toLowerCase() === email) ||
-            normalizePersonName(item.full_name ?? "") === normalizePersonName(employee.full_name),
-        );
-        return profile && profile.id !== user?.id
-          ? [
-              {
-                employeeId: employee.id,
-                userId: profile.id,
-                name: employee.full_name,
-                departmentId: employee.department_id,
-              },
-            ]
-          : [];
-      });
-    },
-  });
-  const [guidanceRecipient, setGuidanceRecipient] = useState("all");
-  const [guidanceTitle, setGuidanceTitle] = useState("");
-  const [guidanceContent, setGuidanceContent] = useState("");
 
   const activeTasksQuery = useQuery({
     queryKey: ["employee-tasks", "active", selectedDate],
@@ -314,36 +255,6 @@ function EmployeeTasksPage() {
     }),
     [activeTasks],
   );
-
-  const sendGuidance = async () => {
-    if (!user || !isDepartmentManager) return toast.error("إرسال التوجيهات متاح لمدير القسم فقط");
-    if (!guidanceTitle.trim() || !guidanceContent.trim())
-      return toast.error("أدخل عنوان التوجيه ومحتواه");
-    const recipients = guidanceEmployeesQuery.data ?? [];
-    const selected =
-      guidanceRecipient === "all"
-        ? recipients
-        : recipients.filter((item) => item.userId === guidanceRecipient);
-    if (!selected.length) return toast.error("لم يتم العثور على حسابات موظفين مرتبطة بالقسم");
-    const rows = selected.map((item) => ({
-      department_id: item.departmentId,
-      target_user_id: item.userId,
-      target_employee_id: item.employeeId,
-      title: guidanceTitle.trim(),
-      content: guidanceContent.trim(),
-      author_id: user.id,
-    }));
-    const { error } = await (supabase as any).from("employee_guidance_notes").insert(rows);
-    if (error) return toast.error(error.message);
-    setGuidanceTitle("");
-    setGuidanceContent("");
-    await queryClient.invalidateQueries({ queryKey: ["employee-guidance"] });
-    toast.success(
-      guidanceRecipient === "all"
-        ? "تم إرسال التوجيه إلى جميع موظفي القسم"
-        : "تم إرسال التوجيه إلى الموظف المحدد",
-    );
-  };
 
   const markGuidanceRead = async (note: GuidanceNote) => {
     if (note.read_at || !user) return;
@@ -689,48 +600,6 @@ function EmployeeTasksPage() {
           )}
         </TabsContent>
         <TabsContent value="guidance" className="space-y-5">
-          {isDepartmentManager && (
-            <Card className="border-primary/20">
-              <CardHeader>
-                <CardTitle>إرسال توجيه إلى الفريق</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label>إرسال إلى</Label>
-                  <select
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                    value={guidanceRecipient}
-                    onChange={(event) => setGuidanceRecipient(event.target.value)}
-                  >
-                    <option value="all">جميع موظفي القسم</option>
-                    {(guidanceEmployeesQuery.data ?? []).map((employee) => (
-                      <option key={employee.userId} value={employee.userId}>
-                        {employee.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <Input
-                  value={guidanceTitle}
-                  onChange={(event) => setGuidanceTitle(event.target.value)}
-                  placeholder="عنوان التوجيه"
-                  maxLength={200}
-                />
-                <Textarea
-                  value={guidanceContent}
-                  onChange={(event) => setGuidanceContent(event.target.value)}
-                  placeholder="اكتب تعليمات مدير القسم..."
-                  rows={5}
-                />
-                <Button
-                  onClick={() => void sendGuidance()}
-                  disabled={guidanceEmployeesQuery.isLoading}
-                >
-                  إرسال التوجيه
-                </Button>
-              </CardContent>
-            </Card>
-          )}
           <Card>
             <CardHeader>
               <CardTitle>التوجيهات الواردة</CardTitle>
