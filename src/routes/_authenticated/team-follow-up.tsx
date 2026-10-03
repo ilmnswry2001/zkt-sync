@@ -40,6 +40,8 @@ import {
   ListChecks,
   Eye,
   Save,
+  Send,
+  Sparkles,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/team-follow-up")({
@@ -123,6 +125,7 @@ function TeamFollowUpPage() {
   const [detailsMember, setDetailsMember] = useState<MemberDetails | null>(null);
   const [taskNotes, setTaskNotes] = useState<Record<string, string>>({});
   const [generalNote, setGeneralNote] = useState("");
+  const [isSavingGuidance, setIsSavingGuidance] = useState(false);
   const [activeTab, setActiveTab] = useState("tasks");
   const [evaluationEmployee, setEvaluationEmployee] = useState<Employee | null>(null);
   const [evaluationScore, setEvaluationScore] = useState("");
@@ -338,16 +341,23 @@ function TeamFollowUpPage() {
   };
   const saveGeneralNote = async () => {
     if (!guidanceDepartmentId) return toast.error("لا يوجد قسم محدد لحفظ التوجيه");
+    const content = generalNote.trim();
+    if (!content) return toast.error("اكتب نص التوجيه قبل إرساله");
+    if (content.length > 3000) return toast.error("يجب ألا يتجاوز التوجيه 3000 حرف");
     const client = supabase as unknown as { from: (table: string) => any };
     const { data: authData } = await supabase.auth.getUser();
     if (!authData.user) return toast.error("يجب تسجيل الدخول أولاً");
-    const payload = { department_id: guidanceDepartmentId, note_date: date, content: generalNote.trim(), author_id: authData.user.id };
-    const result = guidanceQuery.data?.id
-      ? await client.from("team_guidance_notes").update({ content: payload.content }).eq("id", guidanceQuery.data.id)
-      : await client.from("team_guidance_notes").insert(payload);
-    if (result.error) return toast.error(`تعذر حفظ التوجيه العام: ${result.error.message}`);
-    await queryClient.invalidateQueries({ queryKey: ["team-follow-up-guidance"] });
-    toast.success("تم حفظ التوجيه العام للفريق");
+    setIsSavingGuidance(true);
+    try {
+      const result = guidanceQuery.data?.id
+        ? await client.from("team_guidance_notes").update({ content }).eq("id", guidanceQuery.data.id)
+        : await client.from("team_guidance_notes").insert({ department_id: guidanceDepartmentId, note_date: date, content, author_id: authData.user.id });
+      if (result.error) return toast.error(`تعذر حفظ التوجيه العام: ${result.error.message}`);
+      await queryClient.invalidateQueries({ queryKey: ["team-follow-up-guidance"] });
+      toast.success("تم إرسال التوجيه للفريق");
+    } finally {
+      setIsSavingGuidance(false);
+    }
   };
 
   const siteRows = siteIds
@@ -673,14 +683,18 @@ function TeamFollowUpPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold">متابعة الفريق</h1>
-          <p className="text-muted-foreground mt-1">
-            لوحة متابعة الموظفين الإداريين وتقارير المواقع والملاحظات اليومية
-          </p>
-        </div>
-        <Badge variant="outline">
+      <section className="relative isolate overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-teal-950 to-emerald-900 px-6 py-7 text-white shadow-xl shadow-teal-950/10 sm:px-8">
+        <div className="pointer-events-none absolute -left-10 -top-24 h-72 w-72 rounded-full bg-cyan-400/15 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-36 right-1/4 h-72 w-72 rounded-full bg-emerald-300/15 blur-3xl" />
+        <div className="relative flex flex-wrap items-end justify-between gap-5">
+          <div>
+            <Badge className="mb-3 border-white/20 bg-white/10 text-white hover:bg-white/10"><Sparkles className="ml-1.5 h-3.5 w-3.5" /> مركز قيادة الفريق</Badge>
+            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">متابعة الفريق</h1>
+            <p className="mt-2 max-w-2xl text-sm text-teal-50/80 sm:text-base">صورة يومية واضحة للمهام والإنجازات والحضور، مع أدوات مباشرة لتوجيه الفريق.</p>
+          </div>
+          <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3 backdrop-blur-sm">
+            <p className="text-xs text-teal-50/70">صلاحية العرض</p>
+            <p className="mt-1 font-semibold">
           الصلاحية:{" "}
           {canSeeAll
             ? "مدير النظام / الموارد البشرية"
@@ -689,10 +703,15 @@ function TeamFollowUpPage() {
               : roles.includes("supervisor")
                 ? "مشرف"
                 : "مشاهدة محدودة"}
-        </Badge>
-      </div>
-      <Card>
-        <CardContent className="p-4 flex flex-wrap items-end gap-4">
+            </p>
+          </div>
+        </div>
+        <div className="relative mt-6 grid grid-cols-2 gap-3 border-t border-white/15 pt-5 sm:grid-cols-4">
+          {[ ["أفراد الفريق", visibleEmployees.length], ["مهام اليوم", dailyTasks.length], ["المواقع", siteIds.length], ["تغطية التقارير", `${reportCoverage}%`] ].map(([label, value]) => <div key={String(label)} className="rounded-xl bg-white/[0.07] px-4 py-3"><p className="text-xs text-teal-50/70">{label}</p><p className="mt-1 text-2xl font-bold">{value}</p></div>)}
+        </div>
+      </section>
+      <Card className="overflow-hidden rounded-2xl border-slate-200/80 shadow-sm dark:border-slate-800">
+        <CardContent className="flex flex-wrap items-end gap-4 p-4 sm:p-5">
           <div className="w-full sm:w-64">
             <Label>القسم</Label>
             <Select value={effectiveDepartmentId} onValueChange={setDepartmentId}>
@@ -726,12 +745,13 @@ function TeamFollowUpPage() {
           </Button>
         </CardContent>
       </Card>
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid h-auto w-full grid-cols-4">
-          <TabsTrigger value="tasks">مهام الفريق</TabsTrigger>
-          <TabsTrigger value="stats">الإحصائيات</TabsTrigger>
-          <TabsTrigger value="team">فريقي</TabsTrigger>
-          <TabsTrigger value="evaluation">تقييم الموظفين</TabsTrigger>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
+        <TabsList className={`grid h-auto w-full ${isDepartmentManager ? "grid-cols-2 sm:grid-cols-5" : "grid-cols-2 sm:grid-cols-4"} gap-1 rounded-2xl border bg-muted/60 p-1.5`}>
+          <TabsTrigger className="rounded-xl py-2.5" value="tasks">مهام الفريق</TabsTrigger>
+          <TabsTrigger className="rounded-xl py-2.5" value="stats">الإحصائيات</TabsTrigger>
+          <TabsTrigger className="rounded-xl py-2.5" value="team">فريقي</TabsTrigger>
+          <TabsTrigger className="rounded-xl py-2.5" value="evaluation">تقييم الموظفين</TabsTrigger>
+          {isDepartmentManager && <TabsTrigger className="rounded-xl py-2.5" value="guidance">توجيه الفريق</TabsTrigger>}
         </TabsList>
         <TabsContent value="tasks" className="space-y-5">
           <Card className="border-primary/20">
@@ -746,6 +766,24 @@ function TeamFollowUpPage() {
             <CardContent className="space-y-5">{tasks}</CardContent>
           </Card>
         </TabsContent>
+
+        {isDepartmentManager && <TabsContent value="guidance" className="space-y-5">
+          <Card className="overflow-hidden rounded-3xl border-0 bg-gradient-to-br from-teal-950 via-teal-900 to-emerald-800 text-white shadow-xl">
+            <CardHeader className="border-b border-white/10 pb-5">
+              <Badge className="w-fit border-white/20 bg-white/10 text-white hover:bg-white/10"><Send className="ml-1.5 h-3.5 w-3.5" /> توجيه رسمي للفريق</Badge>
+              <CardTitle className="mt-3 text-2xl">وجّه فريقك بوضوح</CardTitle>
+              <p className="text-sm text-teal-50/75">يظهر هذا التوجيه لأعضاء القسم في مهامي اليومية، ويرتبط بالقسم والتاريخ المحددين.</p>
+            </CardHeader>
+            <CardContent className="space-y-4 p-5 sm:p-6">
+              <div className="flex flex-wrap gap-2 text-xs text-teal-50/80"><span className="rounded-full bg-white/10 px-3 py-1.5">{departmentById.get(guidanceDepartmentId ?? "")?.name ?? "القسم المحدد"}</span><span className="rounded-full bg-white/10 px-3 py-1.5">{date}</span></div>
+              <Textarea value={generalNote} onChange={(event) => setGeneralNote(event.target.value)} maxLength={3000} placeholder="اكتب الأولويات والتعليمات المطلوبة من الفريق لهذا اليوم..." className="min-h-44 resize-y border-white/20 bg-white text-slate-900 placeholder:text-slate-400 focus-visible:ring-emerald-300" />
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span className="text-xs text-teal-50/70">{generalNote.length} / 3000 حرف{guidanceQuery.data ? " · يوجد توجيه محفوظ لهذا اليوم" : " · لم يُرسل توجيه بعد"}</span>
+                <Button onClick={() => void saveGeneralNote()} disabled={isSavingGuidance || guidanceQuery.isLoading || !guidanceDepartmentId} className="bg-white font-semibold text-teal-900 hover:bg-teal-50">{isSavingGuidance ? <><Clock3 className="ml-2 h-4 w-4 animate-spin" /> جارٍ الإرسال</> : <><Send className="ml-2 h-4 w-4" /> {guidanceQuery.data ? "تحديث التوجيه" : "إرسال التوجيه"}</>}</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>}
 
         <TabsContent value="stats" className="space-y-5">
           <Card>
