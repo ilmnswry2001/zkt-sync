@@ -375,9 +375,23 @@ function TeamFollowUpPage() {
   });
   const guidanceRecipients = [...new Map(
     teamVisibleEmployees.flatMap((employee) => {
-      const profile = employee.email
+      const emailProfile = employee.email
         ? profileByEmail.get(employee.email.trim().toLowerCase())
         : undefined;
+      const normalizedName = normalizeArabic(employee.full_name);
+      const sameNameEmployees = employees.filter(
+        (candidate) =>
+          candidate.department_id === employee.department_id &&
+          normalizeArabic(candidate.full_name) === normalizedName,
+      );
+      const sameNameProfiles = (profilesQuery.data ?? []).filter(
+        (candidate) => normalizeArabic(candidate.full_name ?? "") === normalizedName,
+      );
+      const profile = emailProfile ?? (
+        normalizedName && sameNameEmployees.length === 1 && sameNameProfiles.length === 1
+          ? sameNameProfiles[0]
+          : undefined
+      );
       return profile && profile.id !== user?.id
         ? [[profile.id, {
             employeeId: employee.id,
@@ -1003,8 +1017,8 @@ function TeamFollowUpPage() {
                 <div><p className="text-xs text-teal-50/70">نطاق الإرسال</p><p className="mt-1 font-semibold">{guidanceDepartmentForView ? departmentById.get(guidanceDepartmentForView)?.name ?? "القسم المعيّن" : "الأقسام المعيّنة لك"}</p></div>
                 <div><Label htmlFor="team-guidance-recipient" className="text-white">إرسال إلى</Label><select id="team-guidance-recipient" className="mt-2 flex h-11 w-full rounded-xl border border-white/15 bg-slate-950/35 px-3 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-300" value={guidanceRecipient} onChange={(event) => setGuidanceRecipient(event.target.value)}><option className="text-slate-900" value="all">جميع موظفي النطاق ({guidanceRecipients.length})</option>{guidanceRecipients.map((recipient) => <option className="text-slate-900" key={recipient.userId} value={recipient.userId}>{recipient.name}</option>)}</select></div>
                 <div className="rounded-xl bg-white/[0.07] p-3 text-sm text-teal-50/80"><Users className="ml-2 inline h-4 w-4" />{guidanceRecipient === "all" ? `${guidanceRecipients.length} موظف مرتبط بحساب` : "سيصل التوجيه إلى الموظف المحدد"}</div>
-                {!profilesQuery.isLoading && !employeesQuery.isLoading && guidanceRecipients.length === 0 && <p className="text-xs leading-5 text-amber-100">لا توجد حسابات موظفين مرتبطة ببريد الموظف في هذا النطاق. اربط بريد الموظف بحسابه أولاً لتفعيل الإرسال.</p>}
-                {teamVisibleEmployees.length > guidanceRecipients.length && <p className="text-xs leading-5 text-amber-100">بعض سجلات الموظفين بلا بريد مطابق لحساب مستخدم، لذلك لن تصلها التوجيهات حتى يتم ربط البريد بالحساب.</p>}
+                {!profilesQuery.isLoading && !employeesQuery.isLoading && guidanceRecipients.length === 0 && <p className="text-xs leading-5 text-amber-100">تعذر ربط حسابات الموظفين بهذا النطاق. يلزم تطابق البريد أو اسم فريد بين حساب المستخدم وسجل الموظف.</p>}
+                {teamVisibleEmployees.length > guidanceRecipients.length && <p className="text-xs leading-5 text-amber-100">لن تظهر التوجيهات إلا للحسابات المرتبطة ببريد مطابق أو باسم فريد؛ الأسماء المتكررة تحتاج ربط البريد لتجنب إرسالها إلى حساب خاطئ.</p>}
               </div>
               <div className="space-y-4 rounded-2xl bg-white p-4 text-slate-900 sm:p-5">
                 <div><Label htmlFor="team-guidance-title">عنوان التوجيه</Label><Input id="team-guidance-title" value={guidanceTitle} onChange={(event) => setGuidanceTitle(event.target.value)} placeholder="مثال: أولويات العمل لهذا اليوم" maxLength={200} className="mt-2 h-11 rounded-xl" /></div>
