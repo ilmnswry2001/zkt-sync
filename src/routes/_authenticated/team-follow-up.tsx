@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { todayInBaghdad } from "@/lib/date-time";
 import { permissionsDb } from "@/lib/permissions-client";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -136,7 +137,7 @@ type Evaluation = {
   created_at: string;
 };
 
-const today = new Date().toISOString().slice(0, 10);
+const today = todayInBaghdad();
 function playNewTaskAlert() {
   if (typeof window === "undefined") return;
   const AudioContextClass =
@@ -203,7 +204,7 @@ function TeamFollowUpPage() {
       return (data ?? []) as Department[];
     },
   });
-  const departments = departmentsQuery.data ?? [];
+  const departments = useMemo(() => departmentsQuery.data ?? [], [departmentsQuery.data]);
   const assignedDepartmentsQuery = useQuery({
     queryKey: ["team-follow-up-assigned-departments"],
     enabled: !canSeeAll,
@@ -235,9 +236,13 @@ function TeamFollowUpPage() {
       return [...departmentIds];
     },
   });
-  const allowedDepartmentIds = canSeeAll
-    ? departments.map((department) => department.id)
-    : (assignedDepartmentsQuery.data ?? []);
+  const allowedDepartmentIds = useMemo(
+    () =>
+      canSeeAll
+        ? departments.map((department) => department.id)
+        : (assignedDepartmentsQuery.data ?? []),
+    [canSeeAll, departments, assignedDepartmentsQuery.data],
+  );
   const effectiveDepartmentId =
     departmentId !== "all" && allowedDepartmentIds.includes(departmentId) ? departmentId : "all";
 
@@ -373,38 +378,48 @@ function TeamFollowUpPage() {
     if (canSeeAll || !isDepartmentManager) return true;
     return findProfileForEmployee(employee)?.id !== user?.id;
   });
-  const guidanceRecipients = [...new Map(
-    teamVisibleEmployees.flatMap((employee) => {
-      const emailProfile = employee.email
-        ? profileByEmail.get(employee.email.trim().toLowerCase())
-        : undefined;
-      const normalizedName = normalizeArabic(employee.full_name);
-      const sameNameEmployees = employees.filter(
-        (candidate) =>
-          candidate.department_id === employee.department_id &&
-          normalizeArabic(candidate.full_name) === normalizedName,
-      );
-      const sameNameProfiles = (profilesQuery.data ?? []).filter(
-        (candidate) => normalizeArabic(candidate.full_name ?? "") === normalizedName,
-      );
-      const profile = emailProfile ?? (
-        normalizedName && sameNameEmployees.length === 1 && sameNameProfiles.length === 1
-          ? sameNameProfiles[0]
-          : undefined
-      );
-      return profile && profile.id !== user?.id
-        ? [[profile.id, {
-            employeeId: employee.id,
-            userId: profile.id,
-            name: employee.full_name,
-            departmentId: employee.department_id,
-          }] as const]
-        : [];
-    }),
-  ).values()];
-  const guidanceDepartmentForView = effectiveDepartmentId === "all"
-    ? allowedDepartmentIds.length === 1 ? allowedDepartmentIds[0] : null
-    : effectiveDepartmentId;
+  const guidanceRecipients = [
+    ...new Map(
+      teamVisibleEmployees.flatMap((employee) => {
+        const emailProfile = employee.email
+          ? profileByEmail.get(employee.email.trim().toLowerCase())
+          : undefined;
+        const normalizedName = normalizeArabic(employee.full_name);
+        const sameNameEmployees = employees.filter(
+          (candidate) =>
+            candidate.department_id === employee.department_id &&
+            normalizeArabic(candidate.full_name) === normalizedName,
+        );
+        const sameNameProfiles = (profilesQuery.data ?? []).filter(
+          (candidate) => normalizeArabic(candidate.full_name ?? "") === normalizedName,
+        );
+        const profile =
+          emailProfile ??
+          (normalizedName && sameNameEmployees.length === 1 && sameNameProfiles.length === 1
+            ? sameNameProfiles[0]
+            : undefined);
+        return profile && profile.id !== user?.id
+          ? [
+              [
+                profile.id,
+                {
+                  employeeId: employee.id,
+                  userId: profile.id,
+                  name: employee.full_name,
+                  departmentId: employee.department_id,
+                },
+              ] as const,
+            ]
+          : [];
+      }),
+    ).values(),
+  ];
+  const guidanceDepartmentForView =
+    effectiveDepartmentId === "all"
+      ? allowedDepartmentIds.length === 1
+        ? allowedDepartmentIds[0]
+        : null
+      : effectiveDepartmentId;
   const employeeIds = visibleEmployees.map((employee) => employee.id);
   const attendanceMonthQuery = useQuery({
     queryKey: ["team-follow-up-attendance", employeeIds, monthStart, monthEnd],
@@ -517,9 +532,10 @@ function TeamFollowUpPage() {
     if (title.length < 2) return toast.error("اكتب عنوان التوجيه بوضوح");
     if (!content) return toast.error("اكتب محتوى التوجيه قبل الإرسال");
     if (content.length > 5000) return toast.error("يجب ألا يتجاوز التوجيه 5000 حرف");
-    const selected = guidanceRecipient === "all"
-      ? guidanceRecipients
-      : guidanceRecipients.filter((recipient) => recipient.userId === guidanceRecipient);
+    const selected =
+      guidanceRecipient === "all"
+        ? guidanceRecipients
+        : guidanceRecipients.filter((recipient) => recipient.userId === guidanceRecipient);
     if (!selected.length) return toast.error("لا توجد حسابات موظفين مرتبطة بالقسم المحدد");
 
     setIsSendingGuidance(true);
@@ -554,11 +570,15 @@ function TeamFollowUpPage() {
       setGuidanceTitle("");
       setGuidanceContent("");
       await queryClient.invalidateQueries({ queryKey: ["employee-guidance"] });
-      toast.success(guidanceRecipient === "all"
-        ? `تم إرسال التوجيه إلى ${selected.length} من موظفي النطاق المحدد`
-        : "تم إرسال التوجيه إلى الموظف المحدد");
+      toast.success(
+        guidanceRecipient === "all"
+          ? `تم إرسال التوجيه إلى ${selected.length} من موظفي النطاق المحدد`
+          : "تم إرسال التوجيه إلى الموظف المحدد",
+      );
     } catch (error) {
-      toast.error(`تعذر إرسال التوجيه: ${error instanceof Error ? error.message : "حدث خطأ غير متوقع"}`);
+      toast.error(
+        `تعذر إرسال التوجيه: ${error instanceof Error ? error.message : "حدث خطأ غير متوقع"}`,
+      );
     } finally {
       setIsSendingGuidance(false);
     }
@@ -935,17 +955,40 @@ function TeamFollowUpPage() {
         <div className="pointer-events-none absolute -bottom-36 right-1/4 h-72 w-72 rounded-full bg-emerald-300/15 blur-3xl" />
         <div className="relative flex flex-wrap items-end justify-between gap-5">
           <div>
-            <Badge className="mb-3 border-white/20 bg-white/10 text-white hover:bg-white/10"><Sparkles className="ml-1.5 h-3.5 w-3.5" /> مركز قيادة الفريق</Badge>
+            <Badge className="mb-3 border-white/20 bg-white/10 text-white hover:bg-white/10">
+              <Sparkles className="ml-1.5 h-3.5 w-3.5" /> مركز قيادة الفريق
+            </Badge>
             <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">متابعة الفريق</h1>
-            <p className="mt-2 max-w-2xl text-sm text-teal-50/80 sm:text-base">صورة يومية واضحة للمهام والإنجازات والحضور، مع أدوات عملية لتوجيه الفريق ومتابعة المواقع.</p>
+            <p className="mt-2 max-w-2xl text-sm text-teal-50/80 sm:text-base">
+              صورة يومية واضحة للمهام والإنجازات والحضور، مع أدوات عملية لتوجيه الفريق ومتابعة
+              المواقع.
+            </p>
           </div>
           <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3 backdrop-blur-sm">
             <p className="text-xs text-teal-50/70">صلاحية العرض</p>
-            <p className="mt-1 font-semibold">{canSeeAll ? "مدير النظام / الموارد البشرية" : isDepartmentManager ? "رئيس القسم" : roles.includes("supervisor") ? "مشرف" : "مشاهدة محدودة"}</p>
+            <p className="mt-1 font-semibold">
+              {canSeeAll
+                ? "مدير النظام / الموارد البشرية"
+                : isDepartmentManager
+                  ? "رئيس القسم"
+                  : roles.includes("supervisor")
+                    ? "مشرف"
+                    : "مشاهدة محدودة"}
+            </p>
           </div>
         </div>
         <div className="relative mt-6 grid grid-cols-2 gap-3 border-t border-white/15 pt-5 sm:grid-cols-4">
-          {[["أفراد الفريق", teamVisibleEmployees.length], ["مهام اليوم", dailyTasks.length], ["المواقع", siteIds.length], ["تغطية التقارير", `${reportCoverage}%`]].map(([label, value]) => <div key={String(label)} className="rounded-xl bg-white/[0.07] px-4 py-3"><p className="text-xs text-teal-50/70">{label}</p><p className="mt-1 text-2xl font-bold">{value}</p></div>)}
+          {[
+            ["أفراد الفريق", teamVisibleEmployees.length],
+            ["مهام اليوم", dailyTasks.length],
+            ["المواقع", siteIds.length],
+            ["تغطية التقارير", `${reportCoverage}%`],
+          ].map(([label, value]) => (
+            <div key={String(label)} className="rounded-xl bg-white/[0.07] px-4 py-3">
+              <p className="text-xs text-teal-50/70">{label}</p>
+              <p className="mt-1 text-2xl font-bold">{value}</p>
+            </div>
+          ))}
         </div>
       </section>
       <Card className="overflow-hidden rounded-2xl border-slate-200/80 shadow-sm dark:border-slate-800">
@@ -984,12 +1027,26 @@ function TeamFollowUpPage() {
         </CardContent>
       </Card>
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
-        <TabsList className={`grid h-auto w-full ${isDepartmentManager ? "grid-cols-2 sm:grid-cols-5" : "grid-cols-2 sm:grid-cols-4"} gap-1 rounded-2xl border bg-muted/60 p-1.5`}>
-          <TabsTrigger className="rounded-xl py-2.5" value="tasks">مهام الفريق</TabsTrigger>
-          <TabsTrigger className="rounded-xl py-2.5" value="stats">الإحصائيات</TabsTrigger>
-          <TabsTrigger className="rounded-xl py-2.5" value="team">فريقي</TabsTrigger>
-          <TabsTrigger className="rounded-xl py-2.5" value="evaluation">تقييم الموظفين</TabsTrigger>
-          {isDepartmentManager && <TabsTrigger className="rounded-xl py-2.5" value="guidance">إرسال التوجيه</TabsTrigger>}
+        <TabsList
+          className={`grid h-auto w-full ${isDepartmentManager ? "grid-cols-2 sm:grid-cols-5" : "grid-cols-2 sm:grid-cols-4"} gap-1 rounded-2xl border bg-muted/60 p-1.5`}
+        >
+          <TabsTrigger className="rounded-xl py-2.5" value="tasks">
+            مهام الفريق
+          </TabsTrigger>
+          <TabsTrigger className="rounded-xl py-2.5" value="stats">
+            الإحصائيات
+          </TabsTrigger>
+          <TabsTrigger className="rounded-xl py-2.5" value="team">
+            فريقي
+          </TabsTrigger>
+          <TabsTrigger className="rounded-xl py-2.5" value="evaluation">
+            تقييم الموظفين
+          </TabsTrigger>
+          {isDepartmentManager && (
+            <TabsTrigger className="rounded-xl py-2.5" value="guidance">
+              إرسال التوجيه
+            </TabsTrigger>
+          )}
         </TabsList>
         <TabsContent value="tasks" className="space-y-5">
           <Card className="border-primary/20">
@@ -1005,29 +1062,130 @@ function TeamFollowUpPage() {
           </Card>
         </TabsContent>
 
-        {isDepartmentManager && <TabsContent value="guidance" className="space-y-5">
-          <Card className="overflow-hidden rounded-3xl border-0 bg-gradient-to-br from-teal-950 via-teal-900 to-emerald-800 text-white shadow-xl">
-            <CardHeader className="border-b border-white/10 pb-5">
-              <Badge className="w-fit border-white/20 bg-white/10 text-white hover:bg-white/10"><Megaphone className="ml-1.5 h-3.5 w-3.5" /> توجيه رئيس القسم</Badge>
-              <CardTitle className="mt-3 text-2xl">وجّه فريقك بوضوح</CardTitle>
-              <p className="text-sm text-teal-50/75">أرسل تعليمات اليوم إلى كامل الفريق أو موظف محدد. ستظهر الرسالة في تبويب التوجيهات ضمن مهامي اليومية.</p>
-            </CardHeader>
-            <CardContent className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-              <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.06] p-4">
-                <div><p className="text-xs text-teal-50/70">نطاق الإرسال</p><p className="mt-1 font-semibold">{guidanceDepartmentForView ? departmentById.get(guidanceDepartmentForView)?.name ?? "القسم المعيّن" : "الأقسام المعيّنة لك"}</p></div>
-                <div><Label htmlFor="team-guidance-recipient" className="text-white">إرسال إلى</Label><select id="team-guidance-recipient" className="mt-2 flex h-11 w-full rounded-xl border border-white/15 bg-slate-950/35 px-3 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-300" value={guidanceRecipient} onChange={(event) => setGuidanceRecipient(event.target.value)}><option className="text-slate-900" value="all">جميع موظفي النطاق ({guidanceRecipients.length})</option>{guidanceRecipients.map((recipient) => <option className="text-slate-900" key={recipient.userId} value={recipient.userId}>{recipient.name}</option>)}</select></div>
-                <div className="rounded-xl bg-white/[0.07] p-3 text-sm text-teal-50/80"><Users className="ml-2 inline h-4 w-4" />{guidanceRecipient === "all" ? `${guidanceRecipients.length} موظف مرتبط بحساب` : "سيصل التوجيه إلى الموظف المحدد"}</div>
-                {!profilesQuery.isLoading && !employeesQuery.isLoading && guidanceRecipients.length === 0 && <p className="text-xs leading-5 text-amber-100">تعذر ربط حسابات الموظفين بهذا النطاق. يلزم تطابق البريد أو اسم فريد بين حساب المستخدم وسجل الموظف.</p>}
-                {teamVisibleEmployees.length > guidanceRecipients.length && <p className="text-xs leading-5 text-amber-100">لن تظهر التوجيهات إلا للحسابات المرتبطة ببريد مطابق أو باسم فريد؛ الأسماء المتكررة تحتاج ربط البريد لتجنب إرسالها إلى حساب خاطئ.</p>}
-              </div>
-              <div className="space-y-4 rounded-2xl bg-white p-4 text-slate-900 sm:p-5">
-                <div><Label htmlFor="team-guidance-title">عنوان التوجيه</Label><Input id="team-guidance-title" value={guidanceTitle} onChange={(event) => setGuidanceTitle(event.target.value)} placeholder="مثال: أولويات العمل لهذا اليوم" maxLength={200} className="mt-2 h-11 rounded-xl" /></div>
-                <div><div className="flex items-center justify-between gap-2"><Label htmlFor="team-guidance-content">التعليمات</Label><span className="text-xs text-muted-foreground">{guidanceContent.length}/5000</span></div><Textarea id="team-guidance-content" value={guidanceContent} onChange={(event) => setGuidanceContent(event.target.value)} placeholder="اكتب التوجيه بوضوح، وحدد الأولويات والإجراءات المطلوبة..." maxLength={5000} className="mt-2 min-h-36 resize-y rounded-xl" /></div>
-                <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4"><span className="text-xs text-muted-foreground">سيُحفظ بتاريخ {date}</span><Button onClick={() => void sendGuidance()} disabled={isSendingGuidance || profilesQuery.isLoading || employeesQuery.isLoading || !guidanceRecipients.length} className="bg-gradient-to-l from-teal-700 to-emerald-600 font-semibold text-white shadow-md shadow-teal-900/15 hover:from-teal-800 hover:to-emerald-700">{isSendingGuidance ? <><Clock3 className="ml-2 h-4 w-4 animate-spin" /> جارٍ الإرسال</> : <><Send className="ml-2 h-4 w-4" /> إرسال التوجيه</>}</Button></div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>}
+        {isDepartmentManager && (
+          <TabsContent value="guidance" className="space-y-5">
+            <Card className="overflow-hidden rounded-3xl border-0 bg-gradient-to-br from-teal-950 via-teal-900 to-emerald-800 text-white shadow-xl">
+              <CardHeader className="border-b border-white/10 pb-5">
+                <Badge className="w-fit border-white/20 bg-white/10 text-white hover:bg-white/10">
+                  <Megaphone className="ml-1.5 h-3.5 w-3.5" /> توجيه رئيس القسم
+                </Badge>
+                <CardTitle className="mt-3 text-2xl">وجّه فريقك بوضوح</CardTitle>
+                <p className="text-sm text-teal-50/75">
+                  أرسل تعليمات اليوم إلى كامل الفريق أو موظف محدد. ستظهر الرسالة في تبويب التوجيهات
+                  ضمن مهامي اليومية.
+                </p>
+              </CardHeader>
+              <CardContent className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+                <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.06] p-4">
+                  <div>
+                    <p className="text-xs text-teal-50/70">نطاق الإرسال</p>
+                    <p className="mt-1 font-semibold">
+                      {guidanceDepartmentForView
+                        ? (departmentById.get(guidanceDepartmentForView)?.name ?? "القسم المعيّن")
+                        : "الأقسام المعيّنة لك"}
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="team-guidance-recipient" className="text-white">
+                      إرسال إلى
+                    </Label>
+                    <select
+                      id="team-guidance-recipient"
+                      className="mt-2 flex h-11 w-full rounded-xl border border-white/15 bg-slate-950/35 px-3 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-300"
+                      value={guidanceRecipient}
+                      onChange={(event) => setGuidanceRecipient(event.target.value)}
+                    >
+                      <option className="text-slate-900" value="all">
+                        جميع موظفي النطاق ({guidanceRecipients.length})
+                      </option>
+                      {guidanceRecipients.map((recipient) => (
+                        <option
+                          className="text-slate-900"
+                          key={recipient.userId}
+                          value={recipient.userId}
+                        >
+                          {recipient.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="rounded-xl bg-white/[0.07] p-3 text-sm text-teal-50/80">
+                    <Users className="ml-2 inline h-4 w-4" />
+                    {guidanceRecipient === "all"
+                      ? `${guidanceRecipients.length} موظف مرتبط بحساب`
+                      : "سيصل التوجيه إلى الموظف المحدد"}
+                  </div>
+                  {!profilesQuery.isLoading &&
+                    !employeesQuery.isLoading &&
+                    guidanceRecipients.length === 0 && (
+                      <p className="text-xs leading-5 text-amber-100">
+                        تعذر ربط حسابات الموظفين بهذا النطاق. يلزم تطابق البريد أو اسم فريد بين حساب
+                        المستخدم وسجل الموظف.
+                      </p>
+                    )}
+                  {teamVisibleEmployees.length > guidanceRecipients.length && (
+                    <p className="text-xs leading-5 text-amber-100">
+                      لن تظهر التوجيهات إلا للحسابات المرتبطة ببريد مطابق أو باسم فريد؛ الأسماء
+                      المتكررة تحتاج ربط البريد لتجنب إرسالها إلى حساب خاطئ.
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-4 rounded-2xl bg-white p-4 text-slate-900 sm:p-5">
+                  <div>
+                    <Label htmlFor="team-guidance-title">عنوان التوجيه</Label>
+                    <Input
+                      id="team-guidance-title"
+                      value={guidanceTitle}
+                      onChange={(event) => setGuidanceTitle(event.target.value)}
+                      placeholder="مثال: أولويات العمل لهذا اليوم"
+                      maxLength={200}
+                      className="mt-2 h-11 rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor="team-guidance-content">التعليمات</Label>
+                      <span className="text-xs text-muted-foreground">
+                        {guidanceContent.length}/5000
+                      </span>
+                    </div>
+                    <Textarea
+                      id="team-guidance-content"
+                      value={guidanceContent}
+                      onChange={(event) => setGuidanceContent(event.target.value)}
+                      placeholder="اكتب التوجيه بوضوح، وحدد الأولويات والإجراءات المطلوبة..."
+                      maxLength={5000}
+                      className="mt-2 min-h-36 resize-y rounded-xl"
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+                    <span className="text-xs text-muted-foreground">سيُحفظ بتاريخ {date}</span>
+                    <Button
+                      onClick={() => void sendGuidance()}
+                      disabled={
+                        isSendingGuidance ||
+                        profilesQuery.isLoading ||
+                        employeesQuery.isLoading ||
+                        !guidanceRecipients.length
+                      }
+                      className="bg-gradient-to-l from-teal-700 to-emerald-600 font-semibold text-white shadow-md shadow-teal-900/15 hover:from-teal-800 hover:to-emerald-700"
+                    >
+                      {isSendingGuidance ? (
+                        <>
+                          <Clock3 className="ml-2 h-4 w-4 animate-spin" /> جارٍ الإرسال
+                        </>
+                      ) : (
+                        <>
+                          <Send className="ml-2 h-4 w-4" /> إرسال التوجيه
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
         <TabsContent value="stats" className="space-y-5">
           <Card>

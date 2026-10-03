@@ -14,6 +14,7 @@ import {
 } from "recharts";
 import { getEmployeeMonthly, getMonthlySheet, setDayStatus } from "@/lib/reports.functions";
 import { dailyTotals, type DayStatus } from "@/lib/monthly-report";
+import { currentMonthInBaghdad } from "@/lib/date-time";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -87,7 +88,7 @@ function optionsFor(
 
 function MonthlyPage() {
   const qc = useQueryClient();
-  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [month, setMonth] = useState(currentMonthInBaghdad);
   const [search, setSearch] = useState("");
   const [employeeId, setEmployeeId] = useState("");
   const [department, setDepartment] = useState("");
@@ -628,7 +629,8 @@ function EmployeeDetails({
               <div className="min-w-0">
                 <p className="truncate text-base font-bold">{data.employee.full_name}</p>
                 <p className="text-xs opacity-90">
-                  {data.employee.departments?.name ?? "بدون قسم"} · {data.employee.shifts?.name ?? "بدون دوام"}
+                  {data.employee.departments?.name ?? "بدون قسم"} ·{" "}
+                  {data.employee.shifts?.name ?? "بدون دوام"}
                   {data.employee.sites ? ` · ${data.employee.sites.name}` : ""}
                 </p>
               </div>
@@ -676,7 +678,9 @@ function EmployeeDetails({
             </div>
           </div>
           <div className="rounded-2xl border bg-card p-4 shadow-sm">
-            <p className="mb-2 text-xs text-muted-foreground">{date} · {weekday(date)}</p>
+            <p className="mb-2 text-xs text-muted-foreground">
+              {date} · {weekday(date)}
+            </p>
             <div className="mb-4 flex items-center justify-between">
               <span className={cn("rounded px-2 py-1 font-medium", status?.className)}>
                 {status?.label ?? "لم يحن موعده"}
@@ -744,13 +748,12 @@ function EmployeeDetails({
                 [
                   ["الأجر اليومي", data.payroll.dailyRate],
                   ...(data.payroll.payType === "daily"
-                    ? ([
-                        ["أيام الجمعة المحتسبة", data.payroll.paidDays],
-                        ["الأيام المدفوعة", data.payroll.paidDays],
-                      ] as [string, number][])
+                    ? ([["أيام العمل المستحقة", data.payroll.paidDays]] as [string, number][])
                     : []),
                   ["أجر الحضور", data.payroll.basePay],
+                  ["بدل الساعات الإضافية", data.payroll.overtimePay],
                   ["الإضافات والمكافآت", data.payroll.additionsTotal],
+                  ["الاستقطاعات والعقوبات", data.payroll.deductionsTotal],
                   ["الإجمالي المستحق", data.payroll.total],
                 ] as [string, number][]
               ).map(([label, value]) => (

@@ -31,6 +31,7 @@ import {
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { DEFAULT_REPORT_CATALOG } from "@/lib/report-catalog";
+import { currentMonthInBaghdad } from "@/lib/date-time";
 
 export const Route = createFileRoute("/_authenticated/wages")({
   beforeLoad: async () => {
@@ -134,7 +135,7 @@ function WagesPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Rate | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [month, setMonth] = useState(currentMonthInBaghdad);
 
   const { data: rates = [] } = useQuery({
     queryKey: ["wage-rates"],
