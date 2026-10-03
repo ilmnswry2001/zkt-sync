@@ -620,28 +620,63 @@ function EmployeeDetails({
       )}
       {data && day && (
         <div className="space-y-5 text-sm">
-          <p className="text-muted-foreground">
-            {data.employee.departments?.name ?? "بدون قسم"} ·{" "}
-            {data.employee.shifts?.name ?? "بدون دوام"}
-            {data.employee.sites ? ` · ${data.employee.sites.name}` : ""}
-          </p>
-          <div className="space-y-2">
-            <Label htmlFor="detail-day">اليوم</Label>
-            <select
-              id="detail-day"
-              className={selectClass}
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              disabled={mutation.isPending}
-            >
-              {data.days.map((d) => (
-                <option key={d.date} value={d.date}>
-                  {d.date} · {weekday(d.date)}
-                </option>
+          <div className="rounded-2xl bg-gradient-to-l from-primary to-primary/70 p-4 text-primary-foreground shadow-md">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-background/20 text-lg font-bold">
+                {data.employee.full_name.trim().charAt(0)}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-base font-bold">{data.employee.full_name}</p>
+                <p className="text-xs opacity-90">
+                  {data.employee.departments?.name ?? "بدون قسم"} · {data.employee.shifts?.name ?? "بدون دوام"}
+                  {data.employee.sites ? ` · ${data.employee.sites.name}` : ""}
+                </p>
+              </div>
+              <span className="mr-auto rounded-full bg-background/20 px-3 py-1 text-xs font-semibold">
+                {data.payroll.payType === "daily" ? "أجر يومي" : "راتب شهري"}
+              </span>
+            </div>
+            <div className="mt-4 grid grid-cols-4 gap-2 text-center">
+              {[
+                ["حضور", data.summary.presentDays],
+                ["غياب", data.summary.absentDays],
+                ["إضافي", `${data.summary.totalOvertimeHours}س`],
+                ["ساعات", data.summary.totalHours],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-xl bg-background/15 p-2">
+                  <p className="text-lg font-bold">{value}</p>
+                  <p className="text-[11px] opacity-90">{label}</p>
+                </div>
               ))}
-            </select>
+            </div>
           </div>
-          <div className="rounded-lg border p-4">
+          <div className="space-y-2">
+            <Label>أيام الشهر — اختر يوماً</Label>
+            <div className="grid grid-cols-7 gap-1.5">
+              {data.days.map((d) => {
+                const s = statuses.find((x) => x.value === d.status);
+                return (
+                  <button
+                    key={d.date}
+                    type="button"
+                    title={`${d.date} · ${weekday(d.date)} · ${s?.label ?? "—"}`}
+                    onClick={() => setDate(d.date)}
+                    disabled={mutation.isPending}
+                    className={cn(
+                      "flex flex-col items-center rounded-lg border py-1 text-[11px] transition",
+                      s?.className ?? "bg-muted/40 text-muted-foreground",
+                      d.date === date && "ring-2 ring-primary ring-offset-1",
+                    )}
+                  >
+                    <span className="font-bold">{Number(d.date.slice(8))}</span>
+                    <span>{s?.code ?? "·"}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="rounded-2xl border bg-card p-4 shadow-sm">
+            <p className="mb-2 text-xs text-muted-foreground">{date} · {weekday(date)}</p>
             <div className="mb-4 flex items-center justify-between">
               <span className={cn("rounded px-2 py-1 font-medium", status?.className)}>
                 {status?.label ?? "لم يحن موعده"}

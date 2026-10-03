@@ -82,9 +82,9 @@ export function buildAttendanceDays(
     const auto: ComputedStatus | null = complete
       ? "present"
       : times.length === 1
-        ? "incomplete"
-        : friday
-          ? "rest" // WO: راحة أسبوعية (مدفوعة للشهري فقط)
+          ? "incomplete"
+        : friday && payType === "monthly"
+          ? "rest" // WO: راحة أسبوعية للشهري فقط؛ اليومي يُعامل الجمعة كيوم عادي
           : date <= today
             ? "absent"
             : null;
