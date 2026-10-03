@@ -508,34 +508,67 @@ function AttendancePage() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border bg-white p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <h3 className="font-bold">مقارنة الخطة النهائية والتقرير المرفوع</h3>
-                    <Badge variant={publishSummary.some((item) => item.missing > 0) ? "destructive" : "default"}>
-                      {publishSummary.some((item) => item.missing > 0) ? "يوجد نقص" : "مكتمل"}
-                    </Badge>
-                  </div>
-                  <div className="space-y-2">
-                    {publishSummary.map((item) => (
-                      <div
-                        key={`${item.specialty}-${item.quantity}`}
-                        className={`flex flex-col md:flex-row md:items-center md:justify-between gap-2 rounded-xl border px-3 py-2 ${item.missing > 0 ? "border-red-200 bg-red-50" : "border-emerald-200 bg-emerald-50"}`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: item.color }} />
-                          <span className="font-medium">{item.specialty}</span>
+                {(() => {
+                  const req = publishSummary.reduce((s, i) => s + i.quantity, 0);
+                  const rep = publishSummary.reduce((s, i) => s + Math.min(i.reported, i.quantity), 0);
+                  const extra = publishSummary.reduce((s, i) => s + Math.max(0, i.reported - i.quantity), 0);
+                  const pct = req ? Math.round((rep / req) * 100) : 0;
+                  return (
+                    <div className="rounded-2xl border bg-card p-4 shadow-sm">
+                      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <h3 className="font-bold">مقارنة الخطة النهائية والتقرير المرفوع</h3>
+                          <p className="text-xs text-muted-foreground">
+                            {existingReport ? `تقرير يوم ${date}` : `لا يوجد تقرير مرفوع ليوم ${date}`}
+                          </p>
                         </div>
-                        <div className="flex flex-wrap items-center gap-3 text-sm">
-                          <span>مطلوب: <b>{item.quantity}</b></span>
-                          <span>منشور: <b>{item.reported}</b></span>
-                          <span className={item.missing > 0 ? "text-red-600 font-bold" : "text-emerald-600 font-bold"}>
-                            {item.missing > 0 ? `ناقص: ${item.missing}` : "مكتمل"}
-                          </span>
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="flex h-16 w-16 items-center justify-center rounded-full text-sm font-bold"
+                            style={{ background: `conic-gradient(var(--primary) ${pct * 3.6}deg, var(--muted) 0deg)` }}
+                          >
+                            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-card">{pct}%</span>
+                          </div>
+                          <div className="text-xs space-y-1">
+                            <div>نسبة الالتزام بالخطة</div>
+                            {extra > 0 && <div className="text-primary font-semibold">زيادة: {extra}</div>}
+                            <Badge variant={publishSummary.some((i) => i.missing > 0) ? "destructive" : "default"}>
+                              {publishSummary.some((i) => i.missing > 0) ? "يوجد نقص" : "مكتمل"}
+                            </Badge>
+                          </div>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        {publishSummary.map((item) => {
+                          const p = item.quantity ? Math.min(100, Math.round((item.reported / item.quantity) * 100)) : 100;
+                          const over = item.reported - item.quantity;
+                          return (
+                            <div key={`${item.specialty}-${item.quantity}`} className="rounded-xl border p-3">
+                              <div className="mb-2 flex items-center justify-between">
+                                <span className="font-medium">{item.specialty}</span>
+                                <span className={item.missing > 0 ? "text-destructive text-sm font-bold" : "text-success text-sm font-bold"}>
+                                  {item.missing > 0 ? `ناقص ${item.missing}` : over > 0 ? `زيادة ${over}` : "مطابق"}
+                                </span>
+                              </div>
+                              <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+                                <div
+                                  className={item.missing > 0 ? "h-full rounded-full bg-destructive" : "h-full rounded-full bg-success"}
+                                  style={{ width: `${p}%` }}
+                                />
+                              </div>
+                              <div className="mt-2 flex justify-between text-xs text-muted-foreground">
+                                <span>الخطة: <b className="text-foreground">{item.quantity}</b></span>
+                                <span>المرفوع: <b className="text-foreground">{item.reported}</b></span>
+                                <span>{p}%</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
 
                 <div className="rounded-2xl border bg-slate-900 p-4 text-white">
                   <div className="mb-3 font-bold">الكادر المعتمد في الخطة النهائية</div>
