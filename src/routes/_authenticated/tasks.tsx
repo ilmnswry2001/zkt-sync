@@ -52,7 +52,9 @@ type GuidanceNote = {
   guidance_date: string;
   created_at: string;
   read_at: string | null;
+  target_user_id: string;
 };
+type GuidanceProfile = { id: string; full_name: string | null; email: string | null };
 
 const today = new Date().toISOString().slice(0, 10);
 const normalizePersonName = (value: string = "") =>
@@ -184,20 +186,35 @@ function EmployeeTasksPage() {
     }
   };
   const guidanceQuery = useQuery({
-    queryKey: ["employee-guidance", user?.id],
+    queryKey: ["employee-guidance", isAdmin ? "all" : user?.id],
     enabled: Boolean(user) && activeTab === "guidance",
     refetchInterval: activeTab === "guidance" ? 30_000 : false,
     refetchOnWindowFocus: true,
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      let query = (supabase as any)
         .from("employee_guidance_notes")
-        .select("id, title, content, guidance_date, created_at, read_at")
-        .eq("target_user_id", user!.id)
-        .order("created_at", { ascending: false });
+        .select("id, title, content, guidance_date, created_at, read_at, target_user_id")
+        .order("created_at", { ascending: false })
+        .limit(500);
+      if (!isAdmin) query = query.eq("target_user_id", user!.id);
+      const { data, error } = await query;
       if (error) throw error;
       return (data ?? []) as GuidanceNote[];
     },
   });
+
+  const guidanceProfilesQuery = useQuery({
+    queryKey: ["employee-guidance", "profiles"],
+    enabled: isAdmin && activeTab === "guidance",
+    queryFn: async () => {
+      const { data, error } = await supabase.from("profiles").select("id, full_name, email");
+      if (error) throw error;
+      return (data ?? []) as GuidanceProfile[];
+    },
+  });
+  const guidanceProfileById = new Map(
+    (guidanceProfilesQuery.data ?? []).map((profile) => [profile.id, profile]),
+  );
 
   useEffect(() => {
     if (!user) return;
@@ -209,17 +226,17 @@ function EmployeeTasksPage() {
           event: "INSERT",
           schema: "public",
           table: "employee_guidance_notes",
-          filter: `target_user_id=eq.${user.id}`,
+          ...(isAdmin ? {} : { filter: `target_user_id=eq.${user.id}` }),
         },
         () => {
-          void queryClient.invalidateQueries({ queryKey: ["employee-guidance", user.id] });
+          void queryClient.invalidateQueries({ queryKey: ["employee-guidance"] });
         },
       )
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [queryClient, user]);
+  }, [isAdmin, queryClient, user]);
 
   const activeTasksQuery = useQuery({
     queryKey: ["employee-tasks", "active", selectedDate],
@@ -281,7 +298,7 @@ function EmployeeTasksPage() {
   );
 
   const markGuidanceRead = async (note: GuidanceNote) => {
-    if (note.read_at || !user) return;
+    if (note.read_at || !user || isAdmin) return;
     await (supabase as any)
       .from("employee_guidance_notes")
       .update({ read_at: new Date().toISOString() })
@@ -356,11 +373,27 @@ function EmployeeTasksPage() {
     toast.success(restore ? "تمت استعادة المهمة" : "تمت أرشفة المهمة");
   };
   const deleteTask = async (task: Task) => {
+    if (!isAdmin && task.created_by !== user?.id) {
+      return toast.error("حذف مهام الآخرين متاح لمدير النظام فقط");
+    }
     if (!window.confirm("سيتم حذف المهمة نهائياً. هل أنت متأكد؟")) return;
     const { error } = await supabase.from("employee_tasks").delete().eq("id", task.id);
     if (error) return toast.error(error.message);
     await invalidate();
     toast.success("تم حذف المهمة");
+  };
+  const deleteGuidance = async (note: GuidanceNote) => {
+    if (!isAdmin) return toast.error("حذف التوجيهات متاح لمدير النظام فقط");
+    if (!window.confirm("سيتم حذف هذا التوجيه نهائياً من حساب المستلم. هل تريد المتابعة؟")) return;
+    const { data, error } = await (supabase as any)
+      .from("employee_guidance_notes")
+      .delete()
+      .eq("id", note.id)
+      .select("id");
+    if (error) return toast.error(`تعذر حذف التوجيه: ${error.message}`);
+    if (!data?.length) return toast.error("لم يتم حذف التوجيه؛ تحقق من صلاحية مدير النظام.");
+    await queryClient.invalidateQueries({ queryKey: ["employee-guidance"] });
+    toast.success("تم حذف التوجيه");
   };
 
   const renderTaskRow = (task: Task, archived = false) => (
@@ -418,7 +451,7 @@ function EmployeeTasksPage() {
               <ArchiveRestore className="w-4 h-4 text-success" />
             </Button>
           )}
-          {(canManageAll || task.created_by === user?.id) && (
+          {(isAdmin || task.created_by === user?.id) && (
             <Button
               size="icon"
               variant="ghost"
@@ -635,21 +668,40 @@ function EmployeeTasksPage() {
                 <p className="text-destructive">تعذر تحميل التوجيهات: {guidanceQuery.error.message}</p>
               ) : (guidanceQuery.data ?? []).length ? (
                 (guidanceQuery.data ?? []).map((note) => (
-                  <button
+                  <div
                     key={note.id}
-                    type="button"
-                    className={`w-full rounded-xl border p-4 text-right ${note.read_at ? "bg-card" : "border-primary/50 bg-primary/5"}`}
-                    onClick={() => void markGuidanceRead(note)}
+                    className={`rounded-xl border p-4 ${note.read_at ? "bg-card" : "border-primary/50 bg-primary/5"}`}
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <strong>{note.title}</strong>
-                      {!note.read_at && <Badge>جديد</Badge>}
-                    </div>
-                    <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
-                      {note.content}
-                    </p>
-                    <p className="mt-2 text-xs text-muted-foreground">{note.guidance_date}</p>
-                  </button>
+                    <button
+                      type="button"
+                      className="w-full text-right"
+                      disabled={isAdmin}
+                      onClick={() => void markGuidanceRead(note)}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <strong>{note.title}</strong>
+                        {!note.read_at && <Badge>جديد</Badge>}
+                      </div>
+                      <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
+                        {note.content}
+                      </p>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {note.guidance_date}
+                        {isAdmin && ` · المستلم: ${guidanceProfileById.get(note.target_user_id)?.full_name ?? note.target_user_id}`}
+                      </p>
+                    </button>
+                    {isAdmin && (
+                      <div className="mt-3 flex justify-end border-t pt-3">
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => void deleteGuidance(note)}
+                        >
+                          <Trash2 className="ml-2 h-4 w-4" /> حذف التوجيه
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 ))
               ) : (
                 <p className="py-8 text-center text-muted-foreground">لا توجد توجيهات واردة.</p>
