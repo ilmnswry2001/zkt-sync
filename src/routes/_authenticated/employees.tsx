@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -388,7 +388,7 @@ function EmployeesPage() {
               {filtered.map((e) => (
                 <TableRow key={e.id}>
                   <TableCell className="font-mono">{e.employee_no}</TableCell>
-                  <TableCell className="font-medium">{e.full_name}</TableCell>
+                  <TableCell className="font-medium"><Link to="/employees/$employeeId" params={{ employeeId: e.id }} className="text-primary underline-offset-4 hover:underline">{e.full_name}</Link></TableCell>
                   <TableCell>{e.departments?.name ?? "-"}</TableCell>
                   <TableCell>{e.position ?? "-"}</TableCell>
                   <TableCell>{(e as any).pay_type === "daily" ? "يومي" : "شهري"}</TableCell>
