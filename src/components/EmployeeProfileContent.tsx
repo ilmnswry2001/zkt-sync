@@ -39,7 +39,7 @@ export function EmployeeProfileContent({ employeeId, embedded = false }: { emplo
     queryKey: ["employee-profile", employeeId, month],
     queryFn: async () => {
       const bounds = monthBounds(month);
-      const { data: employee, error: employeeError } = await (supabase as any).from("employees").select("*, departments(name), sites(name, ctr_code), wage_rates(title, monthly_rate, daily_rate, overtime_hour_rate)").eq("id", employeeId).single();
+      const { data: employee, error: employeeError } = await (supabase as any).from("employees").select("*, departments(name), sites!site_id(name, ctr_code), wage_rates(title, monthly_rate, daily_rate, overtime_hour_rate)").eq("id", employeeId).single();
       if (employeeError) throw employeeError;
       const safe = async <T,>(request: PromiseLike<{ data: T[] | null; error: { message: string } | null }>) => { const result = await request; return result.error ? [] as T[] : (result.data ?? []) as T[]; };
       const [attendance, punches, forms, penalties, tasks, additions] = await Promise.all([
