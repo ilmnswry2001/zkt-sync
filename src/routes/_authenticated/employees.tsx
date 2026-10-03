@@ -14,6 +14,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Trash2, Plus, Pencil, Search, Upload, Loader2, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { EmployeeProfileContent } from "@/components/EmployeeProfileContent";
 import { useServerFn } from "@tanstack/react-start";
 import { importEmployees } from "@/lib/employees.functions";
 
@@ -30,6 +32,8 @@ function EmployeesPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Emp | null>(null);
   const [search, setSearch] = useState("");
+  const [profileSearch, setProfileSearch] = useState("");
+  const [selectedProfileId, setSelectedProfileId] = useState("");
   const doImport = useServerFn(importEmployees);
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -79,6 +83,22 @@ function EmployeesPage() {
       return data as Emp[];
     },
   });
+  const { data: profileMatches = [], isFetching: profileSearching } = useQuery({
+    queryKey: ["employee-profile-search", profileSearch],
+    enabled: profileSearch.trim().length >= 2,
+    queryFn: async () => {
+      const term = profileSearch.trim();
+      const { data, error } = await supabase
+        .from("employees")
+        .select("id, employee_no, full_name, position, status, departments(name)")
+        .or(`employee_no.ilike.%${term}%,full_name.ilike.%${term}%`)
+        .order("full_name")
+        .limit(20);
+      if (error) throw error;
+      return (data ?? []) as Emp[];
+    },
+  });
+  const activeProfileId = selectedProfileId || (profileMatches.length === 1 ? profileMatches[0].id : "");
   const { data: totalCount = 0 } = useQuery({
     queryKey: ["employees_count"],
     queryFn: async () => (await supabase.from("employees").select("id", { count: "exact", head: true })).count ?? 0,
@@ -173,6 +193,12 @@ function EmployeesPage() {
 
   return (
     <div className="space-y-6">
+      <Tabs defaultValue="directory" className="space-y-5">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-2 bg-transparent sm:w-fit">
+          <TabsTrigger value="directory" className="min-h-11 rounded-xl border">دليل الموظفين</TabsTrigger>
+          <TabsTrigger value="personal" className="min-h-11 rounded-xl border">التقرير الشخصي</TabsTrigger>
+        </TabsList>
+        <TabsContent value="directory" className="mt-0 space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">الموظفون</h1>
@@ -416,6 +442,20 @@ function EmployeesPage() {
           </div>
         </CardContent>
       </Card>
+        </TabsContent>
+        <TabsContent value="personal" className="mt-0 space-y-5">
+          <Card className="overflow-hidden border-primary/20 bg-gradient-to-br from-primary/5 via-card to-card">
+            <CardContent className="p-5 md:p-6">
+              <div className="mb-4"><h2 className="text-2xl font-bold">التقرير الشخصي</h2><p className="mt-1 text-sm text-muted-foreground">ابحث بالاسم أو الرقم الوظيفي لعرض كل ما يتعلق بالموظف في مكان واحد.</p></div>
+              <div className="relative max-w-2xl"><Search className="pointer-events-none absolute right-3 top-3 h-5 w-5 text-muted-foreground" /><Input value={profileSearch} onChange={(event) => { setProfileSearch(event.target.value); setSelectedProfileId(""); }} placeholder="ابحث عن موظف بالاسم أو الرقم الوظيفي..." className="min-h-12 pr-11 text-base" /></div>
+              {profileSearching && <p className="mt-3 text-sm text-muted-foreground">جاري البحث...</p>}
+              {profileSearch.trim().length >= 2 && !profileSearching && profileMatches.length > 0 && <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{profileMatches.map((employee) => <button key={employee.id} type="button" onClick={() => setSelectedProfileId(employee.id)} className={`rounded-xl border p-3 text-right transition hover:border-primary hover:bg-primary/5 ${activeProfileId === employee.id ? "border-primary bg-primary/10 ring-2 ring-primary/20" : "bg-background"}`}><div className="font-semibold">{employee.full_name}</div><div className="mt-1 text-xs text-muted-foreground">#{employee.employee_no} · {employee.position || "بدون مسمى"}</div><div className="mt-1 text-xs text-muted-foreground">{employee.departments?.name || "بدون قسم"}</div></button>)}</div>}
+              {profileSearch.trim().length >= 2 && !profileSearching && !profileMatches.length && <p className="mt-4 rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">لم يتم العثور على موظف مطابق للبحث.</p>}
+            </CardContent>
+          </Card>
+          {activeProfileId ? <EmployeeProfileContent employeeId={activeProfileId} embedded /> : <Card><CardContent className="p-10 text-center text-muted-foreground">اختر موظفاً من نتائج البحث لعرض التقرير الشخصي الكامل.</CardContent></Card>}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
