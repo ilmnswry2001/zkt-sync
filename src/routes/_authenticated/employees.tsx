@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Trash2, Plus, Pencil, Search, Upload, Loader2 } from "lucide-react";
+import { Trash2, Plus, Pencil, Search, Upload, Loader2, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import { useServerFn } from "@tanstack/react-start";
@@ -388,14 +388,15 @@ function EmployeesPage() {
               {filtered.map((e) => (
                 <TableRow key={e.id}>
                   <TableCell className="font-mono">{e.employee_no}</TableCell>
-                  <TableCell className="font-medium"><Link to="/employees/$employeeId" params={{ employeeId: e.id }} className="text-primary underline-offset-4 hover:underline">{e.full_name}</Link></TableCell>
+                  <TableCell className="font-medium"><a href={`/employees/${encodeURIComponent(e.id)}`} className="inline-flex min-h-10 items-center text-primary underline-offset-4 hover:underline" aria-label={`فتح ملف ${e.full_name}`}>{e.full_name}</a></TableCell>
                   <TableCell>{e.departments?.name ?? "-"}</TableCell>
                   <TableCell>{e.position ?? "-"}</TableCell>
                   <TableCell>{(e as any).pay_type === "daily" ? "يومي" : "شهري"}</TableCell>
                   <TableCell><Badge variant={e.status === "active" ? "default" : "secondary"}>{e.status === "active" ? "نشط" : "معطل"}</Badge></TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      <Button size="icon" variant="ghost" onClick={() => { setEditing(e); setOpen(true); }}><Pencil className="w-4 h-4" /></Button>
+                      <Button size="icon" variant="ghost" title="فتح ملف الموظف" aria-label="فتح ملف الموظف" onClick={() => { window.location.assign(`/employees/${encodeURIComponent(e.id)}`); }}><UserRound className="w-4 h-4" /></Button>
+                      <Button size="icon" variant="ghost" title="تعديل الموظف" aria-label="تعديل الموظف" onClick={() => { setEditing(e); setOpen(true); }}><Pencil className="w-4 h-4" /></Button>
                       <Button size="icon" variant="ghost" onClick={() => { if (confirm("حذف؟")) del.mutate(e.id); }}><Trash2 className="w-4 h-4 text-destructive" /></Button>
                     </div>
                   </TableCell>
