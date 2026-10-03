@@ -45,6 +45,14 @@ type Task = {
 };
 
 const today = new Date().toISOString().slice(0, 10);
+const normalizePersonName = (value: string = "") =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ة/g, "ه")
+    .replace(/ى/g, "ي")
+    .replace(/\s+/g, " ");
 const emptyForm = {
   title: "",
   description: "",
@@ -56,6 +64,28 @@ function EmployeeTasksPage() {
   const { user, isAdmin, isHR, roles, canCreateTasks } = useAuth();
   const queryClient = useQueryClient();
   const canManageAll = isAdmin || isHR || roles.includes("supervisor");
+  const currentEmployeeQuery = useQuery({
+    queryKey: ["employee-tasks", "current-employee", user?.id, user?.email],
+    enabled: Boolean(user),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("employees")
+        .select("id, email, full_name, department_id")
+        .eq("status", "active");
+      if (error) throw error;
+      const accountName = String(user?.user_metadata?.full_name ?? "");
+      const email = user?.email?.trim().toLowerCase();
+      return (
+        (data ?? []).find((employee) => email && employee.email?.trim().toLowerCase() === email) ??
+        (data ?? []).find(
+          (employee) =>
+            normalizePersonName(employee.full_name) === normalizePersonName(accountName),
+        ) ??
+        null
+      );
+    },
+  });
+  const currentEmployee = currentEmployeeQuery.data;
   const [activeTab, setActiveTab] = useState<"daily" | "archive">("daily");
   const [selectedDate, setSelectedDate] = useState(today);
   const [archiveFrom, setArchiveFrom] = useState("");
@@ -66,7 +96,10 @@ function EmployeeTasksPage() {
     queryKey: ["employee-tasks", "assigned-departments", user?.id],
     enabled: Boolean(user),
     queryFn: async () => {
-      const { data, error } = await permissionsDb.from("user_departments").select("department_id").eq("user_id", user!.id);
+      const { data, error } = await permissionsDb
+        .from("user_departments")
+        .select("department_id")
+        .eq("user_id", user!.id);
       if (error) throw error;
       return (data ?? []).map((item) => item.department_id as string);
     },
@@ -141,7 +174,10 @@ function EmployeeTasksPage() {
   };
   const saveTask = async () => {
     if (!user) return toast.error("يجب تسجيل الدخول أولاً");
-    if (!canCreateTasks) return toast.error("لا يسمح لك بإضافة أو تعديل المهام. يسمح بذلك مدخل البيانات وإداري الموقع فقط.");
+    if (!canCreateTasks)
+      return toast.error(
+        "لا يسمح لك بإضافة أو تعديل المهام. يسمح بذلك مدخل البيانات وإداري الموقع فقط.",
+      );
     if (selectedDate > today) return toast.error("لا يمكن تسجيل مهمة بتاريخ مستقبلي");
     if (form.title.trim().length < 2) return toast.error("اكتب عنوان المهمة بوضوح");
     const payload = {
@@ -151,10 +187,14 @@ function EmployeeTasksPage() {
       status: form.status,
       duration_minutes: Math.max(0, Number(form.duration) || 0),
       created_by: editingTask?.created_by ?? user.id,
+      employee_id: currentEmployee?.id ?? editingTask?.employee_id ?? null,
       department_id: editingTask?.department_id ?? assignedDepartmentId,
     };
     const result = editingTask
-      ? await supabase.from("employee_tasks").update(payload as never).eq("id", editingTask.id)
+      ? await supabase
+          .from("employee_tasks")
+          .update(payload as never)
+          .eq("id", editingTask.id)
       : await supabase.from("employee_tasks").insert(payload as never);
     if (result.error) {
       if (result.error.code === "23502" && result.error.message.includes("employee_id")) {
