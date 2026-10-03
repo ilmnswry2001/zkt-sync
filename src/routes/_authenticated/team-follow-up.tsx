@@ -260,9 +260,18 @@ function TeamFollowUpPage() {
     queryKey: ["team-follow-up-attendance", employeeIds, monthStart, monthEnd],
     enabled: employeeIds.length > 0,
     queryFn: async () => {
-      const { data, error } = await supabase.from("attendance_logs").select("employee_id, verify_time").in("employee_id", employeeIds).gte("verify_time", `${monthStart}T00:00:00`).lte("verify_time", `${monthEnd}T23:59:59`);
-      if (error) throw error;
-      return (data ?? []) as { employee_id: string | null; verify_time: string }[];
+      // تحميل كل السجلات على دفعات (الحد الافتراضي 1000 صف كان يُسقط بيانات)
+      const rows: { employee_id: string | null; verify_time: string }[] = [];
+      for (let i = 0; i < employeeIds.length; i += 100) {
+        const ids = employeeIds.slice(i, i + 100);
+        for (let from = 0; ; from += 1000) {
+          const { data, error } = await supabase.from("attendance_logs").select("employee_id, verify_time").in("employee_id", ids).gte("verify_time", `${monthStart}T00:00:00`).lte("verify_time", `${monthEnd}T23:59:59`).order("verify_time").range(from, from + 999);
+          if (error) throw error;
+          rows.push(...((data ?? []) as typeof rows));
+          if (!data || data.length < 1000) break;
+        }
+      }
+      return rows;
     },
   });
   const evaluationsQuery = useQuery({
@@ -274,8 +283,11 @@ function TeamFollowUpPage() {
       return (data ?? []) as Evaluation[];
     },
   });
+  // يوم الحضور = بصمتان على الأقل (دخول وخروج) كما في التقرير الشهري
+  const punchesByEmployeeDay = new Map<string, Map<string, number>>();
+  (attendanceMonthQuery.data ?? []).forEach((row) => { if (!row.employee_id) return; const m = punchesByEmployeeDay.get(row.employee_id) ?? new Map<string, number>(); const d = row.verify_time.slice(0, 10); m.set(d, (m.get(d) ?? 0) + 1); punchesByEmployeeDay.set(row.employee_id, m); });
   const attendanceByEmployee = new Map<string, Set<string>>();
-  (attendanceMonthQuery.data ?? []).forEach((row) => { if (!row.employee_id) return; const days = attendanceByEmployee.get(row.employee_id) ?? new Set<string>(); days.add(row.verify_time.slice(0, 10)); attendanceByEmployee.set(row.employee_id, days); });
+  punchesByEmployeeDay.forEach((m, id) => attendanceByEmployee.set(id, new Set([...m].filter(([, n]) => n > 1).map(([d]) => d))));
   const evaluationByEmployee = new Map((evaluationsQuery.data ?? []).map((evaluation) => [evaluation.employee_id, evaluation]));
   const profileByEmail = new Map((profilesQuery.data ?? []).filter((profile) => profile.email).map((profile) => [profile.email!.toLowerCase(), profile]));
   const employeeTaskStats = visibleEmployees.map((employee) => {
