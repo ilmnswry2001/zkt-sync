@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,6 +25,7 @@ export const Route = createFileRoute("/_authenticated/employees")({
 type Emp = { id: string; employee_no: string; full_name: string; department_id: string | null; position: string | null; status: string; departments?: { name: string } | null };
 
 function EmployeesPage() {
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Emp | null>(null);
@@ -388,14 +389,14 @@ function EmployeesPage() {
               {filtered.map((e) => (
                 <TableRow key={e.id}>
                   <TableCell className="font-mono">{e.employee_no}</TableCell>
-                  <TableCell className="font-medium"><a href={`/employees/${encodeURIComponent(e.id)}`} className="inline-flex min-h-10 items-center text-primary underline-offset-4 hover:underline" aria-label={`فتح ملف ${e.full_name}`}>{e.full_name}</a></TableCell>
+                  <TableCell className="font-medium"><a href={`/employees/${encodeURIComponent(e.id)}`} onClick={(event) => { event.preventDefault(); navigate({ to: "/employees/$employeeId", params: { employeeId: e.id } }); }} className="inline-flex min-h-10 items-center text-primary underline-offset-4 hover:underline" aria-label={`فتح ملف ${e.full_name}`}>{e.full_name}</a></TableCell>
                   <TableCell>{e.departments?.name ?? "-"}</TableCell>
                   <TableCell>{e.position ?? "-"}</TableCell>
                   <TableCell>{(e as any).pay_type === "daily" ? "يومي" : "شهري"}</TableCell>
                   <TableCell><Badge variant={e.status === "active" ? "default" : "secondary"}>{e.status === "active" ? "نشط" : "معطل"}</Badge></TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      <Button size="icon" variant="ghost" title="فتح ملف الموظف" aria-label="فتح ملف الموظف" onClick={() => { window.location.assign(`/employees/${encodeURIComponent(e.id)}`); }}><UserRound className="w-4 h-4" /></Button>
+                      <Button size="icon" variant="ghost" title="فتح ملف الموظف" aria-label="فتح ملف الموظف" onClick={() => navigate({ to: "/employees/$employeeId", params: { employeeId: e.id } })}><UserRound className="w-4 h-4" /></Button>
                       <Button size="icon" variant="ghost" title="تعديل الموظف" aria-label="تعديل الموظف" onClick={() => { setEditing(e); setOpen(true); }}><Pencil className="w-4 h-4" /></Button>
                       <Button size="icon" variant="ghost" onClick={() => { if (confirm("حذف؟")) del.mutate(e.id); }}><Trash2 className="w-4 h-4 text-destructive" /></Button>
                     </div>
