@@ -1,0 +1,1 @@
+CREATE POLICY "assignees read active task templates" ON public.team_task_templates FOR SELECT TO authenticated USING (active = true);

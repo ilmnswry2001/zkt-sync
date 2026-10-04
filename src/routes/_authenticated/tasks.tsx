@@ -257,6 +257,55 @@ function EmployeeTasksPage() {
     enabled: Boolean(user),
   });
 
+  const templatesQuery = useQuery({
+    queryKey: ["employee-tasks", "templates", currentEmployee?.id],
+    enabled: Boolean(user),
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("team_task_templates")
+        .select("id, title, description, recurrence_rule, interval_days, start_date, end_date, scheduled_time, assignee_employee_ids, department_id, priority")
+        .eq("active", true);
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+  });
+  const dueTemplates = useMemo(() => {
+    const d = new Date(selectedDate + "T00:00:00");
+    return (templatesQuery.data ?? []).filter((t) => {
+      const ids: string[] = t.assignee_employee_ids ?? [];
+      const mine = ids.length
+        ? currentEmployee && ids.includes(currentEmployee.id)
+        : currentEmployee && t.department_id === currentEmployee.department_id;
+      if (!mine) return false;
+      if (selectedDate < t.start_date || (t.end_date && selectedDate > t.end_date)) return false;
+      const s = new Date(t.start_date + "T00:00:00");
+      const diff = Math.round((d.getTime() - s.getTime()) / 86400000);
+      switch (t.recurrence_rule) {
+        case "weekdays": return d.getDay() !== 5;
+        case "weekly": return d.getDay() === s.getDay();
+        case "monthly": return d.getDate() === s.getDate();
+        case "interval": return diff % Math.max(1, t.interval_days ?? 1) === 0;
+        default: return true;
+      }
+    });
+  }, [templatesQuery.data, currentEmployee, selectedDate]);
+  const completeTemplate = async (t: any) => {
+    if (!user) return;
+    const { error } = await supabase.from("employee_tasks").insert({
+      title: t.title,
+      description: t.description,
+      task_date: selectedDate,
+      status: "completed",
+      duration_minutes: 0,
+      created_by: user.id,
+      employee_id: currentEmployee?.id ?? null,
+      department_id: currentEmployee?.department_id ?? t.department_id,
+    } as any);
+    if (error) return toast.error(error.message);
+    await queryClient.invalidateQueries({ queryKey: ["employee-tasks"] });
+    toast.success("تم إنجاز المهمة المجدولة");
+  };
+
   const archiveQuery = useQuery({
     queryKey: ["employee-tasks", "archive", archiveFrom, archiveTo, canManageAll, user?.id],
     queryFn: async () => {
@@ -584,6 +633,29 @@ function EmployeeTasksPage() {
               </div>
             </CardContent>
           </Card>
+          {dueTemplates.length > 0 && (
+            <Card>
+              <CardHeader><CardTitle className="flex items-center gap-2"><ListChecks className="h-5 w-5" /> قائمة المهام المجدولة — {selectedDate}</CardTitle></CardHeader>
+              <CardContent className="space-y-2">
+                {dueTemplates.map((t) => {
+                  const done = activeTasks.some((task) => task.title === t.title && task.status === "completed");
+                  return (
+                    <div key={t.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                      <div>
+                        <p className={`font-medium ${done ? "line-through text-muted-foreground" : ""}`}>{t.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {({ daily: "يومي", weekdays: "أيام العمل", weekly: "أسبوعي", monthly: "شهري", interval: "كل فترة" } as Record<string, string>)[t.recurrence_rule] ?? t.recurrence_rule}
+                          {t.scheduled_time ? ` · ${String(t.scheduled_time).slice(0, 5)}` : ""}
+                          {t.description ? ` · ${t.description}` : ""}
+                        </p>
+                      </div>
+                      {done ? <Badge>منجزة</Badge> : <Button size="sm" onClick={() => void completeTemplate(t)}><CheckCircle2 className="ml-1 h-4 w-4" /> تم</Button>}
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          )}
           <section className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold">مهام {selectedDate}</h2>
