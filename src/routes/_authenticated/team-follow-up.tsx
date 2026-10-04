@@ -49,6 +49,7 @@ import {
   Send,
   Sparkles,
   Megaphone,
+  CalendarDays,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/team-follow-up")({
@@ -97,12 +98,27 @@ type TeamTask = {
   task_date: string;
   title: string;
   description: string | null;
-  status: "completed" | "in_progress";
+  status: "not_started" | "in_progress" | "completed" | "overdue" | "cancelled" | "pending_review" | "needs_follow_up";
   duration_minutes: number;
   created_by: string;
   employee_id: string | null;
   department_id: string | null;
   manager_note: string | null;
+  task_type?: string | null;
+  priority?: string | null;
+  due_date?: string | null;
+};
+type TeamTaskTemplate = {
+  id: string;
+  title: string;
+  description: string | null;
+  recurrence_rule: string;
+  priority: string;
+  start_date: string;
+  end_date: string | null;
+  scheduled_time: string | null;
+  active: boolean;
+  department_id: string;
 };
 type Profile = { id: string; full_name: string | null; email: string | null };
 type MemberTaskStats = {
@@ -193,6 +209,15 @@ function TeamFollowUpPage() {
   const [activeTab, setActiveTab] = useState("tasks");
   const [evaluationEmployee, setEvaluationEmployee] = useState<Employee | null>(null);
   const [evaluationScore, setEvaluationScore] = useState("");
+  const [templateForm, setTemplateForm] = useState({
+    title: "",
+    description: "",
+    recurrenceRule: "daily",
+    priority: "normal",
+    startDate: today,
+    endDate: "",
+    scheduledTime: "",
+  });
   const canSeeAll = isAdmin || isHR;
 
   const departmentsQuery = useQuery({
@@ -329,6 +354,22 @@ function TeamFollowUpPage() {
       const { data, error } = await supabase.from("profiles").select("id, full_name, email");
       if (error) throw error;
       return (data ?? []) as Profile[];
+    },
+  });
+  const taskTemplatesQuery = useQuery({
+    queryKey: ["team-follow-up-task-templates", allowedDepartmentIds, effectiveDepartmentId],
+    enabled: activeTab === "scheduled" && allowedDepartmentIds.length > 0,
+    queryFn: async () => {
+      let query = (supabase as unknown as { from: (table: string) => any })
+        .from("team_task_templates")
+        .select("id, title, description, recurrence_rule, priority, start_date, end_date, scheduled_time, active, department_id")
+        .eq("active", true)
+        .order("start_date", { ascending: false });
+      if (effectiveDepartmentId !== "all") query = query.eq("department_id", effectiveDepartmentId);
+      else query = query.in("department_id", allowedDepartmentIds);
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data ?? []) as TeamTaskTemplate[];
     },
   });
   const teamTasks = teamTasksQuery.data ?? [];
@@ -580,6 +621,31 @@ function TeamFollowUpPage() {
     await queryClient.invalidateQueries({ queryKey: ["team-follow-up-tasks"] });
     toast.success("تم حفظ ملاحظة المهمة");
   };
+  const createTaskTemplate = async () => {
+    const title = templateForm.title.trim();
+    const targetDepartment = effectiveDepartmentId === "all" ? allowedDepartmentIds[0] : effectiveDepartmentId;
+    if (!title || title.length < 2) return toast.error("اكتب اسم القالب بوضوح");
+    if (!targetDepartment) return toast.error("اختر قسماً لإنشاء القالب");
+    const { data: authData } = await supabase.auth.getUser();
+    if (!authData.user) return toast.error("يجب تسجيل الدخول أولاً");
+    const client = supabase as unknown as { from: (table: string) => any };
+    const { error } = await client.from("team_task_templates").insert({
+      department_id: targetDepartment,
+      title,
+      description: templateForm.description.trim() || null,
+      recurrence_rule: templateForm.recurrenceRule,
+      priority: templateForm.priority,
+      start_date: templateForm.startDate,
+      end_date: templateForm.endDate || null,
+      scheduled_time: templateForm.scheduledTime || null,
+      assignee_employee_ids: [],
+      created_by: authData.user.id,
+    });
+    if (error) return toast.error(`تعذر حفظ القالب: ${error.message}`);
+    setTemplateForm({ title: "", description: "", recurrenceRule: "daily", priority: "normal", startDate: today, endDate: "", scheduledTime: "" });
+    await taskTemplatesQuery.refetch();
+    toast.success("تم حفظ المهمة المجدولة");
+  };
   const siteRows = siteIds
     .map((siteId) => {
       const team = visibleEmployees.filter((employee) => employee.site_id === siteId);
@@ -598,6 +664,7 @@ function TeamFollowUpPage() {
     profilesQuery,
     attendanceMonthQuery,
     evaluationsQuery,
+    ...(activeTab === "scheduled" ? [taskTemplatesQuery] : []),
   ];
   const pageError = queryErrors.find((query) => query.isError);
   const isPageLoading = queryErrors.some((query) => query.isLoading);
@@ -623,6 +690,7 @@ function TeamFollowUpPage() {
       profilesQuery.refetch(),
       attendanceMonthQuery.refetch(),
       evaluationsQuery.refetch(),
+      ...(activeTab === "scheduled" ? [taskTemplatesQuery.refetch()] : []),
     ]);
   };
 
@@ -991,10 +1059,11 @@ function TeamFollowUpPage() {
         </CardContent>
       </Card>
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
-        <TabsList className={`grid h-auto w-full ${isDepartmentManager ? "grid-cols-2 sm:grid-cols-5" : "grid-cols-2 sm:grid-cols-4"} gap-1 rounded-2xl border bg-muted/60 p-1.5`}>
+        <TabsList className={`grid h-auto w-full ${isDepartmentManager ? "grid-cols-2 sm:grid-cols-6" : "grid-cols-2 sm:grid-cols-5"} gap-1 rounded-2xl border bg-muted/60 p-1.5`}>
           <TabsTrigger className="rounded-xl py-2.5" value="tasks">مهام الفريق</TabsTrigger>
+          <TabsTrigger className="rounded-xl py-2.5" value="scheduled">المهام المجدولة</TabsTrigger>
           <TabsTrigger className="rounded-xl py-2.5" value="stats">الإحصائيات</TabsTrigger>
-          <TabsTrigger className="rounded-xl py-2.5" value="team">فريقي</TabsTrigger>
+          <TabsTrigger className="rounded-xl py-2.5" value="team">المتابعة اليومية</TabsTrigger>
           <TabsTrigger className="rounded-xl py-2.5" value="evaluation">تقييم الموظفين</TabsTrigger>
           {isDepartmentManager && <TabsTrigger className="rounded-xl py-2.5" value="guidance">إرسال التوجيه</TabsTrigger>}
         </TabsList>
@@ -1009,6 +1078,33 @@ function TeamFollowUpPage() {
               </p>
             </CardHeader>
             <CardContent className="space-y-5">{tasks}</CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="scheduled" className="space-y-5">
+          <Card className="border-primary/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><CalendarDays className="h-5 w-5 text-primary" /> إنشاء مهمة متكررة</CardTitle>
+              <p className="text-sm text-muted-foreground">أنشئ قالباً يومياً أو أسبوعياً ليظهر ضمن جدول مهام القسم.</p>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <div className="lg:col-span-2"><Label>اسم المهمة</Label><Input className="mt-2" value={templateForm.title} onChange={(event) => setTemplateForm((current) => ({ ...current, title: event.target.value }))} placeholder="مثال: مراجعة التقرير اليومي" /></div>
+              <div><Label>التكرار</Label><select className="mt-2 flex h-10 w-full rounded-md border bg-background px-3 text-sm" value={templateForm.recurrenceRule} onChange={(event) => setTemplateForm((current) => ({ ...current, recurrenceRule: event.target.value }))}><option value="daily">يومياً</option><option value="weekdays">أيام العمل</option><option value="weekly">أسبوعياً</option><option value="monthly">شهرياً</option><option value="interval">كل فترة</option></select></div>
+              <div><Label>الأولوية</Label><select className="mt-2 flex h-10 w-full rounded-md border bg-background px-3 text-sm" value={templateForm.priority} onChange={(event) => setTemplateForm((current) => ({ ...current, priority: event.target.value }))}><option value="normal">عادية</option><option value="low">منخفضة</option><option value="high">عالية</option><option value="urgent">عاجلة</option></select></div>
+              <div className="lg:col-span-2"><Label>الوصف</Label><Textarea className="mt-2" value={templateForm.description} onChange={(event) => setTemplateForm((current) => ({ ...current, description: event.target.value }))} placeholder="تفاصيل المهمة المتكررة" rows={2} /></div>
+              <div><Label>تاريخ البدء</Label><Input className="mt-2" type="date" value={templateForm.startDate} onChange={(event) => setTemplateForm((current) => ({ ...current, startDate: event.target.value }))} /></div>
+              <div><Label>تاريخ الانتهاء</Label><Input className="mt-2" type="date" value={templateForm.endDate} onChange={(event) => setTemplateForm((current) => ({ ...current, endDate: event.target.value }))} /></div>
+              <div><Label>الوقت</Label><Input className="mt-2" type="time" value={templateForm.scheduledTime} onChange={(event) => setTemplateForm((current) => ({ ...current, scheduledTime: event.target.value }))} /></div>
+              <div className="flex items-end"><Button className="w-full" onClick={() => void createTaskTemplate()} disabled={!canSeeAll && !isDepartmentManager}><CalendarDays className="ml-2 h-4 w-4" /> حفظ الجدولة</Button></div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>القوالب النشطة</CardTitle></CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {(taskTemplatesQuery.data ?? []).map((template) => <div key={template.id} className="rounded-xl border p-4"><div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold">{template.title}</h3><p className="mt-1 text-xs text-muted-foreground">{template.description || "بدون وصف"}</p></div><Badge variant="outline">{template.recurrence_rule === "daily" ? "يومي" : template.recurrence_rule === "weekly" ? "أسبوعي" : template.recurrence_rule === "monthly" ? "شهري" : template.recurrence_rule}</Badge></div><p className="mt-3 text-xs text-muted-foreground">يبدأ {template.start_date}{template.end_date ? ` وينتهي ${template.end_date}` : ""}{template.scheduled_time ? ` · الساعة ${template.scheduled_time}` : ""}</p></div>)}
+              {!taskTemplatesQuery.isLoading && !taskTemplatesQuery.data?.length && <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground md:col-span-2 xl:col-span-3">لا توجد مهام مجدولة لهذا النطاق. أنشئ أول قالب من النموذج أعلاه.</div>}
+              {taskTemplatesQuery.isError && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 md:col-span-2 xl:col-span-3">تعذر قراءة القوالب. تأكد من تنفيذ Migration `20261004120000_team_management_workflow.sql` في Lovable/Supabase.</div>}
+            </CardContent>
           </Card>
         </TabsContent>
 
@@ -1172,7 +1268,7 @@ function TeamFollowUpPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-primary" /> فريق القسم
+                <Users className="h-5 w-5 text-primary" /> المتابعة اليومية للفريق
               </CardTitle>
               <p className="text-sm text-muted-foreground">
                 أسماء الموظفين المسندين إلى هذا القسم فقط، مع بطاقة مختصرة وتقييمهم وسجل مهامهم.
