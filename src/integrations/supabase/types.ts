@@ -356,46 +356,73 @@ export type Database = {
       employee_tasks: {
         Row: {
           archived_at: string | null
+          completed_at: string | null
+          completion_note: string | null
           created_at: string
           created_by: string
           department_id: string | null
           description: string | null
+          due_date: string | null
           duration_minutes: number
           employee_id: string | null
           id: string
           manager_note: string | null
+          priority: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          start_date: string | null
+          started_at: string | null
           status: string
           task_date: string
+          task_type: string
           title: string
           updated_at: string
         }
         Insert: {
           archived_at?: string | null
+          completed_at?: string | null
+          completion_note?: string | null
           created_at?: string
           created_by?: string
           department_id?: string | null
           description?: string | null
+          due_date?: string | null
           duration_minutes?: number
           employee_id?: string | null
           id?: string
           manager_note?: string | null
+          priority?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          start_date?: string | null
+          started_at?: string | null
           status?: string
           task_date?: string
+          task_type?: string
           title: string
           updated_at?: string
         }
         Update: {
           archived_at?: string | null
+          completed_at?: string | null
+          completion_note?: string | null
           created_at?: string
           created_by?: string
           department_id?: string | null
           description?: string | null
+          due_date?: string | null
           duration_minutes?: number
           employee_id?: string | null
           id?: string
           manager_note?: string | null
+          priority?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          start_date?: string | null
+          started_at?: string | null
           status?: string
           task_date?: string
+          task_type?: string
           title?: string
           updated_at?: string
         }
@@ -1114,6 +1141,113 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "team_guidance_notes_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_guidance_recipients: {
+        Row: {
+          created_at: string
+          employee_id: string | null
+          guidance_id: string
+          id: string
+          read_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          employee_id?: string | null
+          guidance_id: string
+          id?: string
+          read_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          employee_id?: string | null
+          guidance_id?: string
+          id?: string
+          read_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_guidance_recipients_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_guidance_recipients_guidance_id_fkey"
+            columns: ["guidance_id"]
+            isOneToOne: false
+            referencedRelation: "team_guidance_notes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_task_templates: {
+        Row: {
+          active: boolean
+          assignee_employee_ids: string[]
+          created_at: string
+          created_by: string
+          department_id: string
+          description: string | null
+          end_date: string | null
+          id: string
+          interval_days: number | null
+          priority: string
+          recurrence_rule: string
+          scheduled_time: string | null
+          start_date: string
+          task_type: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          assignee_employee_ids?: string[]
+          created_at?: string
+          created_by?: string
+          department_id: string
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          interval_days?: number | null
+          priority?: string
+          recurrence_rule: string
+          scheduled_time?: string | null
+          start_date?: string
+          task_type?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          assignee_employee_ids?: string[]
+          created_at?: string
+          created_by?: string
+          department_id?: string
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          interval_days?: number | null
+          priority?: string
+          recurrence_rule?: string
+          scheduled_time?: string | null
+          start_date?: string
+          task_type?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_task_templates_department_id_fkey"
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"
