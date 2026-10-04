@@ -110,7 +110,7 @@ CREATE POLICY "employees read own tasks" ON public.employee_tasks FOR SELECT TO 
   OR public.has_role(auth.uid(), 'hr')
   OR public.has_role(auth.uid(), 'supervisor')
   OR (department_id IS NOT NULL AND public.can_access_department(auth.uid(), department_id))
-  OR employee_id IN (SELECT e.id FROM public.employees e JOIN auth.users u ON lower(u.email) = lower(e.email) WHERE u.id = auth.uid())
+  OR employee_id IN (SELECT e.id FROM public.employees e JOIN public.profiles p ON lower(p.email) = lower(e.email) WHERE p.id = auth.uid())
 );
 DROP POLICY IF EXISTS "employees update own tasks" ON public.employee_tasks;
 CREATE POLICY "employees update own tasks" ON public.employee_tasks FOR UPDATE TO authenticated USING (
@@ -119,8 +119,15 @@ CREATE POLICY "employees update own tasks" ON public.employee_tasks FOR UPDATE T
   OR public.has_role(auth.uid(), 'hr')
   OR public.has_role(auth.uid(), 'supervisor')
   OR (department_id IS NOT NULL AND public.can_access_department(auth.uid(), department_id))
-  OR employee_id IN (SELECT e.id FROM public.employees e JOIN auth.users u ON lower(u.email) = lower(e.email) WHERE u.id = auth.uid())
-) WITH CHECK (true);
+  OR employee_id IN (SELECT e.id FROM public.employees e JOIN public.profiles p ON lower(p.email) = lower(e.email) WHERE p.id = auth.uid())
+) WITH CHECK (
+  created_by = auth.uid()
+  OR public.has_role(auth.uid(), 'admin')
+  OR public.has_role(auth.uid(), 'hr')
+  OR public.has_role(auth.uid(), 'supervisor')
+  OR (department_id IS NOT NULL AND public.can_access_department(auth.uid(), department_id))
+  OR employee_id IN (SELECT e.id FROM public.employees e JOIN public.profiles p ON lower(p.email) = lower(e.email) WHERE p.id = auth.uid())
+);
 
 DROP TRIGGER IF EXISTS trg_team_task_templates_updated_at ON public.team_task_templates;
 CREATE TRIGGER trg_team_task_templates_updated_at BEFORE UPDATE ON public.team_task_templates FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
