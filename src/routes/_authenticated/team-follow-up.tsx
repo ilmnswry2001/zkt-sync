@@ -352,7 +352,6 @@ function TeamFollowUpPage() {
     };
   }, [allowedDepartmentIds, canSeeAll, queryClient, user?.id]);
   const profileById = new Map((profilesQuery.data ?? []).map((profile) => [profile.id, profile]));
-  const dailyTasks = teamTasks.filter((task) => task.task_date === date);
   const profileByEmail = new Map(
     (profilesQuery.data ?? [])
       .filter((profile) => profile.email)
@@ -373,6 +372,14 @@ function TeamFollowUpPage() {
     if (canSeeAll || !isDepartmentManager) return true;
     return findProfileForEmployee(employee)?.id !== user?.id;
   });
+  const visibleEmployeeIds = new Set(teamVisibleEmployees.map((employee) => employee.id));
+  const visibleEmployeeProfileIds = new Set(
+    teamVisibleEmployees.map((employee) => findProfileForEmployee(employee)?.id).filter(Boolean),
+  );
+  const scopedTeamTasks = teamTasks.filter((task) =>
+    task.employee_id ? visibleEmployeeIds.has(task.employee_id) : visibleEmployeeProfileIds.has(task.created_by),
+  );
+  const dailyTasks = scopedTeamTasks.filter((task) => task.task_date === date);
   const guidanceRecipients = [...new Map(
     teamVisibleEmployees.flatMap((employee) => {
       const emailProfile = employee.email
