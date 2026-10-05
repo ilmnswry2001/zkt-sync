@@ -24,8 +24,11 @@ import {
   Menu,
   X,
   ClipboardCheck,
+  ListChecks,
   UserCog,
   UserCircle2,
+  Moon,
+  Sun,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
@@ -36,6 +39,7 @@ const nav = [
   { to: "/dashboard", label: "لوحة التحكم", icon: LayoutDashboard, access: "executive" },
   { to: "/attendance", label: "التقارير اليومية", icon: ClockIcon },
   { to: "/tasks", label: "مهامي اليومية", icon: ClipboardCheck },
+  { to: "/work-center", label: "مركز العمل", icon: ListChecks },
   { to: "/team-follow-up", label: "متابعة الفريق", icon: Users },
   { to: "/projects", label: "تكلفة المواقع اليومية", icon: Wallet, access: "hr" },
   { to: "/monthly", label: "التقرير الشهري", icon: CalendarDays },
@@ -60,13 +64,30 @@ export const SECTION_OPTIONS = nav.map(({ to, label }) => ({ to, label }));
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { user, profileName, roles, isAdmin, isHR, isCompanyManager, signOut, canAccessSection, allowedSections, permissionsLoading, permissionError } = useAuth();
+  const {
+    user,
+    profileName,
+    roles,
+    isAdmin,
+    isHR,
+    isCompanyManager,
+    signOut,
+    canAccessSection,
+    allowedSections,
+    permissionsLoading,
+    permissionError,
+  } = useAuth();
   const navigate = useNavigate();
   const blocked =
     !permissionsLoading &&
     !!allowedSections &&
     pathname !== "/profile" &&
-    !allowedSections.some((p) => pathname === p || pathname.startsWith(p + "/") || (p === "/planning" && pathname === "/project-plans"));
+    !allowedSections.some(
+      (p) =>
+        pathname === p ||
+        pathname.startsWith(p + "/") ||
+        (p === "/planning" && pathname === "/project-plans"),
+    );
   useEffect(() => {
     if (blocked && allowedSections?.[0]) navigate({ to: allowedSections[0] as any });
   }, [blocked, allowedSections, navigate]);
@@ -74,6 +95,24 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     if (typeof window === "undefined") return true;
     return window.localStorage.getItem("zkt-sidebar-hidden") !== "true";
   });
+  const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
+  useEffect(() => {
+    const savedTheme = window.localStorage.getItem("zkt-theme");
+    const theme =
+      savedTheme === "dark" || savedTheme === "light"
+        ? savedTheme
+        : window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light";
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    setThemeMode(theme);
+  }, []);
+  const toggleTheme = () => {
+    const next = themeMode === "dark" ? "light" : "dark";
+    document.documentElement.classList.toggle("dark", next === "dark");
+    window.localStorage.setItem("zkt-theme", next);
+    setThemeMode(next);
+  };
   const toggleSidebar = () => {
     setSidebarOpen((open) => {
       const next = !open;
@@ -82,10 +121,18 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const currentPage = nav.find((item) => pathname === item.to || pathname.startsWith(item.to + "/"));
+  const currentPage = nav.find(
+    (item) => pathname === item.to || pathname.startsWith(item.to + "/"),
+  );
   return (
     <div dir="rtl" className="app-shell flex min-h-screen bg-background">
-      {sidebarOpen && <button aria-label="إغلاق القائمة" className="fixed inset-0 z-30 bg-slate-950/45 backdrop-blur-sm md:hidden" onClick={toggleSidebar} />}
+      {sidebarOpen && (
+        <button
+          aria-label="إغلاق القائمة"
+          className="fixed inset-0 z-30 bg-slate-950/45 backdrop-blur-sm md:hidden"
+          onClick={toggleSidebar}
+        />
+      )}
       <aside
         className={cn(
           "app-sidebar fixed inset-y-0 right-0 z-40 flex w-[min(19rem,88vw)] shrink-0 flex-col overflow-hidden border-l border-sidebar-border bg-sidebar text-sidebar-foreground shadow-2xl transition-transform duration-300 md:sticky md:top-0 md:h-screen md:w-64 md:translate-x-0 md:shadow-none",
@@ -96,7 +143,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="border-b border-sidebar-border bg-gradient-to-br from-sidebar-accent/20 to-transparent p-5 flex items-center justify-between min-w-64">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-teal-300 to-cyan-500 flex items-center justify-center shadow-lg shadow-teal-950/30">
-              <Fingerprint className="w-5 h-5 text-slate-950" />
+              <Fingerprint className="w-5 h-5 text-primary-foreground" />
             </div>
             <div>
               <h1 className="font-bold text-lg tracking-tight">منظومة زِكت</h1>
@@ -110,7 +157,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             title="إخفاء اللوحة الجانبية"
             aria-label="إخفاء اللوحة الجانبية"
           >
-            <X className="w-4 h-4 md:hidden" /><PanelRightClose className="hidden w-4 h-4 md:block" />
+            <X className="w-4 h-4 md:hidden" />
+            <PanelRightClose className="hidden w-4 h-4 md:block" />
           </Button>
         </div>
         <nav className="flex-1 space-y-1.5 overflow-y-auto p-3 min-w-64">
@@ -118,21 +166,40 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             if (!canAccessSection(item.to)) return null;
             if ("access" in item && item.access === "admin" && !isAdmin) return null;
             if ("access" in item && item.access === "hr" && !isHR) return null;
-            if ("access" in item && item.access === "executive" && !isAdmin && !isCompanyManager) return null;
-            if ("access" in item && item.access === "planning" && !isAdmin && !isHR && !roles.some((role) => ["supervisor", "department_manager"].includes(role))) return null;
-            if ("access" in item && item.access === "project_plans" && !isAdmin && !isHR && !roles.some((role) => ["supervisor", "department_manager", "engineer", "site_admin"].includes(role))) return null;
+            if ("access" in item && item.access === "executive" && !isAdmin && !isCompanyManager)
+              return null;
+            if (
+              "access" in item &&
+              item.access === "planning" &&
+              !isAdmin &&
+              !isHR &&
+              !roles.some((role) => ["supervisor", "department_manager"].includes(role))
+            )
+              return null;
+            if (
+              "access" in item &&
+              item.access === "project_plans" &&
+              !isAdmin &&
+              !isHR &&
+              !roles.some((role) =>
+                ["supervisor", "department_manager", "engineer", "site_admin"].includes(role),
+              )
+            )
+              return null;
             const active = pathname === item.to || pathname.startsWith(item.to + "/");
             const Icon = item.icon;
             return (
               <Link
                 key={item.to}
                 to={item.to as any}
-                onClick={() => { if (window.innerWidth < 768) setSidebarOpen(false); }}
+                onClick={() => {
+                  if (window.innerWidth < 768) setSidebarOpen(false);
+                }}
                 className={cn(
                   "group flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-[13px] font-semibold transition-all",
                   active
-                    ? "bg-gradient-to-l from-teal-300 to-cyan-400 text-slate-950 shadow-md shadow-black/15"
-                    : "text-sidebar-foreground/75 hover:bg-white/8 hover:text-white",
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
+                    : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
                 )}
               >
                 <Icon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
@@ -143,7 +210,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </nav>
         <div className="p-3 border-t border-sidebar-border space-y-2 min-w-64">
           <div className="px-3 py-2 text-xs">
-            <div className="font-semibold truncate">{profileName || user?.user_metadata?.full_name || "صاحب الحساب"}</div>
+            <div className="font-semibold truncate">
+              {profileName || user?.user_metadata?.full_name || "صاحب الحساب"}
+            </div>
             <div className="flex gap-1 mt-1 flex-wrap">
               {roles.map((role) => (
                 <span
@@ -177,21 +246,71 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </aside>
       <main className="app-main min-w-0 flex-1 overflow-auto">
         <div className="mx-auto max-w-[1500px] p-4 sm:p-6 xl:p-8">
-          <header className="mb-7 flex items-center justify-between gap-4 rounded-2xl border border-white/70 bg-white/75 px-4 py-3 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70">
+          <header className="mb-7 flex items-center justify-between gap-4 rounded-2xl border border-border bg-card/90 px-4 py-3 shadow-sm backdrop-blur-xl">
             <div className="flex min-w-0 items-center gap-3">
-              <Button variant="outline" size="icon" className="md:hidden" onClick={toggleSidebar} aria-label="فتح القائمة"><Menu className="h-4 w-4" /></Button>
-              {!sidebarOpen && <Button variant="outline" size="icon" className="hidden md:inline-flex" onClick={toggleSidebar} aria-label="فتح القائمة"><PanelRightOpen className="h-4 w-4" /></Button>}
-              <div className="min-w-0"><p className="text-[11px] font-semibold text-muted-foreground">مساحة العمل <span className="mx-1 text-primary">/</span> الإدارة</p><h2 className="truncate text-base font-bold sm:text-lg">{currentPage?.label || "الملف الشخصي"}</h2></div>
+              <Button
+                variant="outline"
+                size="icon"
+                className="md:hidden"
+                onClick={toggleSidebar}
+                aria-label="فتح القائمة"
+              >
+                <Menu className="h-4 w-4" />
+              </Button>
+              {!sidebarOpen && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="hidden md:inline-flex"
+                  onClick={toggleSidebar}
+                  aria-label="فتح القائمة"
+                >
+                  <PanelRightOpen className="h-4 w-4" />
+                </Button>
+              )}
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold text-muted-foreground">
+                  مساحة العمل <span className="mx-1 text-primary">/</span> الإدارة
+                </p>
+                <h2 className="truncate text-base font-bold sm:text-lg">
+                  {currentPage?.label || "الملف الشخصي"}
+                </h2>
+              </div>
             </div>
-            <div className="hidden items-center gap-2 rounded-xl bg-primary/5 px-3 py-2 text-xs font-semibold text-primary sm:flex"><Sparkles className="h-4 w-4" /> نظام إدارة موحد</div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={toggleTheme}
+                aria-label={themeMode === "dark" ? "تفعيل المظهر الفاتح" : "تفعيل المظهر الداكن"}
+                aria-pressed={themeMode === "dark"}
+                title={themeMode === "dark" ? "المظهر الفاتح" : "المظهر الداكن"}
+              >
+                {themeMode === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              </Button>
+              <div className="hidden items-center gap-2 rounded-xl bg-primary/5 px-3 py-2 text-xs font-semibold text-primary sm:flex">
+                <Sparkles className="h-4 w-4" /> نظام إدارة موحد
+              </div>
+            </div>
           </header>
           {permissionError ? (
-            <div role="alert" className="rounded-2xl border border-amber-300 bg-amber-50 p-6 text-sm text-amber-950 shadow-sm dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
-              تعذر التحقق من صلاحيات الحساب. أعد تحميل الصفحة، وإذا استمرت المشكلة تواصل مع مدير النظام.
+            <div
+              role="alert"
+              className="rounded-2xl border border-amber-300 bg-amber-50 p-6 text-sm text-amber-950 shadow-sm dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100"
+            >
+              تعذر التحقق من صلاحيات الحساب. أعد تحميل الصفحة، وإذا استمرت المشكلة تواصل مع مدير
+              النظام.
             </div>
           ) : blocked && !allowedSections?.length ? (
-            <div role="alert" className="rounded-2xl border bg-card p-6 text-sm text-muted-foreground shadow-sm">لا توجد واجهات مخصصة لهذا الحساب. تواصل مع مدير النظام لتحديث صلاحياتك.</div>
-          ) : blocked ? null : children}
+            <div
+              role="alert"
+              className="rounded-2xl border bg-card p-6 text-sm text-muted-foreground shadow-sm"
+            >
+              لا توجد واجهات مخصصة لهذا الحساب. تواصل مع مدير النظام لتحديث صلاحياتك.
+            </div>
+          ) : blocked ? null : (
+            children
+          )}
         </div>
       </main>
     </div>

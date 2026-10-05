@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,7 +30,7 @@ import {
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
-import { buildPenaltyAttendanceOverride } from "@/lib/monthly-report";
+import { todayInBaghdad } from "@/lib/date-time";
 
 export const Route = createFileRoute("/_authenticated/penalties")({
   head: () => ({ meta: [{ title: "العقوبات والتغييب" }] }),
@@ -54,7 +55,7 @@ type Penalty = {
   executed_at: string | null;
   executed_by: string | null;
 };
-const today = new Date().toISOString().slice(0, 10);
+const today = todayInBaghdad();
 const monthStart = (month: string) => `${month}-01`;
 const monthEnd = (month: string) => {
   const [year, value] = month.split("-").map(Number);
@@ -68,6 +69,8 @@ const typeLabel: Record<Penalty["penalty_type"], string> = {
 
 function PenaltiesPage() {
   const qc = useQueryClient();
+  const { isAdmin, isHR } = useAuth();
+  const canManageFinancialPenalties = isAdmin || isHR;
   const [open, setOpen] = useState(false);
   const [month, setMonth] = useState(today.slice(0, 7));
   const [typeFilter, setTypeFilter] = useState("all");
@@ -105,7 +108,7 @@ function PenaltiesPage() {
       return (data ?? []) as Penalty[];
     },
   });
-  const penalties = penaltiesQuery.data ?? [];
+  const penalties = useMemo(() => penaltiesQuery.data ?? [], [penaltiesQuery.data]);
   const visiblePenalties = penalties.filter(
     (penalty) =>
       (typeFilter === "all" || penalty.penalty_type === typeFilter) &&
@@ -143,6 +146,9 @@ function PenaltiesPage() {
         deduction_amount: payload.type === "deduction" ? payload.amount : 0,
         notes: payload.notes.trim() || null,
       }));
+      if (payload.type === "deduction" && !canManageFinancialPenalties) {
+        throw new Error("صلاحية إنشاء الاستقطاعات المالية مقتصرة على الموارد البشرية ومدير النظام");
+      }
       const { error } = await (supabase as any).from("employee_penalties").insert(rows);
       if (error) throw error;
     },
@@ -178,40 +184,13 @@ function PenaltiesPage() {
       if (!penalty.employee_id) {
         throw new Error("لا يمكن تنفيذ العقوبة إلا على موظف مرتبط بقاعدة البيانات");
       }
-
-      const override = buildPenaltyAttendanceOverride(
-        penalty.penalty_type,
-        penalty.penalty_date,
-        `عقوبة ${typeLabel[penalty.penalty_type]} — ${penalty.employee_name}`,
-      );
-
-      if (!override) {
-        return { executed: false, reason: "غير قابل للتنفيذ وباقي العقوبات تُسجّل فقط في السجل" };
-      }
-
-      const { error } = await supabase.from("attendance_day_status").upsert(
-        {
-          employee_id: penalty.employee_id,
-          work_date: penalty.penalty_date,
-          status: override.status,
-          notes: override.notes,
-          overtime_hours: override.overtime_hours,
-        },
-        { onConflict: "employee_id,work_date" },
-      );
-
+      if (penalty.penalty_type !== "absence")
+        throw new Error("تنفيذ سجل الحضور متاح لعقوبة الغياب فقط");
+      // The database function locks the penalty and writes attendance plus execution status in one transaction.
+      const { error } = await (supabase as any).rpc("execute_absence_penalty", {
+        _penalty_id: penalty.id,
+      });
       if (error) throw error;
-      const { data: authData, error: authError } = await supabase.auth.getUser();
-      if (authError || !authData.user) throw new Error("انتهت الجلسة، سجّل الدخول مجددًا");
-      const { data: updatedPenalty, error: executionError } = await (supabase as any)
-        .from("employee_penalties")
-        .update({ executed_at: new Date().toISOString(), executed_by: authData.user.id })
-        .eq("id", penalty.id)
-        .is("executed_at", null)
-        .select("id")
-        .maybeSingle();
-      if (executionError) throw executionError;
-      if (!updatedPenalty) throw new Error("تم تنفيذ العقوبة مسبقاً أو تعذر العثور على سجلها");
       return { executed: true };
     },
     onSuccess: (_data, penalty) => {
@@ -347,26 +326,43 @@ function PenaltiesPage() {
                     <td className="p-3 max-w-md">{penalty.notes || "—"}</td>
                     <td className="p-3 flex items-center gap-2">
                       <div className="flex flex-col gap-2">
-                      {penalty.executed_at && (
-                        <Badge className="bg-success text-success-foreground">نُفذت {new Date(penalty.executed_at).toLocaleDateString("ar-IQ")}</Badge>
-                      )}
-                      <Button
-                        size="sm"
-                        variant={penalty.penalty_type === "absence" ? "default" : "secondary"}
-                        disabled={!penalty.employee_id || penalty.penalty_type !== "absence" || Boolean(penalty.executed_at) || executePenalty.isPending}
-                        onClick={() => executePenalty.mutate(penalty)}
-                      >
-                        <CheckCircle2 className="w-4 h-4 ml-1" /> {penalty.executed_at ? "تم التنفيذ" : "تنفيذ"}
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => {
-                          if (confirm("حذف سجل العقوبة؟")) deletePenalty.mutate(penalty.id);
-                        }}
-                      >
-                        <Trash2 className="w-4 h-4 text-destructive" />
-                      </Button>
+                        {penalty.executed_at && (
+                          <Badge className="bg-success text-success-foreground">
+                            نُفذت {new Date(penalty.executed_at).toLocaleDateString("ar-IQ")}
+                          </Badge>
+                        )}
+                        <Button
+                          size="sm"
+                          variant={penalty.penalty_type === "absence" ? "default" : "secondary"}
+                          disabled={
+                            !penalty.employee_id ||
+                            penalty.penalty_type !== "absence" ||
+                            Boolean(penalty.executed_at) ||
+                            executePenalty.isPending
+                          }
+                          onClick={() => executePenalty.mutate(penalty)}
+                        >
+                          <CheckCircle2 className="w-4 h-4 ml-1" />{" "}
+                          {penalty.executed_at ? "تم التنفيذ" : "تنفيذ"}
+                        </Button>
+                        {(canManageFinancialPenalties ||
+                          (penalty.penalty_type !== "deduction" && !penalty.executed_at)) && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`حذف سجل ${typeLabel[penalty.penalty_type]} للموظف ${penalty.employee_name}`}
+                            onClick={() => {
+                              if (
+                                confirm(
+                                  `حذف سجل ${typeLabel[penalty.penalty_type]} للموظف ${penalty.employee_name}؟`,
+                                )
+                              )
+                                deletePenalty.mutate(penalty.id);
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -469,7 +465,9 @@ function PenaltiesPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="absence">غياب</SelectItem>
-                    <SelectItem value="deduction">استقطاع</SelectItem>
+                    {canManageFinancialPenalties && (
+                      <SelectItem value="deduction">استقطاع</SelectItem>
+                    )}
                     <SelectItem value="warning">إنذار</SelectItem>
                   </SelectContent>
                 </Select>
@@ -484,16 +482,18 @@ function PenaltiesPage() {
                   required
                 />
               </div>
-              <div>
-                <Label>مبلغ الاستقطاع</Label>
-                <Input
-                  name="deduction_amount"
-                  type="number"
-                  min="0"
-                  step="1"
-                  placeholder="يطبق على الاستقطاع فقط"
-                />
-              </div>
+              {canManageFinancialPenalties && (
+                <div>
+                  <Label>مبلغ الاستقطاع</Label>
+                  <Input
+                    name="deduction_amount"
+                    type="number"
+                    min="0"
+                    step="1"
+                    placeholder="يطبق على الاستقطاع فقط"
+                  />
+                </div>
+              )}
             </div>
             <div>
               <Label>الملاحظات والتفاصيل</Label>
