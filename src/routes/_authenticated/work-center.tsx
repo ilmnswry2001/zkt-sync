@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Loader2, Plus, Send } from "lucide-react";
 import { toast } from "sonner";
 import type { Database } from "@/integrations/supabase/types";
+import { addCalendarDays, todayInBaghdad } from "@/lib/date-time";
 
 export const Route = createFileRoute("/_authenticated/work-center")({
   head: () => ({
@@ -52,8 +53,7 @@ const TYPES: Record<string, string> = { one_time: "لمرة واحدة", daily: 
 const PRIORITIES: Record<string, string> = { low: "منخفضة", normal: "متوسطة", high: "عالية", urgent: "عاجلة" };
 const WEEKDAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 
-const iso = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-const addDays = (s: string, n: number) => { const d = new Date(s + "T00:00:00"); d.setDate(d.getDate() + n); return iso(d); };
+const addDays = addCalendarDays;
 const errText = (e: unknown) => (e instanceof Error ? e.message : typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : "خطأ غير معروف");
 
 function effectiveStatus(t: Task, today: string) {
@@ -87,7 +87,11 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: str
 function WorkCenterPage() {
   const { user, roles, isAdmin, isHR, permissionsLoading } = useAuth();
   const qc = useQueryClient();
-  const today = iso(new Date());
+  const [today, setToday] = useState(todayInBaghdad);
+  useEffect(() => {
+    const timer = window.setInterval(() => setToday(todayInBaghdad()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const isManager = isAdmin || isHR || roles.includes("department_manager") || roles.includes("supervisor");
   const uid = user?.id;
 
@@ -137,7 +141,7 @@ function WorkCenterPage() {
     enabled: !!uid,
     staleTime: 5 * 60_000,
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("generate_recurring_tasks", { _from: addDays(today, -7), _to: addDays(today, 31) });
+      const { data, error } = await supabase.rpc("generate_recurring_tasks", { _from: today, _to: today });
       if (error) throw error;
       return data ?? 0;
     },
@@ -349,7 +353,7 @@ function WorkCenterPage() {
                               try {
                                 const { error } = await supabase.from("team_task_templates").update({ active: !tp.active }).eq("id", tp.id);
                                 if (error) throw error;
-                                if (!tp.active) await supabase.rpc("generate_recurring_tasks", { _from: today, _to: addDays(today, 31) });
+                                if (!tp.active) await supabase.rpc("generate_recurring_tasks", { _from: today, _to: today });
                                 toast.success(tp.active ? "تم إيقاف التكرار" : "تم استئناف التكرار");
                                 refresh();
                               } catch (e) { toast.error(errText(e)); }
@@ -541,7 +545,7 @@ function SentGuidance({ notes, legacy, empName }: { notes: Guidance[]; legacy: L
 
 function PerformanceTab({ rows, emps, isManager, loading, error }: { rows: { t: Task; s: string }[]; emps: Emp[]; isManager: boolean; loading: boolean; error: unknown }) {
   const qc = useQueryClient();
-  const [month, setMonth] = useState(() => iso(new Date()).slice(0, 7));
+  const [month, setMonth] = useState(() => todayInBaghdad().slice(0, 7));
   const monthStart = `${month}-01`;
   const inMonth = rows.filter(({ t }) => t.task_date.startsWith(month) && t.status !== "cancelled");
   const evalQ = useQuery({
@@ -648,7 +652,7 @@ function CreateTaskDialog({ open, onOpenChange, depts, emps, uid, today, onDone 
           weekdays: f.type === "weekly" ? weekdays : null, month_day: f.type === "monthly" && f.monthDay ? Number(f.monthDay) : null,
         });
         if (error) throw error;
-        const g = await supabase.rpc("generate_recurring_tasks", { _from: today, _to: addDays(today, 31) });
+        const g = await supabase.rpc("generate_recurring_tasks", { _from: today, _to: today });
         if (g.error) throw g.error;
       }
       toast.success("تم إنشاء المهمة");
@@ -810,11 +814,11 @@ function EditTemplateDialog({ tp, today, onClose, onDone }: { tp: Template; toda
     try {
       const { error } = await supabase.from("team_task_templates").update({ recurrence_rule: f.rule, end_date: f.end || null, weekdays: f.rule === "weekly" ? weekdays : null, month_day: f.rule === "monthly" && f.monthDay ? Number(f.monthDay) : null }).eq("id", tp.id);
       if (error) throw error;
-      const d = await supabase.from("employee_tasks").delete().eq("template_id", tp.id).gt("task_date", today).eq("status", "not_started");
+      const d = await supabase.from("employee_tasks").delete().eq("template_id", tp.id).eq("task_date", today).eq("status", "not_started");
       if (d.error) throw d.error;
-      const g = await supabase.rpc("generate_recurring_tasks", { _from: addDays(today, 1), _to: addDays(today, 31) });
+      const g = await supabase.rpc("generate_recurring_tasks", { _from: today, _to: today });
       if (g.error) throw g.error;
-      toast.success("تم تعديل الجدول وتحديث التنفيذات المستقبلية");
+      toast.success("تم تعديل الجدول وتحديث مهمة اليوم؛ سيُنشأ تنفيذ جديد في يوم التكرار التالي");
       onDone();
       onClose();
     } catch (e) { toast.error(`تعذر الحفظ: ${errText(e)}`); } finally { setSaving(false); }
@@ -828,7 +832,7 @@ function EditTemplateDialog({ tp, today, onClose, onDone }: { tp: Template; toda
           {f.rule === "weekly" && <div className="flex flex-wrap gap-3">{WEEKDAYS.map((d, i) => <label key={d} className="flex items-center gap-1 text-sm"><Checkbox checked={weekdays.includes(i)} onCheckedChange={(v) => setWeekdays(v === true ? [...weekdays, i] : weekdays.filter((x) => x !== i))} /> {d}</label>)}</div>}
           {f.rule === "monthly" && <div><Label>يوم الشهر</Label><Input type="number" min={1} max={31} value={f.monthDay} onChange={(e) => setF({ ...f, monthDay: e.target.value })} /></div>}
           <div><Label>تاريخ النهاية</Label><Input type="date" value={f.end} onChange={(e) => setF({ ...f, end: e.target.value })} /></div>
-          <p className="text-xs text-muted-foreground">التنفيذات المستقبلية التي لم تبدأ ستُعاد جدولتها، والتنفيذات السابقة تبقى كما هي.</p>
+          <p className="text-xs text-muted-foreground">تُنشأ مهمة اليوم فقط، ويُنشأ سجل جديد تلقائياً في كل يوم تكرار قادم.</p>
         </div>
         <DialogFooter><Button onClick={save} disabled={saving}>حفظ</Button></DialogFooter>
       </DialogContent>
