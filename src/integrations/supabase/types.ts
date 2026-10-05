@@ -375,6 +375,7 @@ export type Database = {
           status: string
           task_date: string
           task_type: string
+          template_id: string | null
           title: string
           updated_at: string
         }
@@ -399,6 +400,7 @@ export type Database = {
           status?: string
           task_date?: string
           task_type?: string
+          template_id?: string | null
           title: string
           updated_at?: string
         }
@@ -423,6 +425,7 @@ export type Database = {
           status?: string
           task_date?: string
           task_type?: string
+          template_id?: string | null
           title?: string
           updated_at?: string
         }
@@ -439,6 +442,13 @@ export type Database = {
             columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_tasks_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "team_task_templates"
             referencedColumns: ["id"]
           },
         ]
@@ -1198,9 +1208,11 @@ export type Database = {
           created_by: string
           department_id: string
           description: string | null
+          due_offset_days: number
           end_date: string | null
           id: string
           interval_days: number | null
+          month_day: number | null
           priority: string
           recurrence_rule: string
           scheduled_time: string | null
@@ -1208,6 +1220,7 @@ export type Database = {
           task_type: string
           title: string
           updated_at: string
+          weekdays: number[] | null
         }
         Insert: {
           active?: boolean
@@ -1216,9 +1229,11 @@ export type Database = {
           created_by?: string
           department_id: string
           description?: string | null
+          due_offset_days?: number
           end_date?: string | null
           id?: string
           interval_days?: number | null
+          month_day?: number | null
           priority?: string
           recurrence_rule: string
           scheduled_time?: string | null
@@ -1226,6 +1241,7 @@ export type Database = {
           task_type?: string
           title: string
           updated_at?: string
+          weekdays?: number[] | null
         }
         Update: {
           active?: boolean
@@ -1234,9 +1250,11 @@ export type Database = {
           created_by?: string
           department_id?: string
           description?: string | null
+          due_offset_days?: number
           end_date?: string | null
           id?: string
           interval_days?: number | null
+          month_day?: number | null
           priority?: string
           recurrence_rule?: string
           scheduled_time?: string | null
@@ -1244,6 +1262,7 @@ export type Database = {
           task_type?: string
           title?: string
           updated_at?: string
+          weekdays?: number[] | null
         }
         Relationships: [
           {
@@ -1492,6 +1511,12 @@ export type Database = {
         Args: { _department_id: string; _user_id: string }
         Returns: boolean
       }
+      current_employee_id: { Args: never; Returns: string }
+      employee_user_id: { Args: { _employee_id: string }; Returns: string }
+      generate_recurring_tasks: {
+        Args: { _from: string; _to: string }
+        Returns: number
+      }
       has_form_role: {
         Args: {
           _role: Database["public"]["Enums"]["form_role"]
@@ -1507,6 +1532,7 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      normalize_ar_name: { Args: { _s: string }; Returns: string }
       submit_employee_monthly_evaluation: {
         Args: {
           _employee_id: string
