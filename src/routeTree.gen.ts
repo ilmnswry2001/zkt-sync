@@ -35,6 +35,7 @@ import { Route as AuthenticatedTeamTasksRouteImport } from './routes/_authentica
 import { Route as AuthenticatedUploadRouteImport } from './routes/_authenticated/upload'
 import { Route as AuthenticatedVehiclesRouteImport } from './routes/_authenticated/vehicles'
 import { Route as AuthenticatedWagesRouteImport } from './routes/_authenticated/wages'
+import { Route as AuthenticatedWorkCenterRouteImport } from './routes/_authenticated/work-center'
 import { Route as AuthenticatedEmployeesEmployeeIdRouteImport } from './routes/_authenticated/employees.$employeeId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -169,6 +170,11 @@ const AuthenticatedWagesRoute = AuthenticatedWagesRouteImport.update({
   path: '/wages',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedWorkCenterRoute = AuthenticatedWorkCenterRouteImport.update({
+  id: '/work-center',
+  path: '/work-center',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedEmployeesEmployeeIdRoute =
   AuthenticatedEmployeesEmployeeIdRouteImport.update({
     id: '/$employeeId',
@@ -202,6 +208,7 @@ export interface FileRoutesByFullPath {
   '/upload': typeof AuthenticatedUploadRoute
   '/vehicles': typeof AuthenticatedVehiclesRoute
   '/wages': typeof AuthenticatedWagesRoute
+  '/work-center': typeof AuthenticatedWorkCenterRoute
   '/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
 }
 export interface FileRoutesByTo {
@@ -230,6 +237,7 @@ export interface FileRoutesByTo {
   '/upload': typeof AuthenticatedUploadRoute
   '/vehicles': typeof AuthenticatedVehiclesRoute
   '/wages': typeof AuthenticatedWagesRoute
+  '/work-center': typeof AuthenticatedWorkCenterRoute
   '/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
 }
 export interface FileRoutesById {
@@ -260,6 +268,7 @@ export interface FileRoutesById {
   '/_authenticated/upload': typeof AuthenticatedUploadRoute
   '/_authenticated/vehicles': typeof AuthenticatedVehiclesRoute
   '/_authenticated/wages': typeof AuthenticatedWagesRoute
+  '/_authenticated/work-center': typeof AuthenticatedWorkCenterRoute
   '/_authenticated/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
 }
 export interface FileRouteTypes {
@@ -290,6 +299,7 @@ export interface FileRouteTypes {
     | '/upload'
     | '/vehicles'
     | '/wages'
+    | '/work-center'
     | '/employees/$employeeId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -318,6 +328,7 @@ export interface FileRouteTypes {
     | '/upload'
     | '/vehicles'
     | '/wages'
+    | '/work-center'
     | '/employees/$employeeId'
   id:
     | '__root__'
@@ -347,6 +358,7 @@ export interface FileRouteTypes {
     | '/_authenticated/upload'
     | '/_authenticated/vehicles'
     | '/_authenticated/wages'
+    | '/_authenticated/work-center'
     | '/_authenticated/employees/$employeeId'
   fileRoutesById: FileRoutesById
 }
@@ -540,6 +552,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedWagesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/work-center': {
+      id: '/_authenticated/work-center'
+      path: '/work-center'
+      fullPath: '/work-center'
+      preLoaderRoute: typeof AuthenticatedWorkCenterRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/employees/$employeeId': {
       id: '/_authenticated/employees/$employeeId'
       path: '/$employeeId'
@@ -589,6 +608,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedUploadRoute: typeof AuthenticatedUploadRoute
   AuthenticatedVehiclesRoute: typeof AuthenticatedVehiclesRoute
   AuthenticatedWagesRoute: typeof AuthenticatedWagesRoute
+  AuthenticatedWorkCenterRoute: typeof AuthenticatedWorkCenterRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -615,6 +635,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedUploadRoute: AuthenticatedUploadRoute,
   AuthenticatedVehiclesRoute: AuthenticatedVehiclesRoute,
   AuthenticatedWagesRoute: AuthenticatedWagesRoute,
+  AuthenticatedWorkCenterRoute: AuthenticatedWorkCenterRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
