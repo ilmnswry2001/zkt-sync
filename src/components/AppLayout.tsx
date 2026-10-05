@@ -8,7 +8,6 @@ import {
   ClockIcon,
   FileBox,
   LogOut,
-  ShieldCheck,
   CalendarDays,
   CalendarRange,
   MapPinned,
@@ -23,8 +22,9 @@ import {
   Sparkles,
   Menu,
   X,
-  ClipboardCheck,
+  Check,
   ListChecks,
+  Pencil,
   UserCog,
   UserCircle2,
   Moon,
@@ -38,9 +38,7 @@ import { cn } from "@/lib/utils";
 const nav = [
   { to: "/dashboard", label: "لوحة التحكم", icon: LayoutDashboard, access: "executive" },
   { to: "/attendance", label: "التقارير اليومية", icon: ClockIcon },
-  { to: "/tasks", label: "مهامي اليومية", icon: ClipboardCheck },
   { to: "/work-center", label: "مركز العمل", icon: ListChecks },
-  { to: "/team-follow-up", label: "متابعة الفريق", icon: Users },
   { to: "/projects", label: "تكلفة المواقع اليومية", icon: Wallet, access: "hr" },
   { to: "/monthly", label: "التقرير الشهري", icon: CalendarDays },
   { to: "/forms", label: "الاستمارات الإلكترونية", icon: FileSignature },
@@ -65,8 +63,6 @@ export const SECTION_OPTIONS = nav.map(({ to, label }) => ({ to, label }));
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const {
-    user,
-    profileName,
     roles,
     isAdmin,
     isHR,
@@ -96,7 +92,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     return window.localStorage.getItem("zkt-sidebar-hidden") !== "true";
   });
   const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
+  const [workspaceName, setWorkspaceName] = useState("منظومة زِكت");
+  const [isEditingWorkspaceName, setIsEditingWorkspaceName] = useState(false);
   useEffect(() => {
+    const savedWorkspaceName = window.localStorage.getItem("zkt-workspace-name");
+    if (savedWorkspaceName?.trim()) setWorkspaceName(savedWorkspaceName.trim());
     const savedTheme = window.localStorage.getItem("zkt-theme");
     const theme =
       savedTheme === "dark" || savedTheme === "light"
@@ -112,6 +112,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     document.documentElement.classList.toggle("dark", next === "dark");
     window.localStorage.setItem("zkt-theme", next);
     setThemeMode(next);
+  };
+  const saveWorkspaceName = () => {
+    const nextName = workspaceName.trim() || "منظومة زِكت";
+    setWorkspaceName(nextName);
+    window.localStorage.setItem("zkt-workspace-name", nextName);
+    setIsEditingWorkspaceName(false);
   };
   const toggleSidebar = () => {
     setSidebarOpen((open) => {
@@ -146,20 +152,56 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <Fingerprint className="w-5 h-5 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="font-bold text-lg tracking-tight">منظومة زِكت</h1>
+              <div className="flex items-center gap-1.5">
+                {isEditingWorkspaceName ? (
+                  <input
+                    autoFocus
+                    value={workspaceName}
+                    onChange={(event) => setWorkspaceName(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") saveWorkspaceName();
+                      if (event.key === "Escape") setIsEditingWorkspaceName(false);
+                    }}
+                    aria-label="اسم النظام في القائمة الجانبية"
+                    className="w-36 rounded-md border border-sidebar-border bg-sidebar px-2 py-1 text-sm font-bold text-sidebar-foreground outline-none focus:ring-2 focus:ring-sidebar-ring"
+                  />
+                ) : (
+                  <h1 className="max-w-36 truncate font-bold text-lg tracking-tight">{workspaceName}</h1>
+                )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0"
+                  onClick={() => isEditingWorkspaceName ? saveWorkspaceName() : setIsEditingWorkspaceName(true)}
+                  aria-label={isEditingWorkspaceName ? "حفظ اسم النظام" : "تعديل اسم النظام"}
+                  title={isEditingWorkspaceName ? "حفظ الاسم" : "تعديل الاسم"}
+                >
+                  {isEditingWorkspaceName ? <Check className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
+                </Button>
+              </div>
               <p className="text-[11px] opacity-60">إدارة الموارد والمشاريع</p>
             </div>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleSidebar}
-            title="إخفاء اللوحة الجانبية"
-            aria-label="إخفاء اللوحة الجانبية"
-          >
-            <X className="w-4 h-4 md:hidden" />
-            <PanelRightClose className="hidden w-4 h-4 md:block" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Link
+              to="/profile"
+              title="الملف الشخصي"
+              aria-label="الملف الشخصي"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md text-sidebar-foreground transition-colors hover:bg-sidebar-border/40"
+            >
+              <UserCircle2 className="h-5 w-5" />
+            </Link>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleSidebar}
+              title="إخفاء اللوحة الجانبية"
+              aria-label="إخفاء اللوحة الجانبية"
+            >
+              <X className="w-4 h-4 md:hidden" />
+              <PanelRightClose className="hidden w-4 h-4 md:block" />
+            </Button>
+          </div>
         </div>
         <nav className="flex-1 space-y-1.5 overflow-y-auto p-3 min-w-64">
           {nav.map((item) => {
@@ -208,29 +250,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
-        <div className="p-3 border-t border-sidebar-border space-y-2 min-w-64">
-          <div className="px-3 py-2 text-xs">
-            <div className="font-semibold truncate">
-              {profileName || user?.user_metadata?.full_name || "صاحب الحساب"}
-            </div>
-            <div className="flex gap-1 mt-1 flex-wrap">
-              {roles.map((role) => (
-                <span
-                  key={role}
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-sidebar-accent/30 text-[10px]"
-                >
-                  <ShieldCheck className="w-3 h-3" /> {role}
-                </span>
-              ))}
-              {isAdmin && <span className="text-[10px] opacity-70">مدير</span>}
-            </div>
-          </div>
-          <Link
-            to="/profile"
-            className="flex w-full items-center justify-start gap-2 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-border/40"
-          >
-            <UserCircle2 className="w-4 h-4" /> الملف الشخصي
-          </Link>
+        <div className="p-3 border-t border-sidebar-border min-w-64">
           <Button
             variant="ghost"
             size="sm"
