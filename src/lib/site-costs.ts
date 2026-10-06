@@ -1,4 +1,4 @@
-import { getDefaultWage } from "@/lib/wage-defaults";
+import { getDefaultWage } from "./wage-defaults.ts";
 
 export type WageRateCostRow = {
   title: string;

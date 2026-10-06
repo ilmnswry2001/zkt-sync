@@ -5,7 +5,7 @@ import {
   dateKeyInTimeZone,
   instantAtMidnightInTimeZone,
   todayInBaghdad,
-} from "@/lib/date-time";
+} from "./date-time.ts";
 import { z } from "zod";
 
 const ingestSchema = z.object({

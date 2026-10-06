@@ -6,9 +6,9 @@ import {
   loadAllRows,
   monthDates,
   summarizeDays,
-} from "@/lib/monthly-report";
+} from "./monthly-report.ts";
 import { z } from "zod";
-import { monthInstantRangeInBaghdad, todayInBaghdad } from "@/lib/date-time";
+import { monthInstantRangeInBaghdad, todayInBaghdad } from "./date-time.ts";
 
 const monthValue = z.string().regex(/^[1-9]\d{3}-(0[1-9]|1[0-2])$/);
 const monthSchema = z.object({ month: monthValue, employee_id: z.string().uuid() });

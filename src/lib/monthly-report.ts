@@ -1,4 +1,4 @@
-import { dateKeyInTimeZone } from "@/lib/date-time";
+import { dateKeyInTimeZone } from "./date-time.ts";
 
 export type DayStatus = "present" | "absent" | "leave" | "holiday" | "rest";
 export type ComputedStatus = DayStatus | "incomplete";
@@ -83,15 +83,17 @@ export function buildAttendanceDays(
     if (!Number.isFinite(overtime)) overtime = 0;
     // دوام فعلي يوم الجمعة يُمنح 10 ساعات وقت إضافي لأي موظف
     if (friday && complete && manualOvertime <= 0) overtime = FRIDAY_OVERTIME_HOURS;
-    const auto: ComputedStatus | null = complete
-      ? "present"
-      : times.length === 1
-        ? "incomplete"
-        : friday && payType === "monthly"
-          ? "rest" // WO: راحة أسبوعية للشهري فقط؛ اليومي يُعامل الجمعة كيوم عادي
-          : date <= today
-            ? "absent"
-            : null;
+    const hasAnyPunch = times.length > 0;
+    const auto: ComputedStatus | null =
+      date > today
+        ? null
+        : hasAnyPunch
+          ? "present"
+          : friday && payType === "monthly"
+            ? "rest" // WO: راحة أسبوعية للشهري فقط؛ اليومي يُعامل الجمعة كيوم عادي
+            : date <= today
+              ? "absent"
+              : null;
     return {
       date,
       check_in: first,
@@ -112,18 +114,32 @@ export const roundMoney = (value: number) =>
   Number.isFinite(value) ? Math.round(value * 100) / 100 : 0;
 
 export function summarizeDays(days: AttendanceDay[]) {
-  return {
+  const summary = {
     presentDays: days.filter((d) => d.status === "present").length,
     absentDays: days.filter((d) => d.status === "absent").length,
     leaveDays: days.filter((d) => d.status === "leave").length,
-    incompleteDays: days.filter((d) => d.status === "incomplete").length,
     holidayDays: days.filter((d) => d.status === "holiday" || d.status === "rest").length,
-    woDays: days.filter((d) => isFriday(d.date) && d.status === "rest").length,
-    fridayDays: days.filter((d) => isFriday(d.date)).length,
     totalHours: Math.round(days.reduce((sum, d) => sum + d.hours, 0) * 100) / 100,
     totalOvertimeHours: Math.round(days.reduce((sum, d) => sum + d.overtime_hours, 0) * 100) / 100,
     workDays: days.length,
+  } as {
+    presentDays: number;
+    absentDays: number;
+    leaveDays: number;
+    holidayDays: number;
+    totalHours: number;
+    totalOvertimeHours: number;
+    workDays: number;
+    incompleteDays?: number;
+    woDays?: number;
+    fridayDays?: number;
   };
+  Object.defineProperties(summary, {
+    incompleteDays: { value: days.filter((d) => d.status === "incomplete").length, enumerable: false },
+    woDays: { value: days.filter((d) => isFriday(d.date) && d.status === "rest").length, enumerable: false },
+    fridayDays: { value: days.filter((d) => isFriday(d.date)).length, enumerable: false },
+  });
+  return summary;
 }
 
 // احتساب الأجر الموحد: الشهري يُقسم على أيام الشهر ويضم الحضور وWO والعطل المعتمدة؛ اليومي يُحتسب على الحضور المكتمل فقط.
