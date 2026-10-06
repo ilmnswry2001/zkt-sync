@@ -34,28 +34,29 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { canAccessModulePath, ERP_MODULES } from "@/lib/erp-core";
 
 const nav = [
-  { to: "/dashboard", label: "لوحة التحكم", icon: LayoutDashboard, access: "executive" },
+  { to: "/dashboard", label: "لوحة التحكم", icon: LayoutDashboard },
   { to: "/attendance", label: "التقارير اليومية", icon: ClockIcon },
   { to: "/work-center", label: "مركز العمل", icon: ListChecks },
-  { to: "/projects", label: "تكلفة المواقع اليومية", icon: Wallet, access: "hr" },
+  { to: "/projects", label: "تكلفة المواقع اليومية", icon: Wallet },
   { to: "/monthly", label: "التقرير الشهري", icon: CalendarDays },
   { to: "/forms", label: "الاستمارات الإلكترونية", icon: FileSignature },
   { to: "/penalties", label: "العقوبات والتغييب", icon: FileWarning },
   { to: "/employees", label: "الموظفون", icon: Users },
   { to: "/departments", label: "الأقسام", icon: Building2 },
-  { to: "/project-plans", label: "خطط المشاريع", icon: CalendarRange, access: "project_plans" },
-  { to: "/planning", label: "الخطط وتكلفة المشاريع", icon: BarChart3, access: "planning" },
-  { to: "/sites", label: "المواقع", icon: MapPinned, access: "planning" },
-  { to: "/wages", label: "الأجور", icon: Wallet, access: "hr" },
-  { to: "/payroll", label: "الرواتب", icon: Wallet, access: "hr" },
-  { to: "/vehicles", label: "المركبات", icon: Truck, access: "hr" },
+  { to: "/project-plans", label: "خطط المشاريع", icon: CalendarRange },
+  { to: "/planning", label: "الخطط وتكلفة المشاريع", icon: BarChart3 },
+  { to: "/sites", label: "المواقع", icon: MapPinned },
+  { to: "/wages", label: "الأجور", icon: Wallet },
+  { to: "/payroll", label: "الرواتب", icon: Wallet },
+  { to: "/vehicles", label: "المركبات", icon: Truck },
   { to: "/devices", label: "الأجهزة", icon: Fingerprint },
   { to: "/upload", label: "رفع ملفات البصمة", icon: Upload },
   { to: "/files", label: "سجل الملفات", icon: FileBox },
-  { to: "/settings", label: "الإعدادات", icon: Settings2, access: "admin" },
-  { to: "/accounts", label: "الحسابات والصلاحيات", icon: UserCog, access: "admin" },
+  { to: "/settings", label: "الإعدادات", icon: Settings2 },
+  { to: "/accounts", label: "الحسابات والصلاحيات", icon: UserCog },
 ] as const;
 
 export const SECTION_OPTIONS = nav.map(({ to, label }) => ({ to, label }));
@@ -205,29 +206,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
         <nav className="flex-1 space-y-1.5 overflow-y-auto p-3 min-w-64">
           {nav.map((item) => {
-            if (!canAccessSection(item.to)) return null;
-            if ("access" in item && item.access === "admin" && !isAdmin) return null;
-            if ("access" in item && item.access === "hr" && !isHR) return null;
-            if ("access" in item && item.access === "executive" && !isAdmin && !isCompanyManager)
-              return null;
-            if (
-              "access" in item &&
-              item.access === "planning" &&
-              !isAdmin &&
-              !isHR &&
-              !roles.some((role) => ["supervisor", "department_manager"].includes(role))
-            )
-              return null;
-            if (
-              "access" in item &&
-              item.access === "project_plans" &&
-              !isAdmin &&
-              !isHR &&
-              !roles.some((role) =>
-                ["supervisor", "department_manager", "engineer", "site_admin"].includes(role),
-              )
-            )
-              return null;
+            const isAllowed = canAccessModulePath(item.to, roles, allowedSections);
+            if (!isAllowed) return null;
             const active = pathname === item.to || pathname.startsWith(item.to + "/");
             const Icon = item.icon;
             return (
