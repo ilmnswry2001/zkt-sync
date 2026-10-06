@@ -35,6 +35,7 @@ import { Route as AuthenticatedTeamTasksRouteImport } from './routes/_authentica
 import { Route as AuthenticatedUploadRouteImport } from './routes/_authenticated/upload'
 import { Route as AuthenticatedVehiclesRouteImport } from './routes/_authenticated/vehicles'
 import { Route as AuthenticatedWagesRouteImport } from './routes/_authenticated/wages'
+import { Route as AuthenticatedWarehousesRouteImport } from './routes/_authenticated/warehouses'
 import { Route as AuthenticatedWorkCenterRouteImport } from './routes/_authenticated/work-center'
 import { Route as AuthenticatedEmployeesEmployeeIdRouteImport } from './routes/_authenticated/employees.$employeeId'
 
@@ -170,6 +171,11 @@ const AuthenticatedWagesRoute = AuthenticatedWagesRouteImport.update({
   path: '/wages',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedWarehousesRoute = AuthenticatedWarehousesRouteImport.update({
+  id: '/warehouses',
+  path: '/warehouses',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedWorkCenterRoute = AuthenticatedWorkCenterRouteImport.update({
   id: '/work-center',
   path: '/work-center',
@@ -208,6 +214,7 @@ export interface FileRoutesByFullPath {
   '/upload': typeof AuthenticatedUploadRoute
   '/vehicles': typeof AuthenticatedVehiclesRoute
   '/wages': typeof AuthenticatedWagesRoute
+  '/warehouses': typeof AuthenticatedWarehousesRoute
   '/work-center': typeof AuthenticatedWorkCenterRoute
   '/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
 }
@@ -237,6 +244,7 @@ export interface FileRoutesByTo {
   '/upload': typeof AuthenticatedUploadRoute
   '/vehicles': typeof AuthenticatedVehiclesRoute
   '/wages': typeof AuthenticatedWagesRoute
+  '/warehouses': typeof AuthenticatedWarehousesRoute
   '/work-center': typeof AuthenticatedWorkCenterRoute
   '/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
 }
@@ -268,6 +276,7 @@ export interface FileRoutesById {
   '/_authenticated/upload': typeof AuthenticatedUploadRoute
   '/_authenticated/vehicles': typeof AuthenticatedVehiclesRoute
   '/_authenticated/wages': typeof AuthenticatedWagesRoute
+  '/_authenticated/warehouses': typeof AuthenticatedWarehousesRoute
   '/_authenticated/work-center': typeof AuthenticatedWorkCenterRoute
   '/_authenticated/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
 }
@@ -299,6 +308,7 @@ export interface FileRouteTypes {
     | '/upload'
     | '/vehicles'
     | '/wages'
+    | '/warehouses'
     | '/work-center'
     | '/employees/$employeeId'
   fileRoutesByTo: FileRoutesByTo
@@ -328,6 +338,7 @@ export interface FileRouteTypes {
     | '/upload'
     | '/vehicles'
     | '/wages'
+    | '/warehouses'
     | '/work-center'
     | '/employees/$employeeId'
   id:
@@ -358,6 +369,7 @@ export interface FileRouteTypes {
     | '/_authenticated/upload'
     | '/_authenticated/vehicles'
     | '/_authenticated/wages'
+    | '/_authenticated/warehouses'
     | '/_authenticated/work-center'
     | '/_authenticated/employees/$employeeId'
   fileRoutesById: FileRoutesById
@@ -552,6 +564,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedWagesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/warehouses': {
+      id: '/_authenticated/warehouses'
+      path: '/warehouses'
+      fullPath: '/warehouses'
+      preLoaderRoute: typeof AuthenticatedWarehousesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/work-center': {
       id: '/_authenticated/work-center'
       path: '/work-center'
@@ -608,6 +627,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedUploadRoute: typeof AuthenticatedUploadRoute
   AuthenticatedVehiclesRoute: typeof AuthenticatedVehiclesRoute
   AuthenticatedWagesRoute: typeof AuthenticatedWagesRoute
+  AuthenticatedWarehousesRoute: typeof AuthenticatedWarehousesRoute
   AuthenticatedWorkCenterRoute: typeof AuthenticatedWorkCenterRoute
 }
 
@@ -635,6 +655,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedUploadRoute: AuthenticatedUploadRoute,
   AuthenticatedVehiclesRoute: AuthenticatedVehiclesRoute,
   AuthenticatedWagesRoute: AuthenticatedWagesRoute,
+  AuthenticatedWarehousesRoute: AuthenticatedWarehousesRoute,
   AuthenticatedWorkCenterRoute: AuthenticatedWorkCenterRoute,
 }
 
