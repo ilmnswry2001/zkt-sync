@@ -257,6 +257,14 @@ function WorkCenterPage() {
 
   const empName = (id: string | null) => (id ? empById.get(id)?.full_name ?? "—" : "—");
 
+  const canDelete = isAdmin || isHR || roles.includes("department_manager");
+  const deleteTask = async (t: Task) => {
+    if (!window.confirm(`حذف المهمة "${t.title}" نهائياً؟`)) return;
+    const { error, count } = await workCenterDb.from("employee_tasks").delete({ count: "exact" }).eq("id", t.id);
+    if (error || !count) return toast.error(error?.message ?? "لا تملك صلاحية حذف هذه المهمة");
+    toast.success("تم حذف المهمة");
+    refresh();
+  };
   const updateStatus = async (t: Task, status: string) => {
     try {
       const patch: WorkCenterTaskUpdate = { status };
@@ -328,6 +336,7 @@ function WorkCenterPage() {
                   </>
                 )}
                 {isManager && <Button size="sm" variant="ghost" onClick={() => setEditTask(t)}>تعديل</Button>}
+                {canDelete && <Button size="sm" variant="ghost" className="text-destructive" onClick={() => deleteTask(t)}>حذف</Button>}
               </div>
             </TableCell>
           </TableRow>
