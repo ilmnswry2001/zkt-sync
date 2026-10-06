@@ -36,6 +36,13 @@
       "when": 1791278384732,
       "tag": "0004_managers_delete_tasks",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791278525285,
+      "tag": "0005_warehouses",
+      "breakpoints": true
     }
   ]
 }

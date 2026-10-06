@@ -1198,6 +1198,164 @@ export type Database = {
           },
         ]
       }
+      stock_count_lines: {
+        Row: {
+          count_id: string
+          counted_qty: number
+          id: string
+          item_id: string
+          system_qty: number
+        }
+        Insert: {
+          count_id: string
+          counted_qty?: number
+          id?: string
+          item_id: string
+          system_qty?: number
+        }
+        Update: {
+          count_id?: string
+          counted_qty?: number
+          id?: string
+          item_id?: string
+          system_qty?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_count_lines_count_id_fkey"
+            columns: ["count_id"]
+            isOneToOne: false
+            referencedRelation: "stock_counts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_count_lines_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stock_counts: {
+        Row: {
+          count_date: string
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          warehouse_id: string
+        }
+        Insert: {
+          count_date?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          warehouse_id: string
+        }
+        Update: {
+          count_date?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          warehouse_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_counts_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stock_movements: {
+        Row: {
+          count_id: string | null
+          created_at: string
+          created_by: string | null
+          employee_id: string | null
+          id: string
+          item_id: string
+          movement_date: string
+          movement_type: string
+          notes: string | null
+          qty_delta: number
+          related_warehouse_id: string | null
+          site_id: string | null
+          warehouse_id: string
+        }
+        Insert: {
+          count_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          employee_id?: string | null
+          id?: string
+          item_id: string
+          movement_date?: string
+          movement_type: string
+          notes?: string | null
+          qty_delta: number
+          related_warehouse_id?: string | null
+          site_id?: string | null
+          warehouse_id: string
+        }
+        Update: {
+          count_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          employee_id?: string | null
+          id?: string
+          item_id?: string
+          movement_date?: string
+          movement_type?: string
+          notes?: string | null
+          qty_delta?: number
+          related_warehouse_id?: string | null
+          site_id?: string | null
+          warehouse_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_movements_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_related_warehouse_id_fkey"
+            columns: ["related_warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_checklist_items: {
         Row: {
           completed_at: string | null
@@ -1633,6 +1791,80 @@ export type Database = {
         }
         Relationships: []
       }
+      warehouse_items: {
+        Row: {
+          code: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          kind: string
+          min_qty: number
+          name: string
+          unit: string
+          unit_cost: number
+        }
+        Insert: {
+          code?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          kind?: string
+          min_qty?: number
+          name: string
+          unit?: string
+          unit_cost?: number
+        }
+        Update: {
+          code?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          kind?: string
+          min_qty?: number
+          name?: string
+          unit?: string
+          unit_cost?: number
+        }
+        Relationships: []
+      }
+      warehouses: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          is_main: boolean
+          name: string
+          notes: string | null
+          site_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_main?: boolean
+          name: string
+          notes?: string | null
+          site_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_main?: boolean
+          name?: string
+          notes?: string | null
+          site_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouses_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -1643,6 +1875,7 @@ export type Database = {
         Returns: boolean
       }
       can_access_work_task: { Args: { _task_id: string }; Returns: boolean }
+      can_manage_stock: { Args: { _uid: string }; Returns: boolean }
       can_manage_work_task: { Args: { _task_id: string }; Returns: boolean }
       create_work_task_assignments: {
         Args: {
