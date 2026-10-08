@@ -8,6 +8,41 @@
       "when": 1791018992754,
       "tag": "0000_data_entry_execute_forms",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791105491143,
+      "tag": "0001_team_management_workflow",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791144945000,
+      "tag": "0002_assignees_read_task_templates",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791189234819,
+      "tag": "0003_work_center",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791278384732,
+      "tag": "0004_managers_delete_tasks",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791278525285,
+      "tag": "0005_warehouses",
+      "breakpoints": true
     }
   ]
 }

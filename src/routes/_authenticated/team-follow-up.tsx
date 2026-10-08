@@ -336,7 +336,7 @@ function TeamFollowUpPage() {
       let query = (supabase as unknown as { from: (table: string) => any })
         .from("employee_tasks")
         .select(
-          "id, task_date, title, description, status, duration_minutes, created_by, employee_id, department_id, manager_note",
+          "id, task_date, title, description, status, duration_minutes, created_by, employee_id, department_id, manager_note, task_type, priority, due_date",
         )
         .gte("task_date", monthStart)
         .lte("task_date", monthEnd)

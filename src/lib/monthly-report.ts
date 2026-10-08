@@ -1,3 +1,5 @@
+import { dateKeyInTimeZone } from "./date-time.ts";
+
 export type DayStatus = "present" | "absent" | "leave" | "holiday" | "rest";
 export type ComputedStatus = DayStatus | "incomplete";
 export type PayType = "daily" | "monthly";
@@ -53,7 +55,9 @@ export function buildAttendanceDays(
 ): AttendanceDay[] {
   const byDay = new Map<string, string[]>();
   for (const log of logs) {
-    const date = log.verify_time.slice(0, 10);
+    // UTC string slicing shifted Baghdad after-midnight punches into the previous wage day;
+    // assign a punch to the company's civil date before attendance and payroll are counted.
+    const date = dateKeyInTimeZone(log.verify_time);
     const times = byDay.get(date) ?? [];
     times.push(log.verify_time);
     byDay.set(date, times);
@@ -79,15 +83,17 @@ export function buildAttendanceDays(
     if (!Number.isFinite(overtime)) overtime = 0;
     // دوام فعلي يوم الجمعة يُمنح 10 ساعات وقت إضافي لأي موظف
     if (friday && complete && manualOvertime <= 0) overtime = FRIDAY_OVERTIME_HOURS;
-    const auto: ComputedStatus | null = complete
-      ? "present"
-      : times.length === 1
-          ? "incomplete"
-        : friday && payType === "monthly"
-          ? "rest" // WO: راحة أسبوعية للشهري فقط؛ اليومي يُعامل الجمعة كيوم عادي
-          : date <= today
-            ? "absent"
-            : null;
+    const hasAnyPunch = times.length > 0;
+    const auto: ComputedStatus | null =
+      date > today
+        ? null
+        : hasAnyPunch
+          ? "present"
+          : friday && payType === "monthly"
+            ? "rest" // WO: راحة أسبوعية للشهري فقط؛ اليومي يُعامل الجمعة كيوم عادي
+            : date <= today
+              ? "absent"
+              : null;
     return {
       date,
       check_in: first,
@@ -104,22 +110,45 @@ export function buildAttendanceDays(
 
 export const isFriday = (date: string) => new Date(`${date}T00:00:00Z`).getUTCDay() === 5;
 
+export const roundMoney = (value: number) =>
+  Number.isFinite(value) ? Math.round(value * 100) / 100 : 0;
+
 export function summarizeDays(days: AttendanceDay[]) {
-  return {
+  const summary = {
     presentDays: days.filter((d) => d.status === "present").length,
     absentDays: days.filter((d) => d.status === "absent").length,
     leaveDays: days.filter((d) => d.status === "leave").length,
-    incompleteDays: days.filter((d) => d.status === "incomplete").length,
     holidayDays: days.filter((d) => d.status === "holiday" || d.status === "rest").length,
-    woDays: days.filter((d) => isFriday(d.date) && d.status === "rest").length,
-    fridayDays: days.filter((d) => isFriday(d.date)).length,
     totalHours: Math.round(days.reduce((sum, d) => sum + d.hours, 0) * 100) / 100,
     totalOvertimeHours: Math.round(days.reduce((sum, d) => sum + d.overtime_hours, 0) * 100) / 100,
     workDays: days.length,
+  } as {
+    presentDays: number;
+    absentDays: number;
+    leaveDays: number;
+    holidayDays: number;
+    totalHours: number;
+    totalOvertimeHours: number;
+    workDays: number;
+    incompleteDays?: number;
+    woDays?: number;
+    fridayDays?: number;
   };
+  Object.defineProperties(summary, {
+    incompleteDays: {
+      value: days.filter((d) => d.status === "incomplete").length,
+      enumerable: false,
+    },
+    woDays: {
+      value: days.filter((d) => isFriday(d.date) && d.status === "rest").length,
+      enumerable: false,
+    },
+    fridayDays: { value: days.filter((d) => isFriday(d.date)).length, enumerable: false },
+  });
+  return summary;
 }
 
-// حساب الأجر المستحق: الشهري = (الراتب ÷ أيام الشهر) × (أيام الحضور + أيام WO)، اليومي = الأجر اليومي × أيام العمل الفعلية
+// احتساب الأجر الموحد: الشهري يُقسم على أيام الشهر ويضم الحضور وWO والعطل المعتمدة؛ اليومي يُحتسب على الحضور المكتمل فقط.
 export function calculatePayroll(options: {
   payType: PayType;
   monthlySalary: number;
@@ -128,6 +157,8 @@ export function calculatePayroll(options: {
   summary: ReturnType<typeof summarizeDays>;
   holidayDays?: number;
   overtimeHourlyRate?: number;
+  additions?: number;
+  deductions?: number;
 }) {
   const {
     payType,
@@ -137,6 +168,8 @@ export function calculatePayroll(options: {
     summary,
     holidayDays = 0,
     overtimeHourlyRate = 0,
+    additions = 0,
+    deductions = 0,
   } = options;
   const isDaily = payType === "daily";
   const dayRate = isDaily
@@ -144,11 +177,16 @@ export function calculatePayroll(options: {
     : daysInMonth
       ? Math.round((monthlySalary / daysInMonth) * 100) / 100
       : 0;
-  const woDays = isDaily ? 0 : summary.woDays;
+  const woDays = isDaily ? 0 : (summary.woDays ?? 0);
   const workedDays = summary.presentDays;
   const paidHolidays = isDaily ? 0 : Math.max(0, holidayDays);
   const paidDays = workedDays + woDays + paidHolidays;
-  const overtimePay = Math.round(summary.totalOvertimeHours * Math.max(0, overtimeHourlyRate) * 100) / 100;
+  const overtimePay = roundMoney(summary.totalOvertimeHours * Math.max(0, overtimeHourlyRate));
+  const basePay = roundMoney(dayRate * paidDays);
+  // سابقاً كانت صفحات الرواتب تعيد جمع الأساسي والإضافي والإضافات والخصومات كلٌ بطريقته؛ أصبحت المعادلة هنا مصدراً واحداً لمنع اختلاف صافي الراتب بين التقارير.
+  const grossPay = roundMoney(basePay + overtimePay);
+  const additionsTotal = roundMoney(additions);
+  const deductionsTotal = roundMoney(Math.max(0, deductions));
   return {
     payType,
     dayRate,
@@ -158,7 +196,11 @@ export function calculatePayroll(options: {
     paidDays,
     overtimeHours: summary.totalOvertimeHours,
     overtimePay,
-    basePay: Math.round(dayRate * paidDays * 100) / 100,
+    basePay,
+    grossPay,
+    additions: additionsTotal,
+    deductions: deductionsTotal,
+    netPay: roundMoney(grossPay + additionsTotal - deductionsTotal),
   };
 }
 

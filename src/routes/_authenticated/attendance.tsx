@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getDailyReport } from "@/lib/attendance.functions";
+import { todayInBaghdad } from "@/lib/date-time";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StaffNameChips } from "@/components/StaffNameChips";
@@ -80,7 +81,7 @@ type AttendanceRow = {
   late?: boolean;
   status: string;
 };
-const today = new Date().toISOString().slice(0, 10);
+const today = todayInBaghdad();
 
 function AttendancePage() {
   const [activeTab, setActiveTab] = useState<"attendance" | "sites" | "publish">("sites");
@@ -177,7 +178,11 @@ function AttendancePage() {
         request_date: row.request_date,
         assigned_staff: normalizeStaffAssignments(row.assigned_staff),
         final_plan: row.final_plan ?? null,
-        specialtySummary: Array.isArray((row.final_plan as any)?.specialties) ? (row.final_plan as any).specialties : Array.isArray(row.specialties) ? row.specialties : [],
+        specialtySummary: Array.isArray((row.final_plan as any)?.specialties)
+          ? (row.final_plan as any).specialties
+          : Array.isArray(row.specialties)
+            ? row.specialties
+            : [],
       };
     },
     enabled: activeTab === "publish" && !!siteId,
@@ -338,7 +343,8 @@ function AttendancePage() {
     });
     return requiredItems.map((item: any) => {
       const requestedCount = Number(item.quantity ?? 0);
-      const reportedCount = totalsByName.get(item.specialty?.trim() ?? item.name?.trim() ?? "") ?? 0;
+      const reportedCount =
+        totalsByName.get(item.specialty?.trim() ?? item.name?.trim() ?? "") ?? 0;
       return {
         specialty: item.specialty ?? item.name ?? "غير محدد",
         quantity: requestedCount,
@@ -429,7 +435,9 @@ function AttendancePage() {
             <FileText className="w-5 h-5 text-primary" />
             <div>
               <div className="font-semibold">متابعة النشر</div>
-              <div className="text-xs text-muted-foreground">مقارنة الخطة النهائية بالتقرير اليومي</div>
+              <div className="text-xs text-muted-foreground">
+                مقارنة الخطة النهائية بالتقرير اليومي
+              </div>
             </div>
           </div>
         </button>
@@ -502,18 +510,28 @@ function AttendancePage() {
                   </div>
                   <div className="rounded-xl border bg-slate-50 p-3">
                     <div className="text-xs text-muted-foreground">مطلوب</div>
-                    <div className="font-bold mt-1">{publishSummary.reduce((sum, item) => sum + item.quantity, 0)}</div>
+                    <div className="font-bold mt-1">
+                      {publishSummary.reduce((sum, item) => sum + item.quantity, 0)}
+                    </div>
                   </div>
                   <div className="rounded-xl border bg-slate-50 p-3">
                     <div className="text-xs text-muted-foreground">منشور</div>
-                    <div className="font-bold mt-1">{publishSummary.reduce((sum, item) => sum + item.reported, 0)}</div>
+                    <div className="font-bold mt-1">
+                      {publishSummary.reduce((sum, item) => sum + item.reported, 0)}
+                    </div>
                   </div>
                 </div>
 
                 {(() => {
                   const req = publishSummary.reduce((s, i) => s + i.quantity, 0);
-                  const rep = publishSummary.reduce((s, i) => s + Math.min(i.reported, i.quantity), 0);
-                  const extra = publishSummary.reduce((s, i) => s + Math.max(0, i.reported - i.quantity), 0);
+                  const rep = publishSummary.reduce(
+                    (s, i) => s + Math.min(i.reported, i.quantity),
+                    0,
+                  );
+                  const extra = publishSummary.reduce(
+                    (s, i) => s + Math.max(0, i.reported - i.quantity),
+                    0,
+                  );
                   const pct = req ? Math.round((rep / req) * 100) : 0;
                   return (
                     <div className="rounded-2xl border bg-card p-4 shadow-sm">
@@ -521,20 +539,34 @@ function AttendancePage() {
                         <div>
                           <h3 className="font-bold">مقارنة الخطة النهائية والتقرير المرفوع</h3>
                           <p className="text-xs text-muted-foreground">
-                            {existingReport ? `تقرير يوم ${date}` : `لا يوجد تقرير مرفوع ليوم ${date}`}
+                            {existingReport
+                              ? `تقرير يوم ${date}`
+                              : `لا يوجد تقرير مرفوع ليوم ${date}`}
                           </p>
                         </div>
                         <div className="flex items-center gap-3">
                           <div
                             className="flex h-16 w-16 items-center justify-center rounded-full text-sm font-bold"
-                            style={{ background: `conic-gradient(var(--primary) ${pct * 3.6}deg, var(--muted) 0deg)` }}
+                            style={{
+                              background: `conic-gradient(var(--primary) ${pct * 3.6}deg, var(--muted) 0deg)`,
+                            }}
                           >
-                            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-card">{pct}%</span>
+                            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-card">
+                              {pct}%
+                            </span>
                           </div>
                           <div className="text-xs space-y-1">
                             <div>نسبة الالتزام بالخطة</div>
-                            {extra > 0 && <div className="text-primary font-semibold">زيادة: {extra}</div>}
-                            <Badge variant={publishSummary.some((i) => i.missing > 0) ? "destructive" : "default"}>
+                            {extra > 0 && (
+                              <div className="text-primary font-semibold">زيادة: {extra}</div>
+                            )}
+                            <Badge
+                              variant={
+                                publishSummary.some((i) => i.missing > 0)
+                                  ? "destructive"
+                                  : "default"
+                              }
+                            >
                               {publishSummary.some((i) => i.missing > 0) ? "يوجد نقص" : "مكتمل"}
                             </Badge>
                           </div>
@@ -542,25 +574,48 @@ function AttendancePage() {
                       </div>
                       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                         {publishSummary.map((item) => {
-                          const p = item.quantity ? Math.min(100, Math.round((item.reported / item.quantity) * 100)) : 100;
+                          const p = item.quantity
+                            ? Math.min(100, Math.round((item.reported / item.quantity) * 100))
+                            : 100;
                           const over = item.reported - item.quantity;
                           return (
-                            <div key={`${item.specialty}-${item.quantity}`} className="rounded-xl border p-3">
+                            <div
+                              key={`${item.specialty}-${item.quantity}`}
+                              className="rounded-xl border p-3"
+                            >
                               <div className="mb-2 flex items-center justify-between">
                                 <span className="font-medium">{item.specialty}</span>
-                                <span className={item.missing > 0 ? "text-destructive text-sm font-bold" : "text-success text-sm font-bold"}>
-                                  {item.missing > 0 ? `ناقص ${item.missing}` : over > 0 ? `زيادة ${over}` : "مطابق"}
+                                <span
+                                  className={
+                                    item.missing > 0
+                                      ? "text-destructive text-sm font-bold"
+                                      : "text-success text-sm font-bold"
+                                  }
+                                >
+                                  {item.missing > 0
+                                    ? `ناقص ${item.missing}`
+                                    : over > 0
+                                      ? `زيادة ${over}`
+                                      : "مطابق"}
                                 </span>
                               </div>
                               <div className="h-2.5 overflow-hidden rounded-full bg-muted">
                                 <div
-                                  className={item.missing > 0 ? "h-full rounded-full bg-destructive" : "h-full rounded-full bg-success"}
+                                  className={
+                                    item.missing > 0
+                                      ? "h-full rounded-full bg-destructive"
+                                      : "h-full rounded-full bg-success"
+                                  }
                                   style={{ width: `${p}%` }}
                                 />
                               </div>
                               <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-                                <span>الخطة: <b className="text-foreground">{item.quantity}</b></span>
-                                <span>المرفوع: <b className="text-foreground">{item.reported}</b></span>
+                                <span>
+                                  الخطة: <b className="text-foreground">{item.quantity}</b>
+                                </span>
+                                <span>
+                                  المرفوع: <b className="text-foreground">{item.reported}</b>
+                                </span>
                                 <span>{p}%</span>
                               </div>
                             </div>

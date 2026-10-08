@@ -3,6 +3,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { todayInBaghdad } from "@/lib/date-time";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,10 +63,18 @@ export const Route = createFileRoute("/_authenticated/project-plans")({
   beforeLoad: async () => {
     const { data: auth } = await supabase.auth.getUser();
     if (!auth.user) throw redirect({ to: "/auth" });
-    const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", auth.user.id);
+    const { data, error } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", auth.user.id);
     if (error) throw redirect({ to: "/attendance" });
     const roles = new Set<string>((data ?? []).map((row) => row.role));
-    if (!["admin", "hr", "supervisor", "department_manager", "engineer", "site_admin"].some((role) => roles.has(role))) throw redirect({ to: "/attendance" });
+    if (
+      !["admin", "hr", "supervisor", "department_manager", "engineer", "site_admin"].some((role) =>
+        roles.has(role),
+      )
+    )
+      throw redirect({ to: "/attendance" });
   },
   head: () => ({
     meta: [
@@ -391,9 +400,11 @@ function PlanningPage() {
   }, [costData.rates, siteEmployees]);
   const totalMonthly = Object.values(siteSummary).reduce((sum, item) => sum + item.monthly, 0);
 
-  const [activeWorkPlanTab, setActiveWorkPlanTab] = useState<WorkPlanTab>(isEngineer ? "request" : "management");
+  const [activeWorkPlanTab, setActiveWorkPlanTab] = useState<WorkPlanTab>(
+    isEngineer ? "request" : "management",
+  );
   const [requestSiteId, setRequestSiteId] = useState<string>(sites[0]?.id ?? "");
-  const [requestDate, setRequestDate] = useState(new Date().toISOString().slice(0, 10));
+  const [requestDate, setRequestDate] = useState(todayInBaghdad);
   const [applicantName, setApplicantName] = useState("");
   const [requestNotes, setRequestNotes] = useState("");
   const { data: specialtyCatalog = EMPTY_SPECIALTY_CATALOG } = useQuery({
@@ -440,7 +451,6 @@ function PlanningPage() {
       ).filter(Boolean),
     [equipmentCatalog],
   );
-  const specialtyOptionsKey = specialtyOptions.join("::");
   const [draftSpecialties, setDraftSpecialties] = useState<WorkPlanSpecialty[]>([]);
   const [managementNote, setManagementNote] = useState<Record<string, string>>({});
   const [managementAssignments, setManagementAssignments] = useState<
@@ -471,7 +481,7 @@ function PlanningPage() {
           previousByName.get(specialty) ?? { ...newPlanSpecialty(index), specialty },
       );
     });
-  }, [specialtyOptionsKey]);
+  }, [specialtyOptions]);
 
   const workPlansQuery = useQuery({
     queryKey: ["site-work-plans"],
@@ -665,7 +675,7 @@ function PlanningPage() {
       qc.invalidateQueries({ queryKey: ["site-work-plans"] });
       setActiveWorkPlanTab(isEngineer ? "request" : "management");
       setRequestNotes("");
-      setRequestDate(new Date().toISOString().slice(0, 10));
+      setRequestDate(todayInBaghdad());
       setRequestSiteSearch("");
       setDraftSpecialties(
         specialtyOptions.map((specialty, index) => ({
@@ -767,7 +777,8 @@ function PlanningPage() {
         error = retry.error;
       }
       if (error) throw error;
-      if (!data) throw new Error("لم يتم تحديث الخطة. تحقق من صلاحية الاعتماد وحالة الخطة الحالية.");
+      if (!data)
+        throw new Error("لم يتم تحديث الخطة. تحقق من صلاحية الاعتماد وحالة الخطة الحالية.");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["site-work-plans"] });
@@ -1129,7 +1140,8 @@ function PlanningPage() {
             </div>
             <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">خطط المشاريع</h1>
             <p className="mt-2 text-sm leading-7 text-white/70 sm:text-base">
-              جهّز احتياج الموقع وأرسله للاعتماد. بعد موافقة التخطيط، عيّن الكوادر حسب التخصص وأكمل الخطة التنفيذية.
+              جهّز احتياج الموقع وأرسله للاعتماد. بعد موافقة التخطيط، عيّن الكوادر حسب التخصص وأكمل
+              الخطة التنفيذية.
             </p>
           </div>
           <div className="grid grid-cols-3 gap-2 text-center">
@@ -1138,8 +1150,13 @@ function PlanningPage() {
               { label: "بانتظار الكوادر", value: planningApprovedPlans.length },
               { label: "قيد التنفيذ", value: managementReviewPlans.length + finalPlans.length },
             ].map((item) => (
-              <div key={item.label} className="min-w-24 rounded-2xl border border-white/10 bg-white/10 px-3 py-3 backdrop-blur">
-                <strong className="block text-2xl tabular-nums">{item.value.toLocaleString("ar-IQ")}</strong>
+              <div
+                key={item.label}
+                className="min-w-24 rounded-2xl border border-white/10 bg-white/10 px-3 py-3 backdrop-blur"
+              >
+                <strong className="block text-2xl tabular-nums">
+                  {item.value.toLocaleString("ar-IQ")}
+                </strong>
                 <span className="text-[11px] text-white/65">{item.label}</span>
               </div>
             ))}
@@ -1158,34 +1175,42 @@ function PlanningPage() {
         <CardHeader>
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <p className="mb-1 text-xs font-bold uppercase tracking-[.16em] text-indigo-600 dark:text-indigo-300">إعداد ومتابعة الطلبات</p>
+              <p className="mb-1 text-xs font-bold uppercase tracking-[.16em] text-indigo-600 dark:text-indigo-300">
+                إعداد ومتابعة الطلبات
+              </p>
               <CardTitle className="text-xl sm:text-2xl">مسار خطط المشاريع</CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">أرسل الاحتياج، استلمه بعد الاعتماد، ثم وزّع الكوادر.</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                أرسل الاحتياج، استلمه بعد الاعتماد، ثم وزّع الكوادر.
+              </p>
             </div>
-            <Badge variant="outline" className="rounded-full px-3 py-1">{workPlans.length.toLocaleString("ar-IQ")} خطة</Badge>
+            <Badge variant="outline" className="rounded-full px-3 py-1">
+              {workPlans.length.toLocaleString("ar-IQ")} خطة
+            </Badge>
           </div>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="sticky top-0 z-20 -mx-6 flex snap-x gap-2 overflow-x-auto border-b bg-card px-4 py-2 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
-            {(isEngineer ? (["request"] as WorkPlanTab[]) : (["management"] as WorkPlanTab[])).map((tab) => (
-              <Button
-                key={tab}
-                type="button"
-                variant={activeWorkPlanTab === tab ? "default" : "ghost"}
-                size="sm"
-                className="min-h-11 shrink-0 snap-start gap-2 rounded-full"
-                onClick={() => setActiveWorkPlanTab(tab)}
-              >
-                {tab === "request" && "طلب خطة"}
-                {tab === "management" && "تعيين الكوادر"}
-                <Badge
-                  variant={activeWorkPlanTab === tab ? "secondary" : "outline"}
-                  className="min-w-6 justify-center px-1.5"
+            {(isEngineer ? (["request"] as WorkPlanTab[]) : (["management"] as WorkPlanTab[])).map(
+              (tab) => (
+                <Button
+                  key={tab}
+                  type="button"
+                  variant={activeWorkPlanTab === tab ? "default" : "ghost"}
+                  size="sm"
+                  className="min-h-11 shrink-0 snap-start gap-2 rounded-full"
+                  onClick={() => setActiveWorkPlanTab(tab)}
                 >
-                  {workPlanTabCounts[tab]}
-                </Badge>
-              </Button>
-            ))}
+                  {tab === "request" && "طلب خطة"}
+                  {tab === "management" && "تعيين الكوادر"}
+                  <Badge
+                    variant={activeWorkPlanTab === tab ? "secondary" : "outline"}
+                    className="min-w-6 justify-center px-1.5"
+                  >
+                    {workPlanTabCounts[tab]}
+                  </Badge>
+                </Button>
+              ),
+            )}
           </div>
           {workPlansQuery.error && (
             <div

@@ -6,16 +6,20 @@ import {
   loadAllRows,
   monthDates,
   summarizeDays,
-} from "@/lib/monthly-report";
+} from "./monthly-report.ts";
 import { z } from "zod";
+import { monthInstantRangeInBaghdad, todayInBaghdad } from "./date-time.ts";
 
 const monthValue = z.string().regex(/^[1-9]\d{3}-(0[1-9]|1[0-2])$/);
 const monthSchema = z.object({ month: monthValue, employee_id: z.string().uuid() });
 
 function monthRange(month: string) {
   const dates = monthDates(month);
-  const end = new Date(Date.parse(`${dates[0]}T00:00:00Z`) + dates.length * 86400000).toISOString();
-  return { dates, start: dates[0], end };
+  const endDate = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 1))
+    .toISOString()
+    .slice(0, 10);
+  const { start: logStart, end: logEnd } = monthInstantRangeInBaghdad(month);
+  return { dates, start: dates[0], endDate, logStart, logEnd };
 }
 
 export const getMonthlySheet = createServerFn({ method: "GET" })
@@ -23,8 +27,8 @@ export const getMonthlySheet = createServerFn({ method: "GET" })
   .inputValidator((d: unknown) => z.object({ month: monthValue }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = context;
-    const { dates, start, end } = monthRange(data.month);
-    const today = new Date().toISOString().slice(0, 10);
+    const { dates, start, endDate, logStart, logEnd } = monthRange(data.month);
+    const today = todayInBaghdad();
     const employees = await loadAllRows((from, to) =>
       supabase
         .from("employees")
@@ -47,8 +51,8 @@ export const getMonthlySheet = createServerFn({ method: "GET" })
               "employee_no",
               batch.map((e) => e.employee_no),
             )
-            .gte("verify_time", `${start}T00:00:00Z`)
-            .lt("verify_time", end)
+            .gte("verify_time", logStart)
+            .lt("verify_time", logEnd)
             .order("verify_time")
             .order("id")
             .range(from, to),
@@ -62,7 +66,7 @@ export const getMonthlySheet = createServerFn({ method: "GET" })
               batch.map((e) => e.id),
             )
             .gte("work_date", start)
-            .lt("work_date", end.slice(0, 10))
+            .lt("work_date", endDate)
             .order("employee_id")
             .order("work_date")
             .range(from, to),
@@ -101,7 +105,7 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
   .inputValidator((d: unknown) => monthSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = context;
-    const { dates, start, end } = monthRange(data.month);
+    const { dates, start, endDate, logStart, logEnd } = monthRange(data.month);
     const { data: emp, error } = await supabase
       .from("employees")
       .select(
@@ -118,8 +122,8 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
           .from("attendance_logs")
           .select("verify_time")
           .eq("employee_no", emp.employee_no)
-          .gte("verify_time", `${start}T00:00:00Z`)
-          .lt("verify_time", end)
+          .gte("verify_time", logStart)
+          .lt("verify_time", logEnd)
           .order("verify_time")
           .order("id")
           .range(from, to),
@@ -130,7 +134,7 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
           .select("work_date, status, notes, overtime_hours")
           .eq("employee_id", data.employee_id)
           .gte("work_date", start)
-          .lt("work_date", end.slice(0, 10))
+          .lt("work_date", endDate)
           .order("work_date")
           .range(from, to),
       ),
@@ -149,7 +153,7 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
           .select("id, deduction_amount")
           .eq("employee_id", data.employee_id)
           .gte("penalty_date", start)
-          .lt("penalty_date", end.slice(0, 10))
+          .lt("penalty_date", endDate)
           .order("penalty_date")
           .range(from, to),
       ),
@@ -160,13 +164,18 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
       logs,
       overrides,
       emp.shifts?.end_time,
-      new Date().toISOString().slice(0, 10),
+      todayInBaghdad(),
       payType,
       emp.shifts?.grace_minutes ?? 0,
     );
     const summary = summarizeDays(days);
     const wage = emp.wage_rates;
     const monthly = Number(emp.base_salary ?? wage?.monthly_rate ?? 0);
+    const additionsTotal = additions.reduce((sum, a) => sum + Number(a.amount ?? 0), 0);
+    const deductionsTotal = penalties.reduce(
+      (sum, penalty) => sum + Number(penalty.deduction_amount ?? 0),
+      0,
+    );
     const pay = calculatePayroll({
       payType,
       monthlySalary: monthly,
@@ -175,9 +184,9 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
       summary,
       holidayDays: days.filter((day) => day.status === "holiday").length,
       overtimeHourlyRate: Number(wage?.overtime_hour_rate ?? 0),
+      additions: additionsTotal,
+      deductions: deductionsTotal,
     });
-    const additionsTotal = additions.reduce((sum, a) => sum + Number(a.amount ?? 0), 0);
-    const deductionsTotal = penalties.reduce((sum, penalty) => sum + Number(penalty.deduction_amount ?? 0), 0);
 
     return {
       employee: emp,
@@ -191,7 +200,7 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
         additionsTotal,
         penalties,
         deductionsTotal,
-        total: Math.round((pay.basePay + pay.overtimePay + additionsTotal - deductionsTotal) * 100) / 100,
+        total: pay.netPay,
         currency: wage?.currency ?? "IQD",
       },
     };
