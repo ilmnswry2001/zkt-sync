@@ -214,6 +214,44 @@ export type Database = {
         }
         Relationships: []
       }
+      employee_clearances: {
+        Row: {
+          clearance_status: string
+          cleared_by: string | null
+          created_at: string
+          employee_id: string
+          has_open_custody: boolean
+          id: string
+          notes: string | null
+        }
+        Insert: {
+          clearance_status?: string
+          cleared_by?: string | null
+          created_at?: string
+          employee_id: string
+          has_open_custody?: boolean
+          id?: string
+          notes?: string | null
+        }
+        Update: {
+          clearance_status?: string
+          cleared_by?: string | null
+          created_at?: string
+          employee_id?: string
+          has_open_custody?: boolean
+          id?: string
+          notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_clearances_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employee_guidance_notes: {
         Row: {
           author_id: string
@@ -353,49 +391,150 @@ export type Database = {
           },
         ]
       }
+      employee_task_events: {
+        Row: {
+          actor_id: string | null
+          actor_name: string | null
+          created_at: string
+          details: Json
+          event_type: string
+          id: string
+          task_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          actor_name?: string | null
+          created_at?: string
+          details?: Json
+          event_type: string
+          id?: string
+          task_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          actor_name?: string | null
+          created_at?: string
+          details?: Json
+          event_type?: string
+          id?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_task_events_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "employee_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employee_tasks: {
         Row: {
           archived_at: string | null
+          assignment_source: string
+          closing_requirement: string
+          completed_at: string | null
+          completion_note: string | null
           created_at: string
           created_by: string
+          delay_reason: string | null
+          delay_reason_note: string | null
           department_id: string | null
           description: string | null
+          due_date: string | null
           duration_minutes: number
           employee_id: string | null
+          guidance_id: string | null
           id: string
           manager_note: string | null
+          priority: string
+          proof_link: string | null
+          proof_note: string | null
+          proof_result: string | null
+          proof_storage_path: string | null
+          require_review: boolean
+          reviewed_at: string | null
+          reviewed_by: string | null
+          start_date: string | null
+          started_at: string | null
           status: string
+          submitted_for_review_at: string | null
           task_date: string
+          task_type: string
+          template_id: string | null
           title: string
           updated_at: string
         }
         Insert: {
           archived_at?: string | null
+          assignment_source?: string
+          closing_requirement?: string
+          completed_at?: string | null
+          completion_note?: string | null
           created_at?: string
           created_by?: string
+          delay_reason?: string | null
+          delay_reason_note?: string | null
           department_id?: string | null
           description?: string | null
+          due_date?: string | null
           duration_minutes?: number
           employee_id?: string | null
+          guidance_id?: string | null
           id?: string
           manager_note?: string | null
+          priority?: string
+          proof_link?: string | null
+          proof_note?: string | null
+          proof_result?: string | null
+          proof_storage_path?: string | null
+          require_review?: boolean
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          start_date?: string | null
+          started_at?: string | null
           status?: string
+          submitted_for_review_at?: string | null
           task_date?: string
+          task_type?: string
+          template_id?: string | null
           title: string
           updated_at?: string
         }
         Update: {
           archived_at?: string | null
+          assignment_source?: string
+          closing_requirement?: string
+          completed_at?: string | null
+          completion_note?: string | null
           created_at?: string
           created_by?: string
+          delay_reason?: string | null
+          delay_reason_note?: string | null
           department_id?: string | null
           description?: string | null
+          due_date?: string | null
           duration_minutes?: number
           employee_id?: string | null
+          guidance_id?: string | null
           id?: string
           manager_note?: string | null
+          priority?: string
+          proof_link?: string | null
+          proof_note?: string | null
+          proof_result?: string | null
+          proof_storage_path?: string | null
+          require_review?: boolean
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          start_date?: string | null
+          started_at?: string | null
           status?: string
+          submitted_for_review_at?: string | null
           task_date?: string
+          task_type?: string
+          template_id?: string | null
           title?: string
           updated_at?: string
         }
@@ -412,6 +551,20 @@ export type Database = {
             columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_tasks_guidance_id_fkey"
+            columns: ["guidance_id"]
+            isOneToOne: false
+            referencedRelation: "employee_guidance_notes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_tasks_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "team_task_templates"
             referencedColumns: ["id"]
           },
         ]
@@ -664,6 +817,8 @@ export type Database = {
           form_no: number
           id: string
           kind: Database["public"]["Enums"]["form_kind"]
+          leave_days: number
+          leave_end_date: string | null
           manager_approved_at: string | null
           manager_approved_by: string | null
           overtime_hours: number
@@ -691,6 +846,8 @@ export type Database = {
           form_no?: number
           id?: string
           kind?: Database["public"]["Enums"]["form_kind"]
+          leave_days?: number
+          leave_end_date?: string | null
           manager_approved_at?: string | null
           manager_approved_by?: string | null
           overtime_hours?: number
@@ -718,6 +875,8 @@ export type Database = {
           form_no?: number
           id?: string
           kind?: Database["public"]["Enums"]["form_kind"]
+          leave_days?: number
+          leave_end_date?: string | null
           manager_approved_at?: string | null
           manager_approved_by?: string | null
           overtime_hours?: number
@@ -753,6 +912,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      leave_settings: {
+        Row: {
+          annual_allowance_days: number
+          id: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          annual_allowance_days?: number
+          id?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          annual_allowance_days?: number
+          id?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -1083,6 +1263,208 @@ export type Database = {
           },
         ]
       }
+      stock_count_lines: {
+        Row: {
+          count_id: string
+          counted_qty: number
+          id: string
+          item_id: string
+          system_qty: number
+        }
+        Insert: {
+          count_id: string
+          counted_qty?: number
+          id?: string
+          item_id: string
+          system_qty?: number
+        }
+        Update: {
+          count_id?: string
+          counted_qty?: number
+          id?: string
+          item_id?: string
+          system_qty?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_count_lines_count_id_fkey"
+            columns: ["count_id"]
+            isOneToOne: false
+            referencedRelation: "stock_counts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_count_lines_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stock_counts: {
+        Row: {
+          count_date: string
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          warehouse_id: string
+        }
+        Insert: {
+          count_date?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          warehouse_id: string
+        }
+        Update: {
+          count_date?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          warehouse_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_counts_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stock_movements: {
+        Row: {
+          count_id: string | null
+          created_at: string
+          created_by: string | null
+          employee_id: string | null
+          id: string
+          item_id: string
+          movement_date: string
+          movement_type: string
+          notes: string | null
+          qty_delta: number
+          related_warehouse_id: string | null
+          site_id: string | null
+          warehouse_id: string
+        }
+        Insert: {
+          count_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          employee_id?: string | null
+          id?: string
+          item_id: string
+          movement_date?: string
+          movement_type: string
+          notes?: string | null
+          qty_delta: number
+          related_warehouse_id?: string | null
+          site_id?: string | null
+          warehouse_id: string
+        }
+        Update: {
+          count_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          employee_id?: string | null
+          id?: string
+          item_id?: string
+          movement_date?: string
+          movement_type?: string
+          notes?: string | null
+          qty_delta?: number
+          related_warehouse_id?: string | null
+          site_id?: string | null
+          warehouse_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_movements_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_related_warehouse_id_fkey"
+            columns: ["related_warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_checklist_items: {
+        Row: {
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string
+          created_by: string
+          id: string
+          is_completed: boolean
+          label: string
+          sort_order: number
+          task_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          is_completed?: boolean
+          label: string
+          sort_order?: number
+          task_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          is_completed?: boolean
+          label?: string
+          sort_order?: number
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_checklist_items_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "employee_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       team_guidance_notes: {
         Row: {
           author_id: string
@@ -1114,6 +1496,131 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "team_guidance_notes_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_guidance_recipients: {
+        Row: {
+          created_at: string
+          employee_id: string | null
+          guidance_id: string
+          id: string
+          read_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          employee_id?: string | null
+          guidance_id: string
+          id?: string
+          read_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          employee_id?: string | null
+          guidance_id?: string
+          id?: string
+          read_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_guidance_recipients_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_guidance_recipients_guidance_id_fkey"
+            columns: ["guidance_id"]
+            isOneToOne: false
+            referencedRelation: "team_guidance_notes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_task_templates: {
+        Row: {
+          active: boolean
+          assignee_employee_ids: string[]
+          checklist_items: string[]
+          closing_requirement: string
+          created_at: string
+          created_by: string
+          department_id: string
+          description: string | null
+          due_offset_days: number
+          end_date: string | null
+          id: string
+          interval_days: number | null
+          month_day: number | null
+          priority: string
+          recurrence_rule: string
+          require_review: boolean
+          scheduled_time: string | null
+          start_date: string
+          task_type: string
+          title: string
+          updated_at: string
+          weekdays: number[] | null
+        }
+        Insert: {
+          active?: boolean
+          assignee_employee_ids?: string[]
+          checklist_items?: string[]
+          closing_requirement?: string
+          created_at?: string
+          created_by?: string
+          department_id: string
+          description?: string | null
+          due_offset_days?: number
+          end_date?: string | null
+          id?: string
+          interval_days?: number | null
+          month_day?: number | null
+          priority?: string
+          recurrence_rule: string
+          require_review?: boolean
+          scheduled_time?: string | null
+          start_date?: string
+          task_type?: string
+          title: string
+          updated_at?: string
+          weekdays?: number[] | null
+        }
+        Update: {
+          active?: boolean
+          assignee_employee_ids?: string[]
+          checklist_items?: string[]
+          closing_requirement?: string
+          created_at?: string
+          created_by?: string
+          department_id?: string
+          description?: string | null
+          due_offset_days?: number
+          end_date?: string | null
+          id?: string
+          interval_days?: number | null
+          month_day?: number | null
+          priority?: string
+          recurrence_rule?: string
+          require_review?: boolean
+          scheduled_time?: string | null
+          start_date?: string
+          task_type?: string
+          title?: string
+          updated_at?: string
+          weekdays?: number[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_task_templates_department_id_fkey"
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"
@@ -1236,6 +1743,83 @@ export type Database = {
         }
         Relationships: []
       }
+      vehicle_monthly_operations: {
+        Row: {
+          created_at: string
+          id: string
+          month: string
+          notes: string | null
+          operating_days: number
+          updated_at: string
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          month: string
+          notes?: string | null
+          operating_days?: number
+          updated_at?: string
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          month?: string
+          notes?: string | null
+          operating_days?: number
+          updated_at?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_monthly_operations_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vehicles: {
+        Row: {
+          created_at: string
+          currency: string
+          daily_rate: number
+          id: string
+          is_active: boolean
+          name: string
+          notes: string | null
+          updated_at: string
+          vehicle_class: string
+          vehicle_no: string
+        }
+        Insert: {
+          created_at?: string
+          currency?: string
+          daily_rate?: number
+          id?: string
+          is_active?: boolean
+          name: string
+          notes?: string | null
+          updated_at?: string
+          vehicle_class: string
+          vehicle_no: string
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          daily_rate?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          notes?: string | null
+          updated_at?: string
+          vehicle_class?: string
+          vehicle_no?: string
+        }
+        Relationships: []
+      }
       wage_rates: {
         Row: {
           created_at: string
@@ -1272,6 +1856,80 @@ export type Database = {
         }
         Relationships: []
       }
+      warehouse_items: {
+        Row: {
+          code: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          kind: string
+          min_qty: number
+          name: string
+          unit: string
+          unit_cost: number
+        }
+        Insert: {
+          code?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          kind?: string
+          min_qty?: number
+          name: string
+          unit?: string
+          unit_cost?: number
+        }
+        Update: {
+          code?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          kind?: string
+          min_qty?: number
+          name?: string
+          unit?: string
+          unit_cost?: number
+        }
+        Relationships: []
+      }
+      warehouses: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          is_main: boolean
+          name: string
+          notes: string | null
+          site_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_main?: boolean
+          name: string
+          notes?: string | null
+          site_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_main?: boolean
+          name?: string
+          notes?: string | null
+          site_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouses_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -1280,6 +1938,45 @@ export type Database = {
       can_access_department: {
         Args: { _department_id: string; _user_id: string }
         Returns: boolean
+      }
+      can_access_work_task: { Args: { _task_id: string }; Returns: boolean }
+      can_manage_stock: { Args: { _uid: string }; Returns: boolean }
+      can_manage_work_task: { Args: { _task_id: string }; Returns: boolean }
+      create_work_task_assignments: {
+        Args: {
+          _checklist_items: string[]
+          _closing_requirement: string
+          _department_id: string
+          _description: string
+          _due_date: string
+          _employee_ids: string[]
+          _manager_note: string
+          _priority: string
+          _require_review: boolean
+          _task_date: string
+          _title: string
+        }
+        Returns: number
+      }
+      current_employee_id: { Args: never; Returns: string }
+      employee_user_id: { Args: { _employee_id: string }; Returns: string }
+      generate_recurring_tasks: {
+        Args: { _from: string; _to: string }
+        Returns: number
+      }
+      get_employee_custody: {
+        Args: { emp_id: string }
+        Returns: {
+          item_code: string
+          item_id: string
+          item_name: string
+          movement_id: string
+          received_date: string
+          remaining_qty: number
+          unit: string
+          warehouse_id: string
+          warehouse_name: string
+        }[]
       }
       has_form_role: {
         Args: {
@@ -1296,6 +1993,38 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      issue_employee_clearance: {
+        Args: { _employee_id: string; _notes?: string }
+        Returns: string
+      }
+      normalize_ar_name: { Args: { _s: string }; Returns: string }
+      return_employee_custody: {
+        Args: {
+          _employee_id: string
+          _item_id: string
+          _notes?: string
+          _quantity: number
+          _warehouse_id: string
+        }
+        Returns: string
+      }
+      send_work_guidance: {
+        Args: {
+          _content: string
+          _create_task: boolean
+          _department_id: string
+          _employee_ids: string[]
+          _guidance_date: string
+          _task_due_date: string
+          _task_priority: string
+          _title: string
+        }
+        Returns: {
+          guidances_sent: number
+          tasks_created: number
+          unlinked_employees: number
+        }[]
+      }
       submit_employee_monthly_evaluation: {
         Args: {
           _employee_id: string
