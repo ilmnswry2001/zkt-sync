@@ -30,6 +30,7 @@ import {
   Trash2,
   Truck,
   UsersRound,
+  Smartphone,
 } from "lucide-react";
 import { printReport } from "@/lib/report-print";
 import { toast } from "sonner";
@@ -75,6 +76,7 @@ type AttendanceRow = {
   check_out: string | null;
   hours: number;
   devices?: number | string | null;
+  mobile_self?: boolean;
   late?: boolean;
   status: string;
 };
@@ -875,7 +877,7 @@ function AttendancePage() {
                         <TableCell>{fmtTime(row.check_in)}</TableCell>
                         <TableCell>{fmtTime(row.check_out)}</TableCell>
                         <TableCell>{row.hours > 0 ? row.hours.toFixed(2) : "—"}</TableCell>
-                        <TableCell>{row.devices || "—"}</TableCell>
+                        <TableCell><span className="inline-flex items-center gap-1">{row.devices || "—"}{row.mobile_self && <Smartphone className="h-4 w-4 text-cyan-600" aria-label="حضور ذاتي من الهاتف" />}</span></TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
                             <Badge

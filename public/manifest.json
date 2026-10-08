@@ -1,0 +1,15 @@
+{
+  "name": "بوابة الحضور الذاتي للموظفين",
+  "short_name": "حضوري الذكي",
+  "start_url": "/self-attendance",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0B1120",
+  "theme_color": "#1E293B",
+  "dir": "rtl",
+  "lang": "ar",
+  "icons": [
+    { "src": "/icons/self-attendance-192.svg", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any maskable" },
+    { "src": "/icons/self-attendance-512.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

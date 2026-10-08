@@ -169,7 +169,7 @@ export const getDailyReport = createServerFn({ method: "GET" })
     const start = new Date(data.date + "T00:00:00Z");
     const end = new Date(start.getTime() + 86400000);
     const { data: logs, error: logsError } = await supabase.from("attendance_logs")
-      .select("employee_no, employee_id, verify_time, device_id")
+      .select("employee_no, employee_id, verify_time, device_id, source")
       .gte("verify_time", start.toISOString())
       .lt("verify_time", end.toISOString())
       .order("verify_time", { ascending: true });
@@ -178,11 +178,11 @@ export const getDailyReport = createServerFn({ method: "GET" })
       .select("id, employee_no, full_name, status, department_id, departments(name), shifts(start_time, end_time, grace_minutes)");
     if (employeesError) throw new Error(employeesError.message);
 
-    const byPin = new Map<string, { first: string; last: string; devices: Set<string> }>();
+    const byPin = new Map<string, { first: string; last: string; devices: Set<string>; sources: Set<string> }>();
     (logs ?? []).forEach((l: any) => {
       const cur = byPin.get(l.employee_no);
-      if (!cur) byPin.set(l.employee_no, { first: l.verify_time, last: l.verify_time, devices: new Set([l.device_id]) });
-      else { cur.last = l.verify_time; cur.devices.add(l.device_id); }
+      if (!cur) byPin.set(l.employee_no, { first: l.verify_time, last: l.verify_time, devices: new Set(l.device_id ? [l.device_id] : []), sources: new Set(l.source ? [l.source] : []) });
+      else { cur.last = l.verify_time; if (l.device_id) cur.devices.add(l.device_id); if (l.source) cur.sources.add(l.source); }
     });
 
     const rows = (emps ?? []).map((e: any) => {
@@ -200,6 +200,7 @@ export const getDailyReport = createServerFn({ method: "GET" })
         check_out: rec?.last !== rec?.first ? rec?.last ?? null : null,
         hours: rec ? Math.max(0, Math.round(hours * 100) / 100) : 0,
         devices: rec?.devices.size ?? 0,
+        mobile_self: rec?.sources.has("mobile_self") ?? false,
         late,
         status: rec ? "present" : "absent",
       };

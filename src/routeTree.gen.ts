@@ -20,6 +20,7 @@ import { Route as AuthenticatedTeamFollowUpRouteImport } from './routes/_authent
 import { Route as AuthenticatedTasksRouteImport } from './routes/_authenticated/tasks'
 import { Route as AuthenticatedSitesRouteImport } from './routes/_authenticated/sites'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedSelfAttendanceRouteImport } from './routes/_authenticated/self-attendance'
 import { Route as AuthenticatedProjectsRouteImport } from './routes/_authenticated/projects'
 import { Route as AuthenticatedProjectPlansRouteImport } from './routes/_authenticated/project-plans'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
@@ -92,6 +93,12 @@ const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedSelfAttendanceRoute =
+  AuthenticatedSelfAttendanceRouteImport.update({
+    id: '/self-attendance',
+    path: '/self-attendance',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedProjectsRoute = AuthenticatedProjectsRouteImport.update({
   id: '/projects',
   path: '/projects',
@@ -194,6 +201,7 @@ export interface FileRoutesByFullPath {
   '/profile': typeof AuthenticatedProfileRoute
   '/project-plans': typeof AuthenticatedProjectPlansRoute
   '/projects': typeof AuthenticatedProjectsRoute
+  '/self-attendance': typeof AuthenticatedSelfAttendanceRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/sites': typeof AuthenticatedSitesRoute
   '/tasks': typeof AuthenticatedTasksRoute
@@ -222,6 +230,7 @@ export interface FileRoutesByTo {
   '/profile': typeof AuthenticatedProfileRoute
   '/project-plans': typeof AuthenticatedProjectPlansRoute
   '/projects': typeof AuthenticatedProjectsRoute
+  '/self-attendance': typeof AuthenticatedSelfAttendanceRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/sites': typeof AuthenticatedSitesRoute
   '/tasks': typeof AuthenticatedTasksRoute
@@ -252,6 +261,7 @@ export interface FileRoutesById {
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/project-plans': typeof AuthenticatedProjectPlansRoute
   '/_authenticated/projects': typeof AuthenticatedProjectsRoute
+  '/_authenticated/self-attendance': typeof AuthenticatedSelfAttendanceRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/sites': typeof AuthenticatedSitesRoute
   '/_authenticated/tasks': typeof AuthenticatedTasksRoute
@@ -282,6 +292,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/project-plans'
     | '/projects'
+    | '/self-attendance'
     | '/settings'
     | '/sites'
     | '/tasks'
@@ -310,6 +321,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/project-plans'
     | '/projects'
+    | '/self-attendance'
     | '/settings'
     | '/sites'
     | '/tasks'
@@ -339,6 +351,7 @@ export interface FileRouteTypes {
     | '/_authenticated/profile'
     | '/_authenticated/project-plans'
     | '/_authenticated/projects'
+    | '/_authenticated/self-attendance'
     | '/_authenticated/settings'
     | '/_authenticated/sites'
     | '/_authenticated/tasks'
@@ -433,6 +446,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/self-attendance': {
+      id: '/_authenticated/self-attendance'
+      path: '/self-attendance'
+      fullPath: '/self-attendance'
+      preLoaderRoute: typeof AuthenticatedSelfAttendanceRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/projects': {
@@ -581,6 +601,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedProjectPlansRoute: typeof AuthenticatedProjectPlansRoute
   AuthenticatedProjectsRoute: typeof AuthenticatedProjectsRoute
+  AuthenticatedSelfAttendanceRoute: typeof AuthenticatedSelfAttendanceRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedSitesRoute: typeof AuthenticatedSitesRoute
   AuthenticatedTasksRoute: typeof AuthenticatedTasksRoute
@@ -607,6 +628,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedProjectPlansRoute: AuthenticatedProjectPlansRoute,
   AuthenticatedProjectsRoute: AuthenticatedProjectsRoute,
+  AuthenticatedSelfAttendanceRoute: AuthenticatedSelfAttendanceRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedSitesRoute: AuthenticatedSitesRoute,
   AuthenticatedTasksRoute: AuthenticatedTasksRoute,
