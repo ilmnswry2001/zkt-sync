@@ -29,6 +29,7 @@ import {
   Smartphone,
   Boxes,
   ListChecks,
+  CalendarCheck2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
@@ -41,6 +42,7 @@ const nav = [
   { to: "/tasks", label: "مهامي اليومية", icon: ClipboardCheck },
   { to: "/self-attendance", label: "الحضور الذاتي", icon: Smartphone },
   { to: "/work-center", label: "مركز العمل", icon: ListChecks },
+  { to: "/leaves", label: "إدارة الإجازات", icon: CalendarCheck2 },
   { to: "/team-follow-up", label: "متابعة الفريق", icon: Users },
   { to: "/projects", label: "تكلفة المواقع اليومية", icon: Wallet, access: "hr" },
   { to: "/monthly", label: "التقرير الشهري", icon: CalendarDays },

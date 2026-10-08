@@ -105,6 +105,21 @@ type Addition = {
   amount: number;
   created_at: string;
 };
+type Custody = {
+  item_id: string;
+  item_code: string | null;
+  item_name: string;
+  unit: string;
+  warehouse_name: string;
+  remaining_qty: number;
+  received_date: string;
+};
+type Clearance = {
+  clearance_status: string;
+  has_open_custody: boolean;
+  notes: string | null;
+  created_at: string;
+};
 
 const monthBounds = (month: string) => ({ start: `${month}-01`, end: `${month}-31` });
 const fmtDate = (value: string | null | undefined) =>
@@ -193,61 +208,71 @@ export function EmployeeProfileContent({
         const result = await request;
         return result.error ? ([] as T[]) : ((result.data ?? []) as T[]);
       };
-      const [attendance, punches, forms, penalties, tasks, additions] = await Promise.all([
-        safe<Attendance>(
-          (supabase as any)
-            .from("attendance_day_status")
-            .select("id, work_date, status, overtime_hours, notes")
-            .eq("employee_id", employeeId)
-            .gte("work_date", bounds.start)
-            .lte("work_date", bounds.end)
-            .order("work_date", { ascending: false }),
-        ),
-        safe<Punch>(
-          (supabase as any)
-            .from("attendance_logs")
-            .select("id, verify_time, verify_type")
-            .eq("employee_id", employeeId)
-            .gte("verify_time", `${bounds.start}T00:00:00`)
-            .lte("verify_time", `${bounds.end}T23:59:59`)
-            .order("verify_time", { ascending: false })
-            .limit(200),
-        ),
-        safe<Form>(
-          (supabase as any)
-            .from("forms")
-            .select("id, work_date, kind, status, overtime_hours, reason, check_in, check_out")
-            .eq("employee_id", employeeId)
-            .gte("work_date", bounds.start)
-            .lte("work_date", bounds.end)
-            .order("work_date", { ascending: false }),
-        ),
-        safe<Penalty>(
-          (supabase as any)
-            .from("employee_penalties")
-            .select("id, penalty_date, penalty_type, deduction_amount, notes, executed_at")
-            .eq("employee_id", employeeId)
-            .order("penalty_date", { ascending: false }),
-        ),
-        safe<Task>(
-          (supabase as any)
-            .from("employee_tasks")
-            .select("id, task_date, title, description, status, duration_minutes, manager_note")
-            .eq("employee_id", employeeId)
-            .gte("task_date", bounds.start)
-            .lte("task_date", bounds.end)
-            .order("task_date", { ascending: false }),
-        ),
-        safe<Addition>(
-          (supabase as any)
-            .from("salary_additions")
-            .select("id, month, kind, description, amount, created_at")
-            .eq("employee_id", employeeId)
-            .gte("month", bounds.start)
-            .lte("month", `${month}-31`)
-            .order("month", { ascending: false }),
-        ),
-      ]);
+      const [attendance, punches, forms, penalties, tasks, additions, custody, clearances] =
+        await Promise.all([
+          safe<Attendance>(
+            (supabase as any)
+              .from("attendance_day_status")
+              .select("id, work_date, status, overtime_hours, notes")
+              .eq("employee_id", employeeId)
+              .gte("work_date", bounds.start)
+              .lte("work_date", bounds.end)
+              .order("work_date", { ascending: false }),
+          ),
+          safe<Punch>(
+            (supabase as any)
+              .from("attendance_logs")
+              .select("id, verify_time, verify_type")
+              .eq("employee_id", employeeId)
+              .gte("verify_time", `${bounds.start}T00:00:00`)
+              .lte("verify_time", `${bounds.end}T23:59:59`)
+              .order("verify_time", { ascending: false })
+              .limit(200),
+          ),
+          safe<Form>(
+            (supabase as any)
+              .from("forms")
+              .select("id, work_date, kind, status, overtime_hours, reason, check_in, check_out")
+              .eq("employee_id", employeeId)
+              .gte("work_date", bounds.start)
+              .lte("work_date", bounds.end)
+              .order("work_date", { ascending: false }),
+          ),
+          safe<Penalty>(
+            (supabase as any)
+              .from("employee_penalties")
+              .select("id, penalty_date, penalty_type, deduction_amount, notes, executed_at")
+              .eq("employee_id", employeeId)
+              .order("penalty_date", { ascending: false }),
+          ),
+          safe<Task>(
+            (supabase as any)
+              .from("employee_tasks")
+              .select("id, task_date, title, description, status, duration_minutes, manager_note")
+              .eq("employee_id", employeeId)
+              .gte("task_date", bounds.start)
+              .lte("task_date", bounds.end)
+              .order("task_date", { ascending: false }),
+          ),
+          safe<Addition>(
+            (supabase as any)
+              .from("salary_additions")
+              .select("id, month, kind, description, amount, created_at")
+              .eq("employee_id", employeeId)
+              .gte("month", bounds.start)
+              .lte("month", `${month}-31`)
+              .order("month", { ascending: false }),
+          ),
+          safe<Custody>((supabase as any).rpc("get_employee_custody", { emp_id: employeeId })),
+          safe<Clearance>(
+            (supabase as any)
+              .from("employee_clearances")
+              .select("clearance_status, has_open_custody, notes, created_at")
+              .eq("employee_id", employeeId)
+              .order("created_at", { ascending: false })
+              .limit(1),
+          ),
+        ]);
       return {
         employee: employee as Employee,
         attendance,
@@ -256,6 +281,8 @@ export function EmployeeProfileContent({
         penalties,
         tasks,
         additions,
+        custody,
+        clearances,
       };
     },
   });
@@ -387,7 +414,7 @@ export function EmployeeProfileContent({
         />
       </div>
       <Tabs defaultValue="overview" className="space-y-5">
-        <TabsList className="grid h-auto w-full grid-cols-2 gap-2 bg-transparent sm:grid-cols-3 lg:grid-cols-6">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-2 bg-transparent sm:grid-cols-3 lg:grid-cols-7">
           <TabsTrigger value="overview" className="min-h-11 rounded-xl border">
             نظرة عامة
           </TabsTrigger>
@@ -402,6 +429,9 @@ export function EmployeeProfileContent({
           </TabsTrigger>
           <TabsTrigger value="finance" className="min-h-11 rounded-xl border">
             الأجور والبدلات
+          </TabsTrigger>
+          <TabsTrigger value="custody" className="min-h-11 rounded-xl border">
+            العهدة وبراءة الذمة
           </TabsTrigger>
           <TabsTrigger value="identity" className="min-h-11 rounded-xl border">
             البيانات والملفات
@@ -564,6 +594,35 @@ export function EmployeeProfileContent({
             ])}
             empty="لا توجد إضافات أو مكافآت لهذا الشهر."
           />
+        </TabsContent>
+        <TabsContent value="custody" className="space-y-4">
+          <DataCard
+            title="العِهد المفتوحة"
+            headers={["الصنف", "الرمز", "المخزن", "الكمية", "تاريخ التسليم"]}
+            rows={(data?.custody ?? []).map((row) => [
+              row.item_name,
+              row.item_code || "—",
+              row.warehouse_name,
+              String(row.remaining_qty),
+              fmtDate(row.received_date),
+            ])}
+            empty="لا توجد عِهد مفتوحة لهذا الموظف."
+          />
+          {data?.clearances?.length ? (
+            <DataCard
+              title="آخر براءة ذمة"
+              headers={["الحالة", "عهد مفتوحة", "التاريخ", "ملاحظات"]}
+              rows={data.clearances.map((row) => [
+                statusText[row.clearance_status] || row.clearance_status,
+                row.has_open_custody ? "نعم" : "لا",
+                fmtDate(row.created_at.slice(0, 10)),
+                row.notes || "—",
+              ])}
+              empty=""
+            />
+          ) : (
+            <Empty text="لم تصدر براءة ذمة لهذا الموظف بعد." />
+          )}
         </TabsContent>
         <TabsContent value="identity">
           <Card>

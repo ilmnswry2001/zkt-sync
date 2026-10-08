@@ -285,6 +285,72 @@ function PayrollPage() {
     if (!printReport(`قصاصة راتب — ${row.employee.full_name}`, body))
       toast.error("اسمح بالنوافذ المنبثقة للطباعة");
   };
+  const exportCsv = () => {
+    const header = [
+      "رقم الموظف",
+      "اسم الموظف",
+      "نوع الأجر",
+      "أيام الحضور",
+      "أيام الجمعة",
+      "الأجر الأساسي",
+      "الإضافي",
+      "الإضافات",
+      "الاستقطاعات",
+      "صافي الراتب",
+    ];
+    const csvCell = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+    const content =
+      "\uFEFF" +
+      [
+        header,
+        ...filteredRows.map(({ employee, payroll, summary, additions, deductions, total: net }) => [
+          employee.employee_no,
+          employee.full_name,
+          employee.pay_type === "daily" ? "يومي" : "شهري",
+          summary.presentDays,
+          payroll.woDays,
+          payroll.basePay,
+          payroll.overtimePay,
+          additions,
+          deductions,
+          net,
+        ]),
+      ]
+        .map((row) => row.map(csvCell).join(","))
+        .join("\n");
+    const url = URL.createObjectURL(new Blob([content], { type: "text/csv;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `رواتب_الموظفين_${month}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    const incomplete = filteredRows.filter((row) => {
+      const employee = row.employee as Employee & {
+        bank_account?: string | null;
+        iban?: string | null;
+      };
+      return !employee.bank_account && !employee.iban;
+    }).length;
+    toast.success(
+      `تم تصدير الكشف بصيغة CSV${incomplete ? ` — تنبيه: ${incomplete} موظف يحتاج بيانات مصرفية` : ""}`,
+    );
+  };
+  const printCashVouchers = () => {
+    const vouchers = filteredRows
+      .map(
+        ({ employee, payroll, total: net }) =>
+          `<section class="voucher"><h2>قسيمة صرف نقدية</h2><p><b>الموظف:</b> ${escapeHtml(employee.full_name)} — <b>الرقم:</b> ${escapeHtml(employee.employee_no)}</p><p><b>الشهر:</b> ${escapeHtml(month)}</p><table><tr><th>الأجر الأساسي</th><td>${money(payroll.basePay)}</td></tr><tr><th>الساعات الإضافية</th><td>${money(payroll.overtimePay)}</td></tr><tr><th>الإضافات والخصومات</th><td>${money(payroll.additions - payroll.deductions)}</td></tr><tr><th>الصافي</th><td>${money(net)}</td></tr></table><div class="sign">المستلم: ________________ &nbsp;&nbsp; المحاسب: ________________</div></section>`,
+      )
+      .join("");
+    if (!vouchers) return toast.error("لا توجد بيانات للطباعة");
+    if (
+      !printReport(
+        `قسائم الصرف — ${month}`,
+        `<style>.voucher{height:30%;box-sizing:border-box;border:1px solid #999;padding:16px;margin-bottom:12px;page-break-inside:avoid}.voucher h2{text-align:center}.voucher table{width:100%;border-collapse:collapse}.voucher th,.voucher td{border:1px solid #bbb;padding:6px;text-align:right}.sign{margin-top:28px}</style>${vouchers}`,
+      )
+    )
+      toast.error("تعذر فتح الطباعة");
+  };
   return (
     <div dir="rtl" className="space-y-6">
       <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
@@ -308,6 +374,20 @@ function PayrollPage() {
           </Button>
           <Button onClick={() => exportExcel()} disabled={!filteredRows.length || query.isLoading}>
             <Download className="ml-2 h-4 w-4" /> تصدير Excel
+          </Button>
+          <Button
+            variant="outline"
+            onClick={exportCsv}
+            disabled={!filteredRows.length || query.isLoading}
+          >
+            <Download className="ml-2 h-4 w-4" /> CSV
+          </Button>
+          <Button
+            variant="outline"
+            onClick={printCashVouchers}
+            disabled={!filteredRows.length || query.isLoading}
+          >
+            <Printer className="ml-2 h-4 w-4" /> قسائم الصرف
           </Button>
         </div>
       </div>
