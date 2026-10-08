@@ -126,8 +126,18 @@ export function calculatePayroll(options: {
   dailyRate: number;
   daysInMonth: number;
   summary: ReturnType<typeof summarizeDays>;
+  holidayDays?: number;
+  overtimeHourlyRate?: number;
 }) {
-  const { payType, monthlySalary, dailyRate, daysInMonth, summary } = options;
+  const {
+    payType,
+    monthlySalary,
+    dailyRate,
+    daysInMonth,
+    summary,
+    holidayDays = 0,
+    overtimeHourlyRate = 0,
+  } = options;
   const isDaily = payType === "daily";
   const dayRate = isDaily
     ? dailyRate
@@ -136,14 +146,18 @@ export function calculatePayroll(options: {
       : 0;
   const woDays = isDaily ? 0 : summary.woDays;
   const workedDays = summary.presentDays;
-  const paidDays = workedDays + woDays;
+  const paidHolidays = isDaily ? 0 : Math.max(0, holidayDays);
+  const paidDays = workedDays + woDays + paidHolidays;
+  const overtimePay = Math.round(summary.totalOvertimeHours * Math.max(0, overtimeHourlyRate) * 100) / 100;
   return {
     payType,
     dayRate,
     workedDays,
     woDays,
+    holidayDays: paidHolidays,
     paidDays,
     overtimeHours: summary.totalOvertimeHours,
+    overtimePay,
     basePay: Math.round(dayRate * paidDays * 100) / 100,
   };
 }

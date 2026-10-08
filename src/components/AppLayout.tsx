@@ -13,6 +13,7 @@ import {
   CalendarRange,
   MapPinned,
   Wallet,
+  Truck,
   FileSignature,
   FileWarning,
   BarChart3,
@@ -25,6 +26,7 @@ import {
   ClipboardCheck,
   UserCog,
   UserCircle2,
+  Smartphone,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
@@ -35,6 +37,7 @@ const nav = [
   { to: "/dashboard", label: "لوحة التحكم", icon: LayoutDashboard, access: "executive" },
   { to: "/attendance", label: "التقارير اليومية", icon: ClockIcon },
   { to: "/tasks", label: "مهامي اليومية", icon: ClipboardCheck },
+  { to: "/self-attendance", label: "الحضور الذاتي", icon: Smartphone },
   { to: "/team-follow-up", label: "متابعة الفريق", icon: Users },
   { to: "/projects", label: "تكلفة المواقع اليومية", icon: Wallet, access: "hr" },
   { to: "/monthly", label: "التقرير الشهري", icon: CalendarDays },
@@ -46,7 +49,9 @@ const nav = [
   { to: "/planning", label: "الخطط وتكلفة المشاريع", icon: BarChart3, access: "planning" },
   { to: "/sites", label: "المواقع", icon: MapPinned, access: "planning" },
   { to: "/wages", label: "الأجور", icon: Wallet, access: "hr" },
-  { to: "/payroll", label: "الرواتب", icon: Wallet, access: "hr" },  { to: "/devices", label: "الأجهزة", icon: Fingerprint },
+  { to: "/payroll", label: "الرواتب", icon: Wallet, access: "hr" },
+  { to: "/vehicles", label: "المركبات", icon: Truck, access: "hr" },
+  { to: "/devices", label: "الأجهزة", icon: Fingerprint },
   { to: "/upload", label: "رفع ملفات البصمة", icon: Upload },
   { to: "/files", label: "سجل الملفات", icon: FileBox },
   { to: "/settings", label: "الإعدادات", icon: Settings2, access: "admin" },

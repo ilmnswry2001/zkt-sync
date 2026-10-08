@@ -112,7 +112,7 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
     if (error) throw new Error(error.message);
     if (!emp) throw new Error("الموظف غير موجود");
 
-    const [logs, overrides, additions] = await Promise.all([
+    const [logs, overrides, additions, penalties] = await Promise.all([
       loadAllRows((from, to) =>
         supabase
           .from("attendance_logs")
@@ -143,6 +143,16 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
           .order("id")
           .range(from, to),
       ),
+      loadAllRows((from, to) =>
+        supabase
+          .from("employee_penalties")
+          .select("id, deduction_amount")
+          .eq("employee_id", data.employee_id)
+          .gte("penalty_date", start)
+          .lt("penalty_date", end.slice(0, 10))
+          .order("penalty_date")
+          .range(from, to),
+      ),
     ]);
     const payType = emp.pay_type === "daily" ? ("daily" as const) : ("monthly" as const);
     const days = buildAttendanceDays(
@@ -160,11 +170,14 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
     const pay = calculatePayroll({
       payType,
       monthlySalary: monthly,
-      dailyRate: Number(wage?.daily_rate ?? 0),
+      dailyRate: Number(wage?.daily_rate ?? (monthly ? monthly / 26 : 0)),
       daysInMonth: dates.length,
       summary,
+      holidayDays: days.filter((day) => day.status === "holiday").length,
+      overtimeHourlyRate: Number(wage?.overtime_hour_rate ?? 0),
     });
     const additionsTotal = additions.reduce((sum, a) => sum + Number(a.amount ?? 0), 0);
+    const deductionsTotal = penalties.reduce((sum, penalty) => sum + Number(penalty.deduction_amount ?? 0), 0);
 
     return {
       employee: emp,
@@ -176,7 +189,9 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
         monthly,
         additions,
         additionsTotal,
-        total: Math.round((pay.basePay + additionsTotal) * 100) / 100,
+        penalties,
+        deductionsTotal,
+        total: Math.round((pay.basePay + pay.overtimePay + additionsTotal - deductionsTotal) * 100) / 100,
         currency: wage?.currency ?? "IQD",
       },
     };

@@ -13,12 +13,14 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedWagesRouteImport } from './routes/_authenticated/wages'
+import { Route as AuthenticatedVehiclesRouteImport } from './routes/_authenticated/vehicles'
 import { Route as AuthenticatedUploadRouteImport } from './routes/_authenticated/upload'
 import { Route as AuthenticatedTeamTasksRouteImport } from './routes/_authenticated/team-tasks'
 import { Route as AuthenticatedTeamFollowUpRouteImport } from './routes/_authenticated/team-follow-up'
 import { Route as AuthenticatedTasksRouteImport } from './routes/_authenticated/tasks'
 import { Route as AuthenticatedSitesRouteImport } from './routes/_authenticated/sites'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedSelfAttendanceRouteImport } from './routes/_authenticated/self-attendance'
 import { Route as AuthenticatedProjectsRouteImport } from './routes/_authenticated/projects'
 import { Route as AuthenticatedProjectPlansRouteImport } from './routes/_authenticated/project-plans'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
@@ -55,6 +57,11 @@ const AuthenticatedWagesRoute = AuthenticatedWagesRouteImport.update({
   path: '/wages',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedVehiclesRoute = AuthenticatedVehiclesRouteImport.update({
+  id: '/vehicles',
+  path: '/vehicles',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedUploadRoute = AuthenticatedUploadRouteImport.update({
   id: '/upload',
   path: '/upload',
@@ -86,6 +93,12 @@ const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedSelfAttendanceRoute =
+  AuthenticatedSelfAttendanceRouteImport.update({
+    id: '/self-attendance',
+    path: '/self-attendance',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedProjectsRoute = AuthenticatedProjectsRouteImport.update({
   id: '/projects',
   path: '/projects',
@@ -188,12 +201,14 @@ export interface FileRoutesByFullPath {
   '/profile': typeof AuthenticatedProfileRoute
   '/project-plans': typeof AuthenticatedProjectPlansRoute
   '/projects': typeof AuthenticatedProjectsRoute
+  '/self-attendance': typeof AuthenticatedSelfAttendanceRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/sites': typeof AuthenticatedSitesRoute
   '/tasks': typeof AuthenticatedTasksRoute
   '/team-follow-up': typeof AuthenticatedTeamFollowUpRoute
   '/team-tasks': typeof AuthenticatedTeamTasksRoute
   '/upload': typeof AuthenticatedUploadRoute
+  '/vehicles': typeof AuthenticatedVehiclesRoute
   '/wages': typeof AuthenticatedWagesRoute
   '/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
 }
@@ -215,12 +230,14 @@ export interface FileRoutesByTo {
   '/profile': typeof AuthenticatedProfileRoute
   '/project-plans': typeof AuthenticatedProjectPlansRoute
   '/projects': typeof AuthenticatedProjectsRoute
+  '/self-attendance': typeof AuthenticatedSelfAttendanceRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/sites': typeof AuthenticatedSitesRoute
   '/tasks': typeof AuthenticatedTasksRoute
   '/team-follow-up': typeof AuthenticatedTeamFollowUpRoute
   '/team-tasks': typeof AuthenticatedTeamTasksRoute
   '/upload': typeof AuthenticatedUploadRoute
+  '/vehicles': typeof AuthenticatedVehiclesRoute
   '/wages': typeof AuthenticatedWagesRoute
   '/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
 }
@@ -244,12 +261,14 @@ export interface FileRoutesById {
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/project-plans': typeof AuthenticatedProjectPlansRoute
   '/_authenticated/projects': typeof AuthenticatedProjectsRoute
+  '/_authenticated/self-attendance': typeof AuthenticatedSelfAttendanceRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/sites': typeof AuthenticatedSitesRoute
   '/_authenticated/tasks': typeof AuthenticatedTasksRoute
   '/_authenticated/team-follow-up': typeof AuthenticatedTeamFollowUpRoute
   '/_authenticated/team-tasks': typeof AuthenticatedTeamTasksRoute
   '/_authenticated/upload': typeof AuthenticatedUploadRoute
+  '/_authenticated/vehicles': typeof AuthenticatedVehiclesRoute
   '/_authenticated/wages': typeof AuthenticatedWagesRoute
   '/_authenticated/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
 }
@@ -273,12 +292,14 @@ export interface FileRouteTypes {
     | '/profile'
     | '/project-plans'
     | '/projects'
+    | '/self-attendance'
     | '/settings'
     | '/sites'
     | '/tasks'
     | '/team-follow-up'
     | '/team-tasks'
     | '/upload'
+    | '/vehicles'
     | '/wages'
     | '/employees/$employeeId'
   fileRoutesByTo: FileRoutesByTo
@@ -300,12 +321,14 @@ export interface FileRouteTypes {
     | '/profile'
     | '/project-plans'
     | '/projects'
+    | '/self-attendance'
     | '/settings'
     | '/sites'
     | '/tasks'
     | '/team-follow-up'
     | '/team-tasks'
     | '/upload'
+    | '/vehicles'
     | '/wages'
     | '/employees/$employeeId'
   id:
@@ -328,12 +351,14 @@ export interface FileRouteTypes {
     | '/_authenticated/profile'
     | '/_authenticated/project-plans'
     | '/_authenticated/projects'
+    | '/_authenticated/self-attendance'
     | '/_authenticated/settings'
     | '/_authenticated/sites'
     | '/_authenticated/tasks'
     | '/_authenticated/team-follow-up'
     | '/_authenticated/team-tasks'
     | '/_authenticated/upload'
+    | '/_authenticated/vehicles'
     | '/_authenticated/wages'
     | '/_authenticated/employees/$employeeId'
   fileRoutesById: FileRoutesById
@@ -372,6 +397,13 @@ declare module '@tanstack/react-router' {
       path: '/wages'
       fullPath: '/wages'
       preLoaderRoute: typeof AuthenticatedWagesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/vehicles': {
+      id: '/_authenticated/vehicles'
+      path: '/vehicles'
+      fullPath: '/vehicles'
+      preLoaderRoute: typeof AuthenticatedVehiclesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/upload': {
@@ -414,6 +446,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/self-attendance': {
+      id: '/_authenticated/self-attendance'
+      path: '/self-attendance'
+      fullPath: '/self-attendance'
+      preLoaderRoute: typeof AuthenticatedSelfAttendanceRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/projects': {
@@ -562,12 +601,14 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedProjectPlansRoute: typeof AuthenticatedProjectPlansRoute
   AuthenticatedProjectsRoute: typeof AuthenticatedProjectsRoute
+  AuthenticatedSelfAttendanceRoute: typeof AuthenticatedSelfAttendanceRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedSitesRoute: typeof AuthenticatedSitesRoute
   AuthenticatedTasksRoute: typeof AuthenticatedTasksRoute
   AuthenticatedTeamFollowUpRoute: typeof AuthenticatedTeamFollowUpRoute
   AuthenticatedTeamTasksRoute: typeof AuthenticatedTeamTasksRoute
   AuthenticatedUploadRoute: typeof AuthenticatedUploadRoute
+  AuthenticatedVehiclesRoute: typeof AuthenticatedVehiclesRoute
   AuthenticatedWagesRoute: typeof AuthenticatedWagesRoute
 }
 
@@ -587,12 +628,14 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedProjectPlansRoute: AuthenticatedProjectPlansRoute,
   AuthenticatedProjectsRoute: AuthenticatedProjectsRoute,
+  AuthenticatedSelfAttendanceRoute: AuthenticatedSelfAttendanceRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedSitesRoute: AuthenticatedSitesRoute,
   AuthenticatedTasksRoute: AuthenticatedTasksRoute,
   AuthenticatedTeamFollowUpRoute: AuthenticatedTeamFollowUpRoute,
   AuthenticatedTeamTasksRoute: AuthenticatedTeamTasksRoute,
   AuthenticatedUploadRoute: AuthenticatedUploadRoute,
+  AuthenticatedVehiclesRoute: AuthenticatedVehiclesRoute,
   AuthenticatedWagesRoute: AuthenticatedWagesRoute,
 }
 

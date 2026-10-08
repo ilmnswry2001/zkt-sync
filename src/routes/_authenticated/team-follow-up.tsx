@@ -46,6 +46,10 @@ import {
   ListChecks,
   Eye,
   Save,
+  Send,
+  Sparkles,
+  Megaphone,
+  CalendarDays,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/team-follow-up")({
@@ -94,22 +98,29 @@ type TeamTask = {
   task_date: string;
   title: string;
   description: string | null;
-  status: "completed" | "in_progress";
+  status: "not_started" | "in_progress" | "completed" | "overdue" | "cancelled" | "pending_review" | "needs_follow_up";
   duration_minutes: number;
   created_by: string;
   employee_id: string | null;
   department_id: string | null;
   manager_note: string | null;
+  task_type?: string | null;
+  priority?: string | null;
+  due_date?: string | null;
+};
+type TeamTaskTemplate = {
+  id: string;
+  title: string;
+  description: string | null;
+  recurrence_rule: string;
+  priority: string;
+  start_date: string;
+  end_date: string | null;
+  scheduled_time: string | null;
+  active: boolean;
+  department_id: string;
 };
 type Profile = { id: string; full_name: string | null; email: string | null };
-type GuidanceNote = {
-  id: string;
-  department_id: string | null;
-  note_date: string;
-  content: string;
-  author_id: string;
-  created_at: string;
-};
 type MemberTaskStats = {
   userId: string;
   profile: Profile | undefined;
@@ -191,10 +202,22 @@ function TeamFollowUpPage() {
   const [departmentId, setDepartmentId] = useState("all");
   const [detailsMember, setDetailsMember] = useState<MemberDetails | null>(null);
   const [taskNotes, setTaskNotes] = useState<Record<string, string>>({});
-  const [generalNote, setGeneralNote] = useState("");
+  const [guidanceRecipient, setGuidanceRecipient] = useState("all");
+  const [guidanceTitle, setGuidanceTitle] = useState("");
+  const [guidanceContent, setGuidanceContent] = useState("");
+  const [isSendingGuidance, setIsSendingGuidance] = useState(false);
   const [activeTab, setActiveTab] = useState("tasks");
   const [evaluationEmployee, setEvaluationEmployee] = useState<Employee | null>(null);
   const [evaluationScore, setEvaluationScore] = useState("");
+  const [templateForm, setTemplateForm] = useState({
+    title: "",
+    description: "",
+    recurrenceRule: "daily",
+    priority: "normal",
+    startDate: today,
+    endDate: "",
+    scheduledTime: "",
+  });
   const canSeeAll = isAdmin || isHR;
 
   const departmentsQuery = useQuery({
@@ -333,6 +356,22 @@ function TeamFollowUpPage() {
       return (data ?? []) as Profile[];
     },
   });
+  const taskTemplatesQuery = useQuery({
+    queryKey: ["team-follow-up-task-templates", allowedDepartmentIds, effectiveDepartmentId],
+    enabled: activeTab === "scheduled" && allowedDepartmentIds.length > 0,
+    queryFn: async () => {
+      let query = (supabase as unknown as { from: (table: string) => any })
+        .from("team_task_templates")
+        .select("id, title, description, recurrence_rule, priority, start_date, end_date, scheduled_time, active, department_id")
+        .eq("active", true)
+        .order("start_date", { ascending: false });
+      if (effectiveDepartmentId !== "all") query = query.eq("department_id", effectiveDepartmentId);
+      else query = query.in("department_id", allowedDepartmentIds);
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data ?? []) as TeamTaskTemplate[];
+    },
+  });
   const teamTasks = teamTasksQuery.data ?? [];
   useEffect(() => {
     const channel = supabase
@@ -354,7 +393,6 @@ function TeamFollowUpPage() {
     };
   }, [allowedDepartmentIds, canSeeAll, queryClient, user?.id]);
   const profileById = new Map((profilesQuery.data ?? []).map((profile) => [profile.id, profile]));
-  const dailyTasks = teamTasks.filter((task) => task.task_date === date);
   const profileByEmail = new Map(
     (profilesQuery.data ?? [])
       .filter((profile) => profile.email)
@@ -375,6 +413,46 @@ function TeamFollowUpPage() {
     if (canSeeAll || !isDepartmentManager) return true;
     return findProfileForEmployee(employee)?.id !== user?.id;
   });
+  const visibleEmployeeIds = new Set(teamVisibleEmployees.map((employee) => employee.id));
+  const visibleEmployeeProfileIds = new Set(
+    teamVisibleEmployees.map((employee) => findProfileForEmployee(employee)?.id).filter(Boolean),
+  );
+  const scopedTeamTasks = teamTasks.filter((task) =>
+    task.employee_id ? visibleEmployeeIds.has(task.employee_id) : visibleEmployeeProfileIds.has(task.created_by),
+  );
+  const dailyTasks = scopedTeamTasks.filter((task) => task.task_date === date);
+  const guidanceRecipients = [...new Map(
+    teamVisibleEmployees.flatMap((employee) => {
+      const emailProfile = employee.email
+        ? profileByEmail.get(employee.email.trim().toLowerCase())
+        : undefined;
+      const normalizedName = normalizeArabic(employee.full_name);
+      const sameNameEmployees = employees.filter(
+        (candidate) =>
+          candidate.department_id === employee.department_id &&
+          normalizeArabic(candidate.full_name) === normalizedName,
+      );
+      const sameNameProfiles = (profilesQuery.data ?? []).filter(
+        (candidate) => normalizeArabic(candidate.full_name ?? "") === normalizedName,
+      );
+      const profile = emailProfile ?? (
+        normalizedName && sameNameEmployees.length === 1 && sameNameProfiles.length === 1
+          ? sameNameProfiles[0]
+          : undefined
+      );
+      return profile && profile.id !== user?.id
+        ? [[profile.id, {
+            employeeId: employee.id,
+            userId: profile.id,
+            name: employee.full_name,
+            departmentId: employee.department_id,
+          }] as const]
+        : [];
+    }),
+  ).values()];
+  const guidanceDepartmentForView = effectiveDepartmentId === "all"
+    ? allowedDepartmentIds.length === 1 ? allowedDepartmentIds[0] : null
+    : effectiveDepartmentId;
   const employeeIds = visibleEmployees.map((employee) => employee.id);
   const attendanceMonthQuery = useQuery({
     queryKey: ["team-follow-up-attendance", employeeIds, monthStart, monthEnd],
@@ -480,26 +558,59 @@ function TeamFollowUpPage() {
         : "تم حفظ التقييم بدون مكافأة",
     );
   };
-  const guidanceDepartmentId =
-    effectiveDepartmentId === "all" ? (allowedDepartmentIds[0] ?? null) : effectiveDepartmentId;
-  const guidanceQuery = useQuery({
-    queryKey: ["team-follow-up-guidance", guidanceDepartmentId, date],
-    enabled: Boolean(guidanceDepartmentId),
-    queryFn: async () => {
-      const { data, error } = await (supabase as unknown as { from: (table: string) => any })
-        .from("team_guidance_notes")
-        .select("id, department_id, note_date, content, author_id, created_at")
-        .eq("department_id", guidanceDepartmentId)
-        .eq("note_date", date)
-        .order("created_at", { ascending: false })
-        .limit(1);
-      if (error) throw error;
-      return ((data ?? [])[0] ?? null) as GuidanceNote | null;
-    },
-  });
-  useEffect(() => {
-    setGeneralNote(guidanceQuery.data?.content ?? "");
-  }, [guidanceQuery.data?.id, guidanceQuery.data?.content]);
+  const sendGuidance = async () => {
+    if (!user || !isDepartmentManager) return toast.error("إرسال التوجيه متاح لرئيس القسم فقط");
+    const title = guidanceTitle.trim();
+    const content = guidanceContent.trim();
+    if (title.length < 2) return toast.error("اكتب عنوان التوجيه بوضوح");
+    if (!content) return toast.error("اكتب محتوى التوجيه قبل الإرسال");
+    if (content.length > 5000) return toast.error("يجب ألا يتجاوز التوجيه 5000 حرف");
+    const selected = guidanceRecipient === "all"
+      ? guidanceRecipients
+      : guidanceRecipients.filter((recipient) => recipient.userId === guidanceRecipient);
+    if (!selected.length) return toast.error("لا توجد حسابات موظفين مرتبطة بالقسم المحدد");
+
+    setIsSendingGuidance(true);
+    try {
+      const payload = selected.map((recipient) => ({
+        department_id: recipient.departmentId,
+        target_user_id: recipient.userId,
+        target_employee_id: recipient.employeeId,
+        title,
+        content,
+        guidance_date: date,
+        author_id: user.id,
+      }));
+      const guidanceClient = supabase as unknown as {
+        from: (table: "employee_guidance_notes") => {
+          insert: (rows: typeof payload) => {
+            select: (columns: "id") => Promise<{
+              data: { id: string }[] | null;
+              error: { message: string } | null;
+            }>;
+          };
+        };
+      };
+      const { data, error } = await guidanceClient
+        .from("employee_guidance_notes")
+        .insert(payload)
+        .select("id");
+      if (error) return toast.error(`تعذر إرسال التوجيه: ${error.message}`);
+      if (!data || data.length !== selected.length) {
+        return toast.error("لم يتم تأكيد حفظ التوجيه لكل المستلمين؛ تحقق من ربط حسابات الموظفين.");
+      }
+      setGuidanceTitle("");
+      setGuidanceContent("");
+      await queryClient.invalidateQueries({ queryKey: ["employee-guidance"] });
+      toast.success(guidanceRecipient === "all"
+        ? `تم إرسال التوجيه إلى ${selected.length} من موظفي النطاق المحدد`
+        : "تم إرسال التوجيه إلى الموظف المحدد");
+    } catch (error) {
+      toast.error(`تعذر إرسال التوجيه: ${error instanceof Error ? error.message : "حدث خطأ غير متوقع"}`);
+    } finally {
+      setIsSendingGuidance(false);
+    }
+  };
   const updateTaskNote = async (task: TeamTask) => {
     const managerNote = taskNotes[task.id] ?? task.manager_note ?? "";
     const { error } = await (supabase as unknown as { from: (table: string) => any })
@@ -510,28 +621,31 @@ function TeamFollowUpPage() {
     await queryClient.invalidateQueries({ queryKey: ["team-follow-up-tasks"] });
     toast.success("تم حفظ ملاحظة المهمة");
   };
-  const saveGeneralNote = async () => {
-    if (!guidanceDepartmentId) return toast.error("لا يوجد قسم محدد لحفظ التوجيه");
-    const client = supabase as unknown as { from: (table: string) => any };
+  const createTaskTemplate = async () => {
+    const title = templateForm.title.trim();
+    const targetDepartment = effectiveDepartmentId === "all" ? allowedDepartmentIds[0] : effectiveDepartmentId;
+    if (!title || title.length < 2) return toast.error("اكتب اسم القالب بوضوح");
+    if (!targetDepartment) return toast.error("اختر قسماً لإنشاء القالب");
     const { data: authData } = await supabase.auth.getUser();
     if (!authData.user) return toast.error("يجب تسجيل الدخول أولاً");
-    const payload = {
-      department_id: guidanceDepartmentId,
-      note_date: date,
-      content: generalNote.trim(),
-      author_id: authData.user.id,
-    };
-    const result = guidanceQuery.data?.id
-      ? await client
-          .from("team_guidance_notes")
-          .update({ content: payload.content })
-          .eq("id", guidanceQuery.data.id)
-      : await client.from("team_guidance_notes").insert(payload);
-    if (result.error) return toast.error(`تعذر حفظ التوجيه العام: ${result.error.message}`);
-    await queryClient.invalidateQueries({ queryKey: ["team-follow-up-guidance"] });
-    toast.success("تم حفظ التوجيه العام للفريق");
+    const client = supabase as unknown as { from: (table: string) => any };
+    const { error } = await client.from("team_task_templates").insert({
+      department_id: targetDepartment,
+      title,
+      description: templateForm.description.trim() || null,
+      recurrence_rule: templateForm.recurrenceRule,
+      priority: templateForm.priority,
+      start_date: templateForm.startDate,
+      end_date: templateForm.endDate || null,
+      scheduled_time: templateForm.scheduledTime || null,
+      assignee_employee_ids: [],
+      created_by: authData.user.id,
+    });
+    if (error) return toast.error(`تعذر حفظ القالب: ${error.message}`);
+    setTemplateForm({ title: "", description: "", recurrenceRule: "daily", priority: "normal", startDate: today, endDate: "", scheduledTime: "" });
+    await taskTemplatesQuery.refetch();
+    toast.success("تم حفظ المهمة المجدولة");
   };
-
   const siteRows = siteIds
     .map((siteId) => {
       const team = visibleEmployees.filter((employee) => employee.site_id === siteId);
@@ -550,7 +664,7 @@ function TeamFollowUpPage() {
     profilesQuery,
     attendanceMonthQuery,
     evaluationsQuery,
-    guidanceQuery,
+    ...(activeTab === "scheduled" ? [taskTemplatesQuery] : []),
   ];
   const pageError = queryErrors.find((query) => query.isError);
   const isPageLoading = queryErrors.some((query) => query.isLoading);
@@ -576,7 +690,7 @@ function TeamFollowUpPage() {
       profilesQuery.refetch(),
       attendanceMonthQuery.refetch(),
       evaluationsQuery.refetch(),
-      guidanceQuery.refetch(),
+      ...(activeTab === "scheduled" ? [taskTemplatesQuery.refetch()] : []),
     ]);
   };
 
@@ -891,26 +1005,26 @@ function TeamFollowUpPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold">متابعة الفريق</h1>
-          <p className="text-muted-foreground mt-1">
-            لوحة متابعة الموظفين الإداريين وتقارير المواقع والملاحظات اليومية
-          </p>
+      <section className="relative isolate overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-teal-950 to-emerald-900 px-6 py-7 text-white shadow-xl shadow-teal-950/10 sm:px-8">
+        <div className="pointer-events-none absolute -left-10 -top-24 h-72 w-72 rounded-full bg-cyan-400/15 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-36 right-1/4 h-72 w-72 rounded-full bg-emerald-300/15 blur-3xl" />
+        <div className="relative flex flex-wrap items-end justify-between gap-5">
+          <div>
+            <Badge className="mb-3 border-white/20 bg-white/10 text-white hover:bg-white/10"><Sparkles className="ml-1.5 h-3.5 w-3.5" /> مركز قيادة الفريق</Badge>
+            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">متابعة الفريق</h1>
+            <p className="mt-2 max-w-2xl text-sm text-teal-50/80 sm:text-base">صورة يومية واضحة للمهام والإنجازات والحضور، مع أدوات عملية لتوجيه الفريق ومتابعة المواقع.</p>
+          </div>
+          <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3 backdrop-blur-sm">
+            <p className="text-xs text-teal-50/70">صلاحية العرض</p>
+            <p className="mt-1 font-semibold">{canSeeAll ? "مدير النظام / الموارد البشرية" : isDepartmentManager ? "رئيس القسم" : roles.includes("supervisor") ? "مشرف" : "مشاهدة محدودة"}</p>
+          </div>
         </div>
-        <Badge variant="outline">
-          الصلاحية:{" "}
-          {canSeeAll
-            ? "مدير النظام / الموارد البشرية"
-            : isDepartmentManager
-              ? "مدير القسم"
-              : roles.includes("supervisor")
-                ? "مشرف"
-                : "مشاهدة محدودة"}
-        </Badge>
-      </div>
-      <Card>
-        <CardContent className="p-4 flex flex-wrap items-end gap-4">
+        <div className="relative mt-6 grid grid-cols-2 gap-3 border-t border-white/15 pt-5 sm:grid-cols-4">
+          {[["أفراد الفريق", teamVisibleEmployees.length], ["مهام اليوم", dailyTasks.length], ["المواقع", siteIds.length], ["تغطية التقارير", `${reportCoverage}%`]].map(([label, value]) => <div key={String(label)} className="rounded-xl bg-white/[0.07] px-4 py-3"><p className="text-xs text-teal-50/70">{label}</p><p className="mt-1 text-2xl font-bold">{value}</p></div>)}
+        </div>
+      </section>
+      <Card className="overflow-hidden rounded-2xl border-slate-200/80 shadow-sm dark:border-slate-800">
+        <CardContent className="flex flex-wrap items-end gap-4 p-4 sm:p-5">
           <div className="w-full sm:w-64">
             <Label>القسم</Label>
             <Select value={effectiveDepartmentId} onValueChange={setDepartmentId}>
@@ -944,12 +1058,14 @@ function TeamFollowUpPage() {
           </Button>
         </CardContent>
       </Card>
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid h-auto w-full grid-cols-4">
-          <TabsTrigger value="tasks">مهام الفريق</TabsTrigger>
-          <TabsTrigger value="stats">الإحصائيات</TabsTrigger>
-          <TabsTrigger value="team">فريقي</TabsTrigger>
-          <TabsTrigger value="evaluation">تقييم الموظفين</TabsTrigger>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
+        <TabsList className={`grid h-auto w-full ${isDepartmentManager ? "grid-cols-2 sm:grid-cols-6" : "grid-cols-2 sm:grid-cols-5"} gap-1 rounded-2xl border bg-muted/60 p-1.5`}>
+          <TabsTrigger className="rounded-xl py-2.5" value="tasks">مهام الفريق</TabsTrigger>
+          <TabsTrigger className="rounded-xl py-2.5" value="scheduled">المهام المجدولة</TabsTrigger>
+          <TabsTrigger className="rounded-xl py-2.5" value="stats">الإحصائيات</TabsTrigger>
+          <TabsTrigger className="rounded-xl py-2.5" value="team">المتابعة اليومية</TabsTrigger>
+          <TabsTrigger className="rounded-xl py-2.5" value="evaluation">تقييم الموظفين</TabsTrigger>
+          {isDepartmentManager && <TabsTrigger className="rounded-xl py-2.5" value="guidance">إرسال التوجيه</TabsTrigger>}
         </TabsList>
         <TabsContent value="tasks" className="space-y-5">
           <Card className="border-primary/20">
@@ -964,6 +1080,57 @@ function TeamFollowUpPage() {
             <CardContent className="space-y-5">{tasks}</CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="scheduled" className="space-y-5">
+          <Card className="border-primary/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><CalendarDays className="h-5 w-5 text-primary" /> إنشاء مهمة متكررة</CardTitle>
+              <p className="text-sm text-muted-foreground">أنشئ قالباً يومياً أو أسبوعياً ليظهر ضمن جدول مهام القسم.</p>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <div className="lg:col-span-2"><Label>اسم المهمة</Label><Input className="mt-2" value={templateForm.title} onChange={(event) => setTemplateForm((current) => ({ ...current, title: event.target.value }))} placeholder="مثال: مراجعة التقرير اليومي" /></div>
+              <div><Label>التكرار</Label><select className="mt-2 flex h-10 w-full rounded-md border bg-background px-3 text-sm" value={templateForm.recurrenceRule} onChange={(event) => setTemplateForm((current) => ({ ...current, recurrenceRule: event.target.value }))}><option value="daily">يومياً</option><option value="weekdays">أيام العمل</option><option value="weekly">أسبوعياً</option><option value="monthly">شهرياً</option><option value="interval">كل فترة</option></select></div>
+              <div><Label>الأولوية</Label><select className="mt-2 flex h-10 w-full rounded-md border bg-background px-3 text-sm" value={templateForm.priority} onChange={(event) => setTemplateForm((current) => ({ ...current, priority: event.target.value }))}><option value="normal">عادية</option><option value="low">منخفضة</option><option value="high">عالية</option><option value="urgent">عاجلة</option></select></div>
+              <div className="lg:col-span-2"><Label>الوصف</Label><Textarea className="mt-2" value={templateForm.description} onChange={(event) => setTemplateForm((current) => ({ ...current, description: event.target.value }))} placeholder="تفاصيل المهمة المتكررة" rows={2} /></div>
+              <div><Label>تاريخ البدء</Label><Input className="mt-2" type="date" value={templateForm.startDate} onChange={(event) => setTemplateForm((current) => ({ ...current, startDate: event.target.value }))} /></div>
+              <div><Label>تاريخ الانتهاء</Label><Input className="mt-2" type="date" value={templateForm.endDate} onChange={(event) => setTemplateForm((current) => ({ ...current, endDate: event.target.value }))} /></div>
+              <div><Label>الوقت</Label><Input className="mt-2" type="time" value={templateForm.scheduledTime} onChange={(event) => setTemplateForm((current) => ({ ...current, scheduledTime: event.target.value }))} /></div>
+              <div className="flex items-end"><Button className="w-full" onClick={() => void createTaskTemplate()} disabled={!canSeeAll && !isDepartmentManager}><CalendarDays className="ml-2 h-4 w-4" /> حفظ الجدولة</Button></div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>القوالب النشطة</CardTitle></CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {(taskTemplatesQuery.data ?? []).map((template) => <div key={template.id} className="rounded-xl border p-4"><div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold">{template.title}</h3><p className="mt-1 text-xs text-muted-foreground">{template.description || "بدون وصف"}</p></div><Badge variant="outline">{template.recurrence_rule === "daily" ? "يومي" : template.recurrence_rule === "weekly" ? "أسبوعي" : template.recurrence_rule === "monthly" ? "شهري" : template.recurrence_rule}</Badge></div><p className="mt-3 text-xs text-muted-foreground">يبدأ {template.start_date}{template.end_date ? ` وينتهي ${template.end_date}` : ""}{template.scheduled_time ? ` · الساعة ${template.scheduled_time}` : ""}</p></div>)}
+              {!taskTemplatesQuery.isLoading && !taskTemplatesQuery.data?.length && <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground md:col-span-2 xl:col-span-3">لا توجد مهام مجدولة لهذا النطاق. أنشئ أول قالب من النموذج أعلاه.</div>}
+              {taskTemplatesQuery.isError && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 md:col-span-2 xl:col-span-3">تعذر قراءة القوالب. تأكد من تنفيذ Migration `20261004120000_team_management_workflow.sql` في Lovable/Supabase.</div>}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {isDepartmentManager && <TabsContent value="guidance" className="space-y-5">
+          <Card className="overflow-hidden rounded-3xl border-0 bg-gradient-to-br from-teal-950 via-teal-900 to-emerald-800 text-white shadow-xl">
+            <CardHeader className="border-b border-white/10 pb-5">
+              <Badge className="w-fit border-white/20 bg-white/10 text-white hover:bg-white/10"><Megaphone className="ml-1.5 h-3.5 w-3.5" /> توجيه رئيس القسم</Badge>
+              <CardTitle className="mt-3 text-2xl">وجّه فريقك بوضوح</CardTitle>
+              <p className="text-sm text-teal-50/75">أرسل تعليمات اليوم إلى كامل الفريق أو موظف محدد. ستظهر الرسالة في تبويب التوجيهات ضمن مهامي اليومية.</p>
+            </CardHeader>
+            <CardContent className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+              <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.06] p-4">
+                <div><p className="text-xs text-teal-50/70">نطاق الإرسال</p><p className="mt-1 font-semibold">{guidanceDepartmentForView ? departmentById.get(guidanceDepartmentForView)?.name ?? "القسم المعيّن" : "الأقسام المعيّنة لك"}</p></div>
+                <div><Label htmlFor="team-guidance-recipient" className="text-white">إرسال إلى</Label><select id="team-guidance-recipient" className="mt-2 flex h-11 w-full rounded-xl border border-white/15 bg-slate-950/35 px-3 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-300" value={guidanceRecipient} onChange={(event) => setGuidanceRecipient(event.target.value)}><option className="text-slate-900" value="all">جميع موظفي النطاق ({guidanceRecipients.length})</option>{guidanceRecipients.map((recipient) => <option className="text-slate-900" key={recipient.userId} value={recipient.userId}>{recipient.name}</option>)}</select></div>
+                <div className="rounded-xl bg-white/[0.07] p-3 text-sm text-teal-50/80"><Users className="ml-2 inline h-4 w-4" />{guidanceRecipient === "all" ? `${guidanceRecipients.length} موظف مرتبط بحساب` : "سيصل التوجيه إلى الموظف المحدد"}</div>
+                {!profilesQuery.isLoading && !employeesQuery.isLoading && guidanceRecipients.length === 0 && <p className="text-xs leading-5 text-amber-100">تعذر ربط حسابات الموظفين بهذا النطاق. يلزم تطابق البريد أو اسم فريد بين حساب المستخدم وسجل الموظف.</p>}
+                {teamVisibleEmployees.length > guidanceRecipients.length && <p className="text-xs leading-5 text-amber-100">لن تظهر التوجيهات إلا للحسابات المرتبطة ببريد مطابق أو باسم فريد؛ الأسماء المتكررة تحتاج ربط البريد لتجنب إرسالها إلى حساب خاطئ.</p>}
+              </div>
+              <div className="space-y-4 rounded-2xl bg-white p-4 text-slate-900 sm:p-5">
+                <div><Label htmlFor="team-guidance-title">عنوان التوجيه</Label><Input id="team-guidance-title" value={guidanceTitle} onChange={(event) => setGuidanceTitle(event.target.value)} placeholder="مثال: أولويات العمل لهذا اليوم" maxLength={200} className="mt-2 h-11 rounded-xl" /></div>
+                <div><div className="flex items-center justify-between gap-2"><Label htmlFor="team-guidance-content">التعليمات</Label><span className="text-xs text-muted-foreground">{guidanceContent.length}/5000</span></div><Textarea id="team-guidance-content" value={guidanceContent} onChange={(event) => setGuidanceContent(event.target.value)} placeholder="اكتب التوجيه بوضوح، وحدد الأولويات والإجراءات المطلوبة..." maxLength={5000} className="mt-2 min-h-36 resize-y rounded-xl" /></div>
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4"><span className="text-xs text-muted-foreground">سيُحفظ بتاريخ {date}</span><Button onClick={() => void sendGuidance()} disabled={isSendingGuidance || profilesQuery.isLoading || employeesQuery.isLoading || !guidanceRecipients.length} className="bg-gradient-to-l from-teal-700 to-emerald-600 font-semibold text-white shadow-md shadow-teal-900/15 hover:from-teal-800 hover:to-emerald-700">{isSendingGuidance ? <><Clock3 className="ml-2 h-4 w-4 animate-spin" /> جارٍ الإرسال</> : <><Send className="ml-2 h-4 w-4" /> إرسال التوجيه</>}</Button></div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>}
 
         <TabsContent value="stats" className="space-y-5">
           <Card>
@@ -1101,7 +1268,7 @@ function TeamFollowUpPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-primary" /> فريق القسم
+                <Users className="h-5 w-5 text-primary" /> المتابعة اليومية للفريق
               </CardTitle>
               <p className="text-sm text-muted-foreground">
                 أسماء الموظفين المسندين إلى هذا القسم فقط، مع بطاقة مختصرة وتقييمهم وسجل مهامهم.

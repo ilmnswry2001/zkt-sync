@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { permissionsDb } from "@/lib/permissions-client";
@@ -22,6 +22,8 @@ import {
   Loader2,
   Plus,
   Trash2,
+  Send,
+  Megaphone,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -50,7 +52,9 @@ type GuidanceNote = {
   guidance_date: string;
   created_at: string;
   read_at: string | null;
+  target_user_id: string;
 };
+type GuidanceProfile = { id: string; full_name: string | null; email: string | null };
 
 const today = new Date().toISOString().slice(0, 10);
 const normalizePersonName = (value: string = "") =>
@@ -116,13 +120,15 @@ function EmployeeTasksPage() {
     },
   });
   const currentEmployee = currentEmployeeQuery.data;
-  const isDepartmentManager = roles.includes("department_manager");
   const [activeTab, setActiveTab] = useState<"daily" | "archive" | "guidance">("daily");
   const [selectedDate, setSelectedDate] = useState(today);
   const [archiveFrom, setArchiveFrom] = useState("");
   const [archiveTo, setArchiveTo] = useState("");
   const [form, setForm] = useState(emptyForm);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [guidanceDepartmentId, setGuidanceDepartmentId] = useState("");
+  const [departmentGuidanceContent, setDepartmentGuidanceContent] = useState("");
+  const [isSendingDepartmentGuidance, setIsSendingDepartmentGuidance] = useState(false);
   const departmentsQuery = useQuery({
     queryKey: ["employee-tasks", "assigned-departments", user?.id],
     enabled: Boolean(user),
@@ -136,77 +142,101 @@ function EmployeeTasksPage() {
     },
   });
   const assignedDepartmentId = departmentsQuery.data?.[0] ?? null;
-  const guidanceQuery = useQuery({
-    queryKey: ["employee-guidance", user?.id],
-    enabled: Boolean(user) && activeTab === "guidance",
+  const guidanceDepartmentsQuery = useQuery({
+    queryKey: ["employee-tasks", "guidance-departments"],
+    enabled: isAdmin || isHR,
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase.from("departments").select("id, name").order("name");
+      if (error) throw error;
+      return (data ?? []) as { id: string; name: string }[];
+    },
+  });
+  const guidanceDepartments = guidanceDepartmentsQuery.data ?? [];
+  const selectedGuidanceDepartmentId = guidanceDepartments.some((department) => department.id === guidanceDepartmentId)
+    ? guidanceDepartmentId
+    : guidanceDepartments[0]?.id ?? "";
+  const departmentGuidanceQuery = useQuery({
+    queryKey: ["employee-tasks", "department-guidance", selectedGuidanceDepartmentId, selectedDate],
+    enabled: Boolean((isAdmin || isHR) && selectedGuidanceDepartmentId),
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from("team_guidance_notes").select("id, content")
+        .eq("department_id", selectedGuidanceDepartmentId).eq("note_date", selectedDate).maybeSingle();
+      if (error) throw error;
+      return data as { id: string; content: string } | null;
+    },
+  });
+  useEffect(() => setDepartmentGuidanceContent(departmentGuidanceQuery.data?.content ?? ""), [departmentGuidanceQuery.data?.id, departmentGuidanceQuery.data?.content]);
+  const sendDepartmentGuidance = async () => {
+    const content = departmentGuidanceContent.trim();
+    if (!selectedGuidanceDepartmentId) return toast.error("اختر القسم أولاً");
+    if (!content) return toast.error("اكتب نص التوجيه قبل إرساله");
+    if (content.length > 3000) return toast.error("يجب ألا يتجاوز التوجيه 3000 حرف");
+    if (!user) return toast.error("يجب تسجيل الدخول أولاً");
+    setIsSendingDepartmentGuidance(true);
+    try {
+      const client = supabase as any;
+      const result = departmentGuidanceQuery.data?.id
+        ? await client.from("team_guidance_notes").update({ content }).eq("id", departmentGuidanceQuery.data.id)
+        : await client.from("team_guidance_notes").insert({ department_id: selectedGuidanceDepartmentId, note_date: selectedDate, content, author_id: user.id });
+      if (result.error) return toast.error(`تعذر إرسال التوجيه: ${result.error.message}`);
+      await queryClient.invalidateQueries({ queryKey: ["employee-tasks", "department-guidance"] });
+      toast.success("تم إرسال التوجيه إلى القسم");
+    } finally {
+      setIsSendingDepartmentGuidance(false);
+    }
+  };
+  const guidanceQuery = useQuery({
+    queryKey: ["employee-guidance", isAdmin ? "all" : user?.id],
+    enabled: Boolean(user) && activeTab === "guidance",
+    refetchInterval: activeTab === "guidance" ? 30_000 : false,
+    refetchOnWindowFocus: true,
+    queryFn: async () => {
+      let query = (supabase as any)
         .from("employee_guidance_notes")
-        .select("id, title, content, guidance_date, created_at, read_at")
-        .eq("target_user_id", user!.id)
-        .order("created_at", { ascending: false });
+        .select("id, title, content, guidance_date, created_at, read_at, target_user_id")
+        .order("created_at", { ascending: false })
+        .limit(500);
+      if (!isAdmin) query = query.eq("target_user_id", user!.id);
+      const { data, error } = await query;
       if (error) throw error;
       return (data ?? []) as GuidanceNote[];
     },
   });
-  const managerDepartmentsQuery = useQuery({
-    queryKey: ["employee-guidance", "manager-departments", user?.id],
-    enabled: Boolean(user) && isDepartmentManager,
+
+  const guidanceProfilesQuery = useQuery({
+    queryKey: ["employee-guidance", "profiles"],
+    enabled: isAdmin && activeTab === "guidance",
     queryFn: async () => {
-      const [assigned, managed] = await Promise.all([
-        permissionsDb.from("user_departments").select("department_id").eq("user_id", user!.id),
-        permissionsDb.from("department_managers").select("department_id").eq("user_id", user!.id),
-      ]);
-      if (assigned.error) throw assigned.error;
-      if (managed.error) throw managed.error;
-      return [
-        ...new Set(
-          [...(assigned.data ?? []), ...(managed.data ?? [])].map(
-            (row) => row.department_id as string,
-          ),
-        ),
-      ];
+      const { data, error } = await supabase.from("profiles").select("id, full_name, email");
+      if (error) throw error;
+      return (data ?? []) as GuidanceProfile[];
     },
   });
-  const managerDepartmentIds = managerDepartmentsQuery.data ?? [];
-  const guidanceEmployeesQuery = useQuery({
-    queryKey: ["employee-guidance", "employees", managerDepartmentIds],
-    enabled: isDepartmentManager && managerDepartmentIds.length > 0,
-    queryFn: async () => {
-      const [{ data: employees, error: employeesError }, { data: profiles, error: profilesError }] =
-        await Promise.all([
-          supabase
-            .from("employees")
-            .select("id, full_name, email, department_id")
-            .eq("status", "active")
-            .in("department_id", managerDepartmentIds),
-          supabase.from("profiles").select("id, full_name, email"),
-        ]);
-      if (employeesError) throw employeesError;
-      if (profilesError) throw profilesError;
-      return (employees ?? []).flatMap((employee) => {
-        const email = employee.email?.trim().toLowerCase();
-        const profile = (profiles ?? []).find(
-          (item) =>
-            (email && item.email?.trim().toLowerCase() === email) ||
-            normalizePersonName(item.full_name ?? "") === normalizePersonName(employee.full_name),
-        );
-        return profile && profile.id !== user?.id
-          ? [
-              {
-                employeeId: employee.id,
-                userId: profile.id,
-                name: employee.full_name,
-                departmentId: employee.department_id,
-              },
-            ]
-          : [];
-      });
-    },
-  });
-  const [guidanceRecipient, setGuidanceRecipient] = useState("all");
-  const [guidanceTitle, setGuidanceTitle] = useState("");
-  const [guidanceContent, setGuidanceContent] = useState("");
+  const guidanceProfileById = new Map(
+    (guidanceProfilesQuery.data ?? []).map((profile) => [profile.id, profile]),
+  );
+
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`employee-guidance-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "employee_guidance_notes",
+          ...(isAdmin ? {} : { filter: `target_user_id=eq.${user.id}` }),
+        },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: ["employee-guidance"] });
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [isAdmin, queryClient, user]);
 
   const activeTasksQuery = useQuery({
     queryKey: ["employee-tasks", "active", selectedDate],
@@ -267,38 +297,8 @@ function EmployeeTasksPage() {
     [activeTasks],
   );
 
-  const sendGuidance = async () => {
-    if (!user || !isDepartmentManager) return toast.error("إرسال التوجيهات متاح لمدير القسم فقط");
-    if (!guidanceTitle.trim() || !guidanceContent.trim())
-      return toast.error("أدخل عنوان التوجيه ومحتواه");
-    const recipients = guidanceEmployeesQuery.data ?? [];
-    const selected =
-      guidanceRecipient === "all"
-        ? recipients
-        : recipients.filter((item) => item.userId === guidanceRecipient);
-    if (!selected.length) return toast.error("لم يتم العثور على حسابات موظفين مرتبطة بالقسم");
-    const rows = selected.map((item) => ({
-      department_id: item.departmentId,
-      target_user_id: item.userId,
-      target_employee_id: item.employeeId,
-      title: guidanceTitle.trim(),
-      content: guidanceContent.trim(),
-      author_id: user.id,
-    }));
-    const { error } = await (supabase as any).from("employee_guidance_notes").insert(rows);
-    if (error) return toast.error(error.message);
-    setGuidanceTitle("");
-    setGuidanceContent("");
-    await queryClient.invalidateQueries({ queryKey: ["employee-guidance"] });
-    toast.success(
-      guidanceRecipient === "all"
-        ? "تم إرسال التوجيه إلى جميع موظفي القسم"
-        : "تم إرسال التوجيه إلى الموظف المحدد",
-    );
-  };
-
   const markGuidanceRead = async (note: GuidanceNote) => {
-    if (note.read_at || !user) return;
+    if (note.read_at || !user || isAdmin) return;
     await (supabase as any)
       .from("employee_guidance_notes")
       .update({ read_at: new Date().toISOString() })
@@ -373,11 +373,27 @@ function EmployeeTasksPage() {
     toast.success(restore ? "تمت استعادة المهمة" : "تمت أرشفة المهمة");
   };
   const deleteTask = async (task: Task) => {
+    if (!isAdmin && task.created_by !== user?.id) {
+      return toast.error("حذف مهام الآخرين متاح لمدير النظام فقط");
+    }
     if (!window.confirm("سيتم حذف المهمة نهائياً. هل أنت متأكد؟")) return;
     const { error } = await supabase.from("employee_tasks").delete().eq("id", task.id);
     if (error) return toast.error(error.message);
     await invalidate();
     toast.success("تم حذف المهمة");
+  };
+  const deleteGuidance = async (note: GuidanceNote) => {
+    if (!isAdmin) return toast.error("حذف التوجيهات متاح لمدير النظام فقط");
+    if (!window.confirm("سيتم حذف هذا التوجيه نهائياً من حساب المستلم. هل تريد المتابعة؟")) return;
+    const { data, error } = await (supabase as any)
+      .from("employee_guidance_notes")
+      .delete()
+      .eq("id", note.id)
+      .select("id");
+    if (error) return toast.error(`تعذر حذف التوجيه: ${error.message}`);
+    if (!data?.length) return toast.error("لم يتم حذف التوجيه؛ تحقق من صلاحية مدير النظام.");
+    await queryClient.invalidateQueries({ queryKey: ["employee-guidance"] });
+    toast.success("تم حذف التوجيه");
   };
 
   const renderTaskRow = (task: Task, archived = false) => (
@@ -435,7 +451,7 @@ function EmployeeTasksPage() {
               <ArchiveRestore className="w-4 h-4 text-success" />
             </Button>
           )}
-          {(canManageAll || task.created_by === user?.id) && (
+          {(isAdmin || task.created_by === user?.id) && (
             <Button
               size="icon"
               variant="ghost"
@@ -499,6 +515,13 @@ function EmployeeTasksPage() {
           <TabsTrigger value="guidance">توجيهات مدير القسم</TabsTrigger>
         </TabsList>
         <TabsContent value="daily" className="space-y-5">
+          {(isAdmin || isHR) && <Card className="overflow-hidden rounded-2xl border-teal-200 bg-gradient-to-br from-teal-50 via-white to-emerald-50 shadow-sm dark:border-teal-900 dark:from-teal-950/40 dark:via-card dark:to-emerald-950/20">
+            <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2"><Megaphone className="h-5 w-5 text-teal-700 dark:text-teal-300" /> إرسال توجيه للقسم</CardTitle><p className="text-sm text-muted-foreground">اكتب تعليمات اليوم لتظهر لأعضاء القسم في مهامي اليومية.</p></CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-[minmax(13rem,0.7fr)_1.5fr]">
+              <div className="space-y-2"><Label htmlFor="guidance-department">القسم</Label><select id="guidance-department" className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={selectedGuidanceDepartmentId} onChange={(event) => setGuidanceDepartmentId(event.target.value)}><option value="" disabled>اختر القسم</option>{guidanceDepartments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select><p className="text-xs text-muted-foreground">التوجيه مرتبط بتاريخ {selectedDate}</p></div>
+              <div className="space-y-2"><Label htmlFor="daily-guidance">نص التوجيه</Label><Textarea id="daily-guidance" value={departmentGuidanceContent} onChange={(event) => setDepartmentGuidanceContent(event.target.value)} maxLength={3000} placeholder="اكتب الأولويات والتعليمات المطلوبة من الفريق..." className="min-h-24 bg-background" /><div className="flex items-center justify-between gap-2"><span className="text-xs text-muted-foreground">{departmentGuidanceContent.length}/3000{departmentGuidanceQuery.data ? " · توجيه محفوظ" : ""}</span><Button onClick={() => void sendDepartmentGuidance()} disabled={isSendingDepartmentGuidance || departmentGuidanceQuery.isLoading || !selectedGuidanceDepartmentId || guidanceDepartmentsQuery.isLoading}>{isSendingDepartmentGuidance ? <Clock3 className="ml-2 h-4 w-4 animate-spin" /> : <Send className="ml-2 h-4 w-4" />}{departmentGuidanceQuery.data ? "تحديث التوجيه" : "إرسال التوجيه"}</Button></div></div>
+            </CardContent>
+          </Card>}
           <Card className="border-primary/20">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -634,48 +657,6 @@ function EmployeeTasksPage() {
           )}
         </TabsContent>
         <TabsContent value="guidance" className="space-y-5">
-          {isDepartmentManager && (
-            <Card className="border-primary/20">
-              <CardHeader>
-                <CardTitle>إرسال توجيه إلى الفريق</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label>إرسال إلى</Label>
-                  <select
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                    value={guidanceRecipient}
-                    onChange={(event) => setGuidanceRecipient(event.target.value)}
-                  >
-                    <option value="all">جميع موظفي القسم</option>
-                    {(guidanceEmployeesQuery.data ?? []).map((employee) => (
-                      <option key={employee.userId} value={employee.userId}>
-                        {employee.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <Input
-                  value={guidanceTitle}
-                  onChange={(event) => setGuidanceTitle(event.target.value)}
-                  placeholder="عنوان التوجيه"
-                  maxLength={200}
-                />
-                <Textarea
-                  value={guidanceContent}
-                  onChange={(event) => setGuidanceContent(event.target.value)}
-                  placeholder="اكتب تعليمات مدير القسم..."
-                  rows={5}
-                />
-                <Button
-                  onClick={() => void sendGuidance()}
-                  disabled={guidanceEmployeesQuery.isLoading}
-                >
-                  إرسال التوجيه
-                </Button>
-              </CardContent>
-            </Card>
-          )}
           <Card>
             <CardHeader>
               <CardTitle>التوجيهات الواردة</CardTitle>
@@ -683,23 +664,44 @@ function EmployeeTasksPage() {
             <CardContent className="space-y-3">
               {guidanceQuery.isLoading ? (
                 <p className="text-muted-foreground">جارٍ تحميل التوجيهات...</p>
+              ) : guidanceQuery.error ? (
+                <p className="text-destructive">تعذر تحميل التوجيهات: {guidanceQuery.error.message}</p>
               ) : (guidanceQuery.data ?? []).length ? (
                 (guidanceQuery.data ?? []).map((note) => (
-                  <button
+                  <div
                     key={note.id}
-                    type="button"
-                    className={`w-full rounded-xl border p-4 text-right ${note.read_at ? "bg-card" : "border-primary/50 bg-primary/5"}`}
-                    onClick={() => void markGuidanceRead(note)}
+                    className={`rounded-xl border p-4 ${note.read_at ? "bg-card" : "border-primary/50 bg-primary/5"}`}
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <strong>{note.title}</strong>
-                      {!note.read_at && <Badge>جديد</Badge>}
-                    </div>
-                    <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
-                      {note.content}
-                    </p>
-                    <p className="mt-2 text-xs text-muted-foreground">{note.guidance_date}</p>
-                  </button>
+                    <button
+                      type="button"
+                      className="w-full text-right"
+                      disabled={isAdmin}
+                      onClick={() => void markGuidanceRead(note)}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <strong>{note.title}</strong>
+                        {!note.read_at && <Badge>جديد</Badge>}
+                      </div>
+                      <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
+                        {note.content}
+                      </p>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {note.guidance_date}
+                        {isAdmin && ` · المستلم: ${guidanceProfileById.get(note.target_user_id)?.full_name ?? note.target_user_id}`}
+                      </p>
+                    </button>
+                    {isAdmin && (
+                      <div className="mt-3 flex justify-end border-t pt-3">
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => void deleteGuidance(note)}
+                        >
+                          <Trash2 className="ml-2 h-4 w-4" /> حذف التوجيه
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 ))
               ) : (
                 <p className="py-8 text-center text-muted-foreground">لا توجد توجيهات واردة.</p>
