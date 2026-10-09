@@ -54,6 +54,12 @@ BEGIN
     'zkteco_auto_agent', incoming_log.value->>'punch_type'
   FROM jsonb_array_elements(p_logs) AS incoming_log(value)
   LEFT JOIN public.employees e ON e.employee_no = incoming_log.value->>'employee_no'
+  WHERE NOT EXISTS (
+    SELECT 1
+    FROM public.attendance_logs existing
+    WHERE existing.employee_no = incoming_log.value->>'employee_no'
+      AND date_trunc('second', existing.verify_time) = date_trunc('second', (incoming_log.value->>'timestamp')::timestamptz)
+  )
   ON CONFLICT (employee_no, verify_time, source) WHERE source = 'zkteco_auto_agent' DO NOTHING;
   GET DIAGNOSTICS v_inserted = ROW_COUNT;
 
