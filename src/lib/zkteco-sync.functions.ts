@@ -49,12 +49,12 @@ export const createZktecoSyncKey = createServerFn({ method: "POST" })
     const key = `zkt_${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
     const keyHash = await sha256(key);
     const now = new Date().toISOString();
-    const { error: revokeError } = await (supabaseAdmin as any)
-      .from("zkteco_sync_keys").update({ revoked_at: now }).eq("device_id", data.device_id).is("revoked_at", null);
-    if (revokeError) throw new Error(revokeError.message);
     const { error: insertError } = await (supabaseAdmin as any).from("zkteco_sync_keys").insert({
       device_id: data.device_id, key_hash: keyHash, key_prefix: key.slice(0, 12), created_by: context.userId,
     });
     if (insertError) throw new Error(insertError.message);
+    const { error: revokeError } = await (supabaseAdmin as any)
+      .from("zkteco_sync_keys").update({ revoked_at: now }).eq("device_id", data.device_id).neq("key_hash", keyHash).is("revoked_at", null);
+    if (revokeError) throw new Error(revokeError.message);
     return { key, device_sn: device.serial_number };
   });
