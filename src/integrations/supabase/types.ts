@@ -62,10 +62,16 @@ export type Database = {
         Row: {
           created_at: string
           device_id: string | null
+          device_info: Json | null
+          distance_meters: number | null
           employee_id: string | null
           employee_no: string
           external_log_id: number | null
           id: string
+          latitude: number | null
+          longitude: number | null
+          self_event_type: string | null
+          source: string
           status: number | null
           upload_id: string | null
           verify_time: string
@@ -74,10 +80,16 @@ export type Database = {
         Insert: {
           created_at?: string
           device_id?: string | null
+          device_info?: Json | null
+          distance_meters?: number | null
           employee_id?: string | null
           employee_no: string
           external_log_id?: number | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
+          self_event_type?: string | null
+          source?: string
           status?: number | null
           upload_id?: string | null
           verify_time: string
@@ -86,10 +98,16 @@ export type Database = {
         Update: {
           created_at?: string
           device_id?: string | null
+          device_info?: Json | null
+          distance_meters?: number | null
           employee_id?: string | null
           employee_no?: string
           external_log_id?: number | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
+          self_event_type?: string | null
+          source?: string
           status?: number | null
           upload_id?: string | null
           verify_time?: string
@@ -1217,8 +1235,11 @@ export type Database = {
           ctr_code: string
           description: string | null
           end_date: string | null
+          geofence_radius_meters: number
           id: string
+          latitude: number | null
           location: string | null
+          longitude: number | null
           name: string
           site_admin_employee_id: string | null
           start_date: string | null
@@ -1231,8 +1252,11 @@ export type Database = {
           ctr_code: string
           description?: string | null
           end_date?: string | null
+          geofence_radius_meters?: number
           id?: string
+          latitude?: number | null
           location?: string | null
+          longitude?: number | null
           name: string
           site_admin_employee_id?: string | null
           start_date?: string | null
@@ -1245,8 +1269,11 @@ export type Database = {
           ctr_code?: string
           description?: string | null
           end_date?: string | null
+          geofence_radius_meters?: number
           id?: string
+          latitude?: number | null
           location?: string | null
+          longitude?: number | null
           name?: string
           site_admin_employee_id?: string | null
           start_date?: string | null
@@ -1998,6 +2025,22 @@ export type Database = {
         Returns: string
       }
       normalize_ar_name: { Args: { _s: string }; Returns: string }
+      record_mobile_self_attendance: {
+        Args: {
+          p_device_info?: Json
+          p_event_type: string
+          p_latitude: number
+          p_longitude: number
+        }
+        Returns: {
+          distance_meters: number
+          employee_id: string
+          event_type: string
+          id: string
+          recorded_at: string
+          site_name: string
+        }[]
+      }
       return_employee_custody: {
         Args: {
           _employee_id: string
