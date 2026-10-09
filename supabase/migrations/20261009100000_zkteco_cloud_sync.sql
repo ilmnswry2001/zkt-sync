@@ -74,4 +74,4 @@ BEGIN
 END;
 $$;
 REVOKE ALL ON FUNCTION public.ingest_zkteco_sync(uuid, uuid, jsonb) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.ingest_zkteco_sync(uuid, jsonb) TO service_role;
+GRANT EXECUTE ON FUNCTION public.ingest_zkteco_sync(uuid, uuid, jsonb) TO service_role;
