@@ -221,6 +221,9 @@ function SelfAttendancePage() {
     })();
   }, [isAdmin, selectedSiteId]);
   const selectedSite = sites.find((item) => item.id === selectedSiteId) ?? null;
+  const sitesWithoutCoordinates = sites.filter(
+    (item) => item.latitude == null || item.longitude == null,
+  ).length;
   useEffect(() => {
     if (!selectedSite) return;
     setSiteLatitude(selectedSite.latitude == null ? "" : String(selectedSite.latitude));
@@ -514,6 +517,18 @@ function SelfAttendancePage() {
         </TabsContent>
         {isAdmin && (
           <TabsContent value="site-settings" className="space-y-4">
+            {sitesWithoutCoordinates > 0 && (
+              <Card className="border-rose-300 bg-rose-50/70 text-rose-900">
+                <CardContent className="p-4">
+                  <p className="font-semibold">
+                    {sitesWithoutCoordinates} مواقع بدون إحداثيات
+                  </p>
+                  <p className="mt-1 text-sm">
+                    أكمل إحداثيات هذه المواقع حتى يتمكن موظفوها من تسجيل الحضور الجغرافي.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
             <Card>
               <CardHeader>
                 <CardTitle>تحديد موقع العمل الجغرافي</CardTitle>
@@ -526,11 +541,19 @@ function SelfAttendancePage() {
                       <SelectValue placeholder="اختر الموقع" />
                     </SelectTrigger>
                     <SelectContent>
-                      {sites.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {item.name}
-                        </SelectItem>
-                      ))}
+                      {sites.map((item) => {
+                        const missingCoordinates = item.latitude == null || item.longitude == null;
+                        return (
+                          <SelectItem key={item.id} value={item.id}>
+                            <span className="flex items-center gap-2">
+                              {item.name}
+                              {missingCoordinates && (
+                                <span className="font-semibold text-rose-600">— بدون إحداثيات</span>
+                              )}
+                            </span>
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                 </div>
@@ -591,3 +614,4 @@ function SelfAttendancePage() {
     </div>
   );
 }
+
