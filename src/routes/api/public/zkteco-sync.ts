@@ -3,7 +3,7 @@ import { z } from "zod";
 
 const payloadSchema = z.object({
   device_sn: z.string().trim().min(1).max(64),
-  site_id: z.string().uuid().optional(),
+  site_id: z.string().uuid().nullable().optional(),
   logs: z.array(z.object({
     employee_no: z.string().trim().min(1).max(48),
     timestamp: z.string().datetime({ offset: true }),
