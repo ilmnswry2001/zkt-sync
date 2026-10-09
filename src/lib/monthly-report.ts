@@ -16,6 +16,7 @@ export type AttendanceDay = {
   manual: boolean;
   notes: string | null;
   punches: number;
+  is_paid_leave?: boolean;
 };
 
 export function buildPenaltyAttendanceOverride(
@@ -47,6 +48,7 @@ export function buildAttendanceDays(
     status: DayStatus;
     notes: string | null;
     overtime_hours?: number | null;
+    is_paid?: boolean;
   }[],
   shiftEnd: string | null | undefined,
   today: string,
@@ -104,6 +106,7 @@ export function buildAttendanceDays(
       manual: !!override,
       notes: override?.notes ?? null,
       punches: times.length,
+      is_paid_leave: override?.status === "leave" ? override.is_paid !== false : undefined,
     };
   });
 }
@@ -118,6 +121,7 @@ export function summarizeDays(days: AttendanceDay[]) {
     presentDays: days.filter((d) => d.status === "present").length,
     absentDays: days.filter((d) => d.status === "absent").length,
     leaveDays: days.filter((d) => d.status === "leave").length,
+    unpaidLeaveDays: days.filter((d) => d.status === "leave" && d.is_paid_leave === false).length,
     holidayDays: days.filter((d) => d.status === "holiday" || d.status === "rest").length,
     totalHours: Math.round(days.reduce((sum, d) => sum + d.hours, 0) * 100) / 100,
     totalOvertimeHours: Math.round(days.reduce((sum, d) => sum + d.overtime_hours, 0) * 100) / 100,
@@ -126,6 +130,7 @@ export function summarizeDays(days: AttendanceDay[]) {
     presentDays: number;
     absentDays: number;
     leaveDays: number;
+    unpaidLeaveDays: number;
     holidayDays: number;
     totalHours: number;
     totalOvertimeHours: number;
@@ -180,7 +185,7 @@ export function calculatePayroll(options: {
   const woDays = isDaily ? 0 : (summary.woDays ?? 0);
   const workedDays = summary.presentDays;
   const paidHolidays = isDaily ? 0 : Math.max(0, holidayDays);
-  const paidLeaveDays = summary.leaveDays;
+  const paidLeaveDays = summary.leaveDays - summary.unpaidLeaveDays;
   const paidDays = workedDays + woDays + paidHolidays + paidLeaveDays;
   const overtimePay = roundMoney(summary.totalOvertimeHours * Math.max(0, overtimeHourlyRate));
   const basePay = roundMoney(dayRate * paidDays);
@@ -195,6 +200,7 @@ export function calculatePayroll(options: {
     woDays,
     holidayDays: paidHolidays,
     leaveDays: paidLeaveDays,
+    unpaidLeaveDays: summary.unpaidLeaveDays,
     paidDays,
     overtimeHours: summary.totalOvertimeHours,
     overtimePay,

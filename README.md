@@ -1,6 +1,7 @@
 # Smart Attendance Hub
 
 > توثيق تدفق تخطيط المشاريع والصلاحيات والتصميم الجديد: [`docs/PLANNING_AND_DESIGN.md`](docs/PLANNING_AND_DESIGN.md).
+> توثيق دورة إدارة الإجازات والسياسات والتكامل: [`docs/leave-management.md`](docs/leave-management.md).
 
 أنت مهندس برمجيات Senior Full Stack وخبير في أنظمة الحضور والانصراف وأجهزة البصمة ZKTeco.
 

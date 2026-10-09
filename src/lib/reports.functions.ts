@@ -9,19 +9,34 @@ import {
 } from "./monthly-report.ts";
 import { z } from "zod";
 import { monthInstantRangeInBaghdad, todayInBaghdad } from "./date-time.ts";
-import { listLeaveDates } from "./leave-utils.ts";
 
 async function approvedLeaveOverrides(supabase: any, employeeIds: string[], start: string, endDate: string) {
-  const rows: { employee_id: string; work_date: string; status: "leave"; notes: string; overtime_hours: number }[] = [];
+  const rows: { employee_id: string; work_date: string; status: "leave"; notes: string; overtime_hours: number; is_paid: boolean }[] = [];
   for (let i = 0; i < employeeIds.length; i += 100) {
     const batch = employeeIds.slice(i, i + 100);
     const { data, error } = await supabase.from("forms")
-      .select("employee_id, work_date, leave_end_date, reason, status")
+      .select("employee_id, work_date, leave_end_date, reason, status, leave_type_id, leave_types(is_paid, count_non_working_days)")
       .eq("kind", "leave").in("status", ["pending_execution", "executed"])
       .in("employee_id", batch).lt("work_date", endDate).gte("leave_end_date", start);
     if (error) throw new Error(error.message);
-    for (const form of data ?? []) for (const date of listLeaveDates(form.work_date, form.leave_end_date ?? form.work_date)) {
-      if (date >= start && date < endDate) rows.push({ employee_id: form.employee_id, work_date: date, status: "leave", notes: `إجازة معتمدة: ${form.reason ?? ""}`, overtime_hours: 0 });
+    for (const form of data ?? []) {
+      const { data: workDates, error: dateError } = await (supabase as any).rpc("leave_work_dates", {
+        _employee_id: form.employee_id,
+        _start_date: form.work_date,
+        _end_date: form.leave_end_date ?? form.work_date,
+        _count_non_working_days: form.leave_types?.count_non_working_days ?? true,
+      });
+      if (dateError) throw new Error(dateError.message);
+      for (const { work_date: date } of workDates ?? []) {
+        if (date >= start && date < endDate) rows.push({
+          employee_id: form.employee_id,
+          work_date: date,
+          status: "leave",
+          notes: `إجازة ${form.leave_types?.is_paid === false ? "بدون راتب" : "معتمدة"}: ${form.reason ?? ""}`,
+          overtime_hours: 0,
+          is_paid: form.leave_types?.is_paid !== false,
+        });
+      }
     }
   }
   return rows;
@@ -261,3 +276,4 @@ export const setDayStatus = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { saved: true };
   });
+

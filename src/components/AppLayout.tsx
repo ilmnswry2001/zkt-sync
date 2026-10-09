@@ -40,6 +40,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useOperationalAlerts } from "@/hooks/use-operational-alerts";
+import { supabase } from "@/integrations/supabase/client";
 
 const nav = [
   { to: "/dashboard", label: "لوحة التحكم", icon: LayoutDashboard, access: "executive" },
@@ -48,7 +49,7 @@ const nav = [
   { to: "/tasks", label: "مهامي اليومية", icon: ClipboardCheck },
   { to: "/self-attendance", label: "الحضور الذاتي", icon: Smartphone },
   { to: "/work-center", label: "مركز العمل", icon: ListChecks },
-  { to: "/leaves", label: "إدارة الإجازات", icon: CalendarCheck2 },
+  { to: "/leaves", label: "إدارة الإجازات", icon: CalendarCheck2, access: "leave" },
   { to: "/team-follow-up", label: "متابعة الفريق", icon: Users },
   { to: "/projects", label: "تكلفة المواقع اليومية", icon: Wallet, access: "hr" },
   { to: "/monthly", label: "التقرير الشهري", icon: CalendarDays },
@@ -91,6 +92,35 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const operationalAlertsQuery = useOperationalAlerts();
   const operationalAlerts = operationalAlertsQuery.data ?? [];
   const [alertsOpen, setAlertsOpen] = useState(false);
+  const [hasLinkedEmployee, setHasLinkedEmployee] = useState(false);
+  useEffect(() => {
+    let current = true;
+    if (!user?.email) {
+      setHasLinkedEmployee(false);
+      return () => {
+        current = false;
+      };
+    }
+    const email = user.email.replace(/[\\%_]/g, "\\$&");
+    supabase
+      .from("employees")
+      .select("id, email")
+      .eq("status", "active")
+      .ilike("email", email)
+      .limit(2)
+      .then(({ data, error }) => {
+        if (!current) return;
+        setHasLinkedEmployee(
+          !error &&
+            (data ?? []).filter(
+              (employee) => employee.email?.toLowerCase() === user.email!.toLowerCase(),
+            ).length === 1,
+        );
+      });
+    return () => {
+      current = false;
+    };
+  }, [user?.email]);
   const canViewOperationalAlerts =
     isAdmin || isHR || isCompanyManager || roles.includes("department_manager");
   const blocked =
@@ -220,6 +250,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             if (!canAccessSection(item.to)) return null;
             if ("access" in item && item.access === "admin" && !isAdmin) return null;
             if ("access" in item && item.access === "hr" && !isHR) return null;
+            if (
+              "access" in item &&
+              item.access === "leave" &&
+              !isAdmin &&
+              !isHR &&
+              !isCompanyManager &&
+              !roles.some((role) => ["department_manager", "data_entry"].includes(role)) &&
+              !hasLinkedEmployee
+            )
+              return null;
             if ("access" in item && item.access === "executive" && !isAdmin && !isCompanyManager)
               return null;
             if (

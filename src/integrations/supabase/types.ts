@@ -837,6 +837,7 @@ export type Database = {
           kind: Database["public"]["Enums"]["form_kind"]
           leave_days: number
           leave_end_date: string | null
+          leave_type_id: string | null
           manager_approved_at: string | null
           manager_approved_by: string | null
           overtime_hours: number
@@ -866,6 +867,7 @@ export type Database = {
           kind?: Database["public"]["Enums"]["form_kind"]
           leave_days?: number
           leave_end_date?: string | null
+          leave_type_id?: string | null
           manager_approved_at?: string | null
           manager_approved_by?: string | null
           overtime_hours?: number
@@ -895,6 +897,7 @@ export type Database = {
           kind?: Database["public"]["Enums"]["form_kind"]
           leave_days?: number
           leave_end_date?: string | null
+          leave_type_id?: string | null
           manager_approved_at?: string | null
           manager_approved_by?: string | null
           overtime_hours?: number
@@ -929,7 +932,104 @@ export type Database = {
             referencedRelation: "departments"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "forms_leave_type_id_fkey"
+            columns: ["leave_type_id"]
+            isOneToOne: false
+            referencedRelation: "leave_types"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      leave_balance_transactions: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string
+          effective_year: number
+          employee_id: string
+          id: string
+          leave_type_id: string
+          reason: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string
+          effective_year: number
+          employee_id: string
+          id?: string
+          leave_type_id: string
+          reason: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string
+          effective_year?: number
+          employee_id?: string
+          id?: string
+          leave_type_id?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leave_balance_transactions_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leave_balance_transactions_leave_type_id_fkey"
+            columns: ["leave_type_id"]
+            isOneToOne: false
+            referencedRelation: "leave_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leave_types: {
+        Row: {
+          annual_allowance_days: number | null
+          carryover_cap_days: number
+          code: string
+          count_non_working_days: boolean
+          created_at: string
+          id: string
+          is_active: boolean
+          is_paid: boolean
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          annual_allowance_days?: number | null
+          carryover_cap_days?: number
+          code: string
+          count_non_working_days?: boolean
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_paid?: boolean
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          annual_allowance_days?: number | null
+          carryover_cap_days?: number
+          code?: string
+          count_non_working_days?: boolean
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_paid?: boolean
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       leave_settings: {
         Row: {
@@ -2019,6 +2119,51 @@ export type Database = {
         }
         Returns: boolean
       }
+      leave_balance_summary: {
+        Args: { _year: number }
+        Returns: {
+          adjustment_days: number
+          allowance_days: number | null
+          available_days: number | null
+          carryover_days: number
+          department_id: string | null
+          department_name: string | null
+          employee_id: string
+          employee_no: string
+          full_name: string
+          is_paid: boolean
+          leave_type_code: string
+          leave_type_id: string
+          leave_type_name: string
+          reserved_days: number
+          used_days: number
+        }[]
+      }
+      leave_calendar_month: {
+        Args: { _month: number; _year: number }
+        Returns: {
+          employee_id: string
+          employee_no: string
+          form_id: string
+          form_no: number
+          full_name: string
+          is_paid: boolean
+          leave_type_id: string
+          leave_type_name: string
+          status: Database["public"]["Enums"]["form_status"]
+          work_date: string
+          department_name: string | null
+        }[]
+      }
+      leave_work_dates: {
+        Args: {
+          _count_non_working_days?: boolean
+          _employee_id: string
+          _end_date: string
+          _start_date: string
+        }
+        Returns: { work_date: string }[]
+      }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
       issue_employee_clearance: {
         Args: { _employee_id: string; _notes?: string }
@@ -2253,3 +2398,4 @@ export const Constants = {
     },
   },
 } as const
+

@@ -108,6 +108,7 @@ function FormsPage() {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState<string>("all");
   const [kind, setKind] = useState<"attendance" | "overtime" | "leave">("attendance");
+  const [leaveTypeId, setLeaveTypeId] = useState("");
   const [employeeId, setEmployeeId] = useState("");
   const [search, setSearch] = useState("");
   const [selectedForm, setSelectedForm] = useState<FormRow | null>(null);
@@ -139,6 +140,21 @@ function FormsPage() {
       const { data, error } = await q;
       if (error) throw error;
       return data as { id: string; employee_no: string; full_name: string }[];
+    },
+  });
+
+  const { data: leaveTypes = [] } = useQuery({
+    queryKey: ["forms", "leave-types"],
+    enabled: kind === "leave",
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("leave_types")
+        .select("id, name, is_paid")
+        .eq("is_active", true)
+        .order("sort_order")
+        .order("name");
+      if (error) throw error;
+      return data as { id: string; name: string; is_paid: boolean }[];
     },
   });
 
@@ -244,6 +260,7 @@ function FormsPage() {
                   employee_id: employeeId,
                   target_department_id: (f.get("target_department_id") as string) || null,
                   work_date: f.get("work_date") as string,
+                  leave_type_id: kind === "leave" ? leaveTypeId || leaveTypes[0]?.id : null,
                   kind,
                   day_status: kind === "leave" ? "leave" : kind === "attendance" ? "present" : null,
                   overtime_hours: kind === "overtime" ? Number(f.get("overtime_hours") || 0) : 0,
@@ -289,6 +306,21 @@ function FormsPage() {
                 <Label>التاريخ</Label>
                 <Input type="date" name="work_date" required />
               </div>
+              {kind === "leave" && (
+                <div className="col-span-2">
+                  <Label>نوع الإجازة</Label>
+                  <Select value={leaveTypeId || leaveTypes[0]?.id || ""} onValueChange={setLeaveTypeId}>
+                    <SelectTrigger><SelectValue placeholder="اختر نوع الإجازة" /></SelectTrigger>
+                    <SelectContent>
+                      {leaveTypes.map((type) => (
+                        <SelectItem key={type.id} value={type.id}>
+                          {type.name} · {type.is_paid ? "مدفوعة" : "بدون راتب"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="col-span-2">
                 <Label>القسم المرسل إليه للموافقة</Label>
                 <Select name="target_department_id">
@@ -563,3 +595,4 @@ function FormRolesCard() {
     </Card>
   );
 }
+
