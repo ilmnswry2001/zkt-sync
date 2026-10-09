@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,9 +14,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Save, Trash2, Truck } from "lucide-react";
+import { CalendarDays, Check, Plus, Save, Trash2, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { currentMonthInBaghdad } from "@/lib/date-time";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/_authenticated/vehicles")({
   head: () => ({ meta: [{ title: "المركبات" }] }),
@@ -51,26 +52,42 @@ function VehiclesPage() {
   const [name, setName] = useState("");
   const [vehicleClass, setVehicleClass] = useState<"light" | "heavy">("light");
   const [dailyRate, setDailyRate] = useState("");
-  const [days, setDays] = useState<Record<string, string>>({});
+  const [dates, setDates] = useState<Record<string, string[]>>({});
+  const [legacyDays, setLegacyDays] = useState<Record<string, number>>({});
+  const [activeVehicle, setActiveVehicle] = useState<Vehicle | null>(null);
   const query = useQuery({
     queryKey: ["vehicles", month],
     queryFn: async () => {
-      const [{ data: vehicles, error: vehicleError }, { data: operations, error: operationError }] =
-        await Promise.all([
+      const [{ data: vehicles, error: vehicleError }, operationsResult] = await Promise.all([
           (supabase as any)
             .from("vehicles")
             .select("id, vehicle_no, name, vehicle_class, daily_rate, currency, is_active")
             .order("vehicle_no"),
           (supabase as any)
             .from("vehicle_monthly_operations")
-            .select("vehicle_id, operating_days")
+            .select("vehicle_id, operating_days, operating_dates")
             .eq("month", `${month}-01`),
         ]);
+      let operations = operationsResult.data;
+      let operationError = operationsResult.error;
+      if (operationError && /operating_dates|column/i.test(operationError.message)) {
+        const fallback = await (supabase as any)
+          .from("vehicle_monthly_operations")
+          .select("vehicle_id, operating_days")
+          .eq("month", `${month}-01`);
+        operations = (fallback.data ?? []).map((row: { vehicle_id: string; operating_days: number }) => ({ ...row, operating_dates: [] }));
+        operationError = fallback.error;
+      }
       if (vehicleError) throw vehicleError;
       if (operationError) throw operationError;
-      const initial: Record<string, string> = {};
-      for (const row of operations ?? []) initial[row.vehicle_id] = String(row.operating_days);
-      setDays(initial);
+      const initial: Record<string, string[]> = {};
+      const legacy: Record<string, number> = {};
+      for (const row of operations ?? []) {
+        initial[row.vehicle_id] = (row.operating_dates ?? []).map((date: string) => date.slice(0, 10));
+        legacy[row.vehicle_id] = Number(row.operating_days ?? 0);
+      }
+      setDates(initial);
+      setLegacyDays(legacy);
       return { vehicles: (vehicles ?? []) as Vehicle[], operations: operations ?? [] };
     },
   });
@@ -94,26 +111,34 @@ function VehiclesPage() {
       toast.success("تم تسجيل المركبة");
       await client.invalidateQueries({ queryKey: ["vehicles"] });
       await client.invalidateQueries({ queryKey: ["payroll"] });
+      await client.invalidateQueries({ queryKey: ["monthly", "vehicle-report"] });
     },
     onError: (error: Error) => toast.error(`تعذر تسجيل المركبة: ${error.message}`),
   });
+  const monthDates = useMemo(() => Array.from({ length: monthDayCount }, (_, index) => {
+    const day = String(index + 1).padStart(2, "0");
+    return `${month}-${day}`;
+  }), [month, monthDayCount]);
   const saveDays = useMutation({
-    mutationFn: async (vehicleId: string) => {
-      const operatingDays = Number(days[vehicleId] ?? 0);
+    mutationFn: async ({ vehicleId, operatingDates }: { vehicleId: string; operatingDates: string[] }) => {
+      const normalizedDates = [...new Set(operatingDates)].filter((date) => date.startsWith(`${month}-`)).sort();
+      const operatingDays = normalizedDates.length;
       if (!Number.isInteger(operatingDays) || operatingDays < 0 || operatingDays > monthDayCount)
         throw new Error(`أدخل عدداً بين 0 و${monthDayCount}`);
       const { error } = await (supabase as any)
         .from("vehicle_monthly_operations")
         .upsert(
-          { vehicle_id: vehicleId, month: `${month}-01`, operating_days: operatingDays },
+          { vehicle_id: vehicleId, month: `${month}-01`, operating_days: operatingDays, operating_dates: normalizedDates },
           { onConflict: "vehicle_id,month" },
         );
       if (error) throw error;
     },
     onSuccess: async () => {
-      toast.success("تم حفظ أيام التشغيل");
+      setActiveVehicle(null);
+      toast.success("تم حفظ أيام حضور المركبة");
       await client.invalidateQueries({ queryKey: ["vehicles"] });
       await client.invalidateQueries({ queryKey: ["payroll"] });
+      await client.invalidateQueries({ queryKey: ["monthly", "vehicle-report"] });
     },
     onError: (error: Error) => toast.error(`تعذر حفظ التشغيل: ${error.message}`),
   });
@@ -210,7 +235,7 @@ function VehiclesPage() {
           <div>
             <CardTitle>سجل المركبات</CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
-              أدخل عدد أيام العمل الفعلية لكل مركبة خلال الشهر المحدد.
+              سجّل تواريخ عمل كل مركبة خلال الشهر، وسيُحسب عدد الأيام والمستحق تلقائياً.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -238,8 +263,8 @@ function VehiclesPage() {
                   <th className="p-3">المركبة</th>
                   <th className="p-3">التصنيف</th>
                   <th className="p-3">الأجر اليومي</th>
-                  <th className="p-3">أيام التشغيل لهذا الشهر</th>
-                  <th className="p-3">الإجراء</th>
+                  <th className="p-3">أيام الحضور المسجلة</th>
+                  <th className="p-3">إجراء التسجيل</th>
                 </tr>
               </thead>
               <tbody>
@@ -252,26 +277,18 @@ function VehiclesPage() {
                     <td className="p-3">{vehicle.vehicle_class === "light" ? "خفيفة" : "ثقيلة"}</td>
                     <td className="p-3">{Number(vehicle.daily_rate).toLocaleString()} د.ع</td>
                     <td className="p-3">
-                      <Input
-                        aria-label={`أيام تشغيل ${vehicle.name}`}
-                        className="max-w-36"
-                        type="number"
-                        min="0"
-                        max={monthDayCount}
-                        value={days[vehicle.id] ?? "0"}
-                        onChange={(e) =>
-                          setDays((state) => ({ ...state, [vehicle.id]: e.target.value }))
-                        }
-                      />
+                      <span className="font-semibold tabular-nums">{(dates[vehicle.id] ?? []).length || legacyDays[vehicle.id] || 0}</span> يوم
+                      <div className="mt-1 max-w-64 text-xs text-muted-foreground">
+                        {(dates[vehicle.id] ?? []).length ? (dates[vehicle.id] ?? []).map((date) => Number(date.slice(8))).join("، ") : legacyDays[vehicle.id] ? "العدد السابق محفوظ دون تحديد التواريخ" : "لم تُسجّل تواريخ بعد"}
+                      </div>
                     </td>
                     <td className="flex gap-2 p-3">
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => saveDays.mutate(vehicle.id)}
-                        disabled={saveDays.isPending}
+                        onClick={() => setActiveVehicle(vehicle)}
                       >
-                        <Save className="ml-2 h-4 w-4" /> حفظ التشغيل
+                        <CalendarDays className="ml-2 h-4 w-4" /> تسجيل الحضور
                       </Button>
                       <Button
                         size="icon"
@@ -295,6 +312,43 @@ function VehiclesPage() {
           )}
         </CardContent>
       </Card>
+      <Dialog open={!!activeVehicle} onOpenChange={(open) => { if (!open) setActiveVehicle(null); }}>
+        <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          {activeVehicle && <>
+            <DialogHeader>
+              <DialogTitle>تسجيل أيام حضور المركبة</DialogTitle>
+              <DialogDescription>{activeVehicle.name} · {activeVehicle.vehicle_no} · شهر {month}</DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-muted/30 p-3">
+              <p className="text-sm">حدد الأيام التي عملت فيها المركبة. الأيام المحددة: <b>{(dates[activeVehicle.id] ?? []).length}</b></p>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => setDates((state) => ({ ...state, [activeVehicle.id]: [...monthDates] }))}>تحديد الشهر كله</Button>
+                <Button size="sm" variant="ghost" onClick={() => setDates((state) => ({ ...state, [activeVehicle.id]: [] }))}>مسح التحديد</Button>
+              </div>
+            </div>
+            {!dates[activeVehicle.id]?.length && legacyDays[activeVehicle.id] > 0 && <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">السجل السابق يحفظ عدد {legacyDays[activeVehicle.id]} أيام دون تواريخ محددة. حدّد الأيام الفعلية الآن لحفظ التقرير التفصيلي.</p>}
+            <div className="grid grid-cols-4 gap-2 sm:grid-cols-7" aria-label="أيام الشهر">
+              {monthDates.map((date) => {
+                const selected = (dates[activeVehicle.id] ?? []).includes(date);
+                const dayNumber = Number(date.slice(8));
+                const weekday = new Date(`${date}T12:00:00`).toLocaleDateString("ar-IQ", { weekday: "short" });
+                return <button key={date} type="button" aria-pressed={selected} onClick={() => setDates((state) => {
+                  const current = state[activeVehicle.id] ?? [];
+                  return { ...state, [activeVehicle.id]: selected ? current.filter((value) => value !== date) : [...current, date].sort() };
+                })} className={`flex min-h-16 flex-col items-center justify-center rounded-xl border p-2 text-sm transition ${selected ? "border-primary bg-primary text-primary-foreground shadow-sm" : "bg-background hover:border-primary/50 hover:bg-primary/5"}`}>
+                  <span className="text-[11px] opacity-80">{weekday}</span><span className="font-bold">{dayNumber}</span>{selected && <Check className="h-3.5 w-3.5" />}
+                </button>;
+              })}
+            </div>
+            <div className="flex justify-end gap-2 border-t pt-4">
+              <Button variant="outline" onClick={() => setActiveVehicle(null)}>إلغاء</Button>
+              <Button onClick={() => saveDays.mutate({ vehicleId: activeVehicle.id, operatingDates: dates[activeVehicle.id] ?? [] })} disabled={saveDays.isPending}>
+                <Save className="ml-2 h-4 w-4" /> {saveDays.isPending ? "جارٍ الحفظ…" : "حفظ أيام الحضور"}
+              </Button>
+            </div>
+          </>}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
