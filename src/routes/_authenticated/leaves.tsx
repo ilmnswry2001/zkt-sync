@@ -10,6 +10,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -68,6 +76,9 @@ function LeavesPage() {
   const [endDate, setEndDate] = useState(new Date().toISOString().slice(0, 10));
   const [reason, setReason] = useState("");
   const [filter, setFilter] = useState("all");
+  const [balanceDialogOpen, setBalanceDialogOpen] = useState(false);
+  const [defaultAllowance, setDefaultAllowance] = useState("21");
+  const [savingAllowance, setSavingAllowance] = useState(false);
 
   const employeesQuery = useQuery({
     queryKey: ["leaves", "employees"],
@@ -111,8 +122,24 @@ function LeavesPage() {
       return Number(data?.annual_allowance_days ?? 21);
     },
   });
-  const rows = formsQuery.data ?? [];
+  const rows = useMemo(() => formsQuery.data ?? [], [formsQuery.data]);
   const allowance = settingsQuery.data ?? 21;
+  const saveDefaultAllowance = async () => {
+    const value = Number(defaultAllowance);
+    if (!Number.isInteger(value) || value < 0 || value > 365) {
+      toast.error("أدخل رصيداً صحيحاً بين 0 و365 يوماً");
+      return;
+    }
+    setSavingAllowance(true);
+    const { error } = await supabase
+      .from("leave_settings")
+      .upsert({ id: 1, annual_allowance_days: value });
+    setSavingAllowance(false);
+    if (error) return toast.error(`تعذر حفظ الرصيد الافتراضي: ${error.message}`);
+    await qc.invalidateQueries({ queryKey: ["leaves", "settings"] });
+    setBalanceDialogOpen(false);
+    toast.success(`تم تعيين الرصيد الافتراضي إلى ${value} يوماً لجميع الموظفين`);
+  };
   const stats = useMemo(() => {
     const yearRows = rows.filter((row) => row.work_date.startsWith(String(year)));
     return {
@@ -182,12 +209,54 @@ function LeavesPage() {
           </h1>
           <p className="mt-1 text-muted-foreground">طلبات الإجازات والاعتمادات والأرصدة السنوية</p>
         </div>
-        {canCreate && (
-          <Button onClick={() => setOpen(true)}>
-            <Plus className="ml-2 h-4 w-4" /> تقديم طلب إجازة
-          </Button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {canManage && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDefaultAllowance(String(allowance));
+                setBalanceDialogOpen(true);
+              }}
+            >
+              تعيين الرصيد الافتراضي للإجازات
+            </Button>
+          )}
+          {canCreate && (
+            <Button onClick={() => setOpen(true)}>
+              <Plus className="ml-2 h-4 w-4" /> تقديم طلب إجازة
+            </Button>
+          )}
+        </div>
       </div>
+      <Dialog open={balanceDialogOpen} onOpenChange={setBalanceDialogOpen}>
+        <DialogContent dir="rtl">
+          <DialogHeader>
+            <DialogTitle>تعيين الرصيد الافتراضي للإجازات</DialogTitle>
+            <DialogDescription>
+              سيُستخدم هذا الرصيد السنوي في احتساب المتاح لجميع الموظفين.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="default-leave-allowance">الرصيد السنوي بالأيام</Label>
+            <Input
+              id="default-leave-allowance"
+              type="number"
+              min="0"
+              max="365"
+              value={defaultAllowance}
+              onChange={(event) => setDefaultAllowance(event.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBalanceDialogOpen(false)}>
+              إلغاء
+            </Button>
+            <Button onClick={() => void saveDefaultAllowance()} disabled={savingAllowance}>
+              {savingAllowance && <Loader2 className="ml-2 h-4 w-4 animate-spin" />} حفظ وتطبيق
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi label="إجمالي الطلبات" value={stats.total} icon={CalendarCheck2} />
         <Kpi label="طلبات معلقة" value={stats.pending} icon={Clock3} />

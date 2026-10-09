@@ -19,6 +19,7 @@ import {
   calculatePayroll,
   loadAllRows,
   monthDates,
+  roundMoney,
   summarizeDays,
 } from "@/lib/monthly-report";
 
@@ -43,13 +44,13 @@ type Employee = {
   full_name: string;
   base_salary: number | null;
   pay_type: string | null;
-  salary_type?: string | null;
-  contract_type?: string | null;
-  bank_name?: string | null;
-  bank_account?: string | null;
-  iban?: string | null;
-  sites?: { name: string } | null;
-  departments?: { name: string } | null;
+  salary_type: string | null;
+  contract_type: string | null;
+  bank_name: string | null;
+  bank_account: string | null;
+  iban: string | null;
+  sites: { name: string } | null;
+  departments: { name: string } | null;
   wage_rates: {
     monthly_rate: number | null;
     daily_rate: number | null;
@@ -218,11 +219,12 @@ function PayrollPage() {
   const bankRows = rows.filter(
     (row) => row.employee.bank_account?.trim() || row.employee.iban?.trim(),
   );
-  const cashRows = rows.filter(
-    ({ employee }) =>
-      employee.pay_type === "daily" ||
-      [employee.salary_type, employee.contract_type].some((value) => /نقد|cash/i.test(value ?? "")),
-  );
+  const cashRows = rows.filter(({ employee }) => {
+    if (employee.pay_type === "daily") return true;
+    return [employee.salary_type, employee.contract_type].some((value) =>
+      /نقد|cash/i.test(value ?? ""),
+    );
+  });
   const total = rows.reduce((sum, row) => sum + row.total, 0);
   const money = (value: number) =>
     `${value.toLocaleString("en-US", { maximumFractionDigits: 2 })} د.ع`;
@@ -296,79 +298,11 @@ function PayrollPage() {
     XLSX.utils.book_append_sheet(workbook, sheet, "رواتب الموظفين");
     XLSX.writeFile(workbook, `رواتب_الموظفين_${month}.xlsx`);
   };
-  const printSlip = (row: (typeof rows)[number]) => {
-    const body = `<div class="meta"><b>الموظف:</b> ${escapeHtml(row.employee.full_name)}<br/><b>الرقم:</b> ${escapeHtml(row.employee.employee_no)}<br/><b>الشهر:</b> ${escapeHtml(month)}</div><table><tr><th>البند</th><th>المبلغ</th></tr><tr><td>الأجر الأساسي</td><td>${money(row.payroll.basePay)}</td></tr><tr><td>بدل الساعات الإضافية (${row.payroll.overtimeHours})</td><td>${money(row.payroll.overtimePay)}</td></tr><tr><td>الإضافات والمكافآت</td><td>${money(row.additions)}</td></tr><tr><td>الاستقطاعات</td><td>${money(row.deductions)}</td></tr><tr class="total"><td>الصافي المستحق</td><td>${money(row.total)}</td></tr></table>`;
-    if (!printReport(`قصاصة راتب — ${row.employee.full_name}`, body))
-      toast.error("اسمح بالنوافذ المنبثقة للطباعة");
-  };
-  const exportCsv = () => {
-    const header = [
-      "رقم الموظف",
-      "اسم الموظف",
-      "نوع الأجر",
-      "أيام الحضور",
-      "أيام الجمعة",
-      "الأجر الأساسي",
-      "الإضافي",
-      "الإضافات",
-      "الاستقطاعات",
-      "صافي الراتب",
-    ];
-    const csvCell = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
-    const content =
-      "\uFEFF" +
-      [
-        header,
-        ...filteredRows.map(({ employee, payroll, summary, additions, deductions, total: net }) => [
-          employee.employee_no,
-          employee.full_name,
-          employee.pay_type === "daily" ? "يومي" : "شهري",
-          summary.presentDays,
-          payroll.woDays,
-          payroll.basePay,
-          payroll.overtimePay,
-          additions,
-          deductions,
-          net,
-        ]),
-      ]
-        .map((row) => row.map(csvCell).join(","))
-        .join("\n");
-    const url = URL.createObjectURL(new Blob([content], { type: "text/csv;charset=utf-8" }));
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `رواتب_الموظفين_${month}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-    const incomplete = filteredRows.filter((row) => {
-      const employee = row.employee as Employee & {
-        bank_account?: string | null;
-        iban?: string | null;
-      };
-      return !employee.bank_account && !employee.iban;
-    }).length;
-    toast.success(
-      `تم تصدير الكشف بصيغة CSV${incomplete ? ` — تنبيه: ${incomplete} موظف يحتاج بيانات مصرفية` : ""}`,
-    );
-  };
-  const printCashVouchers = () => {
-    const vouchers = cashRows
-      .map(
-        ({ employee, payroll, total: net }) =>
-          `<section class="voucher"><h2>قسيمة صرف نقدية</h2><p><b>الموظف:</b> ${escapeHtml(employee.full_name)} — <b>الرقم:</b> ${escapeHtml(employee.employee_no)}</p><p><b>الشهر:</b> ${escapeHtml(month)}</p><table><tr><th>الأجر الأساسي</th><td>${money(payroll.basePay)}</td></tr><tr><th>الساعات الإضافية</th><td>${money(payroll.overtimePay)}</td></tr><tr><th>الإضافات والخصومات</th><td>${money(payroll.additions - payroll.deductions)}</td></tr><tr><th>الصافي</th><td>${money(net)}</td></tr></table><p><b>المبلغ كتابةً:</b> ${escapeHtml(amountInArabicIqd(net))}</p><div class="sign">المستلم: ________________ &nbsp;&nbsp; المحاسب: ________________</div></section>`,
-      )
-      .join("");
-    if (!vouchers) return toast.error("لا توجد بيانات للطباعة");
-    if (
-      !printReport(
-        `قسائم الصرف — ${month}`,
-        `<style>.voucher{height:30%;box-sizing:border-box;border:1px solid #999;padding:16px;margin-bottom:12px;page-break-inside:avoid}.voucher h2{text-align:center}.voucher table{width:100%;border-collapse:collapse}.voucher th,.voucher td{border:1px solid #bbb;padding:6px;text-align:right}.sign{margin-top:28px}</style>${vouchers}`,
-      )
-    )
-      toast.error("تعذر فتح الطباعة");
-  };
   const exportBankPayroll = (format: "xlsx" | "csv") => {
-    if (!bankRows.length) return toast.error("لا توجد حسابات مصرفية أو أرقام دفع مسجلة للموظفين");
+    if (!bankRows.length) {
+      toast.error("لا توجد حسابات مصرفية أو أرقام دفع مسجلة للموظفين");
+      return;
+    }
     const sheetRows = bankRows.map(({ employee, total: net }) => ({
       "اسم الموظف الكامل": employee.full_name,
       "رقم الموظف": employee.employee_no,
@@ -376,14 +310,63 @@ function PayrollPage() {
       المصرف: employee.bank_name || "",
       "رقم الحساب / بطاقة الدفع": employee.bank_account || "",
       IBAN: employee.iban || "",
-      "صافي المستحق": net,
+      "صافي المستحق": roundMoney(net),
       العملة: "IQD",
     }));
     const sheet = XLSX.utils.json_to_sheet(sheetRows);
+    sheet["!cols"] = [
+      { wch: 30 },
+      { wch: 16 },
+      { wch: 24 },
+      { wch: 22 },
+      { wch: 28 },
+      { wch: 34 },
+      { wch: 18 },
+      { wch: 12 },
+    ];
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, sheet, "كشف الصرف المصرفي");
     XLSX.writeFile(workbook, `كشف_مصرفي_للرواتب_${month}.${format}`, { bookType: format });
-    toast.success("تم تنزيل كشف الصرف المصرفي");
+    const skipped = rows.length - bankRows.length;
+    if (skipped)
+      toast.warning(`تم التصدير، واستُبعد ${skipped} موظف لعدم تسجيل حساب مصرفي أو رقم دفع`);
+    else toast.success("تم تنزيل كشف الصرف المصرفي");
+  };
+  const printCashVouchers = () => {
+    if (!cashRows.length) {
+      toast.error("لا توجد عمالة يومية أو عقود نقدية في كشف هذا الشهر");
+      return;
+    }
+    const printWindow = window.open("about:blank", "_blank", "width=1100,height=850");
+    if (!printWindow) {
+      toast.error("اسمح بالنوافذ المنبثقة لطباعة قسائم الصرف");
+      return;
+    }
+    const voucher = (row: (typeof cashRows)[number]) => {
+      const branch = row.employee.sites?.name || row.employee.departments?.name || "—";
+      const gross = roundMoney(row.payroll.grossPay + row.additions);
+      const net = roundMoney(row.total);
+      return `<article class="voucher"><header class="voucher-head"><div><strong>قسيمة صرف نقدي</strong><span>منظومة زِكت · الرواتب</span></div><div class="voucher-month">${escapeHtml(month)}</div></header><section class="identity"><div><span>اسم العامل</span><b>${escapeHtml(row.employee.full_name)}</b></div><div><span>رقم القيد</span><b>${escapeHtml(row.employee.employee_no)}</b></div><div><span>الموقع / القسم</span><b>${escapeHtml(branch)}</b></div><div><span>شهر الصرف</span><b>${escapeHtml(month)}</b></div></section><section class="attendance"><div><span>أيام الحضور</span><b>${row.summary.presentDays} يوم</b></div><div><span>ساعات الإضافي</span><b>${roundMoney(row.payroll.overtimeHours)} ساعة</b></div></section><table><tbody><tr><th>إجمالي الأجر</th><td>${money(gross)}</td></tr><tr><th>الخصومات والاستقطاعات</th><td>${money(row.deductions)}</td></tr><tr class="net"><th>صافي المستلم رقمًا</th><td>${money(net)}</td></tr></tbody></table><div class="amount-words"><span>المبلغ كتابةً</span><b>${escapeHtml(amountInArabicIqd(net))}</b></div><footer class="signatures"><div>توقيع / بصمة العامل</div><div>أمين الصندوق</div><div>المحاسب</div></footer></article>`;
+    };
+    const pages: (typeof cashRows)[] = [];
+    for (let index = 0; index < cashRows.length; index += 3)
+      pages.push(cashRows.slice(index, index + 3));
+    const pageMarkup = pages
+      .map(
+        (page) =>
+          `<section class="voucher-page">${page.map(voucher).join("")}${Array.from({ length: 3 - page.length }, () => '<article class="voucher voucher-empty" aria-hidden="true"></article>').join("")}</section>`,
+      )
+      .join("");
+    printWindow.document
+      .write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>قسائم الصرف النقدي - ${escapeHtml(month)}</title><style>
+      @page{size:A4 portrait;margin:8mm}*{box-sizing:border-box}html,body{margin:0;padding:0;width:100%;font-family:Arial,"Tahoma",sans-serif;color:#17202a;background:#fff}body{direction:rtl}.voucher-page{height:281mm;display:grid;grid-template-rows:repeat(3,minmax(0,1fr));gap:4mm;page-break-after:always;break-after:page}.voucher-page:last-child{page-break-after:auto;break-after:auto}.voucher{min-height:0;overflow:hidden;border:1px dashed #718096;border-radius:3mm;padding:4mm 5mm;display:flex;flex-direction:column;break-inside:avoid;page-break-inside:avoid}.voucher-empty{visibility:hidden}.voucher-head{display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #0f766e;padding-bottom:2mm}.voucher-head strong{display:block;font-size:15px;color:#0f766e}.voucher-head span{display:block;margin-top:1mm;font-size:9px;color:#64748b}.voucher-month{font-size:11px;font-weight:bold;border:1px solid #cbd5e1;border-radius:2mm;padding:2mm 3mm}.identity{display:grid;grid-template-columns:1.5fr .75fr 1.3fr .75fr;gap:2mm;margin:3mm 0}.identity div,.attendance div{min-width:0;border:1px solid #e2e8f0;border-radius:2mm;padding:2mm}.identity span,.attendance span,.amount-words span{display:block;margin-bottom:1mm;font-size:8px;color:#64748b}.identity b,.attendance b{display:block;font-size:10px;overflow-wrap:anywhere}.attendance{display:grid;grid-template-columns:1fr 1fr;gap:2mm;margin-bottom:2mm}.voucher table{width:100%;border-collapse:collapse;font-size:9px}.voucher th,.voucher td{border:1px solid #cbd5e1;padding:1.5mm 2mm;text-align:right}.voucher th{width:60%;background:#f1f5f9}.voucher .net th,.voucher .net td{font-weight:bold;background:#ecfdf5;color:#065f46}.amount-words{margin-top:2mm;padding:2mm;border-right:2px solid #0f766e;background:#f8fafc}.amount-words b{display:block;font-size:9px;line-height:1.5}.signatures{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:3mm;margin-top:auto;padding-top:4mm}.signatures div{height:15mm;border-top:1px solid #475569;padding-top:1.5mm;text-align:center;font-size:8px;color:#475569}@media print{html,body{height:auto;overflow:visible!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}.voucher-page{margin:0}.voucher{box-shadow:none}.voucher-empty{visibility:hidden}}
+      </style></head><body>${pageMarkup}<script>window.onload=()=>{window.focus();window.print()}</script></body></html>`);
+    printWindow.document.close();
+  };
+  const printSlip = (row: (typeof rows)[number]) => {
+    const body = `<div class="meta"><b>الموظف:</b> ${escapeHtml(row.employee.full_name)}<br/><b>الرقم:</b> ${escapeHtml(row.employee.employee_no)}<br/><b>الشهر:</b> ${escapeHtml(month)}</div><table><tr><th>البند</th><th>المبلغ</th></tr><tr><td>الأجر الأساسي</td><td>${money(row.payroll.basePay)}</td></tr><tr><td>بدل الساعات الإضافية (${row.payroll.overtimeHours})</td><td>${money(row.payroll.overtimePay)}</td></tr><tr><td>الإضافات والمكافآت</td><td>${money(row.additions)}</td></tr><tr><td>الاستقطاعات</td><td>${money(row.deductions)}</td></tr><tr class="total"><td>الصافي المستحق</td><td>${money(row.total)}</td></tr></table>`;
+    if (!printReport(`قصاصة راتب — ${row.employee.full_name}`, body))
+      toast.error("اسمح بالنوافذ المنبثقة للطباعة");
   };
   return (
     <div dir="rtl" className="space-y-6">
@@ -397,7 +380,7 @@ function PayrollPage() {
             <p className="text-muted-foreground">تقارير الرواتب والحضور والاستحقاقات الشهرية</p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" asChild>
             <a href="/vehicles">
               <Truck className="ml-2 h-4 w-4" /> إدارة المركبات
@@ -408,13 +391,6 @@ function PayrollPage() {
           </Button>
           <Button onClick={() => exportExcel()} disabled={!filteredRows.length || query.isLoading}>
             <Download className="ml-2 h-4 w-4" /> تصدير Excel
-          </Button>
-          <Button
-            variant="outline"
-            onClick={exportCsv}
-            disabled={!filteredRows.length || query.isLoading}
-          >
-            <Download className="ml-2 h-4 w-4" /> CSV
           </Button>
           <Button
             variant="outline"
@@ -433,9 +409,9 @@ function PayrollPage() {
           <Button
             variant="outline"
             onClick={printCashVouchers}
-            disabled={!filteredRows.length || query.isLoading}
+            disabled={!cashRows.length || query.isLoading}
           >
-            <Printer className="ml-2 h-4 w-4" /> قسائم الصرف
+            <Printer className="ml-2 h-4 w-4" /> طباعة قسائم الصرف النقدية
           </Button>
         </div>
       </div>
@@ -481,6 +457,9 @@ function PayrollPage() {
                 <CardTitle>تقرير رواتب الموظفين</CardTitle>
                 <p className="mt-1 text-sm text-muted-foreground">
                   يشمل احتساب الحضور والراحة والعطل والإضافي والإضافات والاستقطاعات.
+                  {rows.length > bankRows.length &&
+                    ` · ${rows.length - bankRows.length} موظف دون بيانات دفع مصرفية`}
+                  {` · ${cashRows.length} قسيمة نقدية/يومية`}
                 </p>
               </div>
               <div className="relative w-full sm:max-w-xs">

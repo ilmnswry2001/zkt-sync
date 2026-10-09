@@ -1,12 +1,32 @@
 import { Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
 import { currentMonthInBaghdad } from "@/lib/date-time";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "sonner";
 import {
   ArrowRight,
   Award,
@@ -21,9 +41,12 @@ import {
   Mail,
   MapPin,
   Phone,
+  RotateCcw,
   ShieldAlert,
+  ShieldCheck,
   UserRound,
   WalletCards,
+  Wrench,
 } from "lucide-react";
 
 type Employee = {
@@ -105,21 +128,27 @@ type Addition = {
   amount: number;
   created_at: string;
 };
-type Custody = {
+type CustodyRow = {
+  movement_id: string;
   item_id: string;
-  item_code: string | null;
   item_name: string;
+  item_code: string | null;
   unit: string;
+  received_date: string;
+  warehouse_id: string;
   warehouse_name: string;
   remaining_qty: number;
-  received_date: string;
 };
 type Clearance = {
-  clearance_status: string;
+  id: string;
+  clearance_status: "pending" | "approved" | "rejected";
+  cleared_by: string | null;
+  created_at: string;
   has_open_custody: boolean;
   notes: string | null;
-  created_at: string;
 };
+const EMPTY_CUSTODY: CustodyRow[] = [];
+const EMPTY_CLEARANCES: Clearance[] = [];
 
 const monthBounds = (month: string) => ({ start: `${month}-01`, end: `${month}-31` });
 const fmtDate = (value: string | null | undefined) =>
@@ -131,6 +160,26 @@ const fmtDate = (value: string | null | undefined) =>
       })
     : "—";
 const fmtMoney = (value: number) => `${Number(value || 0).toLocaleString("ar-IQ")} د.ع`;
+function printClearanceDocument(employee: Employee, clearance: Clearance) {
+  const popup = window.open("", "_blank", "width=900,height=800");
+  if (!popup) return false;
+  const escapeHtml = (value: string) =>
+    value.replace(
+      /[&<>"']/g,
+      (char) =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[char] ?? char,
+    );
+  const issuedDate = new Date(clearance.created_at).toLocaleDateString("ar-IQ", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  popup.document.write(
+    `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"/><title>براءة ذمة - ${escapeHtml(employee.full_name)}</title><style>@page{size:A4;margin:18mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#18212b;line-height:1.9}.header{text-align:center;border-bottom:3px solid #0f766e;padding-bottom:18px}.header h1{font-size:25px;margin:0}.header p{margin:4px 0;color:#52616b}.stamp{margin:34px auto;padding:24px;border:2px solid #15803d;border-radius:8px;text-align:center;color:#166534;font-size:20px;font-weight:bold}.details{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:24px 0}.field{border:1px solid #cbd5e1;border-radius:6px;padding:12px}.label{display:block;color:#64748b;font-size:12px}.statement{margin-top:26px;text-align:justify}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:70px;margin-top:100px;text-align:center}.line{border-top:1px solid #334155;margin-top:54px;padding-top:8px}.footer{margin-top:60px;border-top:1px solid #cbd5e1;padding-top:10px;color:#64748b;font-size:11px;text-align:center}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}</style></head><body><header class="header"><h1>براءة ذمة إلكترونية</h1><p>إدارة الموارد البشرية والمخازن</p></header><div class="stamp">تشهد الإدارة بخلو ذمة الموظف من العدد والأدوات</div><section class="details"><div class="field"><span class="label">اسم الموظف</span>${escapeHtml(employee.full_name)}</div><div class="field"><span class="label">الرقم الوظيفي</span>${escapeHtml(employee.employee_no)}</div><div class="field"><span class="label">القسم</span>${escapeHtml(employee.departments?.name || "—")}</div><div class="field"><span class="label">المسمى الوظيفي</span>${escapeHtml(employee.position || "—")}</div><div class="field"><span class="label">الموقع</span>${escapeHtml(employee.sites?.name || "—")}</div><div class="field"><span class="label">رقم البراءة</span>${escapeHtml(clearance.id)}</div><div class="field"><span class="label">تاريخ الإصدار</span>${escapeHtml(issuedDate)}</div><div class="field"><span class="label">حالة العهدة</span>لا توجد عهد أدوات مفتوحة</div></section><p class="statement">تؤكد هذه الوثيقة، وفق سجل حركات المخازن حتى تاريخ الإصدار أعلاه، أن الموظف المذكور لا توجد في ذمته أي عدد أو أدوات غير مسترجعة. صدرت هذه البراءة للاستخدام الإداري الرسمي.</p><section class="signatures"><div class="line">الموارد البشرية / الإدارة</div><div class="line">مسؤول المخازن</div></section><footer class="footer">وثيقة صادرة إلكترونيًا من منظومة زِكت</footer><script>window.onload=()=>window.print()</script></body></html>`,
+  );
+  popup.document.close();
+  return true;
+}
 const statusText: Record<string, string> = {
   present: "حاضر",
   absent: "غائب",
@@ -189,7 +238,41 @@ export function EmployeeProfileContent({
   employeeId: string;
   embedded?: boolean;
 }) {
+  const queryClient = useQueryClient();
+  const { roles, isAdmin, isHR } = useAuth();
+  const canReturnCustody = roles.some((role) =>
+    ["admin", "hr", "data_entry", "site_admin"].includes(role),
+  );
+  const canIssueClearance = isAdmin || isHR;
   const [month, setMonth] = useState(currentMonthInBaghdad);
+  const [returnDialogOpen, setReturnDialogOpen] = useState(false);
+  const [selectedCustody, setSelectedCustody] = useState("");
+  const [returnQuantity, setReturnQuantity] = useState("");
+  const [returnNotes, setReturnNotes] = useState("");
+  const custodyQuery = useQuery({
+    queryKey: ["employee-custody", employeeId],
+    queryFn: async () => {
+      const { data: custody, error: custodyError } = await (supabase as any).rpc(
+        "get_employee_custody",
+        {
+          emp_id: employeeId,
+        },
+      );
+      if (custodyError) throw custodyError;
+      let clearances: Clearance[] = [];
+      if (canIssueClearance) {
+        const { data, error: clearanceError } = await (supabase as any)
+          .from("employee_clearances")
+          .select("id, clearance_status, cleared_by, created_at, has_open_custody, notes")
+          .eq("employee_id", employeeId)
+          .order("created_at", { ascending: false })
+          .limit(20);
+        if (clearanceError) throw clearanceError;
+        clearances = (data ?? []) as Clearance[];
+      }
+      return { custody: (custody ?? []) as CustodyRow[], clearances };
+    },
+  });
   const { data, isLoading, error } = useQuery({
     queryKey: ["employee-profile", employeeId, month],
     queryFn: async () => {
@@ -208,71 +291,61 @@ export function EmployeeProfileContent({
         const result = await request;
         return result.error ? ([] as T[]) : ((result.data ?? []) as T[]);
       };
-      const [attendance, punches, forms, penalties, tasks, additions, custody, clearances] =
-        await Promise.all([
-          safe<Attendance>(
-            (supabase as any)
-              .from("attendance_day_status")
-              .select("id, work_date, status, overtime_hours, notes")
-              .eq("employee_id", employeeId)
-              .gte("work_date", bounds.start)
-              .lte("work_date", bounds.end)
-              .order("work_date", { ascending: false }),
-          ),
-          safe<Punch>(
-            (supabase as any)
-              .from("attendance_logs")
-              .select("id, verify_time, verify_type")
-              .eq("employee_id", employeeId)
-              .gte("verify_time", `${bounds.start}T00:00:00`)
-              .lte("verify_time", `${bounds.end}T23:59:59`)
-              .order("verify_time", { ascending: false })
-              .limit(200),
-          ),
-          safe<Form>(
-            (supabase as any)
-              .from("forms")
-              .select("id, work_date, kind, status, overtime_hours, reason, check_in, check_out")
-              .eq("employee_id", employeeId)
-              .gte("work_date", bounds.start)
-              .lte("work_date", bounds.end)
-              .order("work_date", { ascending: false }),
-          ),
-          safe<Penalty>(
-            (supabase as any)
-              .from("employee_penalties")
-              .select("id, penalty_date, penalty_type, deduction_amount, notes, executed_at")
-              .eq("employee_id", employeeId)
-              .order("penalty_date", { ascending: false }),
-          ),
-          safe<Task>(
-            (supabase as any)
-              .from("employee_tasks")
-              .select("id, task_date, title, description, status, duration_minutes, manager_note")
-              .eq("employee_id", employeeId)
-              .gte("task_date", bounds.start)
-              .lte("task_date", bounds.end)
-              .order("task_date", { ascending: false }),
-          ),
-          safe<Addition>(
-            (supabase as any)
-              .from("salary_additions")
-              .select("id, month, kind, description, amount, created_at")
-              .eq("employee_id", employeeId)
-              .gte("month", bounds.start)
-              .lte("month", `${month}-31`)
-              .order("month", { ascending: false }),
-          ),
-          safe<Custody>((supabase as any).rpc("get_employee_custody", { emp_id: employeeId })),
-          safe<Clearance>(
-            (supabase as any)
-              .from("employee_clearances")
-              .select("clearance_status, has_open_custody, notes, created_at")
-              .eq("employee_id", employeeId)
-              .order("created_at", { ascending: false })
-              .limit(1),
-          ),
-        ]);
+      const [attendance, punches, forms, penalties, tasks, additions] = await Promise.all([
+        safe<Attendance>(
+          (supabase as any)
+            .from("attendance_day_status")
+            .select("id, work_date, status, overtime_hours, notes")
+            .eq("employee_id", employeeId)
+            .gte("work_date", bounds.start)
+            .lte("work_date", bounds.end)
+            .order("work_date", { ascending: false }),
+        ),
+        safe<Punch>(
+          (supabase as any)
+            .from("attendance_logs")
+            .select("id, verify_time, verify_type")
+            .eq("employee_id", employeeId)
+            .gte("verify_time", `${bounds.start}T00:00:00`)
+            .lte("verify_time", `${bounds.end}T23:59:59`)
+            .order("verify_time", { ascending: false })
+            .limit(200),
+        ),
+        safe<Form>(
+          (supabase as any)
+            .from("forms")
+            .select("id, work_date, kind, status, overtime_hours, reason, check_in, check_out")
+            .eq("employee_id", employeeId)
+            .gte("work_date", bounds.start)
+            .lte("work_date", bounds.end)
+            .order("work_date", { ascending: false }),
+        ),
+        safe<Penalty>(
+          (supabase as any)
+            .from("employee_penalties")
+            .select("id, penalty_date, penalty_type, deduction_amount, notes, executed_at")
+            .eq("employee_id", employeeId)
+            .order("penalty_date", { ascending: false }),
+        ),
+        safe<Task>(
+          (supabase as any)
+            .from("employee_tasks")
+            .select("id, task_date, title, description, status, duration_minutes, manager_note")
+            .eq("employee_id", employeeId)
+            .gte("task_date", bounds.start)
+            .lte("task_date", bounds.end)
+            .order("task_date", { ascending: false }),
+        ),
+        safe<Addition>(
+          (supabase as any)
+            .from("salary_additions")
+            .select("id, month, kind, description, amount, created_at")
+            .eq("employee_id", employeeId)
+            .gte("month", bounds.start)
+            .lte("month", `${month}-31`)
+            .order("month", { ascending: false }),
+        ),
+      ]);
       return {
         employee: employee as Employee,
         attendance,
@@ -281,12 +354,81 @@ export function EmployeeProfileContent({
         penalties,
         tasks,
         additions,
-        custody,
-        clearances,
       };
     },
   });
   const employee = data?.employee;
+  const custody = custodyQuery.data?.custody ?? EMPTY_CUSTODY;
+  const clearances = custodyQuery.data?.clearances ?? EMPTY_CLEARANCES;
+  const returnChoices = useMemo(() => {
+    const grouped = new Map<string, CustodyRow>();
+    for (const row of custody) {
+      const key = `${row.item_id}|${row.warehouse_id}`;
+      const existing = grouped.get(key);
+      grouped.set(
+        key,
+        existing
+          ? {
+              ...existing,
+              remaining_qty: Number(existing.remaining_qty) + Number(row.remaining_qty),
+            }
+          : { ...row },
+      );
+    }
+    return [...grouped.entries()].map(([key, row]) => ({ key, ...row }));
+  }, [custody]);
+  const selectedReturnChoice = returnChoices.find((row) => row.key === selectedCustody);
+  const latestApprovedClearance = clearances.find(
+    (clearance) => clearance.clearance_status === "approved",
+  );
+  const returnCustodyMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedReturnChoice) throw new Error("اختر العهدة المراد إرجاعها");
+      const quantity = Number(returnQuantity);
+      if (
+        !Number.isFinite(quantity) ||
+        quantity <= 0 ||
+        quantity > Number(selectedReturnChoice.remaining_qty)
+      ) {
+        throw new Error("أدخل كمية صحيحة لا تتجاوز الكمية المتبقية");
+      }
+      const { error: returnError } = await (supabase as any).rpc("return_employee_custody", {
+        _employee_id: employeeId,
+        _item_id: selectedReturnChoice.item_id,
+        _warehouse_id: selectedReturnChoice.warehouse_id,
+        _quantity: quantity,
+        _notes: returnNotes.trim() || null,
+      });
+      if (returnError) throw returnError;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["employee-custody", employeeId] });
+      await queryClient.invalidateQueries({ queryKey: ["wh-moves"] });
+      setReturnDialogOpen(false);
+      setSelectedCustody("");
+      setReturnQuantity("");
+      setReturnNotes("");
+      toast.success("تم تسجيل استرجاع العهدة");
+    },
+    onError: (returnError: Error) =>
+      toast.error(returnError.message || "تعذر تسجيل استرجاع العهدة"),
+  });
+  const issueClearanceMutation = useMutation({
+    mutationFn: async () => {
+      if (custody.length) throw new Error("لا يمكن إصدار براءة الذمة مع وجود عهدة مفتوحة");
+      const { error: clearanceError } = await (supabase as any).rpc("issue_employee_clearance", {
+        _employee_id: employeeId,
+        _notes: "تم التحقق من خلو ذمة الموظف من العدد والأدوات.",
+      });
+      if (clearanceError) throw clearanceError;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["employee-custody", employeeId] });
+      toast.success("تم اعتماد براءة الذمة. يمكنك الآن طباعة الوثيقة الرسمية.");
+    },
+    onError: (clearanceError: Error) =>
+      toast.error(clearanceError.message || "تعذر إصدار براءة الذمة"),
+  });
   const stats = useMemo(() => {
     const attendance = data?.attendance ?? [];
     const forms = data?.forms ?? [];
@@ -414,7 +556,7 @@ export function EmployeeProfileContent({
         />
       </div>
       <Tabs defaultValue="overview" className="space-y-5">
-        <TabsList className="grid h-auto w-full grid-cols-2 gap-2 bg-transparent sm:grid-cols-3 lg:grid-cols-7">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-2 bg-transparent sm:grid-cols-4 lg:grid-cols-7">
           <TabsTrigger value="overview" className="min-h-11 rounded-xl border">
             نظرة عامة
           </TabsTrigger>
@@ -430,11 +572,11 @@ export function EmployeeProfileContent({
           <TabsTrigger value="finance" className="min-h-11 rounded-xl border">
             الأجور والبدلات
           </TabsTrigger>
-          <TabsTrigger value="custody" className="min-h-11 rounded-xl border">
-            العهدة وبراءة الذمة
-          </TabsTrigger>
           <TabsTrigger value="identity" className="min-h-11 rounded-xl border">
             البيانات والملفات
+          </TabsTrigger>
+          <TabsTrigger value="custody" className="min-h-11 rounded-xl border">
+            عِهدة العِدد والأدوات
           </TabsTrigger>
         </TabsList>
         <TabsContent value="overview" className="grid gap-4 lg:grid-cols-3">
@@ -595,35 +737,6 @@ export function EmployeeProfileContent({
             empty="لا توجد إضافات أو مكافآت لهذا الشهر."
           />
         </TabsContent>
-        <TabsContent value="custody" className="space-y-4">
-          <DataCard
-            title="العِهد المفتوحة"
-            headers={["الصنف", "الرمز", "المخزن", "الكمية", "تاريخ التسليم"]}
-            rows={(data?.custody ?? []).map((row) => [
-              row.item_name,
-              row.item_code || "—",
-              row.warehouse_name,
-              String(row.remaining_qty),
-              fmtDate(row.received_date),
-            ])}
-            empty="لا توجد عِهد مفتوحة لهذا الموظف."
-          />
-          {data?.clearances?.length ? (
-            <DataCard
-              title="آخر براءة ذمة"
-              headers={["الحالة", "عهد مفتوحة", "التاريخ", "ملاحظات"]}
-              rows={data.clearances.map((row) => [
-                statusText[row.clearance_status] || row.clearance_status,
-                row.has_open_custody ? "نعم" : "لا",
-                fmtDate(row.created_at.slice(0, 10)),
-                row.notes || "—",
-              ])}
-              empty=""
-            />
-          ) : (
-            <Empty text="لم تصدر براءة ذمة لهذا الموظف بعد." />
-          )}
-        </TabsContent>
         <TabsContent value="identity">
           <Card>
             <CardHeader>
@@ -654,6 +767,258 @@ export function EmployeeProfileContent({
               {employee.notes || "لا توجد ملاحظات محفوظة."}
             </CardContent>
           </Card>
+        </TabsContent>
+        <TabsContent value="custody" className="space-y-4">
+          <Card>
+            <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+              <div className="flex items-center gap-3">
+                {custody.length ? (
+                  <Badge className="bg-red-600 text-white hover:bg-red-600">
+                    توجد عِدد في ذمة الموظف
+                  </Badge>
+                ) : (
+                  <Badge className="bg-emerald-700 text-white hover:bg-emerald-700">
+                    الذمة بريئة - لا توجد عِهد مفتوحة
+                  </Badge>
+                )}
+                <span className="text-sm text-muted-foreground">
+                  {custody.length} بند عهدة مفتوح
+                </span>
+              </div>
+              {canReturnCustody && custody.length > 0 && (
+                <Button onClick={() => setReturnDialogOpen(true)}>
+                  <RotateCcw className="ml-2 h-4 w-4" />
+                  تسجيل استرجاع عِهدة
+                </Button>
+              )}
+              {canIssueClearance && (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    onClick={() => issueClearanceMutation.mutate()}
+                    disabled={
+                      custody.length > 0 ||
+                      issueClearanceMutation.isPending ||
+                      custodyQuery.isLoading
+                    }
+                  >
+                    <ShieldCheck className="ml-2 h-4 w-4" />
+                    {issueClearanceMutation.isPending
+                      ? "جارٍ الاعتماد..."
+                      : "إصدار براءة ذمة رسمية"}
+                  </Button>
+                  {latestApprovedClearance && custody.length === 0 && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        if (!printClearanceDocument(employee, latestApprovedClearance))
+                          toast.error("اسمح بالنوافذ المنبثقة لطباعة الوثيقة");
+                      }}
+                    >
+                      طباعة براءة الذمة
+                    </Button>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {custody.length > 0 && canIssueClearance && (
+            <div
+              role="alert"
+              className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200"
+            >
+              <p className="flex items-center gap-2 font-semibold">
+                <ShieldAlert className="h-4 w-4" />
+                تعذر إصدار براءة الذمة قبل إغلاق العهد المفتوحة:
+              </p>
+              <ul className="mt-2 list-inside list-disc">
+                {custody.map((row) => (
+                  <li key={row.movement_id}>
+                    {row.item_name} ({row.item_code || "دون كود"}) — المتبقي {row.remaining_qty}{" "}
+                    {row.unit} في {row.warehouse_name}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {custodyQuery.isLoading ? (
+            <div className="flex justify-center p-8">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : custodyQuery.error ? (
+            <Card>
+              <CardContent className="p-6 text-sm text-destructive">
+                تعذر تحميل سجل العهدة أو براءة الذمة. تأكد من تطبيق ترحيل العهدة على قاعدة البيانات.
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Wrench className="h-5 w-5" />
+                  العدد والأدوات الموجودة في الذمة
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>اسم الأداة</TableHead>
+                      <TableHead>الكود</TableHead>
+                      <TableHead>تاريخ الاستلام</TableHead>
+                      <TableHead>المخزن التابع له</TableHead>
+                      <TableHead>الكمية المتبقية</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {custody.map((row) => (
+                      <TableRow key={row.movement_id}>
+                        <TableCell className="font-medium">{row.item_name}</TableCell>
+                        <TableCell>{row.item_code || "—"}</TableCell>
+                        <TableCell>{fmtDate(row.received_date)}</TableCell>
+                        <TableCell>{row.warehouse_name}</TableCell>
+                        <TableCell>
+                          {row.remaining_qty} {row.unit}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {!custody.length && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="h-20 text-center text-muted-foreground">
+                          لا توجد عِدد أو أدوات مفتوحة في ذمة الموظف.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+
+          {canIssueClearance && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5" />
+                  سجل براءات الذمة
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>تاريخ الإصدار</TableHead>
+                      <TableHead>الحالة</TableHead>
+                      <TableHead>الملاحظات</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {clearances.map((clearance) => (
+                      <TableRow key={clearance.id}>
+                        <TableCell>
+                          {new Date(clearance.created_at).toLocaleString("ar-IQ")}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              clearance.clearance_status === "approved"
+                                ? "default"
+                                : clearance.clearance_status === "rejected"
+                                  ? "destructive"
+                                  : "secondary"
+                            }
+                          >
+                            {clearance.clearance_status === "approved"
+                              ? "معتمدة"
+                              : clearance.clearance_status === "rejected"
+                                ? "مرفوضة"
+                                : "قيد الانتظار"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{clearance.notes || "—"}</TableCell>
+                      </TableRow>
+                    ))}
+                    {!clearances.length && (
+                      <TableRow>
+                        <TableCell colSpan={3} className="h-16 text-center text-muted-foreground">
+                          لا توجد براءات ذمة سابقة.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+
+          <Dialog open={returnDialogOpen} onOpenChange={setReturnDialogOpen}>
+            <DialogContent dir="rtl" className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>تسجيل استرجاع عِهدة</DialogTitle>
+              </DialogHeader>
+              <form
+                className="space-y-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  returnCustodyMutation.mutate();
+                }}
+              >
+                <div className="space-y-2">
+                  <Label>الأداة والمخزن</Label>
+                  <Select
+                    value={selectedCustody}
+                    onValueChange={(value) => {
+                      setSelectedCustody(value);
+                      const choice = returnChoices.find((row) => row.key === value);
+                      setReturnQuantity(choice ? String(choice.remaining_qty) : "");
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر العهدة المراد إرجاعها" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {returnChoices.map((row) => (
+                        <SelectItem key={row.key} value={row.key}>
+                          {row.item_name} · {row.warehouse_name} · المتبقي {row.remaining_qty}{" "}
+                          {row.unit}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="custody-return-quantity">الكمية المسترجعة</Label>
+                  <Input
+                    id="custody-return-quantity"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    max={selectedReturnChoice?.remaining_qty}
+                    value={returnQuantity}
+                    onChange={(event) => setReturnQuantity(event.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="custody-return-notes">ملاحظات</Label>
+                  <Input
+                    id="custody-return-notes"
+                    value={returnNotes}
+                    onChange={(event) => setReturnNotes(event.target.value)}
+                    maxLength={500}
+                  />
+                </div>
+                <Button
+                  className="w-full"
+                  type="submit"
+                  disabled={returnCustodyMutation.isPending || !selectedCustody}
+                >
+                  {returnCustodyMutation.isPending ? "جارٍ تسجيل الحركة..." : "تأكيد الاسترجاع"}
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
       </Tabs>
     </div>

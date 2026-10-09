@@ -5,6 +5,16 @@ import { useAuth } from "@/hooks/use-auth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import {
   CheckCircle2,
@@ -16,6 +26,7 @@ import {
   Smartphone,
   Wifi,
   WifiOff,
+  Settings2,
 } from "lucide-react";
 
 type DbResult = { data: unknown; error: { message: string } | null };
@@ -97,29 +108,46 @@ function haversineMeters(aLat: number, aLon: number, bLat: number, bLon: number)
   const toRad = (value: number) => (value * Math.PI) / 180;
   const dLat = toRad(bLat - aLat);
   const dLon = toRad(bLon - aLon);
-  const value = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLon / 2) ** 2;
+  const value =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLon / 2) ** 2;
   return radius * 2 * Math.asin(Math.sqrt(value));
 }
 
 function SelfAttendancePage() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [now, setNow] = useState(new Date());
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [locationLoading, setLocationLoading] = useState(false);
   const [recording, setRecording] = useState<"check_in" | "check_out" | null>(null);
-  const [coordinates, setCoordinates] = useState<{ latitude: number; longitude: number; accuracy: number } | null>(null);
+  const [coordinates, setCoordinates] = useState<{
+    latitude: number;
+    longitude: number;
+    accuracy: number;
+  } | null>(null);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isIos, setIsIos] = useState(false);
+  const [sites, setSites] = useState<Site[]>([]);
+  const [selectedSiteId, setSelectedSiteId] = useState("");
+  const [siteLatitude, setSiteLatitude] = useState("");
+  const [siteLongitude, setSiteLongitude] = useState("");
+  const [siteRadius, setSiteRadius] = useState("200");
+  const [siteSaving, setSiteSaving] = useState(false);
 
   const today = baghdadDate(now);
   const site = employee?.sites ?? null;
-  const distance = coordinates && site?.latitude != null && site.longitude != null
-    ? haversineMeters(coordinates.latitude, coordinates.longitude, site.latitude, site.longitude)
-    : null;
-  const insideGeofence = distance != null && site != null && distance <= site.geofence_radius_meters;
+  const distance =
+    coordinates && site?.latitude != null && site.longitude != null
+      ? haversineMeters(coordinates.latitude, coordinates.longitude, site.latitude, site.longitude)
+      : null;
+  const insideGeofence =
+    distance != null && site != null && distance <= site.geofence_radius_meters;
   const checkedIn = logs.some((log) => log.self_event_type === "check_in" || log.verify_type === 0);
-  const checkedOut = logs.some((log) => log.self_event_type === "check_out" || log.verify_type === 1);
+  const checkedOut = logs.some(
+    (log) => log.self_event_type === "check_out" || log.verify_type === 1,
+  );
 
   const loadAttendance = async () => {
     if (!user) return;
@@ -127,7 +155,9 @@ function SelfAttendancePage() {
     const client = supabase as unknown as DbClient;
     const employeeResult = await client
       .from("employees")
-      .select("id, employee_no, full_name, position, site_id, sites!site_id(id, name, latitude, longitude, geofence_radius_meters)")
+      .select(
+        "id, employee_no, full_name, position, site_id, sites!site_id(id, name, latitude, longitude, geofence_radius_meters)",
+      )
       .eq("email", user.email ?? "")
       .eq("status", "active")
       .maybeSingle();
@@ -162,25 +192,62 @@ function SelfAttendancePage() {
   }, []);
   useEffect(() => {
     void loadAttendance();
+    // loadAttendance يعتمد على اليوم والحساب الحاليين، ويُعاد تشغيله عند تغيّرهما فقط.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, today]);
   useEffect(() => {
     const handler = (event: Event) => setInstallPrompt(event as BeforeInstallPromptEvent);
     window.addEventListener("beforeinstallprompt", handler);
+    setIsIos(
+      /iphone|ipad|ipod/i.test(window.navigator.userAgent) &&
+        !(
+          "standalone" in window.navigator &&
+          (window.navigator as Navigator & { standalone?: boolean }).standalone
+        ),
+    );
     return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
+  useEffect(() => {
+    if (!isAdmin) return;
+    void (async () => {
+      const { data, error } = await (supabase as any)
+        .from("sites")
+        .select("id, name, latitude, longitude, geofence_radius_meters")
+        .order("name");
+      if (error) return toast.error(`تعذر تحميل المواقع: ${error.message}`);
+      const nextSites = (data ?? []) as Site[];
+      setSites(nextSites);
+      if (nextSites.length && !selectedSiteId) setSelectedSiteId(nextSites[0].id);
+    })();
+  }, [isAdmin, selectedSiteId]);
+  const selectedSite = sites.find((item) => item.id === selectedSiteId) ?? null;
+  useEffect(() => {
+    if (!selectedSite) return;
+    setSiteLatitude(selectedSite.latitude == null ? "" : String(selectedSite.latitude));
+    setSiteLongitude(selectedSite.longitude == null ? "" : String(selectedSite.longitude));
+    setSiteRadius(String(selectedSite.geofence_radius_meters));
+  }, [selectedSite, selectedSiteId]);
 
   const refreshLocation = () => {
     if (!navigator.geolocation) return toast.error("المتصفح لا يدعم تحديد الموقع");
     setLocationLoading(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setCoordinates({ latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy });
+        setCoordinates({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+        });
         setLocationLoading(false);
         toast.success("تم تحديث موقعك الحالي");
       },
       (error) => {
         setLocationLoading(false);
-        toast.error(error.code === error.PERMISSION_DENIED ? "اسمح للمتصفح بالوصول إلى موقعك أولاً" : "تعذر قراءة موقعك الحالي");
+        toast.error(
+          error.code === error.PERMISSION_DENIED
+            ? "اسمح للمتصفح بالوصول إلى موقعك أولاً"
+            : "تعذر قراءة موقعك الحالي",
+        );
       },
       { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 },
     );
@@ -189,16 +256,27 @@ function SelfAttendancePage() {
   const recordAttendance = async (eventType: "check_in" | "check_out") => {
     if (!employee || !site) return toast.error("لا يوجد موقع عمل مخصص لهذا الموظف");
     if (!coordinates) return toast.error("حدّث موقعك قبل تسجيل الحركة");
-    if (!insideGeofence) return toast.error(`لا يمكن التسجيل، أنت تبعد ${Math.round(distance ?? 0)} متراً عن موقع العمل`);
-    if (eventType === "check_in" && checkedIn) return toast.error("تم تسجيل حضورك لهذا اليوم بالفعل");
-    if (eventType === "check_out" && (!checkedIn || checkedOut)) return toast.error(checkedOut ? "تم تسجيل انصرافك لهذا اليوم بالفعل" : "لا يمكن الانصراف قبل تسجيل الحضور");
+    if (!insideGeofence)
+      return toast.error(
+        `لا يمكن التسجيل، أنت تبعد ${Math.round(distance ?? 0)} متراً عن موقع العمل`,
+      );
+    if (eventType === "check_in" && checkedIn)
+      return toast.error("تم تسجيل حضورك لهذا اليوم بالفعل");
+    if (eventType === "check_out" && (!checkedIn || checkedOut))
+      return toast.error(
+        checkedOut ? "تم تسجيل انصرافك لهذا اليوم بالفعل" : "لا يمكن الانصراف قبل تسجيل الحضور",
+      );
     setRecording(eventType);
     const rpc = supabase as unknown as SelfAttendanceRpc;
     const { data, error } = await rpc.rpc("record_mobile_self_attendance", {
       p_event_type: eventType,
       p_latitude: coordinates.latitude,
       p_longitude: coordinates.longitude,
-      p_device_info: { user_agent: navigator.userAgent, platform: navigator.platform, accuracy_meters: coordinates.accuracy },
+      p_device_info: {
+        user_agent: navigator.userAgent,
+        platform: navigator.platform,
+        accuracy_meters: coordinates.accuracy,
+      },
     });
     setRecording(null);
     if (error) return toast.error(error.message);
@@ -214,6 +292,48 @@ function SelfAttendancePage() {
     await installPrompt.userChoice;
     setInstallPrompt(null);
   };
+  const updateSelectedSite = async (
+    latitude: number | null = Number(siteLatitude),
+    longitude: number | null = Number(siteLongitude),
+  ) => {
+    if (!selectedSiteId) return toast.error("اختر الموقع أولاً");
+    const radius = Number(siteRadius);
+    if (
+      latitude == null ||
+      !Number.isFinite(latitude) ||
+      longitude == null ||
+      !Number.isFinite(longitude)
+    )
+      return toast.error("أدخل إحداثيات صحيحة");
+    if (!Number.isFinite(radius) || radius < 25 || radius > 5000)
+      return toast.error("نصف القطر يجب أن يكون بين 25 و5000 متر");
+    setSiteSaving(true);
+    const { data, error } = await (supabase as any)
+      .from("sites")
+      .update({ latitude, longitude, geofence_radius_meters: Math.round(radius) })
+      .eq("id", selectedSiteId)
+      .select("id, name, latitude, longitude, geofence_radius_meters")
+      .single();
+    setSiteSaving(false);
+    if (error) return toast.error(`تعذر حفظ إعدادات الموقع: ${error.message}`);
+    setSites((current) =>
+      current.map((item) => (item.id === selectedSiteId ? (data as Site) : item)),
+    );
+    toast.success("تم حفظ إعدادات موقع العمل");
+  };
+  const pinCurrentSite = () => {
+    if (!navigator.geolocation) return toast.error("المتصفح لا يدعم تحديد الموقع");
+    setSiteSaving(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setSiteLatitude(String(position.coords.latitude));
+        setSiteLongitude(String(position.coords.longitude));
+        void updateSelectedSite(position.coords.latitude, position.coords.longitude);
+      },
+      () => setSiteSaving(false),
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 },
+    );
+  };
 
   const statusText = useMemo(() => {
     if (checkedOut) return "تم تسجيل الانصراف اليوم";
@@ -221,22 +341,253 @@ function SelfAttendancePage() {
     return "لم يتم تسجيل الحضور بعد";
   }, [checkedIn, checkedOut]);
 
-  if (loading) return <div className="flex min-h-[60vh] items-center justify-center"><Clock3 className="h-6 w-6 animate-spin text-primary" /></div>;
+  if (loading)
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Clock3 className="h-6 w-6 animate-spin text-primary" />
+      </div>
+    );
   return (
     <div dir="rtl" className="mx-auto max-w-2xl space-y-5 pb-8">
-      {installPrompt && <Card className="border-cyan-200 bg-cyan-50/80"><CardContent className="flex flex-wrap items-center justify-between gap-3 p-4"><div><p className="font-semibold">ثبّت حضوري الذكي على هاتفك</p><p className="text-sm text-muted-foreground">افتح الحضور الذاتي بسرعة من الشاشة الرئيسية.</p></div><Button onClick={() => void install()}>تثبيت التطبيق</Button></CardContent></Card>}
+      {(installPrompt || isIos) && (
+        <Card className="border-cyan-200 bg-cyan-50/80">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+            <div>
+              <p className="font-semibold">ثبّت التطبيق على شاشتك الرئيسية لتسجيل الحضور بسهولة</p>
+              <p className="text-sm text-muted-foreground">
+                {isIos
+                  ? "في Safari اضغط زر المشاركة ثم اختر إضافة إلى الشاشة الرئيسية."
+                  : "ثبّت حضوري الذكي للوصول السريع من هاتفك."}
+              </p>
+            </div>
+            {installPrompt && <Button onClick={() => void install()}>تثبيت الآن</Button>}
+          </CardContent>
+        </Card>
+      )}
       <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-teal-950 p-6 text-white shadow-xl sm:p-8">
-        <div className="flex items-center justify-between gap-3"><Badge className="border-white/20 bg-white/10 text-white"><Smartphone className="ml-1.5 h-3.5 w-3.5" /> حضوري الذكي</Badge><Wifi className="h-5 w-5 text-cyan-300" /></div>
+        <div className="flex items-center justify-between gap-3">
+          <Badge className="border-white/20 bg-white/10 text-white">
+            <Smartphone className="ml-1.5 h-3.5 w-3.5" /> حضوري الذكي
+          </Badge>
+          <Wifi className="h-5 w-5 text-cyan-300" />
+        </div>
         <p className="mt-6 text-sm text-slate-300">التوقيت الرسمي — بغداد</p>
         <p className="mt-1 text-5xl font-bold tracking-tight sm:text-6xl">{baghdadTime(now)}</p>
         <p className="mt-2 text-sm text-slate-300">{today}</p>
       </section>
-      {!employee ? <Card><CardContent className="p-6 text-center text-sm text-muted-foreground">لا يوجد سجل موظف نشط مرتبط بحسابك. اطلب من الموارد البشرية ربط البريد الإلكتروني بملف الموظف.</CardContent></Card> : <>
-        <Card><CardHeader><CardTitle className="flex items-center justify-between gap-3"><span>{employee.full_name}</span><Badge variant={checkedOut ? "secondary" : checkedIn ? "default" : "outline"}>{statusText}</Badge></CardTitle></CardHeader><CardContent className="grid gap-3 text-sm sm:grid-cols-3"><div><span className="text-muted-foreground">الرقم الوظيفي</span><p className="font-semibold">{employee.employee_no}</p></div><div><span className="text-muted-foreground">الموقع المعتمد</span><p className="font-semibold">{site?.name ?? "غير محدد"}</p></div><div><span className="text-muted-foreground">المنصب</span><p className="font-semibold">{employee.position ?? "غير محدد"}</p></div></CardContent></Card>
-        <Card className={insideGeofence ? "border-emerald-300 bg-emerald-50/60" : "border-rose-300 bg-rose-50/60"}><CardContent className="p-5"><div className="flex items-start gap-3">{insideGeofence ? <Crosshair className="mt-0.5 h-6 w-6 text-emerald-600" /> : <WifiOff className="mt-0.5 h-6 w-6 text-rose-600" />}<div className="min-w-0 flex-1"><p className="font-semibold">{insideGeofence ? `أنت داخل نطاق موقع العمل (ضمن ${Math.round(distance ?? 0)} متراً)` : distance != null ? `أنت خارج نطاق موقع العمل (تبعد ${Math.round(distance)} متراً)` : "لم يتم تحديد موقعك بعد"}</p><p className="mt-1 text-xs text-muted-foreground">دقة GPS الحالية: {coordinates ? `${Math.round(coordinates.accuracy)} متر` : "غير متاحة"}</p></div><Button variant="outline" size="sm" onClick={refreshLocation} disabled={locationLoading}>{locationLoading ? "جارٍ التحديث" : "تحديث موقعي الآن"}</Button></div></CardContent></Card>
-        <div className="grid gap-4 sm:grid-cols-2"><Button className="h-20 bg-emerald-600 text-lg hover:bg-emerald-700" disabled={!insideGeofence || checkedIn || recording !== null} onClick={() => void recordAttendance("check_in")}><LogIn className="ml-3 h-7 w-7" />{recording === "check_in" ? "جارٍ التسجيل..." : "تسجيل حضور (دخول)"}</Button><Button className="h-20 bg-orange-600 text-lg hover:bg-orange-700" disabled={!insideGeofence || !checkedIn || checkedOut || recording !== null} onClick={() => void recordAttendance("check_out")}><LogOut className="ml-3 h-7 w-7" />{recording === "check_out" ? "جارٍ التسجيل..." : "تسجيل انصراف (خروج)"}</Button></div>
-        <Card><CardHeader><CardTitle className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-primary" /> حركات اليوم</CardTitle></CardHeader><CardContent className="space-y-2">{logs.length ? logs.map((log) => <div key={log.id} className="flex items-center justify-between rounded-lg border p-3 text-sm"><span>{log.self_event_type === "check_out" || log.verify_type === 1 ? "انصراف" : "حضور"}</span><span className="font-semibold">{new Date(log.verify_time).toLocaleTimeString("ar-IQ", { timeZone: "Asia/Baghdad", hour: "2-digit", minute: "2-digit" })}</span><span className="text-xs text-muted-foreground">{log.source === "mobile_self" ? "من الهاتف" : "جهاز بصمة"}</span></div>) : <p className="text-sm text-muted-foreground">لا توجد حركات مسجلة اليوم.</p>}</CardContent></Card>
-      </>}
+      <Tabs defaultValue="attendance" dir="rtl">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="attendance">تسجيل الحضور</TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="site-settings">
+              <Settings2 className="ml-2 h-4 w-4" /> إعدادات موقع العمل
+            </TabsTrigger>
+          )}
+        </TabsList>
+        <TabsContent value="attendance" className="space-y-5">
+          {!employee ? (
+            <Card>
+              <CardContent className="p-6 text-center text-sm text-muted-foreground">
+                لا يوجد سجل موظف نشط مرتبط بحسابك. اطلب من الموارد البشرية ربط البريد الإلكتروني
+                بملف الموظف.
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between gap-3">
+                    <span>{employee.full_name}</span>
+                    <Badge variant={checkedOut ? "secondary" : checkedIn ? "default" : "outline"}>
+                      {statusText}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="grid gap-3 text-sm sm:grid-cols-3">
+                  <div>
+                    <span className="text-muted-foreground">الرقم الوظيفي</span>
+                    <p className="font-semibold">{employee.employee_no}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">الموقع المعتمد</span>
+                    <p className="font-semibold">{site?.name ?? "غير محدد"}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">المنصب</span>
+                    <p className="font-semibold">{employee.position ?? "غير محدد"}</p>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card
+                className={
+                  insideGeofence
+                    ? "border-emerald-300 bg-emerald-50/60"
+                    : "border-rose-300 bg-rose-50/60"
+                }
+              >
+                <CardContent className="p-5">
+                  <div className="flex items-start gap-3">
+                    {insideGeofence ? (
+                      <Crosshair className="mt-0.5 h-6 w-6 text-emerald-600" />
+                    ) : (
+                      <WifiOff className="mt-0.5 h-6 w-6 text-rose-600" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold">
+                        {insideGeofence
+                          ? `أنت داخل نطاق موقع العمل (ضمن ${Math.round(distance ?? 0)} متراً)`
+                          : distance != null
+                            ? `أنت خارج نطاق موقع العمل (تبعد ${Math.round(distance)} متراً)`
+                            : "لم يتم تحديد موقعك بعد"}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        دقة GPS الحالية:{" "}
+                        {coordinates ? `${Math.round(coordinates.accuracy)} متر` : "غير متاحة"}
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={refreshLocation}
+                      disabled={locationLoading}
+                    >
+                      {locationLoading ? "جارٍ التحديث" : "تحديث موقعي الآن"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Button
+                  className="h-20 bg-emerald-600 text-lg hover:bg-emerald-700"
+                  disabled={!insideGeofence || checkedIn || recording !== null}
+                  onClick={() => void recordAttendance("check_in")}
+                >
+                  <LogIn className="ml-3 h-7 w-7" />
+                  {recording === "check_in" ? "جارٍ التسجيل..." : "تسجيل حضور (دخول)"}
+                </Button>
+                <Button
+                  className="h-20 bg-orange-600 text-lg hover:bg-orange-700"
+                  disabled={!insideGeofence || !checkedIn || checkedOut || recording !== null}
+                  onClick={() => void recordAttendance("check_out")}
+                >
+                  <LogOut className="ml-3 h-7 w-7" />
+                  {recording === "check_out" ? "جارٍ التسجيل..." : "تسجيل انصراف (خروج)"}
+                </Button>
+              </div>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-primary" /> حركات اليوم
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {logs.length ? (
+                    logs.map((log) => (
+                      <div
+                        key={log.id}
+                        className="flex items-center justify-between rounded-lg border p-3 text-sm"
+                      >
+                        <span>
+                          {log.self_event_type === "check_out" || log.verify_type === 1
+                            ? "انصراف"
+                            : "حضور"}
+                        </span>
+                        <span className="font-semibold">
+                          {new Date(log.verify_time).toLocaleTimeString("ar-IQ", {
+                            timeZone: "Asia/Baghdad",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {log.source === "mobile_self" ? "من الهاتف" : "جهاز بصمة"}
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">لا توجد حركات مسجلة اليوم.</p>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
+        </TabsContent>
+        {isAdmin && (
+          <TabsContent value="site-settings" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>تحديد موقع العمل الجغرافي</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label>الموقع</Label>
+                  <Select value={selectedSiteId} onValueChange={setSelectedSiteId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر الموقع" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sites.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div>
+                    <Label htmlFor="site-latitude">خط العرض</Label>
+                    <Input
+                      id="site-latitude"
+                      type="number"
+                      step="any"
+                      value={siteLatitude}
+                      onChange={(event) => setSiteLatitude(event.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="site-longitude">خط الطول</Label>
+                    <Input
+                      id="site-longitude"
+                      type="number"
+                      step="any"
+                      value={siteLongitude}
+                      onChange={(event) => setSiteLongitude(event.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="site-radius">نصف قطر الأمان بالمتر</Label>
+                    <Input
+                      id="site-radius"
+                      type="number"
+                      min="25"
+                      max="5000"
+                      value={siteRadius}
+                      onChange={(event) => setSiteRadius(event.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={pinCurrentSite} disabled={siteSaving || !selectedSiteId}>
+                    <MapPin className="ml-2 h-4 w-4" /> تثبيت موقعي الحالي كمقر للموقع
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => void updateSelectedSite()}
+                    disabled={siteSaving || !selectedSiteId}
+                  >
+                    حفظ التعديلات اليدوية
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  يسمح النظام بنصف قطر أمان بين 25 و5000 متر، ويطبق التغيير فوراً على تسجيل الحضور
+                  الجغرافي.
+                </p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+      </Tabs>
     </div>
   );
 }
