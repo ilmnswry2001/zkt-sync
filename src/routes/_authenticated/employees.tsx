@@ -11,22 +11,25 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Trash2, Plus, Pencil, Search, Upload, Loader2, UserRound } from "lucide-react";
+import { Trash2, Plus, Pencil, Search, Upload, Loader2, UserRound, Link2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmployeeProfileContent } from "@/components/EmployeeProfileContent";
 import { useServerFn } from "@tanstack/react-start";
 import { importEmployees } from "@/lib/employees.functions";
+import { useAuth } from "@/hooks/use-auth";
 
 export const Route = createFileRoute("/_authenticated/employees")({
   head: () => ({ meta: [{ title: "الموظفون" }] }),
   component: EmployeesPage,
 });
 
-type Emp = { id: string; employee_no: string; full_name: string; department_id: string | null; position: string | null; status: string; departments?: { name: string } | null };
+type Emp = { id: string; employee_no: string; full_name: string; email?: string | null; department_id: string | null; position: string | null; status: string; departments?: { name: string } | null };
+type LoginProfile = { id: string; full_name: string | null; email: string | null };
 
 function EmployeesPage() {
+  const { isAdmin } = useAuth();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -34,6 +37,7 @@ function EmployeesPage() {
   const [search, setSearch] = useState("");
   const [profileSearch, setProfileSearch] = useState("");
   const [selectedProfileId, setSelectedProfileId] = useState("");
+  const [accountBindings, setAccountBindings] = useState<Record<string, string>>({});
   const doImport = useServerFn(importEmployees);
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -103,6 +107,90 @@ function EmployeesPage() {
     queryKey: ["employees_count"],
     queryFn: async () => (await supabase.from("employees").select("id", { count: "exact", head: true })).count ?? 0,
   });
+  const employeeAccountsQuery = useQuery({
+    queryKey: ["employee-account-links", "employees"],
+    enabled: isAdmin,
+    queryFn: async () => {
+      const rows: Pick<Emp, "id" | "employee_no" | "full_name" | "email" | "status">[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await supabase
+          .from("employees")
+          .select("id, employee_no, full_name, email, status")
+          .order("employee_no")
+          .range(from, from + 999);
+        if (error) throw error;
+        rows.push(...((data ?? []) as Pick<Emp, "id" | "employee_no" | "full_name" | "email" | "status">[]));
+        if ((data ?? []).length < 1000) return rows;
+      }
+    },
+  });
+  const loginProfilesQuery = useQuery({
+    queryKey: ["employee-account-links", "profiles"],
+    enabled: isAdmin,
+    queryFn: async () => {
+      const rows: LoginProfile[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("id, full_name, email")
+          .order("email")
+          .range(from, from + 999);
+        if (error) throw error;
+        rows.push(...((data ?? []) as LoginProfile[]));
+        if ((data ?? []).length < 1000) return rows;
+      }
+    },
+  });
+  const accountEmployees = employeeAccountsQuery.data ?? [];
+  const loginProfiles = loginProfilesQuery.data ?? [];
+  const normalizeEmail = (email: string | null | undefined) => email?.trim().toLocaleLowerCase() ?? "";
+  const matchedProfileEmails = new Set(
+    loginProfiles.map((profile) => normalizeEmail(profile.email)).filter(Boolean),
+  );
+  const unmatchedEmployees = accountEmployees.filter(
+    (employee) => !normalizeEmail(employee.email) || !matchedProfileEmails.has(normalizeEmail(employee.email)),
+  );
+  const availableProfiles = loginProfiles.filter(
+    (profile) =>
+      normalizeEmail(profile.email) &&
+      !accountEmployees.some((employee) => normalizeEmail(employee.email) === normalizeEmail(profile.email)),
+  );
+  const adminProfile = loginProfiles.find(
+    (profile) => normalizeEmail(profile.email) === "admin@attendance.app",
+  );
+  const adminEmployeeMatches = accountEmployees.filter(
+    (employee) => normalizeEmail(employee.email) === "admin@attendance.app",
+  );
+  const bindEmployeeAccount = async (employeeId: string) => {
+    const profile = loginProfiles.find((item) => item.id === accountBindings[employeeId]);
+    const email = normalizeEmail(profile?.email);
+    if (!profile || !email) return toast.error("اختر حساب دخول صالحاً أولاً");
+    const collisions = accountEmployees.filter(
+      (employee) => employee.id !== employeeId && normalizeEmail(employee.email) === email,
+    );
+    if (collisions.length) return toast.error("هذا الحساب مرتبط بسجل موظف آخر بالفعل");
+    const { error } = await supabase.from("employees").update({ email }).eq("id", employeeId);
+    if (error) return toast.error(`تعذر ربط الحساب: ${error.message}`);
+    setAccountBindings((current) => ({ ...current, [employeeId]: "" }));
+    await employeeAccountsQuery.refetch();
+    toast.success("تم ربط حساب الدخول بسجل الموظف");
+  };
+  const createAdminEmployee = async () => {
+    if (!adminProfile || adminEmployeeMatches.length) return;
+    const employeeNo = `ADMIN-${adminProfile.id.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
+    if (accountEmployees.some((employee) => employee.employee_no === employeeNo))
+      return toast.error("تعذر إنشاء سجل الأدمن لأن الرقم الوظيفي المقترح مستخدم؛ اربط حسابه بسجل موجود");
+    const { error } = await supabase.from("employees").insert({
+      employee_no: employeeNo,
+      full_name: adminProfile.full_name?.trim() || "مدير النظام",
+      position: "مدير النظام",
+      email: "admin@attendance.app",
+      status: "active",
+    });
+    if (error) return toast.error(`تعذر إنشاء سجل الأدمن: ${error.message}`);
+    await Promise.all([employeeAccountsQuery.refetch(), qc.invalidateQueries({ queryKey: ["employees"] }), qc.invalidateQueries({ queryKey: ["employees_count"] })]);
+    toast.success("تم إنشاء سجل موظف وربطه بحساب الأدمن");
+  };
   const { data: depts = [] } = useQuery({
     queryKey: ["departments"],
     queryFn: async () => (await supabase.from("departments").select("id, name").order("name")).data ?? [],
@@ -199,6 +287,42 @@ function EmployeesPage() {
           <TabsTrigger value="personal" className="min-h-11 rounded-xl border">التقرير الشخصي</TabsTrigger>
         </TabsList>
         <TabsContent value="directory" className="mt-0 space-y-6">
+      {isAdmin && (
+        <Card className="border-primary/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Link2 className="h-5 w-5" /> ربط حسابات الدخول بالموظفين</CardTitle>
+            <p className="text-sm text-muted-foreground">تظهر هنا سجلات الموظفين التي لا يطابق بريدها حساب دخول. الربط يحدّث بريد السجل المحدد فقط.</p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {adminProfile && adminEmployeeMatches.length === 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
+                <div><p className="font-semibold">حساب الأدمن admin@attendance.app غير مرتبط بسجل موظف</p><p className="text-sm text-muted-foreground">يمكن إنشاء سجل موظف جديد وربطه بهذا الحساب.</p></div>
+                <Button onClick={() => void createAdminEmployee()}><UserPlus className="ml-2 h-4 w-4" /> إنشاء سجل وربط الحساب</Button>
+              </div>
+            )}
+            {adminEmployeeMatches.length > 1 && <p className="rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-800">يوجد أكثر من سجل مرتبط ببريد الأدمن؛ راجع السجلات قبل إجراء ربط جديد.</p>}
+            {employeeAccountsQuery.isLoading || loginProfilesQuery.isLoading ? (
+              <p className="text-sm text-muted-foreground">جارٍ فحص الموظفين وحسابات الدخول...</p>
+            ) : employeeAccountsQuery.error || loginProfilesQuery.error ? (
+              <p className="text-sm text-destructive">تعذر فحص الربط: {(employeeAccountsQuery.error || loginProfilesQuery.error)?.message}</p>
+            ) : unmatchedEmployees.length ? (
+              <div className="space-y-2">
+                {unmatchedEmployees.map((employee) => (
+                  <div key={employee.id} className="grid gap-3 rounded-lg border p-3 md:grid-cols-[1fr_1fr_auto] md:items-center">
+                    <div><p className="font-semibold">{employee.full_name}</p><p className="text-xs text-muted-foreground">الرقم الوظيفي: {employee.employee_no} · البريد الحالي: {employee.email || "غير مسجل"}</p></div>
+                    <select className="h-10 rounded-md border bg-background px-3 text-sm" value={accountBindings[employee.id] ?? ""} onChange={(event) => setAccountBindings((current) => ({ ...current, [employee.id]: event.target.value }))}>
+                      <option value="">اختر حساب الدخول</option>
+                      {availableProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.full_name || profile.email} — {profile.email}</option>)}
+                    </select>
+                    <Button variant="outline" disabled={!accountBindings[employee.id]} onClick={() => void bindEmployeeAccount(employee.id)}>ربط الحساب</Button>
+                  </div>
+                ))}
+                {!availableProfiles.length && <p className="text-sm text-muted-foreground">لا توجد حسابات دخول غير مرتبطة حالياً.</p>}
+              </div>
+            ) : <p className="text-sm text-emerald-700">كل سجلات الموظفين تطابق حسابات دخول.</p>}
+          </CardContent>
+        </Card>
+      )}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">الموظفون</h1>
@@ -459,3 +583,4 @@ function EmployeesPage() {
     </div>
   );
 }
+
