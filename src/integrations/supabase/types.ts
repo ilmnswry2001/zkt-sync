@@ -172,6 +172,7 @@ export type Database = {
           description: string | null
           external_id: number | null
           id: string
+          manager_user_id: string | null
           name: string
           updated_at: string
         }
@@ -180,6 +181,7 @@ export type Database = {
           description?: string | null
           external_id?: number | null
           id?: string
+          manager_user_id?: string | null
           name: string
           updated_at?: string
         }
@@ -188,6 +190,7 @@ export type Database = {
           description?: string | null
           external_id?: number | null
           id?: string
+          manager_user_id?: string | null
           name?: string
           updated_at?: string
         }
@@ -1876,6 +1879,7 @@ export type Database = {
           id: string
           month: string
           notes: string | null
+          operating_dates: string[]
           operating_days: number
           updated_at: string
           vehicle_id: string
@@ -1885,6 +1889,7 @@ export type Database = {
           id?: string
           month: string
           notes?: string | null
+          operating_dates?: string[]
           operating_days?: number
           updated_at?: string
           vehicle_id: string
@@ -1894,6 +1899,7 @@ export type Database = {
           id?: string
           month?: string
           notes?: string | null
+          operating_dates?: string[]
           operating_days?: number
           updated_at?: string
           vehicle_id?: string

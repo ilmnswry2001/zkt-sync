@@ -15,16 +15,27 @@ async function approvedLeaveOverrides(supabase: any, employeeIds: string[], star
   for (let i = 0; i < employeeIds.length; i += 100) {
     const batch = employeeIds.slice(i, i + 100);
     const { data, error } = await supabase.from("forms")
-      .select("employee_id, work_date, leave_end_date, reason, status, leave_type_id, leave_types(is_paid, count_non_working_days)")
+      .select("employee_id, work_date, leave_end_date, reason, status, leave_type_id")
       .eq("kind", "leave").in("status", ["pending_execution", "executed"])
       .in("employee_id", batch).lt("work_date", endDate).gte("leave_end_date", start);
     if (error) throw new Error(error.message);
+    const leaveTypeIds = [...new Set((data ?? []).map((form: any) => form.leave_type_id).filter(Boolean))];
+    const leaveTypesById = new Map<string, { is_paid: boolean; count_non_working_days: boolean }>();
+    if (leaveTypeIds.length) {
+      const { data: leaveTypes, error: leaveTypesError } = await supabase
+        .from("leave_types")
+        .select("id, is_paid, count_non_working_days")
+        .in("id", leaveTypeIds);
+      if (leaveTypesError) throw new Error(leaveTypesError.message);
+      for (const leaveType of leaveTypes ?? []) leaveTypesById.set(leaveType.id, leaveType);
+    }
     for (const form of data ?? []) {
+      const leaveType = leaveTypesById.get(form.leave_type_id);
       const { data: workDates, error: dateError } = await (supabase as any).rpc("leave_work_dates", {
         _employee_id: form.employee_id,
         _start_date: form.work_date,
         _end_date: form.leave_end_date ?? form.work_date,
-        _count_non_working_days: form.leave_types?.count_non_working_days ?? true,
+        _count_non_working_days: leaveType?.count_non_working_days ?? true,
       });
       if (dateError) throw new Error(dateError.message);
       for (const { work_date: date } of workDates ?? []) {
@@ -32,9 +43,9 @@ async function approvedLeaveOverrides(supabase: any, employeeIds: string[], star
           employee_id: form.employee_id,
           work_date: date,
           status: "leave",
-          notes: `إجازة ${form.leave_types?.is_paid === false ? "بدون راتب" : "معتمدة"}: ${form.reason ?? ""}`,
+          notes: `إجازة ${leaveType?.is_paid === false ? "بدون راتب" : "معتمدة"}: ${form.reason ?? ""}`,
           overtime_hours: 0,
-          is_paid: form.leave_types?.is_paid !== false,
+          is_paid: leaveType?.is_paid !== false,
         });
       }
     }
