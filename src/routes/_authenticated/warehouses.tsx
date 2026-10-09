@@ -20,6 +20,8 @@ import {
 import { AlertTriangle, Boxes, Package, Warehouse as WarehouseIcon, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { todayInBaghdad } from "@/lib/date-time";
+import * as XLSX from "xlsx";
+import { FileDown, Printer } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/warehouses")({
   head: () => ({
@@ -121,6 +123,11 @@ function WarehousesPage() {
     return m;
   }, [moves]);
   const qtyOf = (w: string, i: string) => stock.get(`${w}|${i}`) ?? 0;
+  const exportSheet = (name: string, rows: Record<string, string | number>[]) => {
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), name.slice(0, 31));
+    XLSX.writeFile(workbook, `${name}-${today}.xlsx`);
+  };
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["wh-moves"] });
@@ -358,7 +365,7 @@ function WarehousesPage() {
         <TabsContent value="stock">
           <Card>
             <CardHeader className="flex-row items-center justify-between gap-3">
-              <CardTitle className="text-base">رصيد المخازن</CardTitle>
+              <div className="flex items-center gap-2"><CardTitle className="text-base">رصيد المخازن</CardTitle><Button size="sm" variant="outline" onClick={() => exportSheet("الجرد", items.map((item) => ({ الصنف: item.name, النوع: item.kind === "tool" ? "عدة" : "مادة", ...Object.fromEntries(shownWh.map((warehouse) => [warehouse.name, qtyOf(warehouse.id, item.id)])), الإجمالي: shownWh.reduce((sum, warehouse) => sum + qtyOf(warehouse.id, item.id), 0), الوحدة: item.unit })))}><FileDown className="ml-2 h-4 w-4"/> Excel</Button></div>
               <select
                 className={sel + " max-w-60"}
                 value={whFilter}
@@ -553,7 +560,7 @@ function WarehousesPage() {
         )}
 
         <TabsContent value="daily" className="space-y-4">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Label>اليوم</Label>
             <Input
               type="date"
@@ -561,6 +568,8 @@ function WarehousesPage() {
               value={day}
               onChange={(e) => setDay(e.target.value)}
             />
+            <Button variant="outline" onClick={() => exportSheet("حركات-يومية", dayMoves.map((move) => ({ التاريخ: move.movement_date, النوع: MOVE_LABELS[move.movement_type] ?? move.movement_type, المخزن: whById.get(move.warehouse_id)?.name ?? "", الصنف: itemById.get(move.item_id)?.name ?? "", الكمية: Number(move.qty_delta), الجهة: moveLine(move), ملاحظات: move.notes ?? "" })))}><FileDown className="ml-2 h-4 w-4"/> تصدير اليوم</Button>
+            <Button variant="outline" onClick={() => window.print()}><Printer className="ml-2 h-4 w-4"/> طباعة</Button>
           </div>
           <Card>
             <CardHeader>

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { createZktecoSyncKey, getZktecoSyncStatus } from "@/lib/zkteco-sync.functions";
+import { createZktecoSyncKey, getZktecoSyncStatus, revokeZktecoSyncKey } from "@/lib/zkteco-sync.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Plus, Pencil, KeyRound, Copy, Download, RefreshCw } from "lucide-react";
+import { Trash2, Plus, Pencil, KeyRound, Copy, Download, RefreshCw, Ban } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/devices")({
@@ -21,7 +21,7 @@ export const Route = createFileRoute("/_authenticated/devices")({
 });
 
 type Device = { id: string; name: string; serial_number: string | null; ip_address: string | null; location: string | null; description: string | null; status: string; last_sync_at: string | null };
-type SyncStatus = { device_id: string; auto_last_sync_at: string | null; auto_synced_logs_total: number; has_active_key: boolean; key_prefix: string | null };
+type SyncStatus = { device_id: string; auto_last_sync_at: string | null; auto_synced_logs_total: number; has_active_key: boolean; key_prefix: string | null; batches: { id: string; received_at: string; record_count: number; inserted_count: number; duplicate_count: number; unmatched_count: number; error_count: number }[] };
 
 function DevicesPage() {
   const qc = useQueryClient();
@@ -56,6 +56,11 @@ function DevicesPage() {
     },
     onError: (error: Error) => toast.error(error.message),
   });
+  const revokeKey = useMutation({
+    mutationFn: (deviceId: string) => revokeZktecoSyncKey({ data: { device_id: deviceId } }),
+    onSuccess: () => { setCreatedKey(null); qc.invalidateQueries({ queryKey: ["zkteco-sync-status"] }); toast.success("تم إلغاء مفتاح الجهاز"); },
+    onError: (error: Error) => toast.error(error.message),
+  });
 
   const copySyncKey = async () => {
     if (!createdKey) return;
@@ -74,13 +79,13 @@ function DevicesPage() {
       `device_ip = ${device.ip_address || "192.168.1.201"}`,
       "device_port = 4370",
       "device_password = 0",
-      "device_timeout_seconds = 10",
-      `device_sn = ${createdKey.serial}`,
-      `sync_url = ${window.location.origin}/api/public/zkteco-sync`,
-      `sync_key = ${createdKey.key}`,
-      "site_id =",
-      "interval_seconds = 60",
-      "state_file = sync_state.json",
+      "timeout_seconds = 10",
+      `serial = ${createdKey.serial}`,
+      `sync_url = ${window.location.origin}/api/public/zk-sync`,
+      `device_key = ${createdKey.key}`,
+      "interval_seconds = 300",
+      "queue_db = agent_queue.sqlite3",
+      "state_file = state.json",
       "",
     ].join("\n");
     const url = URL.createObjectURL(new Blob([config], { type: "text/plain;charset=utf-8" }));
@@ -166,7 +171,7 @@ function DevicesPage() {
         <CardContent className="space-y-3 text-sm">
           <p>أنشئ مفتاحاً لكل جهاز، ثم نزّل ملف الإعدادات وضعه بجانب وكيل Python على حاسوب متصل بشبكة الجهاز.</p>
           <div className="flex flex-wrap gap-x-5 gap-y-2">
-            <a className="inline-flex items-center gap-2 font-semibold text-primary underline" href="https://raw.githubusercontent.com/ilmnswry2001/zkt-sync/main/scripts/zkteco_sync_agent.py" download>
+            <a className="inline-flex items-center gap-2 font-semibold text-primary underline" href="https://raw.githubusercontent.com/ilmnswry2001/zkt-sync/main/scripts/agent.py" download>
               <Download className="h-4 w-4" /> تنزيل وكيل المزامنة
             </a>
             <a className="inline-flex items-center gap-2 font-semibold text-primary underline" href="https://raw.githubusercontent.com/ilmnswry2001/zkt-sync/main/scripts/requirements.txt" download>
@@ -222,8 +227,8 @@ function DevicesPage() {
                   <TableCell className="text-sm text-muted-foreground">{d.last_sync_at ? new Date(d.last_sync_at).toLocaleString("ar") : "—"}</TableCell>
                   {(() => {
                     const sync = syncByDevice.get(d.id);
-                    const connected = !!sync?.auto_last_sync_at && Date.now() - Date.parse(sync.auto_last_sync_at) <= 3 * 60_000;
-                    return <TableCell><Badge variant={connected ? "default" : "secondary"}>{connected ? "متصل" : sync?.has_active_key ? "بانتظار الاتصال" : "غير مربوط"}</Badge>{sync?.auto_last_sync_at && <div className="mt-1 text-xs text-muted-foreground">{new Date(sync.auto_last_sync_at).toLocaleString("ar")}</div>}</TableCell>;
+                    const connected = !!sync?.auto_last_sync_at && Date.now() - Date.parse(sync.auto_last_sync_at) <= 15 * 60_000;
+                    return <TableCell><Badge variant={connected ? "default" : "destructive"}>{connected ? "متصل" : sync?.has_active_key ? "متوقف" : "غير مربوط"}</Badge>{sync?.auto_last_sync_at && <div className="mt-1 text-xs text-muted-foreground">{new Date(sync.auto_last_sync_at).toLocaleString("ar")}</div>}</TableCell>;
                   })()}
                   <TableCell>{(syncByDevice.get(d.id)?.auto_synced_logs_total ?? 0).toLocaleString("ar-IQ")}</TableCell>
                   <TableCell>
@@ -233,6 +238,7 @@ function DevicesPage() {
                       </Button>
                       {createdKey?.deviceId === d.id && <Button size="sm" variant="ghost" onClick={() => downloadAgentConfig(d)}><Download className="ml-2 h-4 w-4" /> تنزيل agent_config.ini</Button>}
                       {syncByDevice.get(d.id)?.has_active_key && createdKey?.deviceId !== d.id && <span className="text-xs text-muted-foreground">مفتاح فعّال محفوظ كـ {syncByDevice.get(d.id)?.key_prefix}…</span>}
+                      {syncByDevice.get(d.id)?.has_active_key && <Button size="sm" variant="ghost" disabled={revokeKey.isPending} onClick={() => revokeKey.mutate(d.id)}><Ban className="ml-2 h-4 w-4" /> إلغاء المفتاح</Button>}
                     </div>}
                   </TableCell>
                   <TableCell>
@@ -247,6 +253,12 @@ function DevicesPage() {
             </TableBody>
           </Table>
         </CardContent>
+      </Card>
+      <Card>
+        <CardHeader><CardTitle>آخر دفعات المزامنة</CardTitle></CardHeader>
+        <CardContent><Table><TableHeader><TableRow><TableHead>الجهاز</TableHead><TableHead>الوقت</TableHead><TableHead>الواردة</TableHead><TableHead>أُدرجت</TableHead><TableHead>مكررة</TableHead><TableHead>غير مطابقة</TableHead><TableHead>أخطاء</TableHead></TableRow></TableHeader>
+          <TableBody>{(syncStatuses as SyncStatus[]).flatMap((sync) => sync.batches.map((batch) => <TableRow key={batch.id}><TableCell>{devices.find((device) => device.id === sync.device_id)?.name ?? "—"}</TableCell><TableCell>{new Date(batch.received_at).toLocaleString("ar-IQ")}</TableCell><TableCell>{batch.record_count}</TableCell><TableCell>{batch.inserted_count}</TableCell><TableCell>{batch.duplicate_count}</TableCell><TableCell>{batch.unmatched_count}</TableCell><TableCell>{batch.error_count}</TableCell></TableRow>))}{!(syncStatuses as SyncStatus[]).some((sync) => sync.batches.length) && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">لا توجد دفعات بعد</TableCell></TableRow>}</TableBody>
+        </Table></CardContent>
       </Card>
     </div>
   );

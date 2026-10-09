@@ -166,10 +166,10 @@ export const getDailyReport = createServerFn({ method: "GET" })
   .inputValidator((d: { date: string }) => z.object({ date: z.string() }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = context;
-    const start = new Date(data.date + "T00:00:00Z");
+    const start = new Date(data.date + "T00:00:00+03:00");
     const end = new Date(start.getTime() + 86400000);
-    const { data: logs, error: logsError } = await supabase.from("attendance_logs")
-      .select("employee_no, employee_id, verify_time, device_id, source")
+    const { data: logs, error: logsError } = await (supabase as any).from("attendance_logs")
+      .select("employee_no, employee_id, verify_time, device_id, source, is_suspicious, selfie_path")
       .gte("verify_time", start.toISOString())
       .lt("verify_time", end.toISOString())
       .order("verify_time", { ascending: true });
@@ -177,19 +177,35 @@ export const getDailyReport = createServerFn({ method: "GET" })
     const { data: emps, error: employeesError } = await supabase.from("employees")
       .select("id, employee_no, full_name, status, department_id, departments(name), shifts(start_time, end_time, grace_minutes)");
     if (employeesError) throw new Error(employeesError.message);
+    const startOfDay = new Date(`${data.date}T00:00:00+03:00`).toISOString();
+    const startOfNextDay = new Date(new Date(startOfDay).getTime() + 86400000).toISOString();
+    const { data: attempts } = await (supabase as any).from("attendance_suspicious_attempts")
+      .select("employee_id, selfie_path, reason, attempted_at").gte("attempted_at", startOfDay).lt("attempted_at", startOfNextDay);
+    const attemptByEmployee = new Map((attempts ?? []).map((attempt: any) => [attempt.employee_id, attempt]));
+    const weekday = new Date(`${data.date}T00:00:00`).getDay();
+    const { data: schedules, error: scheduleError } = await (supabase as any).from("employee_weekly_schedules")
+      .select("employee_id, start_time, end_time, grace_minutes, effective_from, effective_until")
+      .eq("weekday", weekday).lte("effective_from", data.date).or(`effective_until.is.null,effective_until.gte.${data.date}`);
+    if (scheduleError) throw new Error(scheduleError.message);
+    const scheduleByEmployee = new Map((schedules ?? []).map((schedule: any) => [schedule.employee_id, schedule]));
 
-    const byPin = new Map<string, { first: string; last: string; devices: Set<string>; sources: Set<string> }>();
+    const byPin = new Map<string, { first: string; last: string; devices: Set<string>; sources: Set<string>; suspicious: boolean }>();
     (logs ?? []).forEach((l: any) => {
       const cur = byPin.get(l.employee_no);
-      if (!cur) byPin.set(l.employee_no, { first: l.verify_time, last: l.verify_time, devices: new Set(l.device_id ? [l.device_id] : []), sources: new Set(l.source ? [l.source] : []) });
-      else { cur.last = l.verify_time; if (l.device_id) cur.devices.add(l.device_id); if (l.source) cur.sources.add(l.source); }
+      if (!cur) byPin.set(l.employee_no, { first: l.verify_time, last: l.verify_time, devices: new Set(l.device_id ? [l.device_id] : []), sources: new Set(l.source ? [l.source] : []), suspicious: !!l.is_suspicious });
+      else { cur.last = l.verify_time; if (l.device_id) cur.devices.add(l.device_id); if (l.source) cur.sources.add(l.source); cur.suspicious ||= !!l.is_suspicious; }
     });
 
-    const rows = (emps ?? []).map((e: any) => {
+    const rows = await Promise.all((emps ?? []).map(async (e: any) => {
       const rec = byPin.get(e.employee_no);
+      const attempt: any = attemptByEmployee.get(e.id);
+      const photoLog = (logs ?? []).find((log: any) => log.employee_no === e.employee_no && log.selfie_path);
+      const photoPath = photoLog?.selfie_path ?? attempt?.selfie_path;
+      const selfieUrl = photoPath ? (await supabase.storage.from("attendance-selfies").createSignedUrl(photoPath, 3600)).data?.signedUrl ?? null : null;
       const hours = rec ? (new Date(rec.last).getTime() - new Date(rec.first).getTime()) / 3600000 : 0;
-      const late = rec && e.shifts?.start_time
-        ? isLateArrival(data.date, rec.first, e.shifts.start_time, e.shifts.end_time, e.shifts.grace_minutes ?? 0)
+      const shift: any = scheduleByEmployee.get(e.id) ?? e.shifts;
+      const late = rec && shift?.start_time
+        ? isLateArrival(data.date, rec.first, shift.start_time, shift.end_time, shift.grace_minutes ?? 0)
         : false;
       return {
         employee_no: e.employee_no,
@@ -201,11 +217,23 @@ export const getDailyReport = createServerFn({ method: "GET" })
         hours: rec ? Math.max(0, Math.round(hours * 100) / 100) : 0,
         devices: rec?.devices.size ?? 0,
         mobile_self: rec?.sources.has("mobile_self") ?? false,
+        sources: [...(rec?.sources ?? [])],
+        suspicious: (rec?.suspicious ?? false) || !!attempt,
+        suspicious_reason: attempt?.reason ?? null,
+        selfie_url: selfieUrl,
         late,
         status: rec ? "present" : "absent",
       };
-    });
-    return { rows };
+    }));
+    const sourceCounts = { device: 0, mobile_self: 0, zk_agent: 0, manual: 0 };
+    for (const log of logs ?? []) {
+      const source = (log as any).source;
+      if (source === "mobile_self") sourceCounts.mobile_self++;
+      else if (source === "zk_agent" || source === "zkteco_auto_agent") sourceCounts.zk_agent++;
+      else if (source === "manual") sourceCounts.manual++;
+      else sourceCounts.device++;
+    }
+    return { rows, sourceCounts, suspiciousCount: (logs ?? []).filter((log: any) => log.is_suspicious).length + (attempts ?? []).length };
   });
 
 function isLateArrival(
@@ -216,7 +244,7 @@ function isLateArrival(
   graceMinutes: number,
 ) {
   const checkInTime = Date.parse(checkIn);
-  let shiftStartTime = Date.parse(`${date}T${shiftStart}Z`);
+  let shiftStartTime = Date.parse(`${date}T${shiftStart}+03:00`);
   if (!Number.isFinite(checkInTime) || !Number.isFinite(shiftStartTime)) return false;
 
   if (shiftEnd && shiftEnd < shiftStart && checkInTime < shiftStartTime) {

@@ -1,0 +1,11 @@
+[agent]
+device_ip = 192.168.1.201
+device_port = 4370
+device_password = 0
+timeout_seconds = 10
+serial = REPLACE_WITH_DEVICE_SERIAL
+sync_url = https://YOUR_HOST/api/public/zk-sync
+device_key = REPLACE_WITH_ONE_TIME_KEY
+interval_seconds = 300
+queue_db = agent_queue.sqlite3
+state_file = state.json

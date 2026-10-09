@@ -78,6 +78,10 @@ type AttendanceRow = {
   hours: number;
   devices?: number | string | null;
   mobile_self?: boolean;
+  sources?: string[];
+  suspicious?: boolean;
+  suspicious_reason?: string | null;
+  selfie_url?: string | null;
   late?: boolean;
   status: string;
 };
@@ -920,6 +924,8 @@ function AttendancePage() {
                       <TableHead>آخر خروج</TableHead>
                       <TableHead>الساعات</TableHead>
                       <TableHead>أجهزة</TableHead>
+                      <TableHead>مصدر الحركة</TableHead>
+                      <TableHead>التحقق</TableHead>
                       <TableHead>الحالة</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -933,6 +939,8 @@ function AttendancePage() {
                         <TableCell>{fmtTime(row.check_out)}</TableCell>
                         <TableCell>{row.hours > 0 ? row.hours.toFixed(2) : "—"}</TableCell>
                         <TableCell><span className="inline-flex items-center gap-1">{row.devices || "—"}{row.mobile_self && <Smartphone className="h-4 w-4 text-cyan-600" aria-label="حضور ذاتي من الهاتف" />}</span></TableCell>
+                        <TableCell className="text-xs">{(row.sources ?? []).map((source) => source === "mobile_self" ? "الهاتف" : source === "zk_agent" || source === "zkteco_auto_agent" ? "البرنامج المحلي" : source === "manual" ? "يدوي" : "جهاز البصمة").join("، ") || "—"}</TableCell>
+                        <TableCell>{row.suspicious && <div><Badge variant="destructive">مشبوه</Badge>{row.suspicious_reason && <p className="mt-1 max-w-40 text-xs text-destructive">{row.suspicious_reason}</p>}</div>}{row.selfie_url && <a className="mr-1 text-primary underline" href={row.selfie_url} target="_blank" rel="noreferrer">عرض الصورة</a>}</TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
                             <Badge
@@ -948,7 +956,7 @@ function AttendancePage() {
                     ))}
                     {!attendanceRows.length && (
                       <TableRow>
-                        <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                        <TableCell colSpan={10} className="py-8 text-center text-muted-foreground">
                           لا توجد بيانات لهذا التاريخ
                         </TableCell>
                       </TableRow>

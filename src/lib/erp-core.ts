@@ -13,6 +13,7 @@ export type ModuleKey =
   | "work-center"
   | "employees"
   | "attendance"
+  | "shift-schedules"
   | "leave"
   | "overtime"
   | "departments"
@@ -76,6 +77,13 @@ export const ERP_MODULES: EriModuleDefinition[] = [
     roles: ["admin", "hr", "supervisor", "site_admin", "department_manager", "data_entry"],
     permission: "attendance.view",
     departmentScoped: true,
+  },
+  {
+    key: "shift-schedules",
+    path: "/shift-schedules",
+    label: "جداول الورديات",
+    roles: ["admin", "hr"],
+    permission: "attendance.manage_schedules",
   },
   {
     key: "departments",

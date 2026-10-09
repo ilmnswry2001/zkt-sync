@@ -434,6 +434,10 @@ function Dashboard() {
               <Badge className="bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200">
                 متأخر: {formatCount(lateToday)}
               </Badge>
+              <Badge variant="outline">البصمة: {formatCount(dailyQuery.data?.sourceCounts?.device ?? 0)}</Badge>
+              <Badge variant="outline">الهاتف: {formatCount(dailyQuery.data?.sourceCounts?.mobile_self ?? 0)}</Badge>
+              <Badge variant="outline">الوكيل المحلي: {formatCount(dailyQuery.data?.sourceCounts?.zk_agent ?? 0)}</Badge>
+              {(dailyQuery.data?.suspiciousCount ?? 0) > 0 && <Badge variant="destructive">مشبوهة: {formatCount(dailyQuery.data?.suspiciousCount ?? 0)}</Badge>}
             </div>
           }
         />
