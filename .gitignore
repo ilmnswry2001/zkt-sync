@@ -30,3 +30,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local ZKTeco agent credentials and sync cursor
+scripts/agent_config.ini
+scripts/sync_state.json
