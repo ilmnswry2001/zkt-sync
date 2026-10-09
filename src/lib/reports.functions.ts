@@ -9,6 +9,23 @@ import {
 } from "./monthly-report.ts";
 import { z } from "zod";
 import { monthInstantRangeInBaghdad, todayInBaghdad } from "./date-time.ts";
+import { listLeaveDates } from "./leave-utils.ts";
+
+async function approvedLeaveOverrides(supabase: any, employeeIds: string[], start: string, endDate: string) {
+  const rows: { employee_id: string; work_date: string; status: "leave"; notes: string; overtime_hours: number }[] = [];
+  for (let i = 0; i < employeeIds.length; i += 100) {
+    const batch = employeeIds.slice(i, i + 100);
+    const { data, error } = await supabase.from("forms")
+      .select("employee_id, work_date, leave_end_date, reason, status")
+      .eq("kind", "leave").in("status", ["pending_execution", "executed"])
+      .in("employee_id", batch).lt("work_date", endDate).gte("leave_end_date", start);
+    if (error) throw new Error(error.message);
+    for (const form of data ?? []) for (const date of listLeaveDates(form.work_date, form.leave_end_date ?? form.work_date)) {
+      if (date >= start && date < endDate) rows.push({ employee_id: form.employee_id, work_date: date, status: "leave", notes: `إجازة معتمدة: ${form.reason ?? ""}`, overtime_hours: 0 });
+    }
+  }
+  return rows;
+}
 
 const monthValue = z.string().regex(/^[1-9]\d{3}-(0[1-9]|1[0-2])$/);
 const monthSchema = z.object({ month: monthValue, employee_id: z.string().uuid() });
@@ -72,6 +89,7 @@ export const getMonthlySheet = createServerFn({ method: "GET" })
             .range(from, to),
         ),
       ]);
+      const leaveOverrides = await approvedLeaveOverrides(supabase, batch.map((employee) => employee.id), start, endDate);
       const logsByEmployee = new Map<string, typeof logs>();
       for (const log of logs) {
         const entries = logsByEmployee.get(log.employee_no) ?? [];
@@ -79,7 +97,7 @@ export const getMonthlySheet = createServerFn({ method: "GET" })
         logsByEmployee.set(log.employee_no, entries);
       }
       const overridesByEmployee = new Map<string, typeof overrides>();
-      for (const override of overrides) {
+      for (const override of [...overrides, ...leaveOverrides]) {
         const entries = overridesByEmployee.get(override.employee_id) ?? [];
         entries.push(override);
         overridesByEmployee.set(override.employee_id, entries);
@@ -116,7 +134,7 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
     if (error) throw new Error(error.message);
     if (!emp) throw new Error("الموظف غير موجود");
 
-    const [logs, overrides, additions, penalties] = await Promise.all([
+    const [logs, overrides, additions, penalties, leaveOverrides] = await Promise.all([
       loadAllRows((from, to) =>
         supabase
           .from("attendance_logs")
@@ -157,12 +175,13 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
           .order("penalty_date")
           .range(from, to),
       ),
+      approvedLeaveOverrides(supabase, [data.employee_id], start, endDate),
     ]);
     const payType = emp.pay_type === "daily" ? ("daily" as const) : ("monthly" as const);
     const days = buildAttendanceDays(
       dates,
       logs,
-      overrides,
+      [...overrides, ...leaveOverrides],
       emp.shifts?.end_time,
       todayInBaghdad(),
       payType,

@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +17,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { enqueueSelfAttendance, readSelfAttendanceQueue, removeQueuedSelfAttendance, type QueuedSelfAttendance } from "@/lib/self-attendance-queue";
+import { getAttendancePushKey, saveAttendancePushSubscription } from "@/lib/push.functions";
 import {
   CheckCircle2,
   Clock3,
@@ -135,6 +138,9 @@ function SelfAttendancePage() {
   const [siteLongitude, setSiteLongitude] = useState("");
   const [siteRadius, setSiteRadius] = useState("200");
   const [siteSaving, setSiteSaving] = useState(false);
+  const [queuedCount, setQueuedCount] = useState(0);
+  const getPushKey = useServerFn(getAttendancePushKey);
+  const savePushSubscription = useServerFn(saveAttendancePushSubscription);
 
   const today = baghdadDate(now);
   const site = employee?.sites ?? null;
@@ -195,6 +201,37 @@ function SelfAttendancePage() {
     // loadAttendance يعتمد على اليوم والحساب الحاليين، ويُعاد تشغيله عند تغيّرهما فقط.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, today]);
+  const flushOfflineQueue = async () => {
+    if (!user || !navigator.onLine) return;
+    const queued = await readSelfAttendanceQueue();
+    setQueuedCount(queued.length);
+    for (const item of queued) {
+      const path = `${user.id}/${item.id}.jpg`;
+      const upload = await supabase.storage.from("attendance-selfies").upload(path, item.selfie, { contentType: "image/jpeg", upsert: true });
+      if (upload.error) break;
+      const rpc = supabase as unknown as SelfAttendanceRpc;
+      const { error } = await rpc.rpc("record_mobile_self_attendance", {
+        p_event_type: item.eventType, p_latitude: item.latitude, p_longitude: item.longitude,
+        p_accuracy_meters: item.accuracy, p_client_recorded_at: item.clientRecordedAt,
+        p_selfie_path: path, p_submitted_offline: true,
+        p_client_event_id: item.id,
+        p_device_info: { user_agent: navigator.userAgent, platform: navigator.platform, offline_queue_id: item.id },
+      });
+      if (error) { toast.error(`تعذر إرسال حركة محفوظة: ${error.message}`); break; }
+      await removeQueuedSelfAttendance(item.id);
+    }
+    const remaining = await readSelfAttendanceQueue();
+    setQueuedCount(remaining.length);
+    if (queued.length && remaining.length < queued.length) { toast.success("تم إرسال الحركات المحفوظة دون اتصال"); await loadAttendance(); }
+  };
+  useEffect(() => {
+    void readSelfAttendanceQueue().then((items) => setQueuedCount(items.length)).catch(() => undefined);
+    const online = () => { void flushOfflineQueue(); };
+    window.addEventListener("online", online);
+    return () => window.removeEventListener("online", online);
+    // flush uses the authenticated user and the shared query client.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
   useEffect(() => {
     const handler = (event: Event) => setInstallPrompt(event as BeforeInstallPromptEvent);
     window.addEventListener("beforeinstallprompt", handler);
@@ -270,11 +307,60 @@ function SelfAttendancePage() {
         checkedOut ? "تم تسجيل انصرافك لهذا اليوم بالفعل" : "لا يمكن الانصراف قبل تسجيل الحضور",
       );
     setRecording(eventType);
+    let selfie: Blob;
+    let stream: MediaStream | null = null;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+      const video = document.createElement("video");
+      video.srcObject = stream;
+      await video.play();
+      await new Promise((resolve) => window.setTimeout(resolve, 400));
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("تعذر تجهيز صورة التحقق");
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      selfie = await new Promise<Blob>((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("تعذر التقاط الصورة")), "image/jpeg", 0.82));
+    } catch (error) {
+      setRecording(null);
+      return toast.error(error instanceof Error && error.name === "NotAllowedError" ? "اسمح باستخدام الكاميرا لتسجيل الحضور" : "تعذر التقاط صورة التحقق");
+    } finally {
+      stream?.getTracks().forEach((track) => track.stop());
+    }
+    const queueItem: QueuedSelfAttendance = {
+      id: crypto.randomUUID(), eventType, latitude: coordinates.latitude, longitude: coordinates.longitude,
+      accuracy: coordinates.accuracy, clientRecordedAt: new Date().toISOString(), selfie,
+    };
+    const saveForLater = async () => {
+      await enqueueSelfAttendance(queueItem);
+      setQueuedCount((count) => count + 1);
+      toast.success("حُفظت الحركة والصورة لإرسالها تلقائياً عند عودة الإنترنت");
+    };
+    if (!navigator.onLine) {
+      try {
+        await saveForLater();
+      } catch { toast.error("تعذر حفظ الحركة دون اتصال؛ لا تغلق الصفحة وحاول مجدداً"); }
+      setRecording(null);
+      return;
+    }
+    const selfiePath = `${user?.id}/${queueItem.id}.jpg`;
+    const uploaded = await supabase.storage.from("attendance-selfies").upload(selfiePath, selfie, { contentType: "image/jpeg", upsert: true });
+    if (uploaded.error) {
+      setRecording(null);
+      if (!navigator.onLine) { await saveForLater(); return; }
+      return toast.error(`تعذر حفظ صورة التحقق: ${uploaded.error.message}`);
+    }
     const rpc = supabase as unknown as SelfAttendanceRpc;
     const { data, error } = await rpc.rpc("record_mobile_self_attendance", {
       p_event_type: eventType,
       p_latitude: coordinates.latitude,
       p_longitude: coordinates.longitude,
+      p_accuracy_meters: coordinates.accuracy,
+      p_client_recorded_at: queueItem.clientRecordedAt,
+      p_selfie_path: selfiePath,
+      p_submitted_offline: false,
+      p_client_event_id: queueItem.id,
       p_device_info: {
         user_agent: navigator.userAgent,
         platform: navigator.platform,
@@ -282,9 +368,12 @@ function SelfAttendancePage() {
       },
     });
     setRecording(null);
-    if (error) return toast.error(error.message);
+    if (error) {
+      if (!navigator.onLine) { await saveForLater(); return; }
+      return toast.error(error.message);
+    }
     const result = data?.[0];
-    if (!result) return toast.error("لم يتم تأكيد تسجيل الحركة");
+    if (!result?.id) return toast.error("رُفضت الحركة بسبب انتقال غير منطقي وسُجلت للمراجعة الإدارية");
     toast.success(eventType === "check_in" ? "تم تسجيل حضورك بنجاح" : "تم تسجيل انصرافك بنجاح");
     await loadAttendance();
   };
@@ -294,6 +383,20 @@ function SelfAttendancePage() {
     await installPrompt.prompt();
     await installPrompt.userChoice;
     setInstallPrompt(null);
+  };
+  const enablePushNotifications = async () => {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return toast.error("المتصفح لا يدعم الإشعارات الفورية");
+    if (Notification.permission === "denied") return toast.error("الإشعارات محظورة من إعدادات المتصفح");
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") return toast.error("لم يتم السماح بالإشعارات");
+    const { publicKey } = await getPushKey();
+    if (!publicKey) return toast.error("إعداد الإشعارات غير مكتمل لدى الإدارة");
+    const registration = await navigator.serviceWorker.register("/sw.js");
+    const key = publicKey.replace(/-/g, "+").replace(/_/g, "/");
+    const applicationServerKey = Uint8Array.from(atob(key.padEnd(Math.ceil(key.length / 4) * 4, "=")), (char) => char.charCodeAt(0));
+    const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey });
+    await savePushSubscription({ data: subscription.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } } });
+    toast.success("تم تفعيل تذكيرات الدوام على هذا الجهاز");
   };
   const updateSelectedSite = async (
     latitude: number | null = Number(siteLatitude),
@@ -378,6 +481,7 @@ function SelfAttendancePage() {
         <p className="mt-1 text-5xl font-bold tracking-tight sm:text-6xl">{baghdadTime(now)}</p>
         <p className="mt-2 text-sm text-slate-300">{today}</p>
       </section>
+      {queuedCount > 0 && <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">لديك {queuedCount} حركة محفوظة دون اتصال؛ ستُرسل تلقائياً عند عودة الإنترنت.</p>}
       <Tabs defaultValue="attendance" dir="rtl">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="attendance">تسجيل الحضور</TabsTrigger>
@@ -401,9 +505,7 @@ function SelfAttendancePage() {
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between gap-3">
                     <span>{employee.full_name}</span>
-                    <Badge variant={checkedOut ? "secondary" : checkedIn ? "default" : "outline"}>
-                      {statusText}
-                    </Badge>
+                    <span className="flex items-center gap-2"><Button size="sm" variant="outline" onClick={() => void enablePushNotifications()}>تفعيل التذكيرات</Button><Badge variant={checkedOut ? "secondary" : checkedIn ? "default" : "outline"}>{statusText}</Badge></span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="grid gap-3 text-sm sm:grid-cols-3">
@@ -462,7 +564,7 @@ function SelfAttendancePage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <Button
                   className="h-20 bg-emerald-600 text-lg hover:bg-emerald-700"
-                  disabled={!insideGeofence || checkedIn || recording !== null}
+                  disabled={!insideGeofence || (coordinates?.accuracy ?? 999) > 100 || checkedIn || recording !== null}
                   onClick={() => void recordAttendance("check_in")}
                 >
                   <LogIn className="ml-3 h-7 w-7" />
@@ -470,7 +572,7 @@ function SelfAttendancePage() {
                 </Button>
                 <Button
                   className="h-20 bg-orange-600 text-lg hover:bg-orange-700"
-                  disabled={!insideGeofence || !checkedIn || checkedOut || recording !== null}
+                  disabled={!insideGeofence || (coordinates?.accuracy ?? 999) > 100 || !checkedIn || checkedOut || recording !== null}
                   onClick={() => void recordAttendance("check_out")}
                 >
                   <LogOut className="ml-3 h-7 w-7" />
@@ -614,4 +716,3 @@ function SelfAttendancePage() {
     </div>
   );
 }
-

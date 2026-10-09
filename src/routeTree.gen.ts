@@ -9,7 +9,6 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as ZktecoSyncRouteImport } from './routes/api/public/zkteco-sync'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
@@ -31,6 +30,7 @@ import { Route as AuthenticatedProjectPlansRouteImport } from './routes/_authent
 import { Route as AuthenticatedProjectsRouteImport } from './routes/_authenticated/projects'
 import { Route as AuthenticatedSelfAttendanceRouteImport } from './routes/_authenticated/self-attendance'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedShiftSchedulesRouteImport } from './routes/_authenticated/shift-schedules'
 import { Route as AuthenticatedSitesRouteImport } from './routes/_authenticated/sites'
 import { Route as AuthenticatedTasksRouteImport } from './routes/_authenticated/tasks'
 import { Route as AuthenticatedTeamFollowUpRouteImport } from './routes/_authenticated/team-follow-up'
@@ -41,6 +41,9 @@ import { Route as AuthenticatedWagesRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedWarehousesRouteImport } from './routes/_authenticated/warehouses'
 import { Route as AuthenticatedWorkCenterRouteImport } from './routes/_authenticated/work-center'
 import { Route as AuthenticatedEmployeesEmployeeIdRouteImport } from './routes/_authenticated/employees.$employeeId'
+import { Route as ApiPublicAttendanceRemindersRouteImport } from './routes/api/public/attendance-reminders'
+import { Route as ApiPublicZkSyncRouteImport } from './routes/api/public/zk-sync'
+import { Route as ApiPublicZktecoSyncRouteImport } from './routes/api/public/zkteco-sync'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -49,11 +52,6 @@ const IndexRoute = IndexRouteImport.update({
 } as any)
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ZktecoSyncRoute = ZktecoSyncRouteImport.update({
-  id: '/api/public/zkteco-sync',
-  path: '/api/public/zkteco-sync',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -154,6 +152,12 @@ const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedShiftSchedulesRoute =
+  AuthenticatedShiftSchedulesRouteImport.update({
+    id: '/shift-schedules',
+    path: '/shift-schedules',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSitesRoute = AuthenticatedSitesRouteImport.update({
   id: '/sites',
   path: '/sites',
@@ -206,9 +210,24 @@ const AuthenticatedEmployeesEmployeeIdRoute =
     path: '/$employeeId',
     getParentRoute: () => AuthenticatedEmployeesRoute,
   } as any)
+const ApiPublicAttendanceRemindersRoute =
+  ApiPublicAttendanceRemindersRouteImport.update({
+    id: '/api/public/attendance-reminders',
+    path: '/api/public/attendance-reminders',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicZkSyncRoute = ApiPublicZkSyncRouteImport.update({
+  id: '/api/public/zk-sync',
+  path: '/api/public/zk-sync',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicZktecoSyncRoute = ApiPublicZktecoSyncRouteImport.update({
+  id: '/api/public/zkteco-sync',
+  path: '/api/public/zkteco-sync',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
-  '/api/public/zkteco-sync': typeof ZktecoSyncRoute
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/accounts': typeof AuthenticatedAccountsRoute
@@ -229,6 +248,7 @@ export interface FileRoutesByFullPath {
   '/projects': typeof AuthenticatedProjectsRoute
   '/self-attendance': typeof AuthenticatedSelfAttendanceRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/shift-schedules': typeof AuthenticatedShiftSchedulesRoute
   '/sites': typeof AuthenticatedSitesRoute
   '/tasks': typeof AuthenticatedTasksRoute
   '/team-follow-up': typeof AuthenticatedTeamFollowUpRoute
@@ -239,9 +259,11 @@ export interface FileRoutesByFullPath {
   '/warehouses': typeof AuthenticatedWarehousesRoute
   '/work-center': typeof AuthenticatedWorkCenterRoute
   '/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
+  '/api/public/attendance-reminders': typeof ApiPublicAttendanceRemindersRoute
+  '/api/public/zk-sync': typeof ApiPublicZkSyncRoute
+  '/api/public/zkteco-sync': typeof ApiPublicZktecoSyncRoute
 }
 export interface FileRoutesByTo {
-  '/api/public/zkteco-sync': typeof ZktecoSyncRoute
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/accounts': typeof AuthenticatedAccountsRoute
@@ -262,6 +284,7 @@ export interface FileRoutesByTo {
   '/projects': typeof AuthenticatedProjectsRoute
   '/self-attendance': typeof AuthenticatedSelfAttendanceRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/shift-schedules': typeof AuthenticatedShiftSchedulesRoute
   '/sites': typeof AuthenticatedSitesRoute
   '/tasks': typeof AuthenticatedTasksRoute
   '/team-follow-up': typeof AuthenticatedTeamFollowUpRoute
@@ -272,9 +295,11 @@ export interface FileRoutesByTo {
   '/warehouses': typeof AuthenticatedWarehousesRoute
   '/work-center': typeof AuthenticatedWorkCenterRoute
   '/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
+  '/api/public/attendance-reminders': typeof ApiPublicAttendanceRemindersRoute
+  '/api/public/zk-sync': typeof ApiPublicZkSyncRoute
+  '/api/public/zkteco-sync': typeof ApiPublicZktecoSyncRoute
 }
 export interface FileRoutesById {
-  '/api/public/zkteco-sync': typeof ZktecoSyncRoute
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
@@ -297,6 +322,7 @@ export interface FileRoutesById {
   '/_authenticated/projects': typeof AuthenticatedProjectsRoute
   '/_authenticated/self-attendance': typeof AuthenticatedSelfAttendanceRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/shift-schedules': typeof AuthenticatedShiftSchedulesRoute
   '/_authenticated/sites': typeof AuthenticatedSitesRoute
   '/_authenticated/tasks': typeof AuthenticatedTasksRoute
   '/_authenticated/team-follow-up': typeof AuthenticatedTeamFollowUpRoute
@@ -307,11 +333,13 @@ export interface FileRoutesById {
   '/_authenticated/warehouses': typeof AuthenticatedWarehousesRoute
   '/_authenticated/work-center': typeof AuthenticatedWorkCenterRoute
   '/_authenticated/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
+  '/api/public/attendance-reminders': typeof ApiPublicAttendanceRemindersRoute
+  '/api/public/zk-sync': typeof ApiPublicZkSyncRoute
+  '/api/public/zkteco-sync': typeof ApiPublicZktecoSyncRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    | '/api/public/zkteco-sync'
     | '/'
     | '/auth'
     | '/accounts'
@@ -332,6 +360,7 @@ export interface FileRouteTypes {
     | '/projects'
     | '/self-attendance'
     | '/settings'
+    | '/shift-schedules'
     | '/sites'
     | '/tasks'
     | '/team-follow-up'
@@ -342,9 +371,11 @@ export interface FileRouteTypes {
     | '/warehouses'
     | '/work-center'
     | '/employees/$employeeId'
+    | '/api/public/attendance-reminders'
+    | '/api/public/zk-sync'
+    | '/api/public/zkteco-sync'
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/api/public/zkteco-sync'
     | '/'
     | '/auth'
     | '/accounts'
@@ -365,6 +396,7 @@ export interface FileRouteTypes {
     | '/projects'
     | '/self-attendance'
     | '/settings'
+    | '/shift-schedules'
     | '/sites'
     | '/tasks'
     | '/team-follow-up'
@@ -375,8 +407,10 @@ export interface FileRouteTypes {
     | '/warehouses'
     | '/work-center'
     | '/employees/$employeeId'
-  id:
+    | '/api/public/attendance-reminders'
+    | '/api/public/zk-sync'
     | '/api/public/zkteco-sync'
+  id:
     | '__root__'
     | '/'
     | '/_authenticated'
@@ -399,6 +433,7 @@ export interface FileRouteTypes {
     | '/_authenticated/projects'
     | '/_authenticated/self-attendance'
     | '/_authenticated/settings'
+    | '/_authenticated/shift-schedules'
     | '/_authenticated/sites'
     | '/_authenticated/tasks'
     | '/_authenticated/team-follow-up'
@@ -409,24 +444,22 @@ export interface FileRouteTypes {
     | '/_authenticated/warehouses'
     | '/_authenticated/work-center'
     | '/_authenticated/employees/$employeeId'
+    | '/api/public/attendance-reminders'
+    | '/api/public/zk-sync'
+    | '/api/public/zkteco-sync'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  ZktecoSyncRoute: typeof ZktecoSyncRoute
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiPublicAttendanceRemindersRoute: typeof ApiPublicAttendanceRemindersRoute
+  ApiPublicZkSyncRoute: typeof ApiPublicZkSyncRoute
+  ApiPublicZktecoSyncRoute: typeof ApiPublicZktecoSyncRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/api/public/zkteco-sync': {
-      id: '/api/public/zkteco-sync'
-      path: '/api/public/zkteco-sync'
-      fullPath: '/api/public/zkteco-sync'
-      preLoaderRoute: typeof ZktecoSyncRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
@@ -574,6 +607,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/shift-schedules': {
+      id: '/_authenticated/shift-schedules'
+      path: '/shift-schedules'
+      fullPath: '/shift-schedules'
+      preLoaderRoute: typeof AuthenticatedShiftSchedulesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/sites': {
       id: '/_authenticated/sites'
       path: '/sites'
@@ -644,6 +684,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedEmployeesEmployeeIdRouteImport
       parentRoute: typeof AuthenticatedEmployeesRoute
     }
+    '/api/public/attendance-reminders': {
+      id: '/api/public/attendance-reminders'
+      path: '/api/public/attendance-reminders'
+      fullPath: '/api/public/attendance-reminders'
+      preLoaderRoute: typeof ApiPublicAttendanceRemindersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/zk-sync': {
+      id: '/api/public/zk-sync'
+      path: '/api/public/zk-sync'
+      fullPath: '/api/public/zk-sync'
+      preLoaderRoute: typeof ApiPublicZkSyncRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/zkteco-sync': {
+      id: '/api/public/zkteco-sync'
+      path: '/api/public/zkteco-sync'
+      fullPath: '/api/public/zkteco-sync'
+      preLoaderRoute: typeof ApiPublicZktecoSyncRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -681,6 +742,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedProjectsRoute: typeof AuthenticatedProjectsRoute
   AuthenticatedSelfAttendanceRoute: typeof AuthenticatedSelfAttendanceRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedShiftSchedulesRoute: typeof AuthenticatedShiftSchedulesRoute
   AuthenticatedSitesRoute: typeof AuthenticatedSitesRoute
   AuthenticatedTasksRoute: typeof AuthenticatedTasksRoute
   AuthenticatedTeamFollowUpRoute: typeof AuthenticatedTeamFollowUpRoute
@@ -711,6 +773,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedProjectsRoute: AuthenticatedProjectsRoute,
   AuthenticatedSelfAttendanceRoute: AuthenticatedSelfAttendanceRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedShiftSchedulesRoute: AuthenticatedShiftSchedulesRoute,
   AuthenticatedSitesRoute: AuthenticatedSitesRoute,
   AuthenticatedTasksRoute: AuthenticatedTasksRoute,
   AuthenticatedTeamFollowUpRoute: AuthenticatedTeamFollowUpRoute,
@@ -726,10 +789,12 @@ const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
-  ZktecoSyncRoute: ZktecoSyncRoute,
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiPublicAttendanceRemindersRoute: ApiPublicAttendanceRemindersRoute,
+  ApiPublicZkSyncRoute: ApiPublicZkSyncRoute,
+  ApiPublicZktecoSyncRoute: ApiPublicZktecoSyncRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -180,7 +180,8 @@ export function calculatePayroll(options: {
   const woDays = isDaily ? 0 : (summary.woDays ?? 0);
   const workedDays = summary.presentDays;
   const paidHolidays = isDaily ? 0 : Math.max(0, holidayDays);
-  const paidDays = workedDays + woDays + paidHolidays;
+  const paidLeaveDays = summary.leaveDays;
+  const paidDays = workedDays + woDays + paidHolidays + paidLeaveDays;
   const overtimePay = roundMoney(summary.totalOvertimeHours * Math.max(0, overtimeHourlyRate));
   const basePay = roundMoney(dayRate * paidDays);
   // سابقاً كانت صفحات الرواتب تعيد جمع الأساسي والإضافي والإضافات والخصومات كلٌ بطريقته؛ أصبحت المعادلة هنا مصدراً واحداً لمنع اختلاف صافي الراتب بين التقارير.
@@ -193,6 +194,7 @@ export function calculatePayroll(options: {
     workedDays,
     woDays,
     holidayDays: paidHolidays,
+    leaveDays: paidLeaveDays,
     paidDays,
     overtimeHours: summary.totalOvertimeHours,
     overtimePay,

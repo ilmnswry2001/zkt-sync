@@ -44,6 +44,7 @@ import { useOperationalAlerts } from "@/hooks/use-operational-alerts";
 const nav = [
   { to: "/dashboard", label: "لوحة التحكم", icon: LayoutDashboard, access: "executive" },
   { to: "/attendance", label: "التقارير اليومية", icon: ClockIcon },
+  { to: "/shift-schedules", label: "جداول الورديات", icon: CalendarDays, access: "hr" },
   { to: "/tasks", label: "مهامي اليومية", icon: ClipboardCheck },
   { to: "/self-attendance", label: "الحضور الذاتي", icon: Smartphone },
   { to: "/work-center", label: "مركز العمل", icon: ListChecks },
