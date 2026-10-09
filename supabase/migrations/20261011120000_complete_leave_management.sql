@@ -51,6 +51,12 @@ ALTER TABLE public.forms ADD COLUMN IF NOT EXISTS leave_type_id uuid;
 UPDATE public.forms
 SET leave_type_id = (SELECT id FROM public.leave_types WHERE code = 'annual')
 WHERE kind = 'leave' AND leave_type_id IS NULL;
+UPDATE public.forms
+SET leave_end_date = work_date
+WHERE kind = 'leave' AND leave_end_date IS NULL;
+UPDATE public.forms
+SET leave_days = 1
+WHERE kind = 'leave' AND leave_days IS NULL;
 DO $$ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint
@@ -559,4 +565,12 @@ WITH CHECK (
       AND (SELECT count(*) FROM public.employees matching
         WHERE matching.status = 'active' AND lower(matching.email) = lower(profile.email)) = 1
   )
+);
+
+-- Pending leave requests retain their audit trail through withdrawal instead of deletion.
+DROP POLICY IF EXISTS "delete own pending forms" ON public.forms;
+CREATE POLICY "delete own pending forms" ON public.forms FOR DELETE TO authenticated
+USING (
+  public.is_admin(auth.uid())
+  OR (kind <> 'leave' AND created_by = auth.uid() AND status = 'pending_manager')
 );
