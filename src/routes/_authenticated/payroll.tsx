@@ -62,12 +62,14 @@ type Employee = {
 type Addition = { employee_id: string; amount: number; kind: string };
 type Penalty = { employee_id: string | null; deduction_amount: number };
 type AttendanceLog = { employee_no: string; verify_time: string };
+type ApprovedLeaveCalendarDay = { employee_id: string; work_date: string; is_paid: boolean; status: string };
 type AttendanceOverride = {
   employee_id: string;
   work_date: string;
   status: "present" | "absent" | "leave" | "holiday" | "rest";
   notes: string | null;
   overtime_hours: number | null;
+  is_paid?: boolean;
 };
 type Vehicle = {
   id: string;
@@ -92,7 +94,7 @@ function PayrollPage() {
     queryKey: ["payroll", month],
     queryFn: async () => {
       const attendanceRange = monthInstantRangeInBaghdad(month);
-      const [employees, additions, penalties, logs, overrides, vehicles, vehicleOperations] =
+      const [employees, additions, penalties, logs, overrides, vehicles, vehicleOperations, leaveCalendar] =
         await Promise.all([
           loadAllRows((from, to) =>
             supabase
@@ -157,13 +159,31 @@ function PayrollPage() {
               .order("vehicle_id")
               .range(from, to),
           ),
+          loadAllRows((from, to) =>
+            (supabase as any)
+              .rpc("leave_calendar_month", {
+                _year: Number(month.slice(0, 4)),
+                _month: Number(month.slice(5, 7)),
+              })
+              .range(from, to),
+          ),
         ]);
+      const approvedLeaveDays = (leaveCalendar as ApprovedLeaveCalendarDay[])
+        .filter((day) => ["pending_execution", "executed"].includes(day.status))
+        .map((day): AttendanceOverride => ({
+          employee_id: day.employee_id,
+          work_date: day.work_date,
+          status: "leave",
+          notes: `إجازة ${day.is_paid ? "مدفوعة" : "بدون راتب"}`,
+          overtime_hours: 0,
+          is_paid: day.is_paid,
+        }));
       return {
         employees: employees as Employee[],
         additions: additions as Addition[],
         penalties: penalties as Penalty[],
         logs: logs as AttendanceLog[],
-        overrides: overrides as AttendanceOverride[],
+        overrides: [...(overrides as AttendanceOverride[]), ...approvedLeaveDays],
         vehicles: vehicles as Vehicle[],
         vehicleOperations: vehicleOperations as VehicleOperation[],
       };
@@ -276,6 +296,8 @@ function PayrollPage() {
         "اسم الموظف": employee.full_name,
         "نوع الأجر": employee.pay_type === "daily" ? "يومي" : "شهري",
         "أيام الحضور": summary.presentDays,
+        "إجازة مدفوعة": payroll.leaveDays,
+        "إجازة بدون راتب": payroll.unpaidLeaveDays,
         "أيام الراحة الأسبوعية": payroll.woDays,
         "أيام العطل المعتمدة": payroll.holidayDays,
         "ساعات إضافية": payroll.overtimeHours,
@@ -292,7 +314,7 @@ function PayrollPage() {
       { wch: 16 },
       { wch: 30 },
       { wch: 14 },
-      ...Array(9).fill({ wch: 20 }),
+      ...Array(11).fill({ wch: 20 }),
       { wch: 12 },
     ];
     XLSX.utils.book_append_sheet(workbook, sheet, "رواتب الموظفين");
@@ -364,7 +386,7 @@ function PayrollPage() {
     printWindow.document.close();
   };
   const printSlip = (row: (typeof rows)[number]) => {
-    const body = `<div class="meta"><b>الموظف:</b> ${escapeHtml(row.employee.full_name)}<br/><b>الرقم:</b> ${escapeHtml(row.employee.employee_no)}<br/><b>الشهر:</b> ${escapeHtml(month)}</div><table><tr><th>البند</th><th>المبلغ</th></tr><tr><td>الأجر الأساسي</td><td>${money(row.payroll.basePay)}</td></tr><tr><td>بدل الساعات الإضافية (${row.payroll.overtimeHours})</td><td>${money(row.payroll.overtimePay)}</td></tr><tr><td>الإضافات والمكافآت</td><td>${money(row.additions)}</td></tr><tr><td>الاستقطاعات</td><td>${money(row.deductions)}</td></tr><tr class="total"><td>الصافي المستحق</td><td>${money(row.total)}</td></tr></table>`;
+    const body = `<div class="meta"><b>الموظف:</b> ${escapeHtml(row.employee.full_name)}<br/><b>الرقم:</b> ${escapeHtml(row.employee.employee_no)}<br/><b>الشهر:</b> ${escapeHtml(month)}<br/><b>إجازة مدفوعة:</b> ${row.payroll.leaveDays} يوم · <b>بدون راتب:</b> ${row.payroll.unpaidLeaveDays} يوم</div><table><tr><th>البند</th><th>المبلغ</th></tr><tr><td>الأجر الأساسي</td><td>${money(row.payroll.basePay)}</td></tr><tr><td>بدل الساعات الإضافية (${row.payroll.overtimeHours})</td><td>${money(row.payroll.overtimePay)}</td></tr><tr><td>الإضافات والمكافآت</td><td>${money(row.additions)}</td></tr><tr><td>الاستقطاعات</td><td>${money(row.deductions)}</td></tr><tr class="total"><td>الصافي المستحق</td><td>${money(row.total)}</td></tr></table>`;
     if (!printReport(`قصاصة راتب — ${row.employee.full_name}`, body))
       toast.error("اسمح بالنوافذ المنبثقة للطباعة");
   };
@@ -488,6 +510,7 @@ function PayrollPage() {
                       <tr className="border-b bg-muted/40 text-right">
                         <th className="p-3">الموظف</th>
                         <th className="p-3">الحضور</th>
+                        <th className="p-3">الإجازات</th>
                         <th className="p-3">الأجر الأساسي</th>
                         <th className="p-3">الإضافي</th>
                         <th className="p-3">الإضافات</th>
@@ -514,6 +537,10 @@ function PayrollPage() {
                             <div className="text-xs text-muted-foreground">
                               {row.payroll.overtimeHours} س إضافي
                             </div>
+                          </td>
+                          <td className="p-3">
+                            <span className="block">مدفوعة: {row.payroll.leaveDays}</span>
+                            <span className="text-xs text-muted-foreground">بدون راتب: {row.payroll.unpaidLeaveDays}</span>
                           </td>
                           <td className="p-3">{money(row.payroll.basePay)}</td>
                           <td className="p-3">{money(row.payroll.overtimePay)}</td>
@@ -611,3 +638,4 @@ function PayrollPage() {
     </div>
   );
 }
+

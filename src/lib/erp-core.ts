@@ -129,6 +129,14 @@ export const ERP_MODULES: EriModuleDefinition[] = [
     permission: "payroll.view",
   },
   {
+    key: "leave",
+    path: "/leaves",
+    label: "إدارة الإجازات",
+    roles: ["admin", "hr", "department_manager", "data_entry", "ceo"],
+    permission: "leave.manage",
+    departmentScoped: true,
+  },
+  {
     key: "expenses",
     path: "/expenses",
     label: "المصاريف",
@@ -187,3 +195,4 @@ export function canAccessModulePath(
 export function filterAccessibleModules(roles: string[], allowedSections?: string[] | null) {
   return ERP_MODULES.filter((module) => canAccessModulePath(module.path, roles, allowedSections));
 }
+
