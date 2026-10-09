@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ZktecoSyncRouteImport } from './routes/api/public/zkteco-sync'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
@@ -48,6 +49,11 @@ const IndexRoute = IndexRouteImport.update({
 } as any)
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ZktecoSyncRoute = ZktecoSyncRouteImport.update({
+  id: '/api/public/zkteco-sync',
+  path: '/api/public/zkteco-sync',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -202,6 +208,7 @@ const AuthenticatedEmployeesEmployeeIdRoute =
   } as any)
 
 export interface FileRoutesByFullPath {
+  '/api/public/zkteco-sync': typeof ZktecoSyncRoute
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/accounts': typeof AuthenticatedAccountsRoute
@@ -234,6 +241,7 @@ export interface FileRoutesByFullPath {
   '/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
 }
 export interface FileRoutesByTo {
+  '/api/public/zkteco-sync': typeof ZktecoSyncRoute
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/accounts': typeof AuthenticatedAccountsRoute
@@ -266,6 +274,7 @@ export interface FileRoutesByTo {
   '/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
 }
 export interface FileRoutesById {
+  '/api/public/zkteco-sync': typeof ZktecoSyncRoute
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
@@ -302,6 +311,7 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
+    | '/api/public/zkteco-sync'
     | '/'
     | '/auth'
     | '/accounts'
@@ -334,6 +344,7 @@ export interface FileRouteTypes {
     | '/employees/$employeeId'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/api/public/zkteco-sync'
     | '/'
     | '/auth'
     | '/accounts'
@@ -365,6 +376,7 @@ export interface FileRouteTypes {
     | '/work-center'
     | '/employees/$employeeId'
   id:
+    | '/api/public/zkteco-sync'
     | '__root__'
     | '/'
     | '/_authenticated'
@@ -400,6 +412,7 @@ export interface FileRouteTypes {
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
+  ZktecoSyncRoute: typeof ZktecoSyncRoute
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
@@ -407,6 +420,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/api/public/zkteco-sync': {
+      id: '/api/public/zkteco-sync'
+      path: '/api/public/zkteco-sync'
+      fullPath: '/api/public/zkteco-sync'
+      preLoaderRoute: typeof ZktecoSyncRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -706,6 +726,7 @@ const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
+  ZktecoSyncRoute: ZktecoSyncRoute,
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
