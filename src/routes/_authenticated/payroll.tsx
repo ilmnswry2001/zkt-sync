@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Banknote, Download, Printer, RefreshCw, Search, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { printReport, escapeHtml } from "@/lib/report-print";
+import { amountInArabicIqd } from "@/lib/arabic-currency";
 import { currentMonthInBaghdad, monthInstantRangeInBaghdad, todayInBaghdad } from "@/lib/date-time";
 import {
   buildAttendanceDays,
@@ -42,6 +43,13 @@ type Employee = {
   full_name: string;
   base_salary: number | null;
   pay_type: string | null;
+  salary_type?: string | null;
+  contract_type?: string | null;
+  bank_name?: string | null;
+  bank_account?: string | null;
+  iban?: string | null;
+  sites?: { name: string } | null;
+  departments?: { name: string } | null;
   wage_rates: {
     monthly_rate: number | null;
     daily_rate: number | null;
@@ -89,7 +97,7 @@ function PayrollPage() {
             supabase
               .from("employees")
               .select(
-                "id, employee_no, full_name, base_salary, pay_type, wage_rates(monthly_rate, daily_rate, overtime_hour_rate, currency), shifts(end_time, grace_minutes)",
+                "id, employee_no, full_name, base_salary, pay_type, salary_type, contract_type, bank_name, bank_account, iban, sites!employees_site_id_fkey(name), departments!employees_department_id_fkey(name), wage_rates(monthly_rate, daily_rate, overtime_hour_rate, currency), shifts(end_time, grace_minutes)",
               )
               .order("employee_no")
               .order("id")
@@ -206,6 +214,14 @@ function PayrollPage() {
     `${row.employee.full_name} ${row.employee.employee_no}`
       .toLocaleLowerCase("ar")
       .includes(search.trim().toLocaleLowerCase("ar")),
+  );
+  const bankRows = rows.filter(
+    (row) => row.employee.bank_account?.trim() || row.employee.iban?.trim(),
+  );
+  const cashRows = rows.filter(
+    ({ employee }) =>
+      employee.pay_type === "daily" ||
+      [employee.salary_type, employee.contract_type].some((value) => /نقد|cash/i.test(value ?? "")),
   );
   const total = rows.reduce((sum, row) => sum + row.total, 0);
   const money = (value: number) =>
@@ -336,10 +352,10 @@ function PayrollPage() {
     );
   };
   const printCashVouchers = () => {
-    const vouchers = filteredRows
+    const vouchers = cashRows
       .map(
         ({ employee, payroll, total: net }) =>
-          `<section class="voucher"><h2>قسيمة صرف نقدية</h2><p><b>الموظف:</b> ${escapeHtml(employee.full_name)} — <b>الرقم:</b> ${escapeHtml(employee.employee_no)}</p><p><b>الشهر:</b> ${escapeHtml(month)}</p><table><tr><th>الأجر الأساسي</th><td>${money(payroll.basePay)}</td></tr><tr><th>الساعات الإضافية</th><td>${money(payroll.overtimePay)}</td></tr><tr><th>الإضافات والخصومات</th><td>${money(payroll.additions - payroll.deductions)}</td></tr><tr><th>الصافي</th><td>${money(net)}</td></tr></table><div class="sign">المستلم: ________________ &nbsp;&nbsp; المحاسب: ________________</div></section>`,
+          `<section class="voucher"><h2>قسيمة صرف نقدية</h2><p><b>الموظف:</b> ${escapeHtml(employee.full_name)} — <b>الرقم:</b> ${escapeHtml(employee.employee_no)}</p><p><b>الشهر:</b> ${escapeHtml(month)}</p><table><tr><th>الأجر الأساسي</th><td>${money(payroll.basePay)}</td></tr><tr><th>الساعات الإضافية</th><td>${money(payroll.overtimePay)}</td></tr><tr><th>الإضافات والخصومات</th><td>${money(payroll.additions - payroll.deductions)}</td></tr><tr><th>الصافي</th><td>${money(net)}</td></tr></table><p><b>المبلغ كتابةً:</b> ${escapeHtml(amountInArabicIqd(net))}</p><div class="sign">المستلم: ________________ &nbsp;&nbsp; المحاسب: ________________</div></section>`,
       )
       .join("");
     if (!vouchers) return toast.error("لا توجد بيانات للطباعة");
@@ -350,6 +366,24 @@ function PayrollPage() {
       )
     )
       toast.error("تعذر فتح الطباعة");
+  };
+  const exportBankPayroll = (format: "xlsx" | "csv") => {
+    if (!bankRows.length) return toast.error("لا توجد حسابات مصرفية أو أرقام دفع مسجلة للموظفين");
+    const sheetRows = bankRows.map(({ employee, total: net }) => ({
+      "اسم الموظف الكامل": employee.full_name,
+      "رقم الموظف": employee.employee_no,
+      الفرع: employee.sites?.name || employee.departments?.name || "",
+      المصرف: employee.bank_name || "",
+      "رقم الحساب / بطاقة الدفع": employee.bank_account || "",
+      IBAN: employee.iban || "",
+      "صافي المستحق": net,
+      العملة: "IQD",
+    }));
+    const sheet = XLSX.utils.json_to_sheet(sheetRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, "كشف الصرف المصرفي");
+    XLSX.writeFile(workbook, `كشف_مصرفي_للرواتب_${month}.${format}`, { bookType: format });
+    toast.success("تم تنزيل كشف الصرف المصرفي");
   };
   return (
     <div dir="rtl" className="space-y-6">
@@ -381,6 +415,20 @@ function PayrollPage() {
             disabled={!filteredRows.length || query.isLoading}
           >
             <Download className="ml-2 h-4 w-4" /> CSV
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => exportBankPayroll("xlsx")}
+            disabled={query.isLoading}
+          >
+            <Download className="ml-2 h-4 w-4" /> كشف مصرفي Excel
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => exportBankPayroll("csv")}
+            disabled={query.isLoading}
+          >
+            <Download className="ml-2 h-4 w-4" /> كشف مصرفي CSV
           </Button>
           <Button
             variant="outline"

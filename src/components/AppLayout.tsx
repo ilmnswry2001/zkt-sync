@@ -30,11 +30,16 @@ import {
   Boxes,
   ListChecks,
   CalendarCheck2,
+  Moon,
+  Sun,
+  Bell,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useOperationalAlerts } from "@/hooks/use-operational-alerts";
 
 const nav = [
   { to: "/dashboard", label: "لوحة التحكم", icon: LayoutDashboard, access: "executive" },
@@ -82,6 +87,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     permissionError,
   } = useAuth();
   const navigate = useNavigate();
+  const operationalAlertsQuery = useOperationalAlerts();
+  const operationalAlerts = operationalAlertsQuery.data ?? [];
+  const [alertsOpen, setAlertsOpen] = useState(false);
+  const canViewOperationalAlerts =
+    isAdmin || isHR || isCompanyManager || roles.includes("department_manager");
   const blocked =
     !permissionsLoading &&
     !!allowedSections &&
@@ -99,6 +109,34 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     if (typeof window === "undefined") return true;
     return window.localStorage.getItem("zkt-sidebar-hidden") !== "true";
   });
+  const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
+  const [workspaceName, setWorkspaceName] = useState("منظومة زِكت");
+  const [isEditingWorkspaceName, setIsEditingWorkspaceName] = useState(false);
+  useEffect(() => {
+    const savedWorkspaceName = window.localStorage.getItem("zkt-workspace-name");
+    if (savedWorkspaceName?.trim()) setWorkspaceName(savedWorkspaceName.trim());
+    const savedTheme = window.localStorage.getItem("zkt-theme");
+    const theme =
+      savedTheme === "dark" || savedTheme === "light"
+        ? savedTheme
+        : window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light";
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    setThemeMode(theme);
+  }, []);
+  const toggleTheme = () => {
+    const next = themeMode === "dark" ? "light" : "dark";
+    document.documentElement.classList.toggle("dark", next === "dark");
+    window.localStorage.setItem("zkt-theme", next);
+    setThemeMode(next);
+  };
+  const saveWorkspaceName = () => {
+    const nextName = workspaceName.trim() || "منظومة زِكت";
+    setWorkspaceName(nextName);
+    window.localStorage.setItem("zkt-workspace-name", nextName);
+    setIsEditingWorkspaceName(false);
+  };
   const toggleSidebar = () => {
     setSidebarOpen((open) => {
       const next = !open;
@@ -132,7 +170,36 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <Fingerprint className="w-5 h-5 text-slate-950" />
             </div>
             <div>
-              <h1 className="font-bold text-lg tracking-tight">منظومة زِكت</h1>
+              {isEditingWorkspaceName ? (
+                <input
+                  autoFocus
+                  value={workspaceName}
+                  onChange={(event) => setWorkspaceName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") saveWorkspaceName();
+                    if (event.key === "Escape") setIsEditingWorkspaceName(false);
+                  }}
+                  aria-label="اسم النظام"
+                  className="w-36 rounded-md border border-sidebar-border bg-sidebar px-2 py-1 text-sm font-bold text-sidebar-foreground outline-none"
+                />
+              ) : (
+                <h1 className="font-bold text-lg tracking-tight">{workspaceName}</h1>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() =>
+                  isEditingWorkspaceName ? saveWorkspaceName() : setIsEditingWorkspaceName(true)
+                }
+                aria-label="تعديل اسم النظام"
+              >
+                {isEditingWorkspaceName ? (
+                  <span className="text-xs">حفظ</span>
+                ) : (
+                  <span className="text-xs">تعديل</span>
+                )}
+              </Button>
               <p className="text-[11px] opacity-60">إدارة الموارد والمشاريع</p>
             </div>
           </div>
@@ -263,8 +330,72 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </h2>
               </div>
             </div>
-            <div className="hidden items-center gap-2 rounded-xl bg-primary/5 px-3 py-2 text-xs font-semibold text-primary sm:flex">
-              <Sparkles className="h-4 w-4" /> نظام إدارة موحد
+            <div className="flex items-center gap-2">
+              {canViewOperationalAlerts && (
+                <Popover open={alertsOpen} onOpenChange={setAlertsOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="relative"
+                      aria-label={`مركز التنبيهات: ${operationalAlerts.length} تنبيه`}
+                      title="مركز التنبيهات"
+                    >
+                      <Bell className="h-4 w-4" />
+                      {operationalAlerts.length > 0 && (
+                        <span className="absolute -left-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
+                          {operationalAlerts.length > 99 ? "99+" : operationalAlerts.length}
+                        </span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    dir="rtl"
+                    align="end"
+                    className="w-[min(22rem,calc(100vw-2rem))] p-0"
+                  >
+                    <div className="border-b px-4 py-3">
+                      <p className="text-sm font-bold">التنبيهات التشغيلية</p>
+                      <p className="text-xs text-muted-foreground">
+                        {operationalAlerts.length} تنبيه حالي
+                      </p>
+                    </div>
+                    <div className="max-h-[min(65vh,28rem)] overflow-y-auto p-2">
+                      {operationalAlertsQuery.isLoading ? (
+                        <p className="p-3 text-sm text-muted-foreground">جارٍ فحص المؤشرات...</p>
+                      ) : operationalAlertsQuery.error ? (
+                        <p className="p-3 text-sm text-destructive">تعذر تحميل التنبيهات.</p>
+                      ) : operationalAlerts.length ? (
+                        operationalAlerts.slice(0, 6).map((alert) => (
+                          <Link
+                            key={alert.id}
+                            to={alert.href as any}
+                            onClick={() => setAlertsOpen(false)}
+                            className="block rounded-md border-r-4 border-r-amber-500 px-3 py-2.5 hover:bg-muted/60"
+                          >
+                            <p className="text-xs font-semibold">{alert.title}</p>
+                            <p className="mt-1 text-[11px] text-muted-foreground">{alert.detail}</p>
+                          </Link>
+                        ))
+                      ) : (
+                        <p className="p-3 text-sm text-muted-foreground">لا توجد تنبيهات حالية.</p>
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={toggleTheme}
+                aria-label={themeMode === "dark" ? "تفعيل المظهر الفاتح" : "تفعيل المظهر الداكن"}
+                title="تغيير المظهر"
+              >
+                {themeMode === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              </Button>
+              <div className="hidden items-center gap-2 rounded-xl bg-primary/5 px-3 py-2 text-xs font-semibold text-primary sm:flex">
+                <Sparkles className="h-4 w-4" /> نظام إدارة موحد
+              </div>
             </div>
           </header>
           {permissionError ? (
