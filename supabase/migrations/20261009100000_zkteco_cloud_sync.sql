@@ -47,13 +47,13 @@ BEGIN
     employee_no, employee_id, device_id, upload_id, verify_time, verify_type, status, source, self_event_type
   )
   SELECT
-    row.value->>'employee_no', e.id, p_device_id, NULL,
-    (row.value->>'timestamp')::timestamptz,
-    coalesce((row.value->>'verify_type')::integer, 0),
-    coalesce((row.value->>'status')::integer, 0),
-    'zkteco_auto_agent', row.value->>'punch_type'
-  FROM jsonb_array_elements(p_logs) AS row(value)
-  LEFT JOIN public.employees e ON e.employee_no = row.value->>'employee_no'
+    incoming_log.value->>'employee_no', e.id, p_device_id, NULL,
+    (incoming_log.value->>'timestamp')::timestamptz,
+    coalesce((incoming_log.value->>'verify_type')::integer, 0),
+    coalesce((incoming_log.value->>'status')::integer, 0),
+    'zkteco_auto_agent', incoming_log.value->>'punch_type'
+  FROM jsonb_array_elements(p_logs) AS incoming_log(value)
+  LEFT JOIN public.employees e ON e.employee_no = incoming_log.value->>'employee_no'
   ON CONFLICT (employee_no, verify_time, source) WHERE source = 'zkteco_auto_agent' DO NOTHING;
   GET DIAGNOSTICS v_inserted = ROW_COUNT;
 
