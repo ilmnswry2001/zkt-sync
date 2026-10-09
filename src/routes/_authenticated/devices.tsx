@@ -165,9 +165,14 @@ function DevicesPage() {
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <p>أنشئ مفتاحاً لكل جهاز، ثم نزّل ملف الإعدادات وضعه بجانب وكيل Python على حاسوب متصل بشبكة الجهاز.</p>
-          <a className="inline-flex items-center gap-2 font-semibold text-primary underline" href="https://raw.githubusercontent.com/ilmnswry2001/zkt-sync/main/scripts/zkteco_sync_agent.py" download>
-            <Download className="h-4 w-4" /> تنزيل وكيل المزامنة
-          </a>
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            <a className="inline-flex items-center gap-2 font-semibold text-primary underline" href="https://raw.githubusercontent.com/ilmnswry2001/zkt-sync/main/scripts/zkteco_sync_agent.py" download>
+              <Download className="h-4 w-4" /> تنزيل وكيل المزامنة
+            </a>
+            <a className="inline-flex items-center gap-2 font-semibold text-primary underline" href="https://raw.githubusercontent.com/ilmnswry2001/zkt-sync/main/scripts/requirements.txt" download>
+              <Download className="h-4 w-4" /> تنزيل متطلبات Python
+            </a>
+          </div>
           {syncStatusError && isAdmin && <p role="alert" className="text-destructive">تعذر تحميل حالة المزامنة. تحقق من تطبيق migration الخاصة بالمزامنة.</p>}
           {createdKey && (
             <div className="space-y-2 rounded-lg border bg-background p-3">
