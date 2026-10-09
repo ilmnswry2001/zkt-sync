@@ -55,6 +55,13 @@ export const Route = createFileRoute("/api/public/zkteco-sync")({
             return json({ error: "Device is not authorized" }, 401);
           }
 
+          if (payload.site_id) {
+            const { data: site, error: siteError } = await (supabaseAdmin as any)
+              .from("sites").select("id").eq("id", payload.site_id).maybeSingle();
+            if (siteError) throw siteError;
+            if (!site) return json({ error: "Unknown site_id" }, 422);
+          }
+
           const logs = payload.logs.map((log) => {
             const date = new Date(log.timestamp);
             date.setUTCMilliseconds(0);
@@ -68,7 +75,7 @@ export const Route = createFileRoute("/api/public/zkteco-sync")({
             };
           });
           const { data, error } = await (supabaseAdmin as any).rpc("ingest_zkteco_sync", {
-            p_device_id: device.id, p_logs: logs,
+            p_device_id: device.id, p_site_id: payload.site_id ?? null, p_logs: logs,
           });
           if (error) throw error;
           const result = Array.isArray(data) ? data[0] : data;
