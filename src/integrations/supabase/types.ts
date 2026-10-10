@@ -260,6 +260,8 @@ export type Database = {
       }
       devices: {
         Row: {
+          auto_last_sync_at: string | null
+          auto_synced_logs_total: number
           created_at: string
           description: string | null
           id: string
@@ -272,6 +274,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          auto_last_sync_at?: string | null
+          auto_synced_logs_total?: number
           created_at?: string
           description?: string | null
           id?: string
@@ -284,6 +288,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          auto_last_sync_at?: string | null
+          auto_synced_logs_total?: number
           created_at?: string
           description?: string | null
           id?: string
@@ -2172,6 +2178,44 @@ export type Database = {
           },
         ]
       }
+      zkteco_sync_keys: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          device_id: string
+          id: string
+          key_hash: string
+          key_prefix: string
+          revoked_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          device_id: string
+          id?: string
+          key_hash: string
+          key_prefix: string
+          revoked_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          device_id?: string
+          id?: string
+          key_hash?: string
+          key_prefix?: string
+          revoked_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zkteco_sync_keys_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -2233,6 +2277,13 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      ingest_zkteco_sync: {
+        Args: { p_device_id: string; p_logs: Json; p_site_id: string }
+        Returns: {
+          inserted_count: number
+          unmatched_count: number
+        }[]
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
       issue_employee_clearance: {
@@ -2355,6 +2406,9 @@ export type Database = {
         | "site_admin"
         | "department_manager"
         | "engineer"
+        | "planning_officer"
+        | "warehouse_keeper"
+        | "procurement_officer"
       day_status: "present" | "absent" | "leave" | "holiday" | "rest"
       device_status: "active" | "inactive" | "maintenance"
       employee_status: "active" | "inactive" | "terminated"
@@ -2502,6 +2556,9 @@ export const Constants = {
         "site_admin",
         "department_manager",
         "engineer",
+        "planning_officer",
+        "warehouse_keeper",
+        "procurement_officer",
       ],
       day_status: ["present", "absent", "leave", "holiday", "rest"],
       device_status: ["active", "inactive", "maintenance"],
