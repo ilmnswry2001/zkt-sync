@@ -590,6 +590,53 @@ export type Database = {
           },
         ]
       }
+      employee_weekly_schedules: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          effective_from: string
+          effective_until: string | null
+          employee_id: string
+          end_time: string
+          grace_minutes: number
+          id: string
+          start_time: string
+          weekday: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string
+          effective_until?: string | null
+          employee_id: string
+          end_time: string
+          grace_minutes?: number
+          id?: string
+          start_time: string
+          weekday: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string
+          effective_until?: string | null
+          employee_id?: string
+          end_time?: string
+          grace_minutes?: number
+          id?: string
+          start_time?: string
+          weekday?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_weekly_schedules_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employees: {
         Row: {
           address: string | null
@@ -840,6 +887,7 @@ export type Database = {
           kind: Database["public"]["Enums"]["form_kind"]
           leave_days: number
           leave_end_date: string | null
+          leave_type_id: string | null
           manager_approved_at: string | null
           manager_approved_by: string | null
           overtime_hours: number
@@ -869,6 +917,7 @@ export type Database = {
           kind?: Database["public"]["Enums"]["form_kind"]
           leave_days?: number
           leave_end_date?: string | null
+          leave_type_id?: string | null
           manager_approved_at?: string | null
           manager_approved_by?: string | null
           overtime_hours?: number
@@ -898,6 +947,7 @@ export type Database = {
           kind?: Database["public"]["Enums"]["form_kind"]
           leave_days?: number
           leave_end_date?: string | null
+          leave_type_id?: string | null
           manager_approved_at?: string | null
           manager_approved_by?: string | null
           overtime_hours?: number
@@ -926,10 +976,65 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "forms_leave_type_id_fkey"
+            columns: ["leave_type_id"]
+            isOneToOne: false
+            referencedRelation: "leave_types"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "forms_target_department_id_fkey"
             columns: ["target_department_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leave_balance_transactions: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string
+          effective_year: number
+          employee_id: string
+          id: string
+          leave_type_id: string
+          reason: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string
+          effective_year: number
+          employee_id: string
+          id?: string
+          leave_type_id: string
+          reason: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string
+          effective_year?: number
+          employee_id?: string
+          id?: string
+          leave_type_id?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leave_balance_transactions_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leave_balance_transactions_leave_type_id_fkey"
+            columns: ["leave_type_id"]
+            isOneToOne: false
+            referencedRelation: "leave_types"
             referencedColumns: ["id"]
           },
         ]
@@ -952,6 +1057,48 @@ export type Database = {
           id?: number
           updated_at?: string
           updated_by?: string | null
+        }
+        Relationships: []
+      }
+      leave_types: {
+        Row: {
+          annual_allowance_days: number | null
+          carryover_cap_days: number
+          code: string
+          count_non_working_days: boolean
+          created_at: string
+          id: string
+          is_active: boolean
+          is_paid: boolean
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          annual_allowance_days?: number | null
+          carryover_cap_days?: number
+          code: string
+          count_non_working_days?: boolean
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_paid?: boolean
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          annual_allowance_days?: number | null
+          carryover_cap_days?: number
+          code?: string
+          count_non_working_days?: boolean
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_paid?: boolean
+          name?: string
+          sort_order?: number
+          updated_at?: string
         }
         Relationships: []
       }
@@ -2029,6 +2176,53 @@ export type Database = {
       issue_employee_clearance: {
         Args: { _employee_id: string; _notes?: string }
         Returns: string
+      }
+      leave_balance_summary: {
+        Args: { _year: number }
+        Returns: {
+          adjustment_days: number
+          allowance_days: number
+          available_days: number
+          carryover_days: number
+          department_id: string
+          department_name: string
+          employee_id: string
+          employee_no: string
+          full_name: string
+          is_paid: boolean
+          leave_type_code: string
+          leave_type_id: string
+          leave_type_name: string
+          reserved_days: number
+          used_days: number
+        }[]
+      }
+      leave_calendar_month: {
+        Args: { _month: number; _year: number }
+        Returns: {
+          department_name: string
+          employee_id: string
+          employee_no: string
+          form_id: string
+          form_no: number
+          full_name: string
+          is_paid: boolean
+          leave_type_id: string
+          leave_type_name: string
+          status: Database["public"]["Enums"]["form_status"]
+          work_date: string
+        }[]
+      }
+      leave_work_dates: {
+        Args: {
+          _count_non_working_days?: boolean
+          _employee_id: string
+          _end_date: string
+          _start_date: string
+        }
+        Returns: {
+          work_date: string
+        }[]
       }
       normalize_ar_name: { Args: { _s: string }; Returns: string }
       record_mobile_self_attendance: {
