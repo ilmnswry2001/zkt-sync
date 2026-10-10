@@ -260,6 +260,8 @@ export type Database = {
       }
       devices: {
         Row: {
+          auto_last_sync_at: string | null
+          auto_synced_logs_total: number
           created_at: string
           description: string | null
           id: string
@@ -272,6 +274,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          auto_last_sync_at?: string | null
+          auto_synced_logs_total?: number
           created_at?: string
           description?: string | null
           id?: string
@@ -284,6 +288,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          auto_last_sync_at?: string | null
+          auto_synced_logs_total?: number
           created_at?: string
           description?: string | null
           id?: string
@@ -1164,6 +1170,449 @@ export type Database = {
         }
         Relationships: []
       }
+      material_procurement_batch_items: {
+        Row: {
+          batch_id: string
+          created_at: string
+          id: string
+          not_purchased_reason: string | null
+          purchased_qty: number
+          request_item_id: string
+        }
+        Insert: {
+          batch_id: string
+          created_at?: string
+          id?: string
+          not_purchased_reason?: string | null
+          purchased_qty?: number
+          request_item_id: string
+        }
+        Update: {
+          batch_id?: string
+          created_at?: string
+          id?: string
+          not_purchased_reason?: string | null
+          purchased_qty?: number
+          request_item_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "material_procurement_batch_items_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "material_procurement_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "material_procurement_batch_items_request_item_id_fkey"
+            columns: ["request_item_id"]
+            isOneToOne: false
+            referencedRelation: "material_request_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      material_procurement_batches: {
+        Row: {
+          created_at: string
+          created_by: string
+          document_number: string | null
+          id: string
+          notes: string | null
+          purchase_date: string
+          request_id: string
+          sent_at: string | null
+          status: string
+          supplier: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          document_number?: string | null
+          id?: string
+          notes?: string | null
+          purchase_date?: string
+          request_id: string
+          sent_at?: string | null
+          status?: string
+          supplier: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          document_number?: string | null
+          id?: string
+          notes?: string | null
+          purchase_date?: string
+          request_id?: string
+          sent_at?: string | null
+          status?: string
+          supplier?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "material_procurement_batches_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "material_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      material_request_counters: {
+        Row: {
+          last_value: number
+          request_type: string
+          request_year: number
+        }
+        Insert: {
+          last_value?: number
+          request_type: string
+          request_year: number
+        }
+        Update: {
+          last_value?: number
+          request_type?: string
+          request_year?: number
+        }
+        Relationships: []
+      }
+      material_request_events: {
+        Row: {
+          action: string
+          actor_id: string
+          created_at: string
+          id: string
+          new_value: Json | null
+          note: string | null
+          old_value: Json | null
+          request_id: string
+          request_item_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_id: string
+          created_at?: string
+          id?: string
+          new_value?: Json | null
+          note?: string | null
+          old_value?: Json | null
+          request_id: string
+          request_item_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string
+          created_at?: string
+          id?: string
+          new_value?: Json | null
+          note?: string | null
+          old_value?: Json | null
+          request_id?: string
+          request_item_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "material_request_events_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "material_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "material_request_events_request_item_id_fkey"
+            columns: ["request_item_id"]
+            isOneToOne: false
+            referencedRelation: "material_request_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      material_request_items: {
+        Row: {
+          allocation_reason: string | null
+          created_at: string
+          id: string
+          is_new_item: boolean
+          is_removed: boolean
+          issue_qty: number
+          item_name: string
+          not_purchased_reason: string | null
+          original_qty: number
+          planning_approved_qty: number | null
+          planning_note: string | null
+          purchase_qty: number
+          purchased_qty: number
+          received_qty: number
+          request_id: string
+          requested_qty: number
+          source_warehouse_id: string | null
+          specifications: string | null
+          status: string
+          unit: string
+          updated_at: string
+          warehouse_available_qty: number
+          warehouse_item_id: string | null
+        }
+        Insert: {
+          allocation_reason?: string | null
+          created_at?: string
+          id?: string
+          is_new_item?: boolean
+          is_removed?: boolean
+          issue_qty?: number
+          item_name: string
+          not_purchased_reason?: string | null
+          original_qty: number
+          planning_approved_qty?: number | null
+          planning_note?: string | null
+          purchase_qty?: number
+          purchased_qty?: number
+          received_qty?: number
+          request_id: string
+          requested_qty: number
+          source_warehouse_id?: string | null
+          specifications?: string | null
+          status?: string
+          unit: string
+          updated_at?: string
+          warehouse_available_qty?: number
+          warehouse_item_id?: string | null
+        }
+        Update: {
+          allocation_reason?: string | null
+          created_at?: string
+          id?: string
+          is_new_item?: boolean
+          is_removed?: boolean
+          issue_qty?: number
+          item_name?: string
+          not_purchased_reason?: string | null
+          original_qty?: number
+          planning_approved_qty?: number | null
+          planning_note?: string | null
+          purchase_qty?: number
+          purchased_qty?: number
+          received_qty?: number
+          request_id?: string
+          requested_qty?: number
+          source_warehouse_id?: string | null
+          specifications?: string | null
+          status?: string
+          unit?: string
+          updated_at?: string
+          warehouse_available_qty?: number
+          warehouse_item_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "material_request_items_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "material_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "material_request_items_source_warehouse_id_fkey"
+            columns: ["source_warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "material_request_items_warehouse_item_id_fkey"
+            columns: ["warehouse_item_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      material_request_receipt_items: {
+        Row: {
+          batch_item_id: string
+          created_at: string
+          did_not_arrive: boolean
+          exclusion_approved_by: string | null
+          exclusion_reason: string | null
+          id: string
+          receipt_id: string
+          received_qty: number
+          request_item_id: string
+          serial_notes: string | null
+          shortage_reason: string | null
+          warehouse_item_id: string | null
+        }
+        Insert: {
+          batch_item_id: string
+          created_at?: string
+          did_not_arrive?: boolean
+          exclusion_approved_by?: string | null
+          exclusion_reason?: string | null
+          id?: string
+          receipt_id: string
+          received_qty?: number
+          request_item_id: string
+          serial_notes?: string | null
+          shortage_reason?: string | null
+          warehouse_item_id?: string | null
+        }
+        Update: {
+          batch_item_id?: string
+          created_at?: string
+          did_not_arrive?: boolean
+          exclusion_approved_by?: string | null
+          exclusion_reason?: string | null
+          id?: string
+          receipt_id?: string
+          received_qty?: number
+          request_item_id?: string
+          serial_notes?: string | null
+          shortage_reason?: string | null
+          warehouse_item_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "material_request_receipt_items_batch_item_id_fkey"
+            columns: ["batch_item_id"]
+            isOneToOne: false
+            referencedRelation: "material_procurement_batch_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "material_request_receipt_items_receipt_id_fkey"
+            columns: ["receipt_id"]
+            isOneToOne: false
+            referencedRelation: "material_request_receipts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "material_request_receipt_items_request_item_id_fkey"
+            columns: ["request_item_id"]
+            isOneToOne: false
+            referencedRelation: "material_request_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "material_request_receipt_items_warehouse_item_id_fkey"
+            columns: ["warehouse_item_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      material_request_receipts: {
+        Row: {
+          batch_id: string
+          id: string
+          idempotency_key: string
+          notes: string | null
+          received_at: string
+          received_by: string
+          request_id: string
+        }
+        Insert: {
+          batch_id: string
+          id?: string
+          idempotency_key: string
+          notes?: string | null
+          received_at?: string
+          received_by: string
+          request_id: string
+        }
+        Update: {
+          batch_id?: string
+          id?: string
+          idempotency_key?: string
+          notes?: string | null
+          received_at?: string
+          received_by?: string
+          request_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "material_request_receipts_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "material_procurement_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "material_request_receipts_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "material_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      material_requests: {
+        Row: {
+          close_reason: string | null
+          closed_from_status: string | null
+          created_at: string
+          created_by: string
+          department_id: string
+          id: string
+          need_by_date: string | null
+          reason: string
+          request_number: string
+          request_type: string
+          site_id: string
+          status: string
+          submitted_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          close_reason?: string | null
+          closed_from_status?: string | null
+          created_at?: string
+          created_by: string
+          department_id: string
+          id?: string
+          need_by_date?: string | null
+          reason?: string
+          request_number: string
+          request_type: string
+          site_id: string
+          status?: string
+          submitted_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          close_reason?: string | null
+          closed_from_status?: string | null
+          created_at?: string
+          created_by?: string
+          department_id?: string
+          id?: string
+          need_by_date?: string | null
+          reason?: string
+          request_number?: string
+          request_type?: string
+          site_id?: string
+          status?: string
+          submitted_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "material_requests_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "material_requests_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           allowed_sections: string[] | null
@@ -1584,6 +2033,9 @@ export type Database = {
           employee_id: string | null
           id: string
           item_id: string
+          material_request_id: string | null
+          material_request_item_id: string | null
+          material_request_receipt_id: string | null
           movement_date: string
           movement_type: string
           notes: string | null
@@ -1599,6 +2051,9 @@ export type Database = {
           employee_id?: string | null
           id?: string
           item_id: string
+          material_request_id?: string | null
+          material_request_item_id?: string | null
+          material_request_receipt_id?: string | null
           movement_date?: string
           movement_type: string
           notes?: string | null
@@ -1614,6 +2069,9 @@ export type Database = {
           employee_id?: string | null
           id?: string
           item_id?: string
+          material_request_id?: string | null
+          material_request_item_id?: string | null
+          material_request_receipt_id?: string | null
           movement_date?: string
           movement_type?: string
           notes?: string | null
@@ -1635,6 +2093,27 @@ export type Database = {
             columns: ["item_id"]
             isOneToOne: false
             referencedRelation: "warehouse_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_material_request_id_fkey"
+            columns: ["material_request_id"]
+            isOneToOne: false
+            referencedRelation: "material_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_material_request_item_id_fkey"
+            columns: ["material_request_item_id"]
+            isOneToOne: false
+            referencedRelation: "material_request_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_material_request_receipt_id_fkey"
+            columns: ["material_request_receipt_id"]
+            isOneToOne: false
+            referencedRelation: "material_request_receipts"
             referencedColumns: ["id"]
           },
           {
@@ -2172,6 +2651,44 @@ export type Database = {
           },
         ]
       }
+      zkteco_sync_keys: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          device_id: string
+          id: string
+          key_hash: string
+          key_prefix: string
+          revoked_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          device_id: string
+          id?: string
+          key_hash: string
+          key_prefix: string
+          revoked_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          device_id?: string
+          id?: string
+          key_hash?: string
+          key_prefix?: string
+          revoked_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zkteco_sync_keys_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -2234,6 +2751,13 @@ export type Database = {
         }
         Returns: boolean
       }
+      ingest_zkteco_sync: {
+        Args: { p_device_id: string; p_logs: Json; p_site_id: string }
+        Returns: {
+          inserted_count: number
+          unmatched_count: number
+        }[]
+      }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
       issue_employee_clearance: {
         Args: { _employee_id: string; _notes?: string }
@@ -2285,6 +2809,19 @@ export type Database = {
         Returns: {
           work_date: string
         }[]
+      }
+      material_request_actor_context: { Args: never; Returns: Json }
+      material_request_can_read: {
+        Args: { _request_id: string }
+        Returns: boolean
+      }
+      material_request_can_request: {
+        Args: { _department_id: string; _user_id: string }
+        Returns: boolean
+      }
+      material_request_is_company_manager: {
+        Args: { _user_id: string }
+        Returns: boolean
       }
       normalize_ar_name: { Args: { _s: string }; Returns: string }
       record_mobile_self_attendance: {
@@ -2355,6 +2892,9 @@ export type Database = {
         | "site_admin"
         | "department_manager"
         | "engineer"
+        | "planning_officer"
+        | "warehouse_keeper"
+        | "procurement_officer"
       day_status: "present" | "absent" | "leave" | "holiday" | "rest"
       device_status: "active" | "inactive" | "maintenance"
       employee_status: "active" | "inactive" | "terminated"
@@ -2502,6 +3042,9 @@ export const Constants = {
         "site_admin",
         "department_manager",
         "engineer",
+        "planning_officer",
+        "warehouse_keeper",
+        "procurement_officer",
       ],
       day_status: ["present", "absent", "leave", "holiday", "rest"],
       device_status: ["active", "inactive", "maintenance"],
