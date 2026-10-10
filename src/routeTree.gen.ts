@@ -25,6 +25,7 @@ import { Route as AuthenticatedMonthlyRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedPayrollRouteImport } from './routes/_authenticated/payroll'
 import { Route as AuthenticatedPenaltiesRouteImport } from './routes/_authenticated/penalties'
 import { Route as AuthenticatedPlanningRouteImport } from './routes/_authenticated/planning'
+import { Route as AuthenticatedProcurementRouteImport } from './routes/_authenticated/procurement'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedProjectPlansRouteImport } from './routes/_authenticated/project-plans'
 import { Route as AuthenticatedProjectsRouteImport } from './routes/_authenticated/projects'
@@ -125,6 +126,12 @@ const AuthenticatedPlanningRoute = AuthenticatedPlanningRouteImport.update({
   path: '/planning',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedProcurementRoute =
+  AuthenticatedProcurementRouteImport.update({
+    id: '/procurement',
+    path: '/procurement',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedProfileRoute = AuthenticatedProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
@@ -243,6 +250,7 @@ export interface FileRoutesByFullPath {
   '/payroll': typeof AuthenticatedPayrollRoute
   '/penalties': typeof AuthenticatedPenaltiesRoute
   '/planning': typeof AuthenticatedPlanningRoute
+  '/procurement': typeof AuthenticatedProcurementRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/project-plans': typeof AuthenticatedProjectPlansRoute
   '/projects': typeof AuthenticatedProjectsRoute
@@ -279,6 +287,7 @@ export interface FileRoutesByTo {
   '/payroll': typeof AuthenticatedPayrollRoute
   '/penalties': typeof AuthenticatedPenaltiesRoute
   '/planning': typeof AuthenticatedPlanningRoute
+  '/procurement': typeof AuthenticatedProcurementRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/project-plans': typeof AuthenticatedProjectPlansRoute
   '/projects': typeof AuthenticatedProjectsRoute
@@ -317,6 +326,7 @@ export interface FileRoutesById {
   '/_authenticated/payroll': typeof AuthenticatedPayrollRoute
   '/_authenticated/penalties': typeof AuthenticatedPenaltiesRoute
   '/_authenticated/planning': typeof AuthenticatedPlanningRoute
+  '/_authenticated/procurement': typeof AuthenticatedProcurementRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/project-plans': typeof AuthenticatedProjectPlansRoute
   '/_authenticated/projects': typeof AuthenticatedProjectsRoute
@@ -355,6 +365,7 @@ export interface FileRouteTypes {
     | '/payroll'
     | '/penalties'
     | '/planning'
+    | '/procurement'
     | '/profile'
     | '/project-plans'
     | '/projects'
@@ -391,6 +402,7 @@ export interface FileRouteTypes {
     | '/payroll'
     | '/penalties'
     | '/planning'
+    | '/procurement'
     | '/profile'
     | '/project-plans'
     | '/projects'
@@ -428,6 +440,7 @@ export interface FileRouteTypes {
     | '/_authenticated/payroll'
     | '/_authenticated/penalties'
     | '/_authenticated/planning'
+    | '/_authenticated/procurement'
     | '/_authenticated/profile'
     | '/_authenticated/project-plans'
     | '/_authenticated/projects'
@@ -570,6 +583,13 @@ declare module '@tanstack/react-router' {
       path: '/planning'
       fullPath: '/planning'
       preLoaderRoute: typeof AuthenticatedPlanningRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/procurement': {
+      id: '/_authenticated/procurement'
+      path: '/procurement'
+      fullPath: '/procurement'
+      preLoaderRoute: typeof AuthenticatedProcurementRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/profile': {
@@ -737,6 +757,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedPayrollRoute: typeof AuthenticatedPayrollRoute
   AuthenticatedPenaltiesRoute: typeof AuthenticatedPenaltiesRoute
   AuthenticatedPlanningRoute: typeof AuthenticatedPlanningRoute
+  AuthenticatedProcurementRoute: typeof AuthenticatedProcurementRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedProjectPlansRoute: typeof AuthenticatedProjectPlansRoute
   AuthenticatedProjectsRoute: typeof AuthenticatedProjectsRoute
@@ -768,6 +789,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedPayrollRoute: AuthenticatedPayrollRoute,
   AuthenticatedPenaltiesRoute: AuthenticatedPenaltiesRoute,
   AuthenticatedPlanningRoute: AuthenticatedPlanningRoute,
+  AuthenticatedProcurementRoute: AuthenticatedProcurementRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedProjectPlansRoute: AuthenticatedProjectPlansRoute,
   AuthenticatedProjectsRoute: AuthenticatedProjectsRoute,

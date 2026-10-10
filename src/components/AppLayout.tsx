@@ -28,6 +28,7 @@ import {
   UserCircle2,
   Smartphone,
   Boxes,
+  ShoppingCart,
   ListChecks,
   CalendarCheck2,
   Moon,
@@ -64,6 +65,7 @@ const nav = [
   { to: "/payroll", label: "الرواتب", icon: Wallet, access: "hr" },
   { to: "/vehicles", label: "المركبات", icon: Truck, access: "hr" },
   { to: "/warehouses", label: "المخازن", icon: Boxes },
+  { to: "/procurement", label: "المشتريات", icon: ShoppingCart, access: "procurement" },
   { to: "/devices", label: "الأجهزة", icon: Fingerprint },
   { to: "/upload", label: "رفع ملفات البصمة", icon: Upload },
   { to: "/files", label: "سجل الملفات", icon: FileBox },
@@ -267,7 +269,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               item.access === "planning" &&
               !isAdmin &&
               !isHR &&
-              !roles.some((role) => ["supervisor", "department_manager"].includes(role))
+              !isCompanyManager &&
+              !roles.some((role) => ["supervisor", "department_manager", "planning_officer", "engineer", "site_admin"].includes(role))
+            )
+              return null;
+            if (
+              "access" in item &&
+              item.access === "procurement" &&
+              !isAdmin &&
+              !isCompanyManager &&
+              !roles.includes("procurement_officer")
             )
               return null;
             if (

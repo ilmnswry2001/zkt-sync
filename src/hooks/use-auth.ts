@@ -9,7 +9,10 @@ export type AppRole =
   | "data_entry"
   | "site_admin"
   | "department_manager"
-  | "engineer";
+  | "engineer"
+  | "planning_officer"
+  | "warehouse_keeper"
+  | "procurement_officer";
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -73,8 +76,34 @@ export function useAuth() {
 
   const isAdmin = roles.includes("admin");
   const isEngineer = roles.includes("engineer") && !isAdmin;
-  // null = no restriction. Engineers are limited to planning.
-  const sections = permissionError ? [] : isAdmin ? null : isEngineer ? ["/project-plans"] : allowedSections;
+  const roleSections = [
+    ...(roles.includes("planning_officer") || roles.some((role) => ["supervisor", "department_manager", "site_admin"].includes(role)) || isCompanyManager
+      ? ["/planning"]
+      : []),
+    ...(roles.includes("warehouse_keeper") || isCompanyManager ? ["/warehouses"] : []),
+    ...(roles.includes("procurement_officer") || isCompanyManager ? ["/procurement"] : []),
+  ];
+  const baseSections = permissionError
+    ? []
+    : isAdmin
+      ? null
+      : isEngineer
+        ? ["/project-plans", "/planning"]
+        : allowedSections
+          ? [...new Set([...allowedSections, ...roleSections])]
+          : null;
+  const hasWorkflowOnlyRole = roles.some((role) =>
+    ["planning_officer", "warehouse_keeper", "procurement_officer"].includes(role),
+  ) && !roles.some((role) =>
+    ["admin", "hr", "supervisor", "department_manager", "engineer", "site_admin"].includes(role),
+  );
+  const sections = hasWorkflowOnlyRole && baseSections === null
+    ? roleSections.filter((section) =>
+        (roles.includes("planning_officer") && section === "/planning") ||
+        (roles.includes("warehouse_keeper") && section === "/warehouses") ||
+        (roles.includes("procurement_officer") && section === "/procurement"),
+      )
+    : baseSections;
 
   return {
     user,

@@ -11,7 +11,10 @@ type Role =
   | "data_entry"
   | "site_admin"
   | "department_manager"
-  | "engineer";
+  | "engineer"
+  | "planning_officer"
+  | "warehouse_keeper"
+  | "procurement_officer";
 
 const roleSchema = z.enum([
   "admin",
@@ -21,6 +24,9 @@ const roleSchema = z.enum([
   "site_admin",
   "department_manager",
   "engineer",
+  "planning_officer",
+  "warehouse_keeper",
+  "procurement_officer",
 ] satisfies [Role, ...Role[]]);
 const passwordSchema = z.string().min(8, "كلمة المرور يجب أن تكون 8 أحرف على الأقل").max(72);
 
@@ -119,12 +125,20 @@ export const createAccount = createServerFn({ method: "POST" })
     await supabaseAdmin.from("user_roles").delete().eq("user_id", created.user.id);
     const { error: roleError } = await supabaseAdmin
       .from("user_roles")
-      .insert({ user_id: created.user.id, role: data.role });
+      .insert({ user_id: created.user.id, role: data.role as never });
     if (roleError) {
       await supabaseAdmin.auth.admin.deleteUser(created.user.id);
       throw new Error(`تم التراجع عن إنشاء الحساب: ${translateAuthError(roleError)}`);
     }
-    const sections = data.role === "engineer" ? ["/planning"] : (data.allowedSections ?? []);
+    const roleSection: Partial<Record<Role, string>> = {
+      engineer: "/planning",
+      planning_officer: "/planning",
+      warehouse_keeper: "/warehouses",
+      procurement_officer: "/procurement",
+    };
+    const sections = roleSection[data.role]
+      ? [roleSection[data.role]!]
+      : (data.allowedSections ?? []);
     await supabaseAdmin
       .from("profiles")
       .update({ allowed_sections: sections.length ? sections : null, full_name: data.fullName })

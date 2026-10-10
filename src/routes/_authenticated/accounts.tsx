@@ -49,7 +49,10 @@ type Role =
   | "data_entry"
   | "site_admin"
   | "department_manager"
-  | "engineer";
+  | "engineer"
+  | "planning_officer"
+  | "warehouse_keeper"
+  | "procurement_officer";
 type Profile = { id: string; full_name: string | null; email: string | null; created_at: string; allowed_sections: string[] | null };
 type UserRole = { id: string; user_id: string; role: Role };
 type Department = { id: string; name: string };
@@ -67,6 +70,9 @@ const roles: { key: Role; label: string; description: string }[] = [
   { key: "department_manager", label: "مدير قسم", description: "متابعة فريق القسم" },
   { key: "site_admin", label: "إداري موقع", description: "إدارة الموقع ومهامه" },
   { key: "engineer", label: "مهندس", description: "طلب الخطة فقط من قسم التخطيط" },
+  { key: "planning_officer", label: "مسؤول تخطيط", description: "مراجعة واعتماد طلبات المواد والمعدات" },
+  { key: "warehouse_keeper", label: "مسؤول مخازن", description: "مراجعة الصرف واستلام المشتريات فعلياً" },
+  { key: "procurement_officer", label: "مسؤول مشتريات", description: "تسجيل دفعات الشراء وإرسالها للاستلام" },
 ];
 
 function AccountsPage() {
@@ -186,7 +192,7 @@ function AccountsPage() {
       if (adminCount <= 1) return toast.error("لا يمكن إزالة صلاحية المدير الوحيد في النظام");
     }
     if (enabled) {
-      const { error } = await supabase.from("user_roles").insert({ user_id: userId, role });
+      const { error } = await supabase.from("user_roles").insert({ user_id: userId, role: role as never });
       if (error) return toast.error(error.message);
     } else {
       const assignment = rolesByUser.get(userId)?.find((item) => item.role === role);

@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { todayInBaghdad } from "@/lib/date-time";
 import * as XLSX from "xlsx";
 import { FileDown, Printer } from "lucide-react";
+import { MaterialRequestWorkflow } from "@/components/material-requests/MaterialRequestWorkflow";
 
 export const Route = createFileRoute("/_authenticated/warehouses")({
   head: () => ({
@@ -360,6 +361,7 @@ function WarehousesPage() {
           <TabsTrigger value="tools">العدد والأدوات</TabsTrigger>
           {canEdit && <TabsTrigger value="count">الجرد</TabsTrigger>}
           {canEdit && <TabsTrigger value="setup">الأصناف والمخازن</TabsTrigger>}
+          <TabsTrigger value="requests">الطلبات الواردة</TabsTrigger>
         </TabsList>
 
         <TabsContent value="stock">
@@ -823,6 +825,10 @@ function WarehousesPage() {
             </Card>
           </TabsContent>
         )}
+
+        <TabsContent value="requests">
+          <MaterialRequestWorkflow stage="warehouse" />
+        </TabsContent>
       </Tabs>
     </div>
   );

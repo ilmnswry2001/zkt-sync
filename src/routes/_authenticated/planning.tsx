@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -58,18 +59,23 @@ import {
   type StaffAssignmentGroup,
 } from "@/lib/planning-staff";
 import { escapeHtml, printReport } from "@/lib/report-print";
+import { MaterialRequestWorkflow } from "@/components/material-requests/MaterialRequestWorkflow";
 
 export const Route = createFileRoute("/_authenticated/planning")({
   beforeLoad: async () => {
     const { data: auth } = await supabase.auth.getUser();
     if (!auth.user) throw redirect({ to: "/auth" });
-    const { data, error } = await supabase
+    const [{ data, error }, companyResult] = await Promise.all([
+      supabase
       .from("user_roles")
       .select("role")
-      .eq("user_id", auth.user.id);
-    if (error) throw redirect({ to: "/attendance" });
+      .eq("user_id", auth.user.id),
+      supabase.from("form_role_assignments").select("role").eq("user_id", auth.user.id).eq("role", "ceo"),
+    ]);
+    if (error || companyResult.error) throw redirect({ to: "/attendance" });
     const roles = new Set<string>((data ?? []).map((row) => row.role));
-    if (!["admin", "hr", "supervisor", "department_manager"].some((role) => roles.has(role)))
+    const companyManager = (companyResult.data?.length ?? 0) > 0;
+    if (!companyManager && !["admin", "hr", "supervisor", "department_manager", "planning_officer", "engineer", "site_admin"].some((role) => roles.has(role)))
       throw redirect({ to: "/attendance" });
   },
   head: () => ({
@@ -2330,6 +2336,24 @@ function PlanningPage() {
               )}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>دورة طلبات المواد والمعدات</CardTitle></CardHeader>
+        <CardContent>
+          <Tabs defaultValue="material" dir="rtl">
+            <TabsList>
+              <TabsTrigger value="material">طلبات المواد</TabsTrigger>
+              <TabsTrigger value="equipment">طلبات المعدات</TabsTrigger>
+            </TabsList>
+            <TabsContent value="material">
+              <MaterialRequestWorkflow stage="planning" requestType="material" />
+            </TabsContent>
+            <TabsContent value="equipment">
+              <MaterialRequestWorkflow stage="planning" requestType="equipment" />
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 
