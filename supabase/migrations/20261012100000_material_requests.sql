@@ -630,7 +630,7 @@ BEGIN
       PERFORM 1 FROM public.warehouse_items WHERE id = (v_line->>'warehouse_item_id')::uuid FOR UPDATE;
       IF NOT FOUND THEN RAISE EXCEPTION 'الصنف المخزني غير موجود'; END IF;
       IF (SELECT kind FROM public.warehouse_items WHERE id = (v_line->>'warehouse_item_id')::uuid)
-        <> CASE WHEN v_request.request_type = 'equipment' THEN 'tool' ELSE 'material' END THEN
+        <> (CASE WHEN v_request.request_type = 'equipment' THEN 'tool' ELSE 'material' END) THEN
         RAISE EXCEPTION 'نوع الصنف لا يطابق نوع الطلب';
       END IF;
       IF nullif(v_line->>'warehouse_id','') IS NOT NULL THEN
@@ -835,7 +835,7 @@ BEGIN
       RETURNING id INTO v_stock_item_id;
     END IF;
     IF v_stock_item_id IS NOT NULL AND v_qty > 0 AND
-      (SELECT kind FROM public.warehouse_items WHERE id=v_stock_item_id) <> CASE WHEN v_request.request_type='equipment' THEN 'tool' ELSE 'material' END THEN
+      (SELECT kind FROM public.warehouse_items WHERE id=v_stock_item_id) <> (CASE WHEN v_request.request_type='equipment' THEN 'tool' ELSE 'material' END) THEN
       RAISE EXCEPTION 'نوع المادة المخزنية لا يطابق نوع الطلب';
     END IF;
     INSERT INTO public.material_request_receipt_items(receipt_id,request_item_id,batch_item_id,warehouse_item_id,
