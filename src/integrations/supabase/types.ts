@@ -60,6 +60,8 @@ export type Database = {
       }
       attendance_logs: {
         Row: {
+          client_event_id: string | null
+          client_recorded_at: string | null
           created_at: string
           device_id: string | null
           device_info: Json | null
@@ -67,17 +69,23 @@ export type Database = {
           employee_id: string | null
           employee_no: string
           external_log_id: number | null
+          gps_accuracy_meters: number | null
           id: string
+          is_suspicious: boolean
           latitude: number | null
           longitude: number | null
           self_event_type: string | null
+          selfie_path: string | null
           source: string
           status: number | null
+          submitted_offline: boolean
           upload_id: string | null
           verify_time: string
           verify_type: number | null
         }
         Insert: {
+          client_event_id?: string | null
+          client_recorded_at?: string | null
           created_at?: string
           device_id?: string | null
           device_info?: Json | null
@@ -85,17 +93,23 @@ export type Database = {
           employee_id?: string | null
           employee_no: string
           external_log_id?: number | null
+          gps_accuracy_meters?: number | null
           id?: string
+          is_suspicious?: boolean
           latitude?: number | null
           longitude?: number | null
           self_event_type?: string | null
+          selfie_path?: string | null
           source?: string
           status?: number | null
+          submitted_offline?: boolean
           upload_id?: string | null
           verify_time: string
           verify_type?: number | null
         }
         Update: {
+          client_event_id?: string | null
+          client_recorded_at?: string | null
           created_at?: string
           device_id?: string | null
           device_info?: Json | null
@@ -103,12 +117,16 @@ export type Database = {
           employee_id?: string | null
           employee_no?: string
           external_log_id?: number | null
+          gps_accuracy_meters?: number | null
           id?: string
+          is_suspicious?: boolean
           latitude?: number | null
           longitude?: number | null
           self_event_type?: string | null
+          selfie_path?: string | null
           source?: string
           status?: number | null
+          submitted_offline?: boolean
           upload_id?: string | null
           verify_time?: string
           verify_type?: number | null
@@ -133,6 +151,50 @@ export type Database = {
             columns: ["upload_id"]
             isOneToOne: false
             referencedRelation: "uploaded_files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      attendance_suspicious_attempts: {
+        Row: {
+          attempted_at: string
+          client_recorded_at: string | null
+          created_at: string
+          employee_id: string
+          id: string
+          latitude: number
+          longitude: number
+          reason: string
+          selfie_path: string | null
+        }
+        Insert: {
+          attempted_at?: string
+          client_recorded_at?: string | null
+          created_at?: string
+          employee_id: string
+          id?: string
+          latitude: number
+          longitude: number
+          reason: string
+          selfie_path?: string | null
+        }
+        Update: {
+          attempted_at?: string
+          client_recorded_at?: string | null
+          created_at?: string
+          employee_id?: string
+          id?: string
+          latitude?: number
+          longitude?: number
+          reason?: string
+          selfie_path?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_suspicious_attempts_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
             referencedColumns: ["id"]
           },
         ]
