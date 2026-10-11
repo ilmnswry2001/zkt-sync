@@ -2811,6 +2811,17 @@ export type Database = {
         }[]
       }
       material_request_actor_context: { Args: never; Returns: Json }
+      material_request_add_purchase_batch: {
+        Args: {
+          _document_number: string
+          _items: Json
+          _notes: string
+          _purchase_date: string
+          _request_id: string
+          _supplier: string
+        }
+        Returns: Json
+      }
       material_request_can_read: {
         Args: { _request_id: string }
         Returns: boolean
@@ -2819,9 +2830,73 @@ export type Database = {
         Args: { _department_id: string; _user_id: string }
         Returns: boolean
       }
+      material_request_cancel: { Args: { _request_id: string }; Returns: Json }
+      material_request_close: {
+        Args: { _reason: string; _request_id: string }
+        Returns: Json
+      }
+      material_request_create: {
+        Args: {
+          _department_id: string
+          _items: Json
+          _need_by_date: string
+          _reason: string
+          _request_type: string
+          _site_id: string
+          _submit: boolean
+        }
+        Returns: Json
+      }
+      material_request_edit: {
+        Args: {
+          _items: Json
+          _need_by_date: string
+          _reason: string
+          _request_id: string
+          _site_id: string
+          _submit: boolean
+        }
+        Returns: Json
+      }
       material_request_is_company_manager: {
         Args: { _user_id: string }
         Returns: boolean
+      }
+      material_request_list: {
+        Args: { _request_type?: string; _search?: string; _status?: string }
+        Returns: Json
+      }
+      material_request_options: { Args: never; Returns: Json }
+      material_request_planning_review: {
+        Args: {
+          _action: string
+          _items: Json
+          _note: string
+          _request_id: string
+        }
+        Returns: Json
+      }
+      material_request_receive_batch: {
+        Args: {
+          _batch_id: string
+          _idempotency_key: string
+          _items: Json
+          _notes: string
+          _warehouse_id: string
+        }
+        Returns: Json
+      }
+      material_request_reopen: {
+        Args: { _reason: string; _request_id: string }
+        Returns: Json
+      }
+      material_request_send_purchase_batch: {
+        Args: { _batch_id: string }
+        Returns: Json
+      }
+      material_request_warehouse_review: {
+        Args: { _items: Json; _request_id: string }
+        Returns: Json
       }
       normalize_ar_name: { Args: { _s: string }; Returns: string }
       record_mobile_self_attendance: {
