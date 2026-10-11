@@ -38,7 +38,9 @@ export function useAuth() {
       setPermissionError(failed);
       setRoles(failed ? [] : (rolesResult.data ?? []).map((role: any) => role.role));
       setProfileName(profileResult.data?.full_name?.trim() || null);
-      setIsCompanyManager(!failed && (formRolesResult.data ?? []).some((role) => role.role === "ceo"));
+      setIsCompanyManager(
+        !failed && (formRolesResult.data ?? []).some((role) => role.role === "ceo"),
+      );
       const sections = (profileResult.data as any)?.allowed_sections as string[] | null | undefined;
       setAllowedSections(failed ? [] : sections && sections.length ? sections : null);
       setPermissionsLoading(false);
@@ -76,8 +78,14 @@ export function useAuth() {
 
   const isAdmin = roles.includes("admin");
   const isEngineer = roles.includes("engineer") && !isAdmin;
+  const canSubmitMaterialRequests = roles.some((role) =>
+    ["engineer", "department_manager", "supervisor", "site_admin"].includes(role),
+  );
   const roleSections = [
-    ...(roles.includes("planning_officer") || roles.some((role) => ["supervisor", "department_manager", "site_admin"].includes(role)) || isCompanyManager
+    ...(canSubmitMaterialRequests || isCompanyManager ? ["/requests"] : []),
+    ...(roles.includes("planning_officer") ||
+    roles.some((role) => ["supervisor", "department_manager", "site_admin"].includes(role)) ||
+    isCompanyManager
       ? ["/planning"]
       : []),
     ...(roles.includes("warehouse_keeper") || isCompanyManager ? ["/warehouses"] : []),
@@ -88,17 +96,21 @@ export function useAuth() {
     : isAdmin
       ? null
       : isEngineer
-        ? ["/project-plans", "/planning"]
+        ? ["/project-plans", "/planning", "/requests"]
         : allowedSections
           ? [...new Set([...allowedSections, ...roleSections])]
           : null;
-  const hasWorkflowOnlyRole = roles.some((role) =>
+  const hasWorkflowOnlyRole =
+    roles.some((role) =>
     ["planning_officer", "warehouse_keeper", "procurement_officer"].includes(role),
-  ) && !roles.some((role) =>
+    ) &&
+    !roles.some((role) =>
     ["admin", "hr", "supervisor", "department_manager", "engineer", "site_admin"].includes(role),
   );
-  const sections = hasWorkflowOnlyRole && baseSections === null
-    ? roleSections.filter((section) =>
+  const sections =
+    hasWorkflowOnlyRole && baseSections === null
+      ? roleSections.filter(
+          (section) =>
         (roles.includes("planning_officer") && section === "/planning") ||
         (roles.includes("warehouse_keeper") && section === "/warehouses") ||
         (roles.includes("procurement_officer") && section === "/procurement"),
@@ -114,14 +126,21 @@ export function useAuth() {
     isAdmin,
     isEngineer,
     allowedSections: sections,
-    canAccessSection: (path: string) => !sections || sections.includes(path) || (path === "/project-plans" && sections.includes("/planning")),
+    canAccessSection: (path: string) =>
+      !sections ||
+      sections.includes(path) ||
+      (path === "/project-plans" && sections.includes("/planning")),
     isCompanyManager,
     isHR: roles.includes("hr") || isAdmin,
-    canManageEmployees: roles.some((r) => ["admin", "hr", "data_entry", "department_manager", "site_admin"].includes(r)),
+    canManageEmployees: roles.some((r) =>
+      ["admin", "hr", "data_entry", "department_manager", "site_admin"].includes(r),
+    ),
     isDepartmentManager: roles.includes("department_manager"),
     isSiteAdmin: roles.includes("site_admin"),
     profileName,
-    canCreateTasks: roles.some((r) => ["admin", "hr", "data_entry", "site_admin"].includes(r)) && !roles.includes("department_manager"),
+    canCreateTasks:
+      roles.some((r) => ["admin", "hr", "data_entry", "site_admin"].includes(r)) &&
+      !roles.includes("department_manager"),
     signOut: () => supabase.auth.signOut(),
   };
 }

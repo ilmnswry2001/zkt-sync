@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  canAccessMaterialRequests,
+  canCreateMaterialRequests,
   canTransitionMaterialRequest,
   defaultStockAllocation,
   receiptStatus,
@@ -8,6 +10,25 @@ import {
   validatePurchaseQuantity,
   validateStockAllocation,
 } from "./material-requests-domain.ts";
+
+test("requests access is limited to requesters, admin, and company manager", () => {
+  for (const role of ["engineer", "department_manager", "supervisor", "site_admin"]) {
+    assert.equal(canAccessMaterialRequests([role]), true);
+    assert.equal(canCreateMaterialRequests([role]), true);
+  }
+  assert.equal(canAccessMaterialRequests(["admin"]), true);
+  assert.equal(canAccessMaterialRequests([], true), true);
+  for (const role of [
+    "hr",
+    "data_entry",
+    "planning_officer",
+    "warehouse_keeper",
+    "procurement_officer",
+  ]) {
+    assert.equal(canAccessMaterialRequests([role]), false);
+    assert.equal(canCreateMaterialRequests([role]), false);
+  }
+});
 
 test("stock review allocates available stock before procurement", () => {
   assert.deepEqual(defaultStockAllocation(10, 4), { issue: 4, purchase: 6 });

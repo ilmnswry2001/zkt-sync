@@ -1,7 +1,7 @@
 export type AlertSeverity = "critical" | "warning" | "follow_up";
 export type OperationalAlert = {
   id: string;
-  kind: "stock" | "document" | "task";
+  kind: "stock" | "document" | "task" | "request";
   severity: AlertSeverity;
   title: string;
   detail: string;

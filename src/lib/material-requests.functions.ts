@@ -1,6 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import {
+  canAccessMaterialRequests,
+  canCreateMaterialRequests,
+} from "@/lib/material-requests-domain";
 
 type RpcError = { code?: string; message: string } | null;
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
@@ -68,7 +72,12 @@ export type MaterialRequestBatch = {
   notes: string | null;
   status: "draft" | "sent_to_warehouse";
   sent_at: string | null;
-  items: Array<{ id: string; request_item_id: string; purchased_qty: number; not_purchased_reason: string | null }>;
+  items: Array<{
+    id: string;
+    request_item_id: string;
+    purchased_qty: number;
+    not_purchased_reason: string | null;
+  }>;
 };
 
 export type MaterialRequestReceipt = {
@@ -131,7 +140,6 @@ const requestLineSchema = z.object({
 const createSchema = z.object({
   request_type: z.enum(["material", "equipment"]),
   site_id: z.string().uuid(),
-  department_id: z.string().uuid(),
   reason: z.string().trim().max(2000).default(""),
   need_by_date: z.string().date().nullable().optional(),
   items: z.array(requestLineSchema).max(100),
@@ -141,6 +149,12 @@ const createSchema = z.object({
 const actorAllowed = (actor: MaterialRequestActor, accepted: string[]) =>
   actor.company_manager || actor.roles.some((role) => accepted.includes(role));
 
+const canUseRequestWorkflow = (actor: MaterialRequestActor) =>
+  canAccessMaterialRequests(actor.roles, actor.company_manager) ||
+  actor.roles.some((role) =>
+    ["planning_officer", "warehouse_keeper", "procurement_officer"].includes(role),
+  );
+
 async function getActor(db: RpcClient) {
   const result = await db.rpc("material_request_actor_context");
   if (result.error) throw migrationError(result.error);
@@ -149,7 +163,9 @@ async function getActor(db: RpcClient) {
 
 function migrationError(error: NonNullable<RpcError>) {
   if (["PGRST202", "PGRST205", "42883", "42P01", "42703"].includes(error.code ?? "")) {
-    return new Error("ميزة طلبات المواد غير مهيأة في قاعدة البيانات. طبّق ملفات migration الخاصة بها أولاً.");
+    return new Error(
+      "ميزة طلبات المواد غير مهيأة في قاعدة البيانات. طبّق ملفات migration الخاصة بها أولاً.",
+    );
   }
   return new Error(error.message);
 }
@@ -166,22 +182,30 @@ function rpcClient(supabase: unknown) {
 
 export const getMaterialRequestOptions = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) =>
-    callRpc<MaterialRequestOptions>(rpcClient(context.supabase), "material_request_options"),
-  );
+  .handler(async ({ context }) => {
+    const db = rpcClient(context.supabase);
+    if (!canUseRequestWorkflow(await getActor(db)))
+      throw new Error("لا تملك صلاحية الوصول إلى دورة الطلبات");
+    return callRpc<MaterialRequestOptions>(db, "material_request_options");
+  });
 
 export const getMaterialRequests = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) =>
-    z.object({
+    z
+      .object({
       requestType: z.enum(["material", "equipment"]).optional(),
       search: z.string().max(200).optional(),
       status: z.string().max(40).optional(),
-    }).parse(data),
+      })
+      .parse(data),
   )
   .handler(async ({ data, context }) => {
+    const db = rpcClient(context.supabase);
+    if (!canUseRequestWorkflow(await getActor(db)))
+      throw new Error("لا تملك صلاحية الوصول إلى دورة الطلبات");
     const response = await callRpc<{ requests: MaterialRequest[]; actor: MaterialRequestActor }>(
-      rpcClient(context.supabase),
+      db,
       "material_request_list",
       {
         _request_type: data.requestType ?? null,
@@ -198,20 +222,25 @@ export const createMaterialRequest = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const db = rpcClient(context.supabase);
     const actor = await getActor(db);
-    if (!actorAllowed(actor, ["engineer", "department_manager", "supervisor", "site_admin"])) {
+    if (!canCreateMaterialRequests(actor.roles)) {
       throw new Error("لا تملك صلاحية تقديم طلب مواد أو معدات");
     }
+    const departmentId =
+      actor.employee_department_id ??
+      (actor.department_ids.length === 1 ? actor.department_ids[0] : null);
+    if (!departmentId)
+      throw new Error("تعذر تحديد قسمك من الحساب؛ راجع ربط الموظف أو القسم قبل إنشاء الطلب");
     if (
       !actor.company_manager &&
-      !actor.department_ids.includes(data.department_id) &&
-      actor.employee_department_id !== data.department_id
+      !actor.department_ids.includes(departmentId) &&
+      actor.employee_department_id !== departmentId
     ) {
-      throw new Error("القسم المختار خارج نطاق صلاحيتك");
+      throw new Error("القسم المرتبط بحسابك خارج نطاق صلاحية تقديم الطلبات");
     }
     return callRpc<RequestActionResult>(db, "material_request_create", {
       _request_type: data.request_type,
       _site_id: data.site_id,
-      _department_id: data.department_id,
+      _department_id: departmentId,
       _reason: data.reason,
       _need_by_date: data.need_by_date ?? null,
       _items: data.items.map((item) => ({
@@ -248,12 +277,20 @@ export const editMaterialRequest = createServerFn({ method: "POST" })
 export const reviewMaterialRequestPlanning = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) =>
-    z.object({
+    z
+      .object({
       request_id: z.string().uuid(),
       action: z.enum(["approve", "return", "reject"]),
       note: z.string().trim().max(1000).default(""),
-      items: z.array(z.object({ id: z.string().uuid(), approved_qty: z.number().finite().min(0), note: z.string().max(1000).default("") })),
-    }).parse(data),
+        items: z.array(
+          z.object({
+            id: z.string().uuid(),
+            approved_qty: z.number().finite().min(0),
+            note: z.string().max(1000).default(""),
+          }),
+        ),
+      })
+      .parse(data),
   )
   .handler(async ({ data, context }) => {
     const db = rpcClient(context.supabase);
@@ -270,9 +307,11 @@ export const reviewMaterialRequestPlanning = createServerFn({ method: "POST" })
 export const reviewMaterialRequestWarehouse = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) =>
-    z.object({
+    z
+      .object({
       request_id: z.string().uuid(),
-      items: z.array(z.object({
+        items: z.array(
+          z.object({
         id: z.string().uuid(),
         warehouse_item_id: z.string().uuid().nullable(),
         warehouse_id: z.string().uuid().nullable(),
@@ -280,8 +319,10 @@ export const reviewMaterialRequestWarehouse = createServerFn({ method: "POST" })
         issue_qty: z.number().finite().min(0),
         purchase_qty: z.number().finite().min(0),
         reason: z.string().trim().max(1000).default(""),
-      })),
-    }).parse(data),
+          }),
+        ),
+      })
+      .parse(data),
   )
   .handler(async ({ data, context }) => {
     const db = rpcClient(context.supabase);
@@ -296,23 +337,30 @@ export const reviewMaterialRequestWarehouse = createServerFn({ method: "POST" })
 export const createMaterialPurchaseBatch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) =>
-    z.object({
+    z
+      .object({
       request_id: z.string().uuid(),
       supplier: z.string().trim().min(2).max(200),
       document_number: z.string().trim().max(150).default(""),
       purchase_date: z.string().date(),
       notes: z.string().trim().max(1000).default(""),
-      items: z.array(z.object({
+        items: z
+          .array(
+            z.object({
         id: z.string().uuid(),
         quantity: z.number().finite().min(0),
         not_purchased_reason: z.string().trim().max(1000).default(""),
-      })).min(1),
-    }).parse(data),
+            }),
+          )
+          .min(1),
+      })
+      .parse(data),
   )
   .handler(async ({ data, context }) => {
     const db = rpcClient(context.supabase);
     const actor = await getActor(db);
-    if (!actorAllowed(actor, ["procurement_officer"])) throw new Error("هذا الإجراء لمسؤول المشتريات");
+    if (!actorAllowed(actor, ["procurement_officer"]))
+      throw new Error("هذا الإجراء لمسؤول المشتريات");
     return callRpc<RequestActionResult>(db, "material_request_add_purchase_batch", {
       _request_id: data.request_id,
       _supplier: data.supplier,
@@ -329,19 +377,25 @@ export const sendMaterialPurchaseBatch = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const db = rpcClient(context.supabase);
     const actor = await getActor(db);
-    if (!actorAllowed(actor, ["procurement_officer"])) throw new Error("هذا الإجراء لمسؤول المشتريات");
-    return callRpc<RequestActionResult>(db, "material_request_send_purchase_batch", { _batch_id: data.batch_id });
+    if (!actorAllowed(actor, ["procurement_officer"]))
+      throw new Error("هذا الإجراء لمسؤول المشتريات");
+    return callRpc<RequestActionResult>(db, "material_request_send_purchase_batch", {
+      _batch_id: data.batch_id,
+    });
   });
 
 export const receiveMaterialPurchaseBatch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) =>
-    z.object({
+    z
+      .object({
       batch_id: z.string().uuid(),
       warehouse_id: z.string().uuid(),
       idempotency_key: z.string().uuid(),
       notes: z.string().trim().max(1000).default(""),
-      items: z.array(z.object({
+        items: z
+          .array(
+            z.object({
         batch_item_id: z.string().uuid(),
         received_qty: z.number().finite().min(0),
         did_not_arrive: z.boolean(),
@@ -352,8 +406,11 @@ export const receiveMaterialPurchaseBatch = createServerFn({ method: "POST" })
         new_item_name: z.string().trim().max(200).default(""),
         new_item_unit: z.string().trim().max(60).default(""),
         serial_notes: z.string().trim().max(1000).default(""),
-      })).min(1),
-    }).parse(data),
+            }),
+          )
+          .min(1),
+      })
+      .parse(data),
   )
   .handler(async ({ data, context }) => {
     const db = rpcClient(context.supabase);
@@ -370,27 +427,69 @@ export const receiveMaterialPurchaseBatch = createServerFn({ method: "POST" })
 
 export const closeMaterialRequest = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => z.object({ request_id: z.string().uuid(), reason: z.string().trim().min(3).max(1000) }).parse(data))
+  .inputValidator((data: unknown) =>
+    z
+      .object({ request_id: z.string().uuid(), reason: z.string().trim().min(3).max(1000) })
+      .parse(data),
+  )
   .handler(async ({ data, context }) => {
     const db = rpcClient(context.supabase);
     const actor = await getActor(db);
     if (!actor.company_manager) throw new Error("إغلاق الطلب يتطلب الأدمن أو مدير الشركة");
-    return callRpc<RequestActionResult>(db, "material_request_close", { _request_id: data.request_id, _reason: data.reason });
+    return callRpc<RequestActionResult>(db, "material_request_close", {
+      _request_id: data.request_id,
+      _reason: data.reason,
+    });
   });
 
 export const reopenMaterialRequest = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => z.object({ request_id: z.string().uuid(), reason: z.string().trim().min(3).max(1000) }).parse(data))
+  .inputValidator((data: unknown) =>
+    z
+      .object({ request_id: z.string().uuid(), reason: z.string().trim().min(3).max(1000) })
+      .parse(data),
+  )
   .handler(async ({ data, context }) => {
     const db = rpcClient(context.supabase);
     const actor = await getActor(db);
     if (!actor.roles.includes("admin")) throw new Error("إعادة فتح الطلب للأدمن فقط");
-    return callRpc<RequestActionResult>(db, "material_request_reopen", { _request_id: data.request_id, _reason: data.reason });
+    return callRpc<RequestActionResult>(db, "material_request_reopen", {
+      _request_id: data.request_id,
+      _reason: data.reason,
+    });
+  });
+
+export const copyMaterialRequest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => z.object({ request_id: z.string().uuid() }).parse(data))
+  .handler(async ({ data, context }) => {
+    const db = rpcClient(context.supabase);
+    if (!canCreateMaterialRequests((await getActor(db)).roles)) {
+      throw new Error("نسخ الطلبات متاح لمقدمي الطلبات فقط");
+    }
+    return callRpc<RequestActionResult>(db, "material_request_copy", {
+      _request_id: data.request_id,
+    });
+  });
+
+export const deleteMaterialRequestDraft = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => z.object({ request_id: z.string().uuid() }).parse(data))
+  .handler(async ({ data, context }) => {
+    const db = rpcClient(context.supabase);
+    if (!canCreateMaterialRequests((await getActor(db)).roles)) {
+      throw new Error("حذف المسودات متاح لمقدمي الطلبات فقط");
+    }
+    return callRpc<RequestActionResult>(db, "material_request_delete_draft", {
+      _request_id: data.request_id,
+    });
   });
 
 export const cancelMaterialRequest = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => z.object({ request_id: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) =>
-    callRpc<RequestActionResult>(rpcClient(context.supabase), "material_request_cancel", { _request_id: data.request_id }),
+    callRpc<RequestActionResult>(rpcClient(context.supabase), "material_request_cancel", {
+      _request_id: data.request_id,
+    }),
   );

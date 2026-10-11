@@ -93,14 +93,86 @@ async function fetchOperationalAlerts(today: string, userId: string, scoped: boo
   });
 }
 
+async function fetchMaterialRequestAlerts(userId: string) {
+  const requestDb = supabase as any;
+  const { data, error } = await requestDb
+    .from("material_request_events")
+    .select(
+      "id, action, note, created_at, request:material_requests!inner(id, request_number, created_by, request_type, status)",
+    )
+    .eq("request.created_by", userId)
+    .in("action", ["planning_return", "planning_reject", "receipt_confirmed"])
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (error) throw error;
+  return (
+    (data ?? []) as Array<{
+      id: string;
+      action: string;
+      note: string | null;
+      created_at: string;
+      request: { id: string; request_number: string; request_type: string; status: string };
+    }>
+  ).flatMap((event) => {
+    const request = event.request;
+    if (
+      event.action === "receipt_confirmed" &&
+      !["partially_received", "received"].includes(request.status)
+    )
+      return [];
+    const title =
+      event.action === "planning_return"
+        ? "أُعيد طلبك للتعديل"
+        : event.action === "planning_reject"
+          ? "رُفض طلبك"
+          : request.status === "received"
+            ? "اكتمل استلام طلبك"
+            : "وصل طلبك جزئياً";
+    const statusDetail =
+      event.action === "receipt_confirmed"
+        ? request.status === "received"
+          ? "اكتمل استلام الطلب."
+          : "تم تسجيل استلام جزئي للطلب."
+        : event.note || "راجع تفاصيل الطلب لمعرفة الملاحظات.";
+    return [
+      {
+        id: `request:${event.id}`,
+        kind: "request" as const,
+        severity:
+          event.action === "planning_reject" ? ("warning" as const) : ("follow_up" as const),
+        title,
+        detail: `${request.request_number} · ${statusDetail}`,
+        href: `/requests?requestId=${encodeURIComponent(request.id)}&type=${encodeURIComponent(request.request_type)}`,
+        date: event.created_at,
+      },
+    ];
+  });
+}
+
 export function useOperationalAlerts() {
-  const { user, isAdmin, isHR, isCompanyManager, isDepartmentManager } = useAuth();
-  const canView = isAdmin || isHR || isCompanyManager || isDepartmentManager;
+  const { user, roles, isAdmin, isHR, isCompanyManager, isDepartmentManager } = useAuth();
+  const canViewExisting = isAdmin || isHR || isCompanyManager || isDepartmentManager;
+  const canViewRequests =
+    isAdmin ||
+    isCompanyManager ||
+    roles.some((role) =>
+      ["engineer", "department_manager", "supervisor", "site_admin"].includes(role),
+    );
+  const canView = canViewExisting || canViewRequests;
   const departmentScoped = isDepartmentManager && !isAdmin && !isHR && !isCompanyManager;
   return useQuery({
     queryKey: ["operational-alerts", user?.id, departmentScoped],
-    queryFn: () =>
-      fetchOperationalAlerts(dateKeyInTimeZone(new Date()), user!.id, departmentScoped),
+    queryFn: async () => {
+      const [operational, requestAlerts] = await Promise.all([
+        canViewExisting
+          ? fetchOperationalAlerts(dateKeyInTimeZone(new Date()), user!.id, departmentScoped)
+          : Promise.resolve([]),
+        canViewRequests ? fetchMaterialRequestAlerts(user!.id) : Promise.resolve([]),
+      ]);
+      return [...operational, ...requestAlerts].sort((left, right) =>
+        right.date.localeCompare(left.date),
+      );
+    },
     enabled: canView && !!user,
     refetchInterval: 120_000,
   });

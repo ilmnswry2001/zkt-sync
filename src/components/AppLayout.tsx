@@ -34,6 +34,7 @@ import {
   Moon,
   Sun,
   Bell,
+  ClipboardList,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
@@ -42,6 +43,7 @@ import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useOperationalAlerts } from "@/hooks/use-operational-alerts";
 import { supabase } from "@/integrations/supabase/client";
+import { canAccessMaterialRequests } from "@/lib/material-requests-domain";
 
 const nav = [
   { to: "/dashboard", label: "لوحة التحكم", icon: LayoutDashboard, access: "executive" },
@@ -50,6 +52,7 @@ const nav = [
   { to: "/tasks", label: "مهامي اليومية", icon: ClipboardCheck },
   { to: "/self-attendance", label: "الحضور الذاتي", icon: Smartphone },
   { to: "/work-center", label: "مركز العمل", icon: ListChecks },
+  { to: "/requests", label: "الطلبات", icon: ClipboardList, access: "requests" },
   { to: "/leaves", label: "إدارة الإجازات", icon: CalendarCheck2, access: "leave" },
   { to: "/team-follow-up", label: "متابعة الفريق", icon: Users },
   { to: "/projects", label: "تكلفة المواقع اليومية", icon: Wallet, access: "hr" },
@@ -124,7 +127,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     };
   }, [user?.email]);
   const canViewOperationalAlerts =
-    isAdmin || isHR || isCompanyManager || roles.includes("department_manager");
+    isAdmin ||
+    isHR ||
+    isCompanyManager ||
+    roles.includes("department_manager") ||
+    roles.some((role) => ["engineer", "supervisor", "site_admin"].includes(role));
   const blocked =
     !permissionsLoading &&
     !!allowedSections &&
@@ -263,6 +270,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             )
               return null;
             if ("access" in item && item.access === "executive" && !isAdmin && !isCompanyManager)
+              return null;
+            if (
+              "access" in item &&
+              item.access === "requests" &&
+              !canAccessMaterialRequests(roles, isCompanyManager)
+            )
               return null;
             if (
               "access" in item &&

@@ -1,6 +1,7 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileDown, Plus, Search, Send, X } from "lucide-react";
+import { useBlocker } from "@tanstack/react-router";
+import { ArrowDown, ArrowUp, Copy, FileDown, Plus, Search, Send, Trash2, X } from "lucide-react";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -11,16 +12,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { todayInBaghdad } from "@/lib/date-time";
+import { useAuth } from "@/hooks/use-auth";
 import {
+  canCreateMaterialRequests,
   defaultStockAllocation,
   validatePurchaseQuantity,
   validateStockAllocation,
 } from "@/lib/material-requests-domain";
 import {
   cancelMaterialRequest,
+  copyMaterialRequest,
   closeMaterialRequest,
   createMaterialPurchaseBatch,
   createMaterialRequest,
+  deleteMaterialRequestDraft,
   editMaterialRequest,
   getMaterialRequestOptions,
   getMaterialRequests,
@@ -34,7 +39,7 @@ import {
   type MaterialRequestOptions,
 } from "@/lib/material-requests.functions";
 
-type Stage = "planning" | "warehouse" | "procurement";
+type Stage = "planning" | "warehouse" | "procurement" | "requests";
 type RequestType = "material" | "equipment";
 type LineDraft = { id?: string; item_name: string; unit: string; quantity: string; specifications: string };
 type AllocationDraft = {
@@ -81,6 +86,10 @@ function RequestState({ status }: { status: string }) {
 }
 
 export function MaterialRequestWorkflow({ stage, requestType }: { stage: Stage; requestType?: RequestType }) {
+  return stage === "requests" ? <ApplicantRequestsWorkspace /> : <WorkflowStage stage={stage} requestType={requestType} />;
+}
+
+function WorkflowStage({ stage, requestType }: { stage: Exclude<Stage, "requests">; requestType?: RequestType }) {
   const queryClient = useQueryClient();
   const [kind, setKind] = useState<RequestType>(requestType ?? "material");
   const [activeView, setActiveView] = useState("work");
@@ -91,8 +100,6 @@ export function MaterialRequestWorkflow({ stage, requestType }: { stage: Stage; 
   const [siteFilter, setSiteFilter] = useState("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
-  const [formOpen, setFormOpen] = useState(false);
-  const [editingRequest, setEditingRequest] = useState<MaterialRequest | null>(null);
   const [planningScope, setPlanningScope] = useState<"mine" | "incoming" | "all">("all");
 
   const optionsQuery = useQuery({
@@ -191,11 +198,6 @@ export function MaterialRequestWorkflow({ stage, requestType }: { stage: Stage; 
           <Button variant="outline" size="sm" onClick={exportReport}>
             <FileDown className="ml-2 h-4 w-4" /> Excel
           </Button>
-          {stage === "planning" && canCreate && (
-            <Button size="sm" onClick={() => { setEditingRequest(null); setFormOpen(true); }}>
-              <Plus className="ml-2 h-4 w-4" /> طلب جديد
-            </Button>
-          )}
         </div>
       </div>
 
@@ -254,12 +256,11 @@ export function MaterialRequestWorkflow({ stage, requestType }: { stage: Stage; 
               requests={planningRequests}
               options={options}
               actor={actor}
-              canCreate={canCreate}
+              canCreate={false}
               canPlan={canPlan}
               canWarehouse={canWarehouse}
               canProcure={canProcure}
               canManage={canManage}
-              onEdit={(request) => { setEditingRequest(request); setFormOpen(true); }}
               onRefresh={invalidate}
             />
           )}
@@ -292,12 +293,11 @@ export function MaterialRequestWorkflow({ stage, requestType }: { stage: Stage; 
               requests={filteredRequests}
               options={options}
               actor={actor}
-              canCreate={canCreate}
+              canCreate={false}
               canPlan={false}
               canWarehouse={false}
               canProcure={false}
               canManage={canManage}
-              onEdit={(request) => { setEditingRequest(request); setFormOpen(true); }}
               onRefresh={invalidate}
             />
           )}
@@ -309,21 +309,346 @@ export function MaterialRequestWorkflow({ stage, requestType }: { stage: Stage; 
         <span>تتضمن بنداً لم يصل: <b className="text-foreground">{missingCount}</b></span>
       </div>
 
-      <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent dir="rtl" className="max-h-[92dvh] max-w-4xl overflow-y-auto">
-          <DialogHeader><DialogTitle>{editingRequest ? "تعديل الطلب" : "طلب مواد أو معدات جديد"}</DialogTitle></DialogHeader>
-          {options && (
-            <RequestForm
-              requestType={kind}
-              existing={editingRequest}
-              options={options}
-              onCancel={() => setFormOpen(false)}
-              onSaved={() => { setFormOpen(false); setEditingRequest(null); invalidate(); }}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
       {isLedger && <span className="sr-only">السجل يعرض {filteredRequests.length} من الطلبات المتاحة.</span>}
+    </section>
+  );
+}
+
+function ApplicantRequestsWorkspace() {
+  const queryClient = useQueryClient();
+  const { profileName } = useAuth();
+  const [kind, setKind] = useState<RequestType>(() => {
+    if (typeof window === "undefined") return "material";
+    return new URLSearchParams(window.location.search).get("type") === "equipment"
+      ? "equipment"
+      : "material";
+  });
+  const [workspaceTab, setWorkspaceTab] = useState("mine");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [responsibleFilter, setResponsibleFilter] = useState("all");
+  const [departmentFilter, setDepartmentFilter] = useState("all");
+  const [siteFilter, setSiteFilter] = useState("all");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [showAllInMine, setShowAllInMine] = useState(false);
+  const [formDirty, setFormDirty] = useState(false);
+  const [editingRequest, setEditingRequest] = useState<MaterialRequest | null>(null);
+  const handledDeepLink = useRef(false);
+  const requestId =
+    typeof window === "undefined"
+      ? null
+      : new URLSearchParams(window.location.search).get("requestId");
+
+  const optionsQuery = useQuery({
+    queryKey: ["material-request-options"],
+    queryFn: () => getMaterialRequestOptions(),
+    staleTime: 60_000,
+  });
+  const requestQuery = useQuery({
+    queryKey: ["material-requests", kind, search],
+    queryFn: () => getMaterialRequests({ data: { requestType: kind, search } }),
+    refetchOnWindowFocus: true,
+  });
+  const options = optionsQuery.data as MaterialRequestOptions | undefined;
+  const actor = options?.actor;
+  const requests = requestQuery.data?.requests ?? EMPTY_REQUESTS;
+  const canCreate = !!actor && canCreateMaterialRequests(actor.roles);
+  const canViewSection =
+    !!actor &&
+    (actor.company_manager ||
+      actor.roles.includes("admin") ||
+      actor.roles.includes("department_manager"));
+  const canViewAll = !!actor && (actor.company_manager || actor.roles.includes("admin"));
+
+  const filteredRequests = useMemo(
+    () =>
+      requests.filter(
+        (request) =>
+          (statusFilter === "all" || request.status === statusFilter) &&
+          (responsibleFilter === "all" ||
+            requestResponsibleStage(request.status) === responsibleFilter) &&
+          (departmentFilter === "all" || request.department_id === departmentFilter) &&
+          (siteFilter === "all" || request.site_id === siteFilter) &&
+          (!fromDate || request.created_at.slice(0, 10) >= fromDate) &&
+          (!toDate || request.created_at.slice(0, 10) <= toDate),
+      ),
+    [requests, statusFilter, responsibleFilter, departmentFilter, siteFilter, fromDate, toDate],
+  );
+  const myRequests = useMemo(
+    () => filteredRequests.filter((request) => request.created_by === actor?.user_id),
+    [filteredRequests, actor?.user_id],
+  );
+  const departmentRequests = useMemo(
+    () =>
+      filteredRequests.filter(
+        (request) =>
+          canViewAll ||
+          (!!actor &&
+            (actor.department_ids.includes(request.department_id) ||
+              actor.employee_department_id === request.department_id)),
+      ),
+    [filteredRequests, canViewAll, actor],
+  );
+  const ownStatusRequests = requests.filter((request) => request.created_by === actor?.user_id);
+  const requestCounts = [
+    {
+      label: "مسودات",
+      value: ownStatusRequests.filter((request) => request.status === "draft").length,
+    },
+    {
+      label: "بانتظار الإجراء",
+      value: ownStatusRequests.filter((request) =>
+        [
+          "pending_planning",
+          "pending_warehouse",
+          "pending_procurement",
+          "purchasing",
+          "pending_receipt",
+        ].includes(request.status),
+      ).length,
+    },
+    {
+      label: "معاد لي للتعديل",
+      value: ownStatusRequests.filter((request) => request.status === "returned").length,
+    },
+    {
+      label: "مستلم جزئياً",
+      value: ownStatusRequests.filter((request) => request.status === "partially_received").length,
+    },
+  ];
+
+  useEffect(() => {
+    if (!requestId || handledDeepLink.current || !actor) return;
+    const request = requests.find((item) => item.id === requestId);
+    if (!request) return;
+    handledDeepLink.current = true;
+    if (request.request_type !== kind) {
+      setKind(request.request_type);
+      return;
+    }
+    setWorkspaceTab(request.created_by === actor.user_id ? "mine" : "department");
+    window.setTimeout(
+      () =>
+        document
+          .getElementById(`request-${request.id}`)
+          ?.scrollIntoView({ behavior: "smooth", block: "center" }),
+      100,
+    );
+  }, [requestId, requests, actor, kind]);
+
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ["material-requests"] });
+    void queryClient.invalidateQueries({ queryKey: ["material-request-options"] });
+  };
+  const onSaved = () => {
+    setEditingRequest(null);
+    setWorkspaceTab("mine");
+    invalidate();
+  };
+  const onDuplicate = async (request: MaterialRequest) => {
+    try {
+      const result = await copyMaterialRequest({ data: { request_id: request.id } });
+      toast.success(`أُنشئت مسودة جديدة ${result.request_number ?? ""} وسُجل النسخ`);
+      setKind(request.request_type);
+      await queryClient.invalidateQueries({ queryKey: ["material-requests"] });
+      const refreshed = await requestQuery.refetch();
+      const copy = refreshed.data?.requests.find((candidate) => candidate.id === result.id);
+      setEditingRequest(copy ?? null);
+      setWorkspaceTab(copy ? "new" : "mine");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "تعذر نسخ الطلب");
+    }
+  };
+
+  const filters = (
+    <RequestFilters
+      search={search}
+      onSearch={setSearch}
+      status={statusFilter}
+      onStatus={setStatusFilter}
+      responsible={responsibleFilter}
+      onResponsible={setResponsibleFilter}
+      department={departmentFilter}
+      onDepartment={setDepartmentFilter}
+      site={siteFilter}
+      onSite={setSiteFilter}
+      fromDate={fromDate}
+      onFromDate={setFromDate}
+      toDate={toDate}
+      onToDate={setToDate}
+      options={options}
+    />
+  );
+  const list = (visibleRequests: MaterialRequest[]) =>
+    requestQuery.error || optionsQuery.error ? (
+      <MigrationNotice message={(requestQuery.error ?? (optionsQuery.error as Error)).message} />
+    ) : requestQuery.isLoading || optionsQuery.isLoading ? (
+      <p className="py-6 text-center text-sm text-muted-foreground">جارٍ تحميل الطلبات...</p>
+    ) : (
+      <RequestList
+        stage="requests"
+        requests={visibleRequests}
+        options={options}
+        actor={actor}
+        canCreate={canCreate}
+        canPlan={false}
+        canWarehouse={false}
+        canProcure={false}
+        canManage={false}
+        onEdit={(request) => {
+          setEditingRequest(request);
+          setWorkspaceTab("new");
+        }}
+        onDuplicate={(request) => void onDuplicate(request)}
+        onRefresh={invalidate}
+      />
+    );
+
+  return (
+    <section dir="rtl" className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold">طلبات المواد والمعدات</h2>
+          <p className="text-sm text-muted-foreground">
+            قدّم طلبك وتابع مساره من التخطيط حتى الاستلام.
+          </p>
+        </div>
+        <div
+          className="inline-flex rounded-lg border bg-muted/30 p-1"
+          role="group"
+          aria-label="نوع الطلب"
+        >
+          {(["material", "equipment"] as const).map((type) => (
+            <Button
+              key={type}
+              type="button"
+              variant={kind === type ? "default" : "ghost"}
+              className="min-h-11"
+              onClick={() => setKind(type)}
+            >
+              {type === "material" ? "مواد" : "معدات"}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        {requestCounts.map((count) => (
+          <Count
+            key={count.label}
+            label={count.label}
+            value={count.value}
+            active={count.label === "معاد لي للتعديل" && count.value > 0}
+          />
+        ))}
+      </div>
+
+      <Tabs
+        value={workspaceTab}
+        onValueChange={(value) => {
+          if (
+            workspaceTab === "new" &&
+            value !== "new" &&
+            formDirty &&
+            !window.confirm("لديك تغييرات غير محفوظة. هل تريد مغادرة النموذج؟")
+          ) return;
+          setFormDirty(false);
+          setWorkspaceTab(value);
+          if (value !== "new") setEditingRequest(null);
+        }}
+        dir="rtl"
+      >
+        <TabsList className="grid h-auto w-full grid-cols-2 sm:w-fit sm:grid-cols-3">
+          <TabsTrigger value="mine" className="min-h-11">
+            طلباتي
+          </TabsTrigger>
+          {canCreate && (
+            <TabsTrigger value="new" className="min-h-11">
+              طلب جديد
+            </TabsTrigger>
+          )}
+          {canViewSection && (
+            <TabsTrigger value="department" className="min-h-11">
+              طلبات القسم
+            </TabsTrigger>
+          )}
+        </TabsList>
+
+        <TabsContent value="mine" className="space-y-3">
+          {canViewAll && (
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={!showAllInMine ? "default" : "outline"}
+                onClick={() => setShowAllInMine(false)}
+              >
+                طلباتي فقط
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={showAllInMine ? "default" : "outline"}
+                onClick={() => setShowAllInMine(true)}
+              >
+                كل الطلبات
+              </Button>
+            </div>
+          )}
+          {filters}
+          {list(showAllInMine ? filteredRequests : myRequests)}
+        </TabsContent>
+
+        {canCreate && (
+          <TabsContent value="new" className="space-y-3">
+            {optionsQuery.error ? (
+              <MigrationNotice message={(optionsQuery.error as Error).message} />
+            ) : options ? (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">
+                    {editingRequest
+                      ? `تعديل ${editingRequest.request_number}`
+                      : `إنشاء طلب ${kind === "material" ? "مواد" : "معدات"}`}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <RequestForm
+                    key={`${kind}-${editingRequest?.id ?? "new"}`}
+                    requestType={kind}
+                    existing={editingRequest}
+                    options={options}
+                    profileName={profileName ?? undefined}
+                    onDirtyChange={setFormDirty}
+                    persistDraftKey={
+                      !editingRequest
+                        ? `zkt-material-request-draft:${actor?.user_id}:${kind}`
+                        : undefined
+                    }
+                    onCancel={() => {
+                      setEditingRequest(null);
+                      setWorkspaceTab("mine");
+                    }}
+                    onSaved={onSaved}
+                  />
+                </CardContent>
+              </Card>
+            ) : (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                جارٍ تحميل بيانات النموذج...
+              </p>
+            )}
+          </TabsContent>
+        )}
+
+        {canViewSection && (
+          <TabsContent value="department" className="space-y-3">
+            {filters}
+            {list(departmentRequests)}
+          </TabsContent>
+        )}
+      </Tabs>
     </section>
   );
 }
@@ -394,49 +719,193 @@ function RequestFilters({
   );
 }
 
-function RequestForm({ requestType, existing, options, onCancel, onSaved }: {
-  requestType: RequestType; existing: MaterialRequest | null; options: MaterialRequestOptions;
-  onCancel: () => void; onSaved: () => void;
+type StoredRequestDraft = {
+  siteId: string;
+  reason: string;
+  needByDate: string;
+  lines: LineDraft[];
+};
+
+function readStoredRequestDraft(key: string | undefined): StoredRequestDraft | null {
+  if (!key || typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredRequestDraft;
+    return parsed && Array.isArray(parsed.lines) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function RequestForm({
+  requestType,
+  existing,
+  options,
+  profileName,
+  onDirtyChange,
+  persistDraftKey,
+  onCancel,
+  onSaved,
+}: {
+  requestType: RequestType;
+  existing: MaterialRequest | null;
+  options: MaterialRequestOptions;
+  profileName?: string;
+  onDirtyChange?: (dirty: boolean) => void;
+  persistDraftKey?: string;
+  onCancel: () => void;
+  onSaved: () => void;
 }) {
   const actor = options.actor;
-  const editableLines = existing?.items ?? [];
-  const [siteId, setSiteId] = useState(existing?.site_id ?? options.sites[0]?.id ?? "");
-  const [departmentId, setDepartmentId] = useState(existing?.department_id ?? actor.employee_department_id ?? actor.department_ids[0] ?? "");
-  const [reason, setReason] = useState(existing?.reason ?? "");
-  const [needByDate, setNeedByDate] = useState(existing?.need_by_date ?? "");
-  const [lines, setLines] = useState<LineDraft[]>(editableLines.length
-    ? editableLines.map((item) => ({ id: item.id, item_name: item.item_name, unit: item.unit, quantity: String(item.requested_qty), specifications: item.specifications ?? "" }))
-    : [{ item_name: "", unit: "قطعة", quantity: "", specifications: "" }]);
+  const storageKey =
+    persistDraftKey ??
+    `zkt-material-request-draft:${actor.user_id}:${requestType}:${existing?.id ?? "new"}`;
+  const [storedDraft] = useState(() => readStoredRequestDraft(storageKey));
+  const originalLines = existing?.items ?? [];
+  const [siteId, setSiteId] = useState(
+    storedDraft?.siteId ?? existing?.site_id ?? options.sites[0]?.id ?? "",
+  );
+  const [reason, setReason] = useState(storedDraft?.reason ?? existing?.reason ?? "");
+  const [needByDate, setNeedByDate] = useState(
+    storedDraft?.needByDate ?? existing?.need_by_date ?? "",
+  );
+  const [lines, setLines] = useState<LineDraft[]>(
+    storedDraft?.lines ??
+      (originalLines.length
+        ? originalLines.map((item) => ({
+            id: item.id,
+            item_name: item.item_name,
+            unit: item.unit,
+            quantity: String(item.requested_qty),
+            specifications: item.specifications ?? "",
+          }))
+        : [{ item_name: "", unit: "قطعة", quantity: "", specifications: "" }]),
+  );
+  const [dirty, setDirty] = useState(!!storedDraft);
   const [busy, setBusy] = useState(false);
+  const blocker = useBlocker({
+    shouldBlockFn: () => dirty,
+    enableBeforeUnload: () => dirty,
+    withResolver: true,
+  });
+  const blockerStatus = blocker.status;
+  const proceedNavigation = blocker.proceed;
+  const resetNavigation = blocker.reset;
   const datalistId = `request-items-${requestType}`;
-  const editableDepartments = actor.company_manager || actor.roles.includes("admin")
-    ? options.departments
-    : options.departments.filter((item) => actor.department_ids.includes(item.id) || actor.employee_department_id === item.id);
-  const canSelectDepartment = actor.company_manager || actor.roles.includes("admin");
+  const departmentId =
+    existing?.department_id ??
+    actor.employee_department_id ??
+    (actor.department_ids.length === 1 ? actor.department_ids[0] : "");
+  const departmentName =
+    existing?.department_name ??
+    options.departments.find((department) => department.id === departmentId)?.name ??
+    "غير محدد في الحساب";
+  const duplicateNames = useMemo(() => {
+    const occurrences = new Map<string, number>();
+    for (const line of lines) {
+      const name = line.item_name.trim().toLocaleLowerCase();
+      if (name) occurrences.set(name, (occurrences.get(name) ?? 0) + 1);
+    }
+    return [...occurrences.entries()].filter(([, count]) => count > 1).map(([name]) => name);
+  }, [lines]);
 
+  useEffect(() => {
+    try {
+      if (dirty)
+        window.localStorage.setItem(
+          storageKey,
+          JSON.stringify({ siteId, reason, needByDate, lines } satisfies StoredRequestDraft),
+        );
+      else window.localStorage.removeItem(storageKey);
+    } catch {
+      // Browser storage can be unavailable (private browsing/quota); the form remains usable.
+    }
+  }, [storageKey, dirty, siteId, reason, needByDate, lines]);
+  useEffect(() => {
+    if (blockerStatus !== "blocked") return;
+    if (window.confirm("لديك تغييرات غير محفوظة. هل تريد مغادرة النموذج؟"))
+      proceedNavigation?.();
+    else resetNavigation?.();
+  }, [blockerStatus, proceedNavigation, resetNavigation]);
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+
+  const updateLine = (index: number, patch: Partial<LineDraft>) => {
+    setDirty(true);
+    setLines((current) =>
+      current.map((line, row) => (row === index ? { ...line, ...patch } : line)),
+    );
+  };
   const save = async (submit: boolean) => {
-    if (!siteId || !departmentId) return toast.error("اختر الموقع والقسم");
-    if (submit && !lines.some((line) => line.item_name.trim() && Number(line.quantity) > 0)) return toast.error("أضف بنداً واحداً على الأقل بكمية صحيحة");
-    const items = lines.filter((line) => line.item_name.trim()).map((line) => ({
+    if (!siteId) return toast.error("اختر الموقع الطالب");
+    if (!departmentId) return toast.error("تعذر تحديد قسمك من الحساب؛ راجع ربط الموظف أو القسم");
+    const enteredLines = lines.filter(
+      (line) =>
+        line.item_name.trim() ||
+        line.unit.trim() ||
+        line.quantity.trim() ||
+        line.specifications.trim(),
+    );
+    if (
+      enteredLines.some(
+        (line) =>
+          !line.item_name.trim() ||
+          !line.unit.trim() ||
+          !Number.isFinite(Number(line.quantity)) ||
+          Number(line.quantity) <= 0,
+      )
+    ) {
+      return toast.error("أكمل اسم البند والوحدة والكمية الصحيحة لكل بند بدأت بإدخاله");
+    }
+    if (submit && !enteredLines.length) return toast.error("لا يمكن إرسال طلب بلا بنود");
+    const items = enteredLines.map((line) => ({
       ...(line.id ? { id: line.id } : {}),
       item_name: line.item_name.trim(),
       unit: line.unit.trim(),
       quantity: Number(line.quantity),
       specifications: line.specifications.trim(),
     }));
-    if (items.some((line) => !line.unit || !(line.quantity > 0))) return toast.error("تحقق من اسم البند والوحدة والكمية الأكبر من صفر");
     setBusy(true);
     try {
+      let requestNumber = existing?.request_number;
       if (existing) {
-        await editMaterialRequest({ data: { request_id: existing.id, request_type: requestType, site_id: siteId, department_id: departmentId, reason, need_by_date: needByDate || null, items, submit } });
+        await editMaterialRequest({
+          data: {
+            request_id: existing.id,
+            request_type: requestType,
+            site_id: siteId,
+            reason,
+            need_by_date: needByDate || null,
+            items,
+            submit,
+          },
+        });
       } else {
-        const result = await createMaterialRequest({ data: { request_type: requestType, site_id: siteId, department_id: departmentId, reason, need_by_date: needByDate || null, items, submit } });
-        const record = result as { request_number?: string };
-        toast.success(submit ? `تم إرسال الطلب ${record.request_number ?? ""} إلى التخطيط` : `حُفظت المسودة ${record.request_number ?? ""}`);
-        onSaved();
-        return;
+        const result = await createMaterialRequest({
+          data: {
+            request_type: requestType,
+            site_id: siteId,
+            reason,
+            need_by_date: needByDate || null,
+            items,
+            submit,
+          },
+        });
+        requestNumber = (result as { request_number?: string }).request_number;
       }
-      toast.success(submit ? "تم إرسال الطلب إلى التخطيط" : "تم حفظ التعديلات");
+      try {
+        window.localStorage.removeItem(storageKey);
+      } catch {
+        /* storage may be disabled */
+      }
+      setDirty(false);
+      toast.success(
+        submit
+          ? `تم إرسال الطلب ${requestNumber ?? ""} إلى التخطيط`
+          : `حُفظت المسودة ${requestNumber ?? ""}`,
+      );
       onSaved();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "تعذر حفظ الطلب");
@@ -447,36 +916,259 @@ function RequestForm({ requestType, existing, options, onCancel, onSaved }: {
 
   return (
     <div className="space-y-4">
-      {existing && <p className="text-sm font-semibold">{existing.request_number} · {STATUS_LABELS[existing.status]}</p>}
+      {existing && (
+        <p className="text-sm font-semibold">
+          {existing.request_number} · {STATUS_LABELS[existing.status]}
+        </p>
+      )}
+      {storedDraft && (
+        <p className="rounded-md border border-sky-500/30 bg-sky-50 p-2 text-xs text-sky-950 dark:bg-sky-950/20 dark:text-sky-100">
+          استُعيدت مسودة محلية غير محفوظة على الخادم.
+        </p>
+      )}
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="الموقع الطالب"><select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={siteId} onChange={(event) => setSiteId(event.target.value)}><option value="">اختر الموقع</option>{options.sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select></Field>
-        <Field label="القسم"><select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={departmentId} onChange={(event) => setDepartmentId(event.target.value)} disabled={!canSelectDepartment || editableDepartments.length === 1}><option value="">اختر القسم</option>{editableDepartments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select></Field>
-        <Field label="تاريخ الحاجة (اختياري)"><Input type="date" value={needByDate} onChange={(event) => setNeedByDate(event.target.value)} /></Field>
-        <Field label="سبب الطلب أو الملاحظات"><Input value={reason} onChange={(event) => setReason(event.target.value)} maxLength={2000} /></Field>
+        <Field label="الموقع الطالب">
+          <select
+            className="min-h-12 w-full rounded-md border bg-background px-3 text-base"
+            value={siteId}
+            onChange={(event) => {
+              setSiteId(event.target.value);
+              setDirty(true);
+            }}
+          >
+            <option value="">اختر الموقع</option>
+            {options.sites.map((site) => (
+              <option key={site.id} value={site.id}>
+                {site.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="القسم (من الحساب)">
+          <Input
+            readOnly
+            aria-readonly="true"
+            value={departmentName}
+            className="min-h-12 text-base"
+          />
+        </Field>
+        <Field label="مقدم الطلب (من الحساب)">
+          <Input
+            readOnly
+            aria-readonly="true"
+            value={profileName || actor.email || "الحساب الحالي"}
+            className="min-h-12 text-base"
+          />
+        </Field>
+        <Field label="تاريخ الحاجة (اختياري)">
+          <Input
+            type="date"
+            className="min-h-12 text-base"
+            value={needByDate}
+            onChange={(event) => {
+              setNeedByDate(event.target.value);
+              setDirty(true);
+            }}
+          />
+        </Field>
+        <div className="sm:col-span-2">
+          <Field label="سبب الطلب أو الملاحظات">
+            <Input
+              className="min-h-12 text-base"
+              value={reason}
+              onChange={(event) => {
+                setReason(event.target.value);
+                setDirty(true);
+              }}
+              maxLength={2000}
+            />
+          </Field>
+        </div>
       </div>
-      <datalist id={datalistId}>{options.items.filter((item) => item.kind === (requestType === "equipment" ? "tool" : "material")).map((item) => <option key={item.id} value={item.name} />)}</datalist>
-      <datalist id={`request-units-${requestType}`}>{UNITS.map((unit) => <option key={unit} value={unit} />)}</datalist>
+      <datalist id={datalistId}>
+        {options.items
+          .filter((item) => item.kind === (requestType === "equipment" ? "tool" : "material"))
+          .map((item) => (
+            <option key={item.id} value={item.name} />
+          ))}
+      </datalist>
+      <datalist id={`request-units-${requestType}`}>
+        {UNITS.map((unit) => (
+          <option key={unit} value={unit} />
+        ))}
+      </datalist>
       <div className="space-y-2">
-        <div className="flex items-center justify-between"><h3 className="font-semibold">بنود الطلب</h3><Button type="button" variant="outline" size="sm" onClick={() => setLines((current) => [...current, { item_name: "", unit: "قطعة", quantity: "", specifications: "" }])}><Plus className="ml-1 h-4 w-4" /> إضافة بند</Button></div>
+        <h3 className="font-semibold">بنود الطلب</h3>
+        {duplicateNames.length > 0 && (
+          <p
+            role="status"
+            className="rounded-md border border-amber-500/40 bg-amber-50 p-2 text-sm text-amber-950 dark:bg-amber-950/20 dark:text-amber-100"
+          >
+            يوجد اسم بند مكرر. يمكنك دمج الكميات يدوياً أو متابعة الطلب كما هو.
+          </p>
+        )}
         {lines.map((line, index) => (
-          <div key={line.id ?? index} className="grid gap-2 rounded-md border p-3 sm:grid-cols-[1.3fr_0.7fr_0.6fr_1.2fr_auto]">
-            <Field label="اسم المادة أو المعدة"><Input list={datalistId} value={line.item_name} onChange={(event) => setLines((current) => current.map((item, row) => row === index ? { ...item, item_name: event.target.value } : item))} /></Field>
-            <Field label="الوحدة"><Input list={`request-units-${requestType}`} value={line.unit} onChange={(event) => setLines((current) => current.map((item, row) => row === index ? { ...item, unit: event.target.value } : item))} /></Field>
-            <Field label="الكمية"><Input type="number" min="0.001" step="0.001" value={line.quantity} onChange={(event) => setLines((current) => current.map((item, row) => row === index ? { ...item, quantity: event.target.value } : item))} /></Field>
-            <Field label="المواصفات أو الملاحظات"><Input value={line.specifications} onChange={(event) => setLines((current) => current.map((item, row) => row === index ? { ...item, specifications: event.target.value } : item))} /></Field>
-            <Button type="button" variant="ghost" size="icon" className="self-end" aria-label="حذف البند" disabled={lines.length === 1} onClick={() => setLines((current) => current.filter((_, row) => row !== index))}><X className="h-4 w-4" /></Button>
+          <article
+            key={line.id ?? index}
+            className="grid gap-3 rounded-xl border bg-card p-3 sm:grid-cols-[1.3fr_0.7fr_0.6fr_1.2fr_auto]"
+          >
+            <Field label="اسم المادة أو المعدة">
+              <Input
+                className="min-h-12 text-base"
+                list={datalistId}
+                value={line.item_name}
+                onChange={(event) => updateLine(index, { item_name: event.target.value })}
+              />
+            </Field>
+            <Field label="الوحدة">
+              <Input
+                className="min-h-12 text-base"
+                list={`request-units-${requestType}`}
+                value={line.unit}
+                onChange={(event) => updateLine(index, { unit: event.target.value })}
+              />
+            </Field>
+            <Field label="الكمية">
+              <Input
+                className="min-h-12 text-base"
+                type="number"
+                min="0.001"
+                step="0.001"
+                value={line.quantity}
+                onChange={(event) => updateLine(index, { quantity: event.target.value })}
+              />
+            </Field>
+            <Field label="المواصفات أو الملاحظات">
+              <Input
+                className="min-h-12 text-base"
+                value={line.specifications}
+                onChange={(event) => updateLine(index, { specifications: event.target.value })}
+                maxLength={1000}
+              />
+            </Field>
+            <div className="flex items-end gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-11 w-11"
+                disabled={index === 0}
+                aria-label="تحريك البند للأعلى"
+                onClick={() => {
+                  setDirty(true);
+                  setLines((current) => {
+                    const next = [...current];
+                    [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                    return next;
+                  });
+                }}
+              >
+                <ArrowUp className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-11 w-11"
+                disabled={index === lines.length - 1}
+                aria-label="تحريك البند للأسفل"
+                onClick={() => {
+                  setDirty(true);
+                  setLines((current) => {
+                    const next = [...current];
+                    [next[index + 1], next[index]] = [next[index], next[index + 1]];
+                    return next;
+                  });
+                }}
+              >
+                <ArrowDown className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-11 w-11"
+                aria-label="تكرار البند"
+                onClick={() => {
+                  const copy = { ...line };
+                  delete copy.id;
+                  setDirty(true);
+                  setLines((current) => [
+                    ...current.slice(0, index + 1),
+                    copy,
+                    ...current.slice(index + 1),
+                  ]);
+                }}
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-11 w-11"
+                aria-label="حذف البند"
+                disabled={lines.length === 1}
+                onClick={() => {
+                  setDirty(true);
+                  setLines((current) => current.filter((_, row) => row !== index));
+                }}
+              >
+                <X className="h-4 w-4" />
+              </Button>
           </div>
+          </article>
         ))}
       </div>
-      <div className="flex flex-wrap justify-end gap-2 border-t pt-3">
-        <Button type="button" variant="outline" onClick={onCancel}>إلغاء</Button>
-        <Button type="button" variant="secondary" disabled={busy} onClick={() => void save(false)}>حفظ كمسودة</Button>
-        <Button type="button" disabled={busy || !lines.some((line) => line.item_name.trim() && Number(line.quantity) > 0)} onClick={() => void save(true)}><Send className="ml-2 h-4 w-4" /> إرسال إلى التخطيط</Button>
+      <div className="sticky bottom-2 z-10 flex flex-wrap justify-end gap-2 rounded-xl border bg-background/95 p-3 shadow-lg backdrop-blur">
+        <Button
+          type="button"
+          variant="outline"
+          className="min-h-12"
+          onClick={() => {
+            if (!dirty || window.confirm("لديك تغييرات غير محفوظة. هل تريد مغادرة النموذج؟")) onCancel();
+          }}
+        >
+          إلغاء
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          className="min-h-12"
+          disabled={busy}
+          onClick={() => void save(false)}
+        >
+          حفظ كمسودة
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className="min-h-12"
+          disabled={busy}
+          onClick={() => {
+            setDirty(true);
+            setLines((current) => [
+              ...current,
+              { item_name: "", unit: "قطعة", quantity: "", specifications: "" },
+            ]);
+          }}
+        >
+          <Plus className="ml-2 h-4 w-4" /> إضافة بند
+        </Button>
+        <Button
+          type="button"
+          className="min-h-12"
+          disabled={
+            busy || !lines.some((line) => line.item_name.trim() && Number(line.quantity) > 0)
+          }
+          onClick={() => void save(true)}
+        >
+          <Send className="ml-2 h-4 w-4" /> إرسال إلى التخطيط
+        </Button>
       </div>
     </div>
   );
 }
-
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <div className="min-w-0 space-y-1"><Label className="text-xs">{label}</Label>{children}</div>;
 }
@@ -514,7 +1206,31 @@ function hasOutstandingReceipt(request: MaterialRequest) {
   );
 }
 
-function RequestList({ stage, requests, options, actor, canCreate, canPlan, canWarehouse, canProcure, canManage, onEdit, onRefresh }: {
+function responsibleLabel(status: string) {
+  if (status === "pending_planning") return "التخطيط";
+  if (["pending_warehouse", "pending_receipt", "partially_received"].includes(status))
+    return "المخازن / الاستلام";
+  if (["pending_procurement", "purchasing"].includes(status)) return "المشتريات";
+  if (status === "draft" || status === "returned") return "مقدم الطلب";
+  return ["received", "closed", "rejected", "cancelled"].includes(status)
+    ? "مكتمل / لا يتطلب إجراء"
+    : "مقدم الطلب";
+}
+
+function RequestList({
+  stage,
+  requests,
+  options,
+  actor,
+  canCreate,
+  canPlan,
+  canWarehouse,
+  canProcure,
+  canManage,
+  onEdit,
+  onDuplicate,
+  onRefresh,
+}: {
   stage: Stage | "ledger";
   requests: MaterialRequest[];
   options?: MaterialRequestOptions;
@@ -524,42 +1240,87 @@ function RequestList({ stage, requests, options, actor, canCreate, canPlan, canW
   canWarehouse: boolean;
   canProcure: boolean;
   canManage: boolean;
-  onEdit: (request: MaterialRequest) => void;
+  onEdit?: (request: MaterialRequest) => void;
+  onDuplicate?: (request: MaterialRequest) => void;
   onRefresh: () => void;
 }) {
   const visible = requests.filter((request) => {
     if (stage === "ledger") return true;
     if (stage === "planning") return request.status !== "cancelled";
-    if (stage === "warehouse") return ["pending_warehouse", "pending_receipt", "partially_received"].includes(request.status) || hasOutstandingReceipt(request);
-    return ["pending_procurement", "purchasing", "pending_receipt", "partially_received", "received", "closed"].includes(request.status);
+    if (stage === "requests") return true;
+    if (stage === "warehouse")
+      return (
+        ["pending_warehouse", "pending_receipt", "partially_received"].includes(request.status) ||
+        hasOutstandingReceipt(request)
+      );
+    return [
+      "pending_procurement",
+      "purchasing",
+      "pending_receipt",
+      "partially_received",
+      "received",
+      "closed",
+    ].includes(request.status);
   });
 
   if (!visible.length) return <EmptyRequests text="لا توجد طلبات مطابقة حالياً." />;
   return (
     <div className="space-y-2">
       {visible.map((request) => (
-        <Card key={request.id}>
+        <Card key={request.id} id={`request-${request.id}`}>
           <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 p-4">
             <div className="min-w-0">
               <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-                <span dir="ltr" className="font-mono">{request.request_number}</span>
+                <span dir="ltr" className="font-mono">
+                  {request.request_number}
+                </span>
                 <RequestState status={request.status} />
-                <Badge variant="outline">{request.request_type === "equipment" ? "معدات" : "مواد"}</Badge>
-                {request.need_by_date && request.need_by_date < todayInBaghdad() && !["received", "closed", "rejected", "cancelled"].includes(request.status) && <Badge variant="destructive">متأخر</Badge>}
+                <Badge variant="outline">{request.items.length} بنود</Badge>
+                <Badge variant="outline">
+                  {request.request_type === "equipment" ? "معدات" : "مواد"}
+                </Badge>
+                {request.need_by_date &&
+                  request.need_by_date < todayInBaghdad() &&
+                  !["received", "closed", "rejected", "cancelled"].includes(request.status) && (
+                    <Badge variant="destructive">متأخر</Badge>
+                  )}
               </CardTitle>
               <p className="mt-1 text-xs text-muted-foreground">
-                {request.created_by_name || "مقدم الطلب"} · {request.department_name} · {request.site_name} · {formatDate(request.created_at)}
+                {request.created_by_name || "مقدم الطلب"} · {request.department_name} ·{" "}
+                {request.site_name} · {formatDate(request.created_at)}
                 {request.need_by_date ? ` · الحاجة ${formatDate(request.need_by_date)}` : ""}
+              </p>
+              <p className="mt-1 text-xs font-medium text-muted-foreground">
+                الإجراء لدى: {responsibleLabel(request.status)}
               </p>
             </div>
             <div className="flex items-center gap-2">
-              {canCreate && actor?.user_id === request.created_by && ["draft", "returned"].includes(request.status) && (
-                <Button size="sm" variant="outline" onClick={() => onEdit(request)}>تعديل</Button>
+              {canCreate &&
+                onEdit &&
+                actor?.user_id === request.created_by &&
+                ["draft", "returned"].includes(request.status) && (
+                  <Button size="sm" variant="outline" onClick={() => onEdit(request)}>
+                    تعديل
+                  </Button>
               )}
-              {canCreate && actor?.user_id === request.created_by && request.status === "pending_planning" && (
-                <CancelRequest request={request} onDone={onRefresh} />
+              {canCreate &&
+                actor?.user_id === request.created_by &&
+                request.status === "pending_planning" &&
+                stage === "requests" && <CancelRequest request={request} onDone={onRefresh} />}
+              {stage === "requests" &&
+                canCreate &&
+                actor?.user_id === request.created_by &&
+                request.status === "draft" && <DeleteDraft request={request} onDone={onRefresh} />}
+              {stage === "requests" &&
+                canCreate &&
+                actor?.user_id === request.created_by &&
+                onDuplicate && (
+                  <Button size="sm" variant="outline" onClick={() => onDuplicate(request)}>
+                    <Copy className="ml-1 h-4 w-4" /> نسخ كطلب جديد
+                  </Button>
               )}
-              {canManage && !["draft", "pending_planning", "returned", "closed"].includes(request.status) && (
+              {canManage &&
+                !["draft", "pending_planning", "returned", "closed"].includes(request.status) && (
                 <CloseRequest request={request} onDone={onRefresh} />
               )}
               {actor?.roles.includes("admin") && request.status === "closed" && (
@@ -568,31 +1329,79 @@ function RequestList({ stage, requests, options, actor, canCreate, canPlan, canW
             </div>
           </CardHeader>
           <CardContent className="space-y-4 px-4 pb-4 pt-0">
+            {["returned", "rejected"].includes(request.status) &&
+              (() => {
+                const feedback = [...request.events]
+                  .reverse()
+                  .find((event) => ["planning_return", "planning_reject"].includes(event.action));
+                return feedback ? (
+                  <div
+                    role="alert"
+                    className={`rounded-md border p-3 text-sm ${request.status === "rejected" ? "border-destructive/40 bg-destructive/5 text-destructive" : "border-amber-500/40 bg-amber-50 text-amber-950 dark:bg-amber-950/20 dark:text-amber-100"}`}
+                  >
+                    <strong>
+                      {request.status === "returned"
+                        ? "ملاحظات التخطيط — يلزم تعديل الطلب"
+                        : "سبب رفض الطلب"}
+                    </strong>
+                    <p className="mt-1 whitespace-pre-wrap">
+                      {feedback.note || "لم تُسجل ملاحظات إضافية."}
+                    </p>
+                  </div>
+                ) : null;
+              })()}
             <div className="grid gap-2 sm:grid-cols-3">
-              <MiniStat label="مطلوب أصلاً" value={request.items.reduce((sum, item) => sum + Number(item.original_qty), 0)} />
-              <MiniStat label="مصروف من المخزن" value={request.items.reduce((sum, item) => sum + Number(item.issue_qty), 0)} />
-              <MiniStat label="مستلم فعلياً" value={request.items.reduce((sum, item) => sum + Number(item.received_qty), 0)} />
+              <MiniStat
+                label="مطلوب أصلاً"
+                value={request.items.reduce((sum, item) => sum + Number(item.original_qty), 0)}
+              />
+              <MiniStat
+                label="مصروف من المخزن"
+                value={request.items.reduce((sum, item) => sum + Number(item.issue_qty), 0)}
+              />
+              <MiniStat
+                label="مستلم فعلياً"
+                value={request.items.reduce((sum, item) => sum + Number(item.received_qty), 0)}
+              />
             </div>
             <div className="space-y-2">
               {request.items.map((item) => (
-                <RequestLine key={item.id} request={request} item={item} receipts={request.receipts as RequestReceipt[]} />
+                <RequestLine
+                  key={item.id}
+                  request={request}
+                  item={item}
+                  receipts={request.receipts as RequestReceipt[]}
+                />
               ))}
             </div>
-            {request.reason && <p className="rounded-md bg-muted/40 p-3 text-sm">{request.reason}</p>}
+            {request.reason && (
+              <p className="rounded-md bg-muted/40 p-3 text-sm">{request.reason}</p>
+            )}
             {stage === "planning" && canPlan && request.status === "pending_planning" && (
               <PlanningReview request={request} onDone={onRefresh} />
             )}
-            {stage === "warehouse" && canWarehouse && request.status === "pending_warehouse" && options && (
-              <WarehouseReview request={request} options={options} onDone={onRefresh} />
-            )}
-            {stage === "procurement" && canProcure && ["pending_procurement", "purchasing", "partially_received"].includes(request.status) && (
-              <ProcurementPanel request={request} onDone={onRefresh} />
-            )}
+            {stage === "warehouse" &&
+              canWarehouse &&
+              request.status === "pending_warehouse" &&
+              options && <WarehouseReview request={request} options={options} onDone={onRefresh} />}
+            {stage === "procurement" &&
+              canProcure &&
+              ["pending_procurement", "purchasing", "partially_received"].includes(
+                request.status,
+              ) && <ProcurementPanel request={request} onDone={onRefresh} />}
             {stage === "warehouse" && canWarehouse && options && (
               <ReceiptPanels request={request} options={options} onDone={onRefresh} />
             )}
-            {request.batches.length > 0 && <BatchHistory batches={request.batches as PurchaseBatch[]} canSend={stage === "procurement" && canProcure} onDone={onRefresh} />}
-            {request.receipts.length > 0 && <ReceiptHistory receipts={request.receipts as RequestReceipt[]} />}
+            {request.batches.length > 0 && (
+              <BatchHistory
+                batches={request.batches as PurchaseBatch[]}
+                canSend={stage === "procurement" && canProcure}
+                onDone={onRefresh}
+              />
+            )}
+            {request.receipts.length > 0 && (
+              <ReceiptHistory receipts={request.receipts as RequestReceipt[]} />
+            )}
             <AuditTimeline events={request.events} />
           </CardContent>
         </Card>
@@ -600,7 +1409,6 @@ function RequestList({ stage, requests, options, actor, canCreate, canPlan, canW
     </div>
   );
 }
-
 function MiniStat({ label, value }: { label: string; value: number }) {
   return <div className="flex justify-between gap-2 border-b py-1.5 text-xs"><span className="text-muted-foreground">{label}</span><b className="tabular-nums">{value}</b></div>;
 }
@@ -1041,7 +1849,27 @@ function CancelRequest({ request, onDone }: { request: MaterialRequest; onDone: 
     catch (error) { toast.error(error instanceof Error ? error.message : "تعذر إلغاء الطلب"); }
     finally { setBusy(false); }
   };
-  return <Button size="sm" variant="outline" disabled={busy} onClick={() => void submit()}>إلغاء</Button>;
+  return <Button size="sm" variant="outline" disabled={busy} onClick={() => {
+    if (window.confirm(`تأكيد إلغاء الطلب ${request.request_number}؟`)) void submit();
+  }}>إلغاء</Button>;
+}
+
+function DeleteDraft({ request, onDone }: { request: MaterialRequest; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const archive = async () => {
+    if (!window.confirm(`تأكيد أرشفة المسودة ${request.request_number}؟ لن تظهر بعد ذلك في قائمتك، وسيبقى سجل التدقيق محفوظاً.`)) return;
+    setBusy(true);
+    try {
+      await deleteMaterialRequestDraft({ data: { request_id: request.id } });
+      toast.success("تمت أرشفة المسودة وحفظ سجل التدقيق");
+      onDone();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "تعذرت أرشفة المسودة");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return <Button size="sm" variant="destructive" disabled={busy} onClick={() => void archive()}><Trash2 className="ml-1 h-4 w-4" /> أرشفة المسودة</Button>;
 }
 
 function EmptyRequests({ text }: { text: string }) {

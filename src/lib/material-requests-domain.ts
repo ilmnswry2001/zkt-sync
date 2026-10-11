@@ -12,6 +12,29 @@ export type MaterialRequestStatus =
   | "closed"
   | "cancelled";
 
+export const MATERIAL_REQUESTER_ROLES = [
+  "engineer",
+  "department_manager",
+  "supervisor",
+  "site_admin",
+] as const;
+
+export function canAccessMaterialRequests(roles: string[], companyManager = false) {
+  return (
+    companyManager ||
+    roles.includes("admin") ||
+    roles.some((role) =>
+      MATERIAL_REQUESTER_ROLES.includes(role as (typeof MATERIAL_REQUESTER_ROLES)[number]),
+    )
+  );
+}
+
+export function canCreateMaterialRequests(roles: string[]) {
+  return roles.some((role) =>
+    MATERIAL_REQUESTER_ROLES.includes(role as (typeof MATERIAL_REQUESTER_ROLES)[number]),
+  );
+}
+
 export type MaterialRequestItemState =
   | "pending"
   | "issue_from_stock"
@@ -63,7 +86,9 @@ export function receiptStatus(
   received: number,
   receivedNow: number,
 ): MaterialRequestItemState {
-  if ([approved, issue, received, receivedNow].some((value) => !Number.isFinite(value) || value < 0)) {
+  if (
+    [approved, issue, received, receivedNow].some((value) => !Number.isFinite(value) || value < 0)
+  ) {
     throw new Error("كميات الاستلام يجب أن تكون أرقاماً غير سالبة");
   }
   if (issue + received + receivedNow > approved) {
@@ -99,6 +124,9 @@ const allowedTransitions: Record<MaterialRequestStatus, MaterialRequestStatus[]>
   cancelled: ["closed"],
 };
 
-export function canTransitionMaterialRequest(from: MaterialRequestStatus, to: MaterialRequestStatus) {
+export function canTransitionMaterialRequest(
+  from: MaterialRequestStatus,
+  to: MaterialRequestStatus,
+) {
   return allowedTransitions[from].includes(to);
 }
