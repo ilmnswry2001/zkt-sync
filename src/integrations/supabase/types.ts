@@ -155,6 +155,73 @@ export type Database = {
           },
         ]
       }
+      attendance_push_reminders: {
+        Row: {
+          employee_id: string
+          id: string
+          reminder_date: string
+          reminder_type: string
+          sent_at: string
+        }
+        Insert: {
+          employee_id: string
+          id?: string
+          reminder_date: string
+          reminder_type: string
+          sent_at?: string
+        }
+        Update: {
+          employee_id?: string
+          id?: string
+          reminder_date?: string
+          reminder_type?: string
+          sent_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_push_reminders_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      attendance_push_subscriptions: {
+        Row: {
+          employee_id: string
+          endpoint: string
+          id: string
+          subscription: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          employee_id: string
+          endpoint: string
+          id?: string
+          subscription: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          employee_id?: string
+          endpoint?: string
+          id?: string
+          subscription?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_push_subscriptions_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attendance_suspicious_attempts: {
         Row: {
           attempted_at: string
@@ -257,6 +324,44 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      device_sync_keys: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          device_id: string
+          id: string
+          key_hash: string
+          key_prefix: string
+          revoked_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          device_id: string
+          id?: string
+          key_hash: string
+          key_prefix: string
+          revoked_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          device_id?: string
+          id?: string
+          key_hash?: string
+          key_prefix?: string
+          revoked_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_sync_keys_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       devices: {
         Row: {
@@ -2139,6 +2244,50 @@ export type Database = {
           },
         ]
       }
+      sync_batches: {
+        Row: {
+          device_id: string
+          duplicate_count: number
+          error_count: number
+          error_details: Json
+          id: string
+          inserted_count: number
+          received_at: string
+          record_count: number
+          unmatched_count: number
+        }
+        Insert: {
+          device_id: string
+          duplicate_count?: number
+          error_count?: number
+          error_details?: Json
+          id?: string
+          inserted_count?: number
+          received_at?: string
+          record_count?: number
+          unmatched_count?: number
+        }
+        Update: {
+          device_id?: string
+          duplicate_count?: number
+          error_count?: number
+          error_details?: Json
+          id?: string
+          inserted_count?: number
+          received_at?: string
+          record_count?: number
+          unmatched_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_batches_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_checklist_items: {
         Row: {
           completed_at: string | null
@@ -2698,6 +2847,10 @@ export type Database = {
         Args: { _department_id: string; _user_id: string }
         Returns: boolean
       }
+      can_access_employee_penalty: {
+        Args: { _employee_id: string }
+        Returns: boolean
+      }
       can_access_work_task: { Args: { _task_id: string }; Returns: boolean }
       can_manage_stock: { Args: { _uid: string }; Returns: boolean }
       can_manage_work_task: { Args: { _task_id: string }; Returns: boolean }
@@ -2719,6 +2872,10 @@ export type Database = {
       }
       current_employee_id: { Args: never; Returns: string }
       employee_user_id: { Args: { _employee_id: string }; Returns: string }
+      execute_absence_penalty: {
+        Args: { _penalty_id: string }
+        Returns: undefined
+      }
       generate_recurring_tasks: {
         Args: { _from: string; _to: string }
         Returns: number
@@ -2901,10 +3058,15 @@ export type Database = {
       normalize_ar_name: { Args: { _s: string }; Returns: string }
       record_mobile_self_attendance: {
         Args: {
+          p_accuracy_meters?: number
+          p_client_event_id?: string
+          p_client_recorded_at?: string
           p_device_info?: Json
           p_event_type: string
           p_latitude: number
           p_longitude: number
+          p_selfie_path?: string
+          p_submitted_offline?: boolean
         }
         Returns: {
           distance_meters: number
