@@ -200,12 +200,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       )}
       <aside
         className={cn(
-          "app-sidebar fixed inset-y-0 right-0 z-40 flex w-[min(19rem,88vw)] shrink-0 flex-col overflow-hidden border-l border-sidebar-border bg-sidebar text-sidebar-foreground shadow-2xl transition-transform duration-300 md:sticky md:top-0 md:h-screen md:w-64 md:translate-x-0 md:shadow-none",
+          "app-sidebar fixed inset-y-0 right-0 z-40 flex w-[min(19rem,88vw)] shrink-0 flex-col overflow-hidden border-l border-white/45 bg-white/75 text-sidebar-foreground shadow-2xl shadow-slate-950/15 backdrop-blur-2xl backdrop-saturate-150 transition-transform duration-300 dark:border-white/10 dark:bg-slate-950/75 md:sticky md:top-0 md:h-screen md:w-64 md:translate-x-0 md:shadow-xl md:shadow-slate-950/10",
           sidebarOpen ? "translate-x-0" : "translate-x-full md:w-0 md:border-0",
         )}
         aria-hidden={!sidebarOpen}
       >
-        <div className="relative border-b border-sidebar-border/80 bg-gradient-to-bl from-teal-500/10 via-sidebar to-sidebar p-5 flex items-center justify-between min-w-64">
+        <div className="relative border-b border-white/40 bg-gradient-to-bl from-teal-400/15 via-white/10 to-transparent p-5 flex items-center justify-between min-w-64 dark:border-white/10 dark:via-white/[0.03]">
           <div className="flex items-center gap-3">
             <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-300 to-cyan-500 shadow-lg shadow-teal-950/25 ring-1 ring-white/20">
               <Fingerprint className="h-6 w-6 text-slate-950" />
@@ -234,7 +234,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 rounded-lg text-sidebar-foreground/65 hover:bg-white/10 hover:text-white"
+              className="h-8 w-8 rounded-lg text-sidebar-foreground/65 hover:bg-black/[0.05] hover:text-sidebar-foreground dark:hover:bg-white/10"
               onClick={() =>
                 isEditingWorkspaceName ? saveWorkspaceName() : setIsEditingWorkspaceName(true)
               }
@@ -246,7 +246,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 rounded-lg text-sidebar-foreground/65 hover:bg-white/10 hover:text-white"
+              className="h-8 w-8 rounded-lg text-sidebar-foreground/65 hover:bg-black/[0.05] hover:text-sidebar-foreground dark:hover:bg-white/10"
               onClick={toggleSidebar}
               title="إخفاء اللوحة الجانبية"
               aria-label="إخفاء اللوحة الجانبية"
@@ -333,7 +333,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   "group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-[13px] font-semibold transition-all duration-200",
                   active
                     ? "bg-gradient-to-l from-teal-300 to-cyan-400 text-slate-950 shadow-md shadow-black/15 ring-1 ring-white/20"
-                    : "text-sidebar-foreground/70 hover:translate-x-[-2px] hover:bg-white/[0.07] hover:text-white",
+                    : "text-sidebar-foreground/70 hover:translate-x-[-2px] hover:bg-black/[0.04] hover:text-sidebar-foreground dark:hover:bg-white/[0.07]",
                 )}
               >
                 <Icon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
