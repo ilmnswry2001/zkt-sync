@@ -8,7 +8,6 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  BarChart3,
   CheckCircle2,
   ClipboardList,
   Loader2,
@@ -20,9 +19,11 @@ import {
   WalletCards,
 } from "lucide-react";
 import { toast } from "sonner";
+import { getDefaultWage } from "@/lib/wage-defaults";
+import { todayInBaghdad } from "@/lib/date-time";
 
 export const Route = createFileRoute("/_authenticated/projects")({
-  head: () => ({ meta: [{ title: "تكلفة المواقع اليومية" }] }),
+  head: () => ({ meta: [{ title: "تكلفة المشاريع" }] }),
   beforeLoad: async () => {
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) throw redirect({ to: "/auth" });
@@ -45,11 +46,18 @@ type ProjectLine = {
   item_name: string;
   total_count: number;
 };
-type WageRate = { title: string; daily_rate: number; currency: string };
-type ProjectPlan = { id: string; site_id: string; status: string; specialties: unknown };
+type WageRate = { title: string; daily_rate: number; monthly_rate: number; currency: string };
+type PlanSpecialty = { specialty: string; quantity: number };
+type ProjectPlan = {
+  id: string;
+  site_id: string;
+  status: string;
+  specialties: PlanSpecialty[];
+  final_plan: { specialties?: PlanSpecialty[] } | null;
+  request_date: string;
+};
 
-const isoDate = (value: Date) => value.toISOString().slice(0, 10);
-const today = isoDate(new Date());
+const today = todayInBaghdad();
 
 function StatCard({
   title,
@@ -91,10 +99,15 @@ function ProjectsPage() {
           .eq("report_date", reportDate)
           .order("site_id")
           .limit(500),
-        supabase.from("wage_rates").select("title, daily_rate, currency").order("title").limit(500),
+        supabase
+          .from("wage_rates")
+          .select("title, daily_rate, monthly_rate, currency")
+          .order("title")
+          .limit(500),
         supabase
           .from("site_work_plans")
-          .select("id, site_id, status, specialties")
+          .select("id, site_id, status, specialties, final_plan, request_date")
+          .eq("status", "finalized")
           .order("request_date", { ascending: false })
           .limit(1000),
       ]);
@@ -149,6 +162,13 @@ function ProjectsPage() {
     }
     return grouped;
   }, [data.lines]);
+  const finalPlanByProject = useMemo(() => {
+    const grouped = new Map<string, ProjectPlan>();
+    for (const plan of data.plans) {
+      if (!grouped.has(plan.site_id)) grouped.set(plan.site_id, plan);
+    }
+    return grouped;
+  }, [data.plans]);
   const visibleProjects = useMemo(
     () =>
       selectedProjectId === "all"
@@ -171,15 +191,42 @@ function ProjectsPage() {
         const specialtyCosts = workerLines.map((line) => {
           const count = Number(line.total_count || 0);
           const wage = wageByTitle.get(line.item_name.trim());
+          const fallback = getDefaultWage(line.item_name);
+          const dailyRate =
+            Number(wage?.daily_rate) > 0
+              ? Number(wage.daily_rate)
+              : Number(wage?.monthly_rate) > 0
+                ? Number(wage.monthly_rate) / 26
+                : fallback.daily_rate;
           return {
             name: line.item_name,
             count,
-            dailyRate: Number(wage?.daily_rate ?? 0),
-            cost: count * Number(wage?.daily_rate ?? 0),
+            dailyRate,
+            cost: count * dailyRate,
             hasRate: Boolean(wage),
+            usedDefault: !wage && fallback.daily_rate > 0,
           };
         });
         const siteDailyCost = specialtyCosts.reduce((sum, item) => sum + item.cost, 0);
+        const plan = finalPlanByProject.get(project.id);
+        const plannedSpecialties = plan?.final_plan?.specialties?.length
+          ? plan.final_plan.specialties
+          : (plan?.specialties ?? []);
+        const plannedSpecialtyCosts = plannedSpecialties.map((item) => {
+          const wage = wageByTitle.get(item.specialty.trim());
+          const fallback = getDefaultWage(item.specialty);
+          const dailyRate =
+            Number(wage?.daily_rate) > 0
+              ? Number(wage.daily_rate)
+              : Number(wage?.monthly_rate) > 0
+                ? Number(wage.monthly_rate) / 26
+                : fallback.daily_rate;
+          return {
+            name: item.specialty,
+            count: Number(item.quantity || 0),
+            cost: Number(item.quantity || 0) * dailyRate,
+          };
+        });
         return {
           project,
           report,
@@ -188,9 +235,13 @@ function ProjectsPage() {
           equipmentTotal,
           specialtyCosts,
           siteDailyCost,
+          plan,
+          plannedSpecialtyCosts,
+          plannedWorkerTotal: plannedSpecialtyCosts.reduce((sum, item) => sum + item.count, 0),
+          plannedDailyCost: plannedSpecialtyCosts.reduce((sum, item) => sum + item.cost, 0),
         };
       }),
-    [linesByReport, reportByProject, visibleProjects, wageByTitle],
+    [finalPlanByProject, linesByReport, reportByProject, visibleProjects, wageByTitle],
   );
   const workerSpecialties = useMemo(
     () =>
@@ -228,17 +279,11 @@ function ProjectsPage() {
       sum + card.specialtyCosts.filter((item) => item.count > 0 && !item.hasRate).length,
     0,
   );
-  const planStats = useMemo(
-    () => ({
-      total: data.plans.length,
-      requested: data.plans.filter((plan) => plan.status === "requested").length,
-      inProgress: data.plans.filter(
-        (plan) => plan.status === "planning_approved" || plan.status === "management_review",
-      ).length,
-      finalized: data.plans.filter((plan) => plan.status === "finalized").length,
-    }),
-    [data.plans],
-  );
+  const comparableProjects = projectCards.filter((card) => card.plan && card.report);
+  const plannedDailyCost = comparableProjects.reduce((sum, card) => sum + card.plannedDailyCost, 0);
+  const comparableDailyCost = comparableProjects.reduce((sum, card) => sum + card.siteDailyCost, 0);
+  const dailyCostVariance = comparableDailyCost - plannedDailyCost;
+  const sitesWithFinalPlan = projectCards.filter((card) => card.plan).length;
 
   const refresh = async () => {
     await query.refetch();
@@ -254,9 +299,9 @@ function ProjectsPage() {
             <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-teal-100">
               <WalletCards className="h-4 w-4" /> لوحة التكاليف والتقارير اليومية
             </div>
-            <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">تكلفة المواقع اليومية</h1>
+            <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">تكلفة المشاريع</h1>
             <p className="mt-2 max-w-xl text-sm leading-6 text-white/70 sm:text-base">
-              تابع توزيع العاملين والآليات وتكلفتهم اليومية لكل موقع.
+              قارن العمالة المعتمدة في الخطة النهائية بالواقع المسجل في التقارير اليومية لكل مشروع.
             </p>
           </div>
           <Button
@@ -346,37 +391,47 @@ function ProjectsPage() {
       <Card className="border-primary/20">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
-            <ClipboardList className="h-5 w-5 text-primary" /> إحصائيات خطط المشاريع
+            <WalletCards className="h-5 w-5 text-primary" /> مقارنة التكلفة المخططة والمنفذة —{" "}
+            {reportDate}
           </CardTitle>
+          <p className="text-xs text-muted-foreground">
+            تقارن الخطة النهائية بتقرير اليوم للمشاريع التي يتوفر لها الاثنان (
+            {comparableProjects.length}). تتوفر خطة نهائية لـ {sitesWithFinalPlan} من أصل{" "}
+            {projectCards.length} مشاريع.
+          </p>
         </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-3 p-4 md:grid-cols-4">
+        <CardContent className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-3">
           <StatCard
-            title="إجمالي الخطط"
-            value={planStats.total}
+            title="التكلفة المخططة للعمالة"
+            value={`${plannedDailyCost.toLocaleString("ar-IQ")} د.ع`}
             icon={ClipboardList}
-            tone="bg-primary"
+            tone="bg-sky-700"
           />
           <StatCard
-            title="خطط مرسلة"
-            value={planStats.requested}
-            icon={BarChart3}
-            tone="bg-amber-600"
+            title="المنفذة في المشاريع المقارنة"
+            value={`${comparableDailyCost.toLocaleString("ar-IQ")} د.ع`}
+            icon={WalletCards}
+            tone="bg-rose-600"
           />
           <StatCard
-            title="قيد الاعتماد والتوزيع"
-            value={planStats.inProgress}
-            icon={ClipboardList}
-            tone="bg-sky-600"
-          />
-          <StatCard
-            title="خطط نهائية"
-            value={planStats.finalized}
-            icon={CheckCircle2}
-            tone="bg-emerald-600"
+            title={
+              comparableProjects.length
+                ? dailyCostVariance > 0
+                  ? "تجاوز عن الخطة"
+                  : "أقل من الخطة"
+                : "لا توجد مقارنة متاحة"
+            }
+            value={
+              comparableProjects.length
+                ? `${Math.abs(dailyCostVariance).toLocaleString("ar-IQ")} د.ع`
+                : "—"
+            }
+            icon={dailyCostVariance > 0 ? TriangleAlert : CheckCircle2}
+            tone={dailyCostVariance > 0 ? "bg-amber-600" : "bg-emerald-600"}
           />
         </CardContent>
       </Card>
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <StatCard
           title="إجمالي الآليات والمركبات"
           value={equipmentTotal}
@@ -389,31 +444,105 @@ function ProjectsPage() {
           icon={ClipboardList}
           tone="bg-teal-600"
         />
-        <StatCard
-          title="تكلفة العاملين اليومية"
-          value={`${companyDailyCost.toLocaleString()} د.ع`}
-          icon={WalletCards}
-          tone="bg-rose-600"
-        />
       </div>
       {missingWageCount > 0 && (
         <Card className="border-amber-400/50 bg-amber-50/50 dark:bg-amber-950/20">
           <CardContent className="p-4 text-sm text-amber-900 dark:text-amber-200">
-            توجد {missingWageCount} تخصصات لها أعداد مسجلة دون أجر يومي. افتح قسم الأجور والمكافآت
-            ثم اضغط «تهيئة الأجور الافتراضية» أو أضف الأجر يدوياً.
+            توجد {missingWageCount} تخصصات بلا أجر مسجل؛ احتُسبت تكلفتها بالسعر الافتراضي عند توفره.
+            حدّث قيمتها من قسم الأجور لتحسين دقة المقارنة.
           </CardContent>
         </Card>
       )}
 
       <Card>
         <CardHeader>
-          <CardTitle>تقارير المشاريع اليومية — {reportDate}</CardTitle>
+          <CardTitle>التكلفة والتشغيل حسب المشروع — {reportDate}</CardTitle>
         </CardHeader>
         <CardContent>
           {query.isLoading ? (
             <p className="py-8 text-center text-muted-foreground">جارٍ تحميل تقارير المشاريع...</p>
           ) : projectCards.length ? (
             <div dir="rtl" className="space-y-6">
+              <div>
+                <h3 className="mb-3 text-base font-semibold">مقارنة التكلفة حسب المشروع</h3>
+                <div className="overflow-x-auto rounded-xl border">
+                  <table className="min-w-[780px] w-full text-sm">
+                    <thead className="bg-muted/60">
+                      <tr className="border-b text-right">
+                        <th className="px-4 py-3 font-semibold">المشروع</th>
+                        <th className="px-4 py-3 text-center font-semibold">الخطة النهائية</th>
+                        <th className="px-4 py-3 text-center font-semibold">العمالة المخططة</th>
+                        <th className="px-4 py-3 text-center font-semibold">العمالة الفعلية</th>
+                        <th className="px-4 py-3 text-center font-semibold">الفرق</th>
+                        <th className="px-4 py-3 text-center font-semibold">التقرير اليومي</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {projectCards.map((card) => {
+                        const variance = card.siteDailyCost - card.plannedDailyCost;
+                        return (
+                          <tr
+                            key={card.project.id}
+                            className="border-b last:border-0 hover:bg-muted/30"
+                          >
+                            <th className="px-4 py-3 text-right font-medium">
+                              {card.project.name}
+                              <span className="mr-2 text-xs text-muted-foreground">
+                                CTR {card.project.ctr_code}
+                              </span>
+                            </th>
+                            <td className="px-4 py-3 text-center">
+                              {card.plan ? (
+                                <Badge className="bg-emerald-600">نهائية</Badge>
+                              ) : (
+                                <Badge variant="outline">غير متوفرة</Badge>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-center tabular-nums">
+                              {card.plan ? (
+                                <>
+                                  <b>{card.plannedWorkerTotal}</b>
+                                  <span className="block text-xs text-muted-foreground">
+                                    {card.plannedDailyCost.toLocaleString("ar-IQ")} د.ع/يوم
+                                  </span>
+                                </>
+                              ) : (
+                                "—"
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-center tabular-nums">
+                              {card.report ? (
+                                <>
+                                  <b>{card.workerTotal}</b>
+                                  <span className="block text-xs text-muted-foreground">
+                                    {card.siteDailyCost.toLocaleString("ar-IQ")} د.ع/يوم
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="text-muted-foreground">لا يوجد تقرير</span>
+                              )}
+                            </td>
+                            <td
+                              className={`px-4 py-3 text-center font-semibold tabular-nums ${variance > 0 ? "text-amber-700 dark:text-amber-300" : "text-emerald-700 dark:text-emerald-300"}`}
+                            >
+                              {card.plan && card.report
+                                ? `${variance > 0 ? "+" : "−"}${Math.abs(variance).toLocaleString("ar-IQ")} د.ع`
+                                : "—"}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              {card.report ? (
+                                <Badge>مرفوع</Badge>
+                              ) : (
+                                <Badge variant="destructive">لم يرفع</Badge>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
               <div className="overflow-x-auto rounded-xl border">
                 <table className="min-w-[760px] w-full text-sm">
                   <thead className="bg-muted/60">
@@ -475,7 +604,9 @@ function ProjectsPage() {
                                   >
                                     {item.hasRate
                                       ? `${item.cost.toLocaleString()} د.ع`
-                                      : "لا يوجد أجر"}
+                                      : item.usedDefault
+                                        ? `${item.cost.toLocaleString()} د.ع (افتراضي)`
+                                        : "لا يوجد أجر"}
                                   </div>
                                 </>
                               ) : (
