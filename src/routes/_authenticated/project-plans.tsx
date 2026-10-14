@@ -49,7 +49,6 @@ import {
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
-import { createWageRateTitleMap, getEmployeeSiteCost } from "@/lib/site-costs";
 import { getDefaultWage } from "@/lib/wage-defaults";
 import {
   appendStaffNames,
@@ -354,51 +353,16 @@ export function PlanningPage() {
       return data ?? [];
     },
   });
-  const { data: costData = { employees: [], rates: [] } } = useQuery({
-    queryKey: ["site-employee-costs"],
+  const { data: wageRates = [] } = useQuery({
+    queryKey: ["work-plan-wage-rates"],
     queryFn: async () => {
-      const [employeesResult, ratesResult] = await Promise.all([
-        (supabase as any)
-          .from("employees")
-          .select(
-            "id, site_id, position, wage_rate_id, base_salary, wage_rates(title, monthly_rate, daily_rate, currency)",
-          )
-          .eq("status", "active"),
-        supabase.from("wage_rates").select("title, monthly_rate, daily_rate, currency"),
-      ]);
-      if (employeesResult.error) throw employeesResult.error;
-      if (ratesResult.error) throw ratesResult.error;
-      return {
-        employees: (employeesResult.data ?? []) as any[],
-        rates: (ratesResult.data ?? []) as any[],
-      };
+      const { data, error } = await supabase
+        .from("wage_rates")
+        .select("title, monthly_rate, daily_rate, currency");
+      if (error) throw error;
+      return data ?? [];
     },
   });
-  const siteEmployees = costData.employees;
-  const siteSummary = useMemo(() => {
-    const result: Record<
-      string,
-      { employees: number; monthly: number; daily: number; specialties: Record<string, number> }
-    > = {};
-    const wagesByTitle = createWageRateTitleMap(costData.rates);
-    for (const employee of siteEmployees) {
-      if (!employee.site_id) continue;
-      const { monthly, daily, specialty } = getEmployeeSiteCost(employee, wagesByTitle);
-      const current = result[employee.site_id] ?? {
-        employees: 0,
-        monthly: 0,
-        daily: 0,
-        specialties: {},
-      };
-      current.employees += 1;
-      current.monthly += monthly;
-      current.daily += daily;
-      current.specialties[specialty] = (current.specialties[specialty] ?? 0) + 1;
-      result[employee.site_id] = current;
-    }
-    return result;
-  }, [costData.rates, siteEmployees]);
-  const totalMonthly = Object.values(siteSummary).reduce((sum, item) => sum + item.monthly, 0);
 
   const [activeWorkPlanTab, setActiveWorkPlanTab] = useState<WorkPlanTab>(
     isEngineer ? "request" : "management",
@@ -564,7 +528,7 @@ export function PlanningPage() {
     0,
   );
   const estimatedPlanCost = selectedSpecialties.reduce((sum, item) => {
-    const rate = costData.rates.find((entry: any) => entry.title?.trim() === item.specialty.trim());
+    const rate = wageRates.find((entry: any) => entry.title?.trim() === item.specialty.trim());
     const defaults = getDefaultWage(item.specialty);
     const dailyRate =
       Number(rate?.daily_rate) > 0

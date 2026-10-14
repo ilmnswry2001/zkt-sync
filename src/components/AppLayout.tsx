@@ -15,7 +15,6 @@ import {
   Truck,
   FileSignature,
   FileWarning,
-  BarChart3,
   Settings2,
   PanelRightClose,
   PanelRightOpen,
@@ -61,13 +60,13 @@ const nav = [
   { to: "/work-center", label: "مركز العمل", icon: ListChecks },
   { to: "/leaves", label: "إدارة الإجازات", icon: CalendarCheck2, access: "leave" },
   { to: "/team-follow-up", label: "متابعة الفريق", icon: Users },
-  { to: "/projects", label: "تكلفة المواقع اليومية", icon: Wallet, access: "hr" },
+  { to: "/projects", label: "تكلفة المشاريع", icon: Wallet, access: "hr" },
   { to: "/monthly", label: "التقرير الشهري", icon: CalendarDays },
   { to: "/forms", label: "الاستمارات الإلكترونية", icon: FileSignature },
   { to: "/penalties", label: "العقوبات والتغييب", icon: FileWarning },
   { to: "/employees", label: "الموظفون", icon: Users },
   { to: "/departments", label: "الأقسام", icon: Building2 },
-  { to: "/planning", label: "الخطط وتكلفة المشاريع", icon: BarChart3, access: "planning" },
+  { to: "/planning", label: "الخطط", icon: ClipboardList, access: "planning" },
   { to: "/requests", label: "الطلبات", icon: ClipboardList, access: "requests" },
   { to: "/sites", label: "المواقع", icon: MapPinned, access: "planning" },
   { to: "/wages", label: "الأجور", icon: Wallet, access: "hr" },
@@ -187,7 +186,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   };
 
   const currentPage = nav.find(
-    (item) => pathname === item.to || pathname.startsWith(item.to + "/"),
+    (item) =>
+      pathname === item.to ||
+      pathname.startsWith(item.to + "/") ||
+      (item.to === "/planning" && pathname === "/project-plans"),
   );
   return (
     <div dir="rtl" className="app-shell flex min-h-screen bg-background">
@@ -256,8 +258,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </Button>
           </div>
         </div>
-        <nav aria-label="التنقل الرئيسي" className="flex-1 space-y-1.5 overflow-y-auto p-3.5 min-w-64">
-          <p className="px-3 pb-1 pt-2 text-[10px] font-bold tracking-[0.16em] text-sidebar-foreground/40">القائمة الرئيسية</p>
+        <nav
+          aria-label="التنقل الرئيسي"
+          className="flex-1 space-y-1.5 overflow-y-auto p-3.5 min-w-64"
+        >
+          <p className="px-3 pb-1 pt-2 text-[10px] font-bold tracking-[0.16em] text-sidebar-foreground/40">
+            القائمة الرئيسية
+          </p>
           {nav.map((item) => {
             if (!canAccessSection(item.to)) return null;
             if ("access" in item && item.access === "admin" && !isAdmin) return null;
@@ -280,7 +287,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               !isAdmin &&
               !isHR &&
               !isCompanyManager &&
-              !roles.some((role) => ["supervisor", "department_manager", "planning_officer", "engineer", "site_admin"].includes(role))
+              !roles.some((role) =>
+                [
+                  "supervisor",
+                  "department_manager",
+                  "planning_officer",
+                  "engineer",
+                  "site_admin",
+                ].includes(role),
+              )
             )
               return null;
             if (
@@ -405,8 +420,19 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     </div>
                     <div className="mt-1 truncate text-xs text-muted-foreground">{user?.email}</div>
                     <div className="mt-2 flex flex-wrap gap-1">
-                      {isAdmin && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">مدير النظام</span>}
-                      {roles.map((role) => <span key={role} className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{role}</span>)}
+                      {isAdmin && (
+                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
+                          مدير النظام
+                        </span>
+                      )}
+                      {roles.map((role) => (
+                        <span
+                          key={role}
+                          className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground"
+                        >
+                          {role}
+                        </span>
+                      ))}
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />

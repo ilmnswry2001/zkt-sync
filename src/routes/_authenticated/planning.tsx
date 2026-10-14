@@ -50,7 +50,6 @@ import {
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
-import { createWageRateTitleMap, getEmployeeSiteCost } from "@/lib/site-costs";
 import { getDefaultWage } from "@/lib/wage-defaults";
 import {
   appendStaffNames,
@@ -65,27 +64,42 @@ export const Route = createFileRoute("/_authenticated/planning")({
     const { data: auth } = await supabase.auth.getUser();
     if (!auth.user) throw redirect({ to: "/auth" });
     const [{ data, error }, companyResult] = await Promise.all([
+      supabase.from("user_roles").select("role").eq("user_id", auth.user.id),
       supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", auth.user.id),
-      supabase.from("form_role_assignments").select("role").eq("user_id", auth.user.id).eq("role", "ceo"),
+        .from("form_role_assignments")
+        .select("role")
+        .eq("user_id", auth.user.id)
+        .eq("role", "ceo"),
     ]);
     if (error || companyResult.error) throw redirect({ to: "/attendance" });
     const roles = new Set<string>((data ?? []).map((row) => row.role));
     const companyManager = (companyResult.data?.length ?? 0) > 0;
-    if (!companyManager && !["admin", "hr", "supervisor", "department_manager", "planning_officer", "engineer", "site_admin"].some((role) => roles.has(role)))
+    if (
+      !companyManager &&
+      ![
+        "admin",
+        "hr",
+        "supervisor",
+        "department_manager",
+        "planning_officer",
+        "engineer",
+        "site_admin",
+      ].some((role) => roles.has(role))
+    )
       throw redirect({ to: "/attendance" });
   },
   head: () => ({
     meta: [
-      { title: "التخطيط — مواقع العمل وأكواد التكلفة" },
+      { title: "الخطط | منظومة زِكت" },
       {
         name: "description",
-        content: "إنشاء مواقع العمل وتحديد كود التكلفة CTR لكل موقع وربط الموظفين به.",
+        content: "إعداد خطط المشاريع واعتماد الاحتياج وتوزيع الكوادر.",
       },
-      { property: "og:title", content: "التخطيط — مواقع العمل وأكواد التكلفة" },
-      { property: "og:description", content: "إدارة مواقع العمل وأكواد التكلفة CTR." },
+      { property: "og:title", content: "الخطط | منظومة زِكت" },
+      {
+        property: "og:description",
+        content: "إعداد خطط المشاريع واعتماد الاحتياج وتوزيع الكوادر.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -363,51 +377,16 @@ function PlanningPage() {
       return data ?? [];
     },
   });
-  const { data: costData = { employees: [], rates: [] } } = useQuery({
-    queryKey: ["site-employee-costs"],
+  const { data: wageRates = [] } = useQuery({
+    queryKey: ["work-plan-wage-rates"],
     queryFn: async () => {
-      const [employeesResult, ratesResult] = await Promise.all([
-        (supabase as any)
-          .from("employees")
-          .select(
-            "id, site_id, position, wage_rate_id, base_salary, wage_rates(title, monthly_rate, daily_rate, currency)",
-          )
-          .eq("status", "active"),
-        supabase.from("wage_rates").select("title, monthly_rate, daily_rate, currency"),
-      ]);
-      if (employeesResult.error) throw employeesResult.error;
-      if (ratesResult.error) throw ratesResult.error;
-      return {
-        employees: (employeesResult.data ?? []) as any[],
-        rates: (ratesResult.data ?? []) as any[],
-      };
+      const { data, error } = await supabase
+        .from("wage_rates")
+        .select("title, monthly_rate, daily_rate, currency");
+      if (error) throw error;
+      return data ?? [];
     },
   });
-  const siteEmployees = costData.employees;
-  const siteSummary = useMemo(() => {
-    const result: Record<
-      string,
-      { employees: number; monthly: number; daily: number; specialties: Record<string, number> }
-    > = {};
-    const wagesByTitle = createWageRateTitleMap(costData.rates);
-    for (const employee of siteEmployees) {
-      if (!employee.site_id) continue;
-      const { monthly, daily, specialty } = getEmployeeSiteCost(employee, wagesByTitle);
-      const current = result[employee.site_id] ?? {
-        employees: 0,
-        monthly: 0,
-        daily: 0,
-        specialties: {},
-      };
-      current.employees += 1;
-      current.monthly += monthly;
-      current.daily += daily;
-      current.specialties[specialty] = (current.specialties[specialty] ?? 0) + 1;
-      result[employee.site_id] = current;
-    }
-    return result;
-  }, [costData.rates, siteEmployees]);
-  const totalMonthly = Object.values(siteSummary).reduce((sum, item) => sum + item.monthly, 0);
 
   const [activeWorkPlanTab, setActiveWorkPlanTab] = useState<WorkPlanTab>("requested");
   const [requestSiteId, setRequestSiteId] = useState<string>(sites[0]?.id ?? "");
@@ -572,7 +551,7 @@ function PlanningPage() {
     0,
   );
   const estimatedPlanCost = selectedSpecialties.reduce((sum, item) => {
-    const rate = costData.rates.find((entry: any) => entry.title?.trim() === item.specialty.trim());
+    const rate = wageRates.find((entry: any) => entry.title?.trim() === item.specialty.trim());
     const defaults = getDefaultWage(item.specialty);
     const dailyRate =
       Number(rate?.daily_rate) > 0
@@ -1137,14 +1116,11 @@ function PlanningPage() {
         <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-end">
           <div className="max-w-2xl">
             <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-100/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-emerald-100">
-              <Banknote className="h-4 w-4" /> مركز المراجعة والاعتماد
+              <Banknote className="h-4 w-4" /> مراجعة واعتماد الخطط
             </div>
-            <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
-              الخطط وتكلفة المشاريع
-            </h1>
+            <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">الخطط</h1>
             <p className="mt-2 text-sm leading-7 text-white/70 sm:text-base">
-              راجع احتياج كل مشروع واعتمد تكلفته. بعد الموافقة، تعود الخطة إلى «خطط المشاريع» لتوزيع
-              الكوادر.
+              راجع احتياج المشروع واعتمد الكميات، ثم وزّع الكوادر على الخطة التنفيذية.
             </p>
           </div>
           <Button
@@ -1176,8 +1152,8 @@ function PlanningPage() {
               tone: "text-sky-200",
             },
             {
-              label: "التكلفة الشهرية الحالية",
-              value: `${totalMonthly.toLocaleString("ar-IQ")} د.ع`,
+              label: "خطط نهائية",
+              value: finalPlans.length.toLocaleString("ar-IQ"),
               tone: "text-emerald-200",
             },
           ].map((item) => (
@@ -1239,43 +1215,6 @@ function PlanningPage() {
         >
           <Plus className="h-6 w-6" />
         </Button>
-      )}
-
-      {!isEngineer && (
-        <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-3">
-          <Card className="min-w-[250px] snap-start sm:min-w-0">
-            <CardContent className="flex items-center gap-3 p-3 sm:p-4">
-              <div className="rounded-xl bg-primary p-3">
-                <Users className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">إجمالي الموظفين بالمواقع</p>
-                <p className="text-2xl font-bold">
-                  {Object.values(siteSummary).reduce((sum, item) => sum + item.employees, 0)}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="min-w-[250px] snap-start sm:min-w-0">
-            <CardContent className="flex items-center gap-3 p-3 sm:p-4">
-              <div className="rounded-xl bg-emerald-600 p-3">
-                <Banknote className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">التكلفة الشهرية التقديرية</p>
-                <p className="text-2xl font-bold">{totalMonthly.toLocaleString()} د.ع</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="min-w-[250px] snap-start sm:min-w-0">
-            <CardContent className="p-3 sm:p-4">
-              <p className="text-sm text-muted-foreground">قاعدة الحساب</p>
-              <p className="font-semibold mt-1">
-                الراتب الأساسي، ثم أجر التخصص الافتراضي عند عدم وجود راتب خاص
-              </p>
-            </CardContent>
-          </Card>
-        </div>
       )}
 
       <Card className="border-primary/20">
@@ -2339,8 +2278,7 @@ function PlanningPage() {
       </Card>
 
       <p className="text-sm text-muted-foreground">
-        لإدارة بيانات المواقع والتكاليف وإداريي المواقع، استخدم قسم «المواقع» المستقل من القائمة
-        الجانبية.
+        لإدارة بيانات المواقع وإداريي المواقع، استخدم قسم «المواقع» المستقل من القائمة الجانبية.
       </p>
     </div>
   );
