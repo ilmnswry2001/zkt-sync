@@ -8,7 +8,6 @@ import {
   ClockIcon,
   FileBox,
   LogOut,
-  ShieldCheck,
   CalendarDays,
   CalendarRange,
   MapPinned,
@@ -35,6 +34,7 @@ import {
   Moon,
   Sun,
   Bell,
+  ChevronDown,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
@@ -43,6 +43,14 @@ import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useOperationalAlerts } from "@/hooks/use-operational-alerts";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const nav = [
   { to: "/dashboard", label: "لوحة التحكم", icon: LayoutDashboard, access: "executive" },
@@ -197,12 +205,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         )}
         aria-hidden={!sidebarOpen}
       >
-        <div className="border-b border-sidebar-border bg-gradient-to-br from-sidebar-accent/20 to-transparent p-5 flex items-center justify-between min-w-64">
+        <div className="relative border-b border-sidebar-border/80 bg-gradient-to-bl from-teal-500/10 via-sidebar to-sidebar p-5 flex items-center justify-between min-w-64">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-teal-300 to-cyan-500 flex items-center justify-center shadow-lg shadow-teal-950/30">
-              <Fingerprint className="w-5 h-5 text-slate-950" />
+            <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-300 to-cyan-500 shadow-lg shadow-teal-950/25 ring-1 ring-white/20">
+              <Fingerprint className="h-6 w-6 text-slate-950" />
+              <span className="absolute -bottom-1 -left-1 h-3 w-3 rounded-full border-2 border-sidebar bg-emerald-400" />
             </div>
-            <div>
+            <div className="min-w-0">
               {isEditingWorkspaceName ? (
                 <input
                   autoFocus
@@ -216,38 +225,39 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   className="w-36 rounded-md border border-sidebar-border bg-sidebar px-2 py-1 text-sm font-bold text-sidebar-foreground outline-none"
                 />
               ) : (
-                <h1 className="font-bold text-lg tracking-tight">{workspaceName}</h1>
+                <h1 className="truncate font-bold text-[15px] tracking-tight">{workspaceName}</h1>
               )}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() =>
-                  isEditingWorkspaceName ? saveWorkspaceName() : setIsEditingWorkspaceName(true)
-                }
-                aria-label="تعديل اسم النظام"
-              >
-                {isEditingWorkspaceName ? (
-                  <span className="text-xs">حفظ</span>
-                ) : (
-                  <span className="text-xs">تعديل</span>
-                )}
-              </Button>
-              <p className="text-[11px] opacity-60">إدارة الموارد والمشاريع</p>
+              <p className="mt-1 text-[11px] text-sidebar-foreground/55">إدارة الموارد والمشاريع</p>
             </div>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleSidebar}
-            title="إخفاء اللوحة الجانبية"
-            aria-label="إخفاء اللوحة الجانبية"
-          >
-            <X className="w-4 h-4 md:hidden" />
-            <PanelRightClose className="hidden w-4 h-4 md:block" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-lg text-sidebar-foreground/65 hover:bg-white/10 hover:text-white"
+              onClick={() =>
+                isEditingWorkspaceName ? saveWorkspaceName() : setIsEditingWorkspaceName(true)
+              }
+              aria-label={isEditingWorkspaceName ? "حفظ اسم النظام" : "تعديل اسم النظام"}
+              title={isEditingWorkspaceName ? "حفظ اسم النظام" : "تعديل اسم النظام"}
+            >
+              <Settings2 className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-lg text-sidebar-foreground/65 hover:bg-white/10 hover:text-white"
+              onClick={toggleSidebar}
+              title="إخفاء اللوحة الجانبية"
+              aria-label="إخفاء اللوحة الجانبية"
+            >
+              <X className="w-4 h-4 md:hidden" />
+              <PanelRightClose className="hidden w-4 h-4 md:block" />
+            </Button>
+          </div>
         </div>
-        <nav className="flex-1 space-y-1.5 overflow-y-auto p-3 min-w-64">
+        <nav aria-label="التنقل الرئيسي" className="flex-1 space-y-1.5 overflow-y-auto p-3.5 min-w-64">
+          <p className="px-3 pb-1 pt-2 text-[10px] font-bold tracking-[0.16em] text-sidebar-foreground/40">القائمة الرئيسية</p>
           {nav.map((item) => {
             if (!canAccessSection(item.to)) return null;
             if ("access" in item && item.access === "admin" && !isAdmin) return null;
@@ -320,10 +330,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   if (window.innerWidth < 768) setSidebarOpen(false);
                 }}
                 className={cn(
-                  "group flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-[13px] font-semibold transition-all",
+                  "group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-[13px] font-semibold transition-all duration-200",
                   active
-                    ? "bg-gradient-to-l from-teal-300 to-cyan-400 text-slate-950 shadow-md shadow-black/15"
-                    : "text-sidebar-foreground/75 hover:bg-white/8 hover:text-white",
+                    ? "bg-gradient-to-l from-teal-300 to-cyan-400 text-slate-950 shadow-md shadow-black/15 ring-1 ring-white/20"
+                    : "text-sidebar-foreground/70 hover:translate-x-[-2px] hover:bg-white/[0.07] hover:text-white",
                 )}
               >
                 <Icon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
@@ -332,40 +342,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
-        <div className="p-3 border-t border-sidebar-border space-y-2 min-w-64">
-          <div className="px-3 py-2 text-xs">
-            <div className="font-semibold truncate">
-              {profileName || user?.user_metadata?.full_name || "صاحب الحساب"}
-            </div>
-            <div className="flex gap-1 mt-1 flex-wrap">
-              {roles.map((role) => (
-                <span
-                  key={role}
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-sidebar-accent/30 text-[10px]"
-                >
-                  <ShieldCheck className="w-3 h-3" /> {role}
-                </span>
-              ))}
-              {isAdmin && <span className="text-[10px] opacity-70">مدير</span>}
-            </div>
+        <div className="border-t border-sidebar-border/80 px-4 py-3 min-w-64">
+          <div className="flex items-center gap-2 text-[10px] text-sidebar-foreground/45">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> النظام متصل
           </div>
-          <Link
-            to="/profile"
-            className="flex w-full items-center justify-start gap-2 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-border/40"
-          >
-            <UserCircle2 className="w-4 h-4" /> الملف الشخصي
-          </Link>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-border/40"
-            onClick={async () => {
-              await signOut();
-              navigate({ to: "/auth" });
-            }}
-          >
-            <LogOut className="w-4 h-4 ml-2" /> تسجيل الخروج
-          </Button>
         </div>
       </aside>
       <main className="app-main min-w-0 flex-1 overflow-auto">
@@ -402,6 +382,50 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="h-10 gap-2 rounded-xl border-border/70 bg-background/80 px-2.5 shadow-sm hover:bg-muted/70 sm:px-3"
+                    aria-label="قائمة الحساب الشخصي"
+                  >
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <UserCircle2 className="h-[18px] w-[18px]" />
+                    </span>
+                    <span className="hidden max-w-32 truncate text-xs font-semibold sm:block">
+                      {profileName || user?.user_metadata?.full_name || "حسابي"}
+                    </span>
+                    <ChevronDown className="hidden h-3.5 w-3.5 text-muted-foreground sm:block" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-60" dir="rtl">
+                  <DropdownMenuLabel className="font-normal">
+                    <div className="truncate text-sm font-semibold text-foreground">
+                      {profileName || user?.user_metadata?.full_name || "صاحب الحساب"}
+                    </div>
+                    <div className="mt-1 truncate text-xs text-muted-foreground">{user?.email}</div>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {isAdmin && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">مدير النظام</span>}
+                      {roles.map((role) => <span key={role} className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{role}</span>)}
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link to="/profile" className="cursor-pointer">
+                      <UserCircle2 className="ml-2 h-4 w-4" /> الملف الشخصي
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="cursor-pointer text-destructive focus:text-destructive"
+                    onSelect={async () => {
+                      await signOut();
+                      navigate({ to: "/auth" });
+                    }}
+                  >
+                    <LogOut className="ml-2 h-4 w-4" /> تسجيل الخروج
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               {canViewOperationalAlerts && (
                 <Popover open={alertsOpen} onOpenChange={setAlertsOpen}>
                   <PopoverTrigger asChild>
