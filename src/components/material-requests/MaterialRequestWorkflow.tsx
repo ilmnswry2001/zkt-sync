@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileDown, Plus, Search, Send, X } from "lucide-react";
+import { ChevronDown, FileDown, Plus, Search, Send, SlidersHorizontal, X } from "lucide-react";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -330,12 +330,10 @@ export function MaterialRequestWorkflow({ stage, requestType }: { stage: Stage; 
 
 function Count({ label, value, active }: { label: string; value: number; active: boolean }) {
   return (
-    <Card className={active ? "border-primary/50 bg-primary/5" : undefined}>
-      <CardContent className="flex items-center justify-between p-3">
-        <span className="text-xs text-muted-foreground">{label}</span>
-        <strong className="text-xl tabular-nums">{value}</strong>
-      </CardContent>
-    </Card>
+    <div className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-2.5 ${active ? "border-primary/30 bg-primary/[0.06]" : "border-border/70 bg-card/70"}`}>
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <strong className="text-lg tabular-nums">{value}</strong>
+    </div>
   );
 }
 
@@ -360,36 +358,44 @@ function RequestFilters({
   toDate: string; onToDate: (value: string) => void;
   options?: MaterialRequestOptions;
 }) {
+  const activeFilters = [status, responsible, department, site].filter((value) => value !== "all").length +
+    Number(!!fromDate) + Number(!!toDate);
   return (
-    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
-      <div className="relative lg:col-span-2">
+    <div className="space-y-2">
+      <div className="relative">
         <Search className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
-        <Input className="pr-9" value={search} onChange={(event) => onSearch(event.target.value)} placeholder="رقم الطلب أو المادة أو الموقع..." aria-label="بحث في طلبات المواد والمعدات" />
+        <Input className="h-11 rounded-xl border-border/70 bg-card/80 pr-10 shadow-sm" value={search} onChange={(event) => onSearch(event.target.value)} placeholder="ابحث برقم الطلب أو المادة أو الموقع" aria-label="بحث في طلبات المواد والمعدات" />
       </div>
-      <select className="h-10 rounded-md border bg-background px-2 text-sm" value={status} onChange={(event) => onStatus(event.target.value)} aria-label="تصفية الحالة">
-        <option value="all">كل الحالات</option>
-        {Object.entries(STATUS_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-      </select>
-      <select className="h-10 rounded-md border bg-background px-2 text-sm" value={responsible} onChange={(event) => onResponsible(event.target.value)} aria-label="تصفية القسم المسؤول حالياً">
-        <option value="all">كل الأقسام المسؤولة</option>
-        <option value="planning">التخطيط</option>
-        <option value="warehouse">المخازن</option>
-        <option value="procurement">المشتريات</option>
-        <option value="applicant">مقدم الطلب</option>
-        <option value="done">مكتمل أو مغلق</option>
-      </select>
-      <select className="h-10 rounded-md border bg-background px-2 text-sm" value={department} onChange={(event) => onDepartment(event.target.value)} aria-label="تصفية القسم">
-        <option value="all">كل الأقسام</option>
-        {(options?.departments ?? []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-      </select>
-      <select className="h-10 rounded-md border bg-background px-2 text-sm" value={site} onChange={(event) => onSite(event.target.value)} aria-label="تصفية الموقع">
-        <option value="all">كل المواقع</option>
-        {(options?.sites ?? []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-      </select>
-      <div className="flex gap-1">
-        <Input type="date" aria-label="من تاريخ" value={fromDate} onChange={(event) => onFromDate(event.target.value)} />
-        <Input type="date" aria-label="إلى تاريخ" value={toDate} onChange={(event) => onToDate(event.target.value)} />
-      </div>
+      <details className="group rounded-xl border border-border/70 bg-card/55">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2.5 text-sm [&::-webkit-details-marker]:hidden">
+          <span className="flex items-center gap-2 font-medium"><SlidersHorizontal className="h-4 w-4 text-muted-foreground" /> التصفية المتقدمة{activeFilters > 0 && <Badge variant="secondary" className="h-5 min-w-5 justify-center px-1.5">{activeFilters}</Badge>}</span>
+          <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="grid gap-2 border-t border-border/60 p-3 sm:grid-cols-2 lg:grid-cols-3">
+          <select className="h-10 min-w-0 rounded-lg border bg-background px-3 text-sm" value={status} onChange={(event) => onStatus(event.target.value)} aria-label="تصفية الحالة">
+            <option value="all">كل الحالات</option>
+            {Object.entries(STATUS_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+          </select>
+          <select className="h-10 min-w-0 rounded-lg border bg-background px-3 text-sm" value={responsible} onChange={(event) => onResponsible(event.target.value)} aria-label="تصفية القسم المسؤول حالياً">
+            <option value="all">كل الأقسام المسؤولة</option>
+            <option value="planning">التخطيط</option>
+            <option value="warehouse">المخازن</option>
+            <option value="procurement">المشتريات</option>
+            <option value="applicant">مقدم الطلب</option>
+            <option value="done">مكتمل أو مغلق</option>
+          </select>
+          <select className="h-10 min-w-0 rounded-lg border bg-background px-3 text-sm" value={department} onChange={(event) => onDepartment(event.target.value)} aria-label="تصفية القسم">
+            <option value="all">كل الأقسام</option>
+            {(options?.departments ?? []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+          <select className="h-10 min-w-0 rounded-lg border bg-background px-3 text-sm" value={site} onChange={(event) => onSite(event.target.value)} aria-label="تصفية الموقع">
+            <option value="all">كل المواقع</option>
+            {(options?.sites ?? []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+          <Input type="date" aria-label="من تاريخ" value={fromDate} onChange={(event) => onFromDate(event.target.value)} />
+          <Input type="date" aria-label="إلى تاريخ" value={toDate} onChange={(event) => onToDate(event.target.value)} />
+        </div>
+      </details>
     </div>
   );
 }
@@ -536,23 +542,23 @@ function RequestList({ stage, requests, options, actor, canCreate, canPlan, canW
 
   if (!visible.length) return <EmptyRequests text="لا توجد طلبات مطابقة حالياً." />;
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {visible.map((request) => (
-        <Card key={request.id}>
-          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 p-4">
+        <Card key={request.id} className="overflow-hidden rounded-2xl border-border/70 bg-card/90 shadow-sm transition-shadow hover:shadow-md">
+          <div className={`h-1 w-full ${["rejected", "cancelled"].includes(request.status) ? "bg-destructive/70" : ["received", "closed"].includes(request.status) ? "bg-emerald-500/70" : "bg-gradient-to-l from-primary/80 via-primary/40 to-transparent"}`} />
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 p-4 sm:px-5">
             <div className="min-w-0">
-              <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-                <span dir="ltr" className="font-mono">{request.request_number}</span>
+              <CardTitle className="flex flex-wrap items-center gap-2 text-[15px]">
+                <span dir="ltr" className="font-mono tracking-wide">{request.request_number}</span>
                 <RequestState status={request.status} />
-                <Badge variant="outline">{request.request_type === "equipment" ? "معدات" : "مواد"}</Badge>
-                {request.need_by_date && request.need_by_date < todayInBaghdad() && !["received", "closed", "rejected", "cancelled"].includes(request.status) && <Badge variant="destructive">متأخر</Badge>}
+                <Badge variant="outline" className="rounded-full">{request.request_type === "equipment" ? "معدات" : "مواد"}</Badge>
+                {request.need_by_date && request.need_by_date < todayInBaghdad() && !["received", "closed", "rejected", "cancelled"].includes(request.status) && <Badge variant="destructive" className="rounded-full">متأخر</Badge>}
               </CardTitle>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {request.created_by_name || "مقدم الطلب"} · {request.department_name} · {request.site_name} · {formatDate(request.created_at)}
-                {request.need_by_date ? ` · الحاجة ${formatDate(request.need_by_date)}` : ""}
+              <p className="mt-2 truncate text-xs text-muted-foreground">
+                {request.created_by_name || "مقدم الطلب"} <span className="mx-1 text-border">•</span> {request.department_name} <span className="mx-1 text-border">•</span> {request.site_name}
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 self-start sm:self-center">
               {canCreate && actor?.user_id === request.created_by && ["draft", "returned"].includes(request.status) && (
                 <Button size="sm" variant="outline" onClick={() => onEdit(request)}>تعديل</Button>
               )}
@@ -567,7 +573,19 @@ function RequestList({ stage, requests, options, actor, canCreate, canPlan, canW
               )}
             </div>
           </CardHeader>
-          <CardContent className="space-y-4 px-4 pb-4 pt-0">
+          <details className="group/request border-t border-border/60">
+            <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm transition-colors hover:bg-muted/35 sm:px-5 [&::-webkit-details-marker]:hidden">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+                <span><b className="text-foreground">{request.items.length}</b> بنود</span>
+                <span><b className="text-foreground tabular-nums">{request.items.reduce((sum, item) => sum + Number(item.original_qty), 0)}</b> وحدة مطلوبة</span>
+                <span>{formatDate(request.created_at)}{request.need_by_date ? ` · الحاجة ${formatDate(request.need_by_date)}` : ""}</span>
+              </div>
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-primary">
+                التفاصيل والإجراءات
+                <ChevronDown className="h-4 w-4 transition-transform group-open/request:rotate-180" />
+              </span>
+            </summary>
+          <CardContent className="space-y-4 border-t border-border/50 bg-muted/[0.12] px-4 pb-4 pt-4 sm:px-5">
             <div className="grid gap-2 sm:grid-cols-3">
               <MiniStat label="مطلوب أصلاً" value={request.items.reduce((sum, item) => sum + Number(item.original_qty), 0)} />
               <MiniStat label="مصروف من المخزن" value={request.items.reduce((sum, item) => sum + Number(item.issue_qty), 0)} />
@@ -595,6 +613,7 @@ function RequestList({ stage, requests, options, actor, canCreate, canPlan, canW
             {request.receipts.length > 0 && <ReceiptHistory receipts={request.receipts as RequestReceipt[]} />}
             <AuditTimeline events={request.events} />
           </CardContent>
+          </details>
         </Card>
       ))}
     </div>
