@@ -29,6 +29,7 @@ import {
   Smartphone,
   Boxes,
   ShoppingCart,
+  ClipboardList,
   ListChecks,
   CalendarCheck2,
   Moon,
@@ -58,14 +59,13 @@ const nav = [
   { to: "/penalties", label: "العقوبات والتغييب", icon: FileWarning },
   { to: "/employees", label: "الموظفون", icon: Users },
   { to: "/departments", label: "الأقسام", icon: Building2 },
-  { to: "/project-plans", label: "خطط المشاريع", icon: CalendarRange, access: "project_plans" },
   { to: "/planning", label: "الخطط وتكلفة المشاريع", icon: BarChart3, access: "planning" },
+  { to: "/requests", label: "الطلبات", icon: ClipboardList, access: "requests" },
   { to: "/sites", label: "المواقع", icon: MapPinned, access: "planning" },
   { to: "/wages", label: "الأجور", icon: Wallet, access: "hr" },
   { to: "/payroll", label: "الرواتب", icon: Wallet, access: "hr" },
   { to: "/vehicles", label: "المركبات", icon: Truck, access: "hr" },
   { to: "/warehouses", label: "المخازن", icon: Boxes },
-  { to: "/procurement", label: "المشتريات", icon: ShoppingCart, access: "procurement" },
   { to: "/devices", label: "الأجهزة", icon: Fingerprint },
   { to: "/upload", label: "رفع ملفات البصمة", icon: Upload },
   { to: "/files", label: "سجل الملفات", icon: FileBox },
@@ -279,6 +279,25 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               !isAdmin &&
               !isCompanyManager &&
               !roles.includes("procurement_officer")
+            )
+              return null;
+            if (
+              "access" in item &&
+              item.access === "requests" &&
+              !isAdmin &&
+              !isHR &&
+              !isCompanyManager &&
+              !roles.some((role) =>
+                [
+                  "supervisor",
+                  "department_manager",
+                  "engineer",
+                  "site_admin",
+                  "planning_officer",
+                  "warehouse_keeper",
+                  "procurement_officer",
+                ].includes(role),
+              )
             )
               return null;
             if (

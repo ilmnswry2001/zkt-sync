@@ -59,7 +59,6 @@ import {
   type StaffAssignmentGroup,
 } from "@/lib/planning-staff";
 import { escapeHtml, printReport } from "@/lib/report-print";
-import { MaterialRequestWorkflow } from "@/components/material-requests/MaterialRequestWorkflow";
 
 export const Route = createFileRoute("/_authenticated/planning")({
   beforeLoad: async () => {
@@ -2336,24 +2335,6 @@ function PlanningPage() {
               )}
             </div>
           )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader><CardTitle>دورة طلبات المواد والمعدات</CardTitle></CardHeader>
-        <CardContent>
-          <Tabs defaultValue="material" dir="rtl">
-            <TabsList>
-              <TabsTrigger value="material">طلبات المواد</TabsTrigger>
-              <TabsTrigger value="equipment">طلبات المعدات</TabsTrigger>
-            </TabsList>
-            <TabsContent value="material">
-              <MaterialRequestWorkflow stage="planning" requestType="material" />
-            </TabsContent>
-            <TabsContent value="equipment">
-              <MaterialRequestWorkflow stage="planning" requestType="equipment" />
-            </TabsContent>
-          </Tabs>
         </CardContent>
       </Card>
 

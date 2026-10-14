@@ -297,7 +297,7 @@ function ColoredNameChips({ names, color }: { names: string[]; color: string }) 
   );
 }
 
-function PlanningPage() {
+export function PlanningPage() {
   const qc = useQueryClient();
   const { isEngineer } = useAuth();
   const isMobile = useIsMobile();

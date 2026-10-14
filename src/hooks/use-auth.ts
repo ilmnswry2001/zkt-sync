@@ -81,14 +81,16 @@ export function useAuth() {
       ? ["/planning"]
       : []),
     ...(roles.includes("warehouse_keeper") || isCompanyManager ? ["/warehouses"] : []),
-    ...(roles.includes("procurement_officer") || isCompanyManager ? ["/procurement"] : []),
+    ...(roles.some((role) => ["engineer", "supervisor", "department_manager", "site_admin", "planning_officer", "warehouse_keeper", "procurement_officer"].includes(role)) || isCompanyManager
+      ? ["/requests"]
+      : []),
   ];
   const baseSections = permissionError
     ? []
     : isAdmin
       ? null
       : isEngineer
-        ? ["/project-plans", "/planning"]
+        ? ["/project-plans", "/planning", "/requests"]
         : allowedSections
           ? [...new Set([...allowedSections, ...roleSections])]
           : null;
@@ -101,7 +103,7 @@ export function useAuth() {
     ? roleSections.filter((section) =>
         (roles.includes("planning_officer") && section === "/planning") ||
         (roles.includes("warehouse_keeper") && section === "/warehouses") ||
-        (roles.includes("procurement_officer") && section === "/procurement"),
+          section === "/requests",
       )
     : baseSections;
 
