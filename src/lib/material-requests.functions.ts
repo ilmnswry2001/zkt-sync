@@ -148,8 +148,14 @@ async function getActor(db: RpcClient) {
 }
 
 function migrationError(error: NonNullable<RpcError>) {
-  if (["PGRST202", "PGRST205", "42883", "42P01", "42703"].includes(error.code ?? "")) {
+  if (["PGRST202", "PGRST205", "42883", "42P01"].includes(error.code ?? "")) {
     return new Error("ميزة طلبات المواد غير مهيأة في قاعدة البيانات. طبّق ملفات migration الخاصة بها أولاً.");
+  }
+  if (error.code === "42703") {
+    return new Error("بنية قاعدة البيانات لا تطابق نسخة التطبيق. حدّث migrations الخاصة بطلبات المواد ثم أعد تحميل الصفحة.");
+  }
+  if (error.code === "42501") {
+    return new Error("لا تملك قاعدة البيانات صلاحية تنفيذ خدمة طلبات المواد. طبّق migration إصلاح صلاحيات طلبات المواد ثم حدّث الصفحة.");
   }
   return new Error(error.message);
 }

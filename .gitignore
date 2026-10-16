@@ -16,6 +16,9 @@ dist-ssr
 .nitro
 *.local
 
+# Graphify code graph and generated visualization
+graphify-out/
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars

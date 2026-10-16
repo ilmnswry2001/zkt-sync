@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { todayInBaghdad } from "@/lib/date-time";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { StaffNameChips } from "@/components/StaffNameChips";
+import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,7 +38,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Banknote,
+  Check,
+  CheckCircle2,
   ChevronDown,
+  CircleAlert,
+  ClipboardList,
+  FileCheck2,
   MapPin,
   MoreHorizontal,
   Minus,
@@ -46,8 +52,8 @@ import {
   Printer,
   Search,
   Pencil,
+  ShieldCheck,
   Trash2,
-  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getDefaultWage } from "@/lib/wage-defaults";
@@ -205,48 +211,82 @@ function planCreatorLabel(plan: SiteWorkPlan) {
   return plan.requested_by_name?.trim() || "حساب غير محدد";
 }
 
-function planPdfMarkup(plan: SiteWorkPlan, site?: Site) {
+function getPlanCoverage(plan: SiteWorkPlan, search = "") {
   const specialties = plan.final_plan?.specialties ?? plan.specialties ?? [];
-  const assigned = new Map(plan.assigned_staff.map((group) => [group.specialty, group.names]));
-  const totalRequired = specialties.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
-  const totalAssigned = specialties.reduce(
-    (sum, item) => sum + (assigned.get(item.specialty)?.length ?? 0),
-    0,
-  );
-  const rows = specialties
-    .map((item) => {
-      const names = assigned.get(item.specialty) ?? [];
-      const color = item.color || "#0f766e";
-      const required = Number(item.quantity || 0);
-      const missing = Math.max(0, required - names.length);
-      const progress = required ? Math.min(100, Math.round((names.length / required) * 100)) : 100;
-      return `<article class="plan-item" style="--item-color:${escapeHtml(color)}">
-        <div class="plan-item-head"><div><span class="plan-label">التخصص</span><strong class="plan-specialty">${escapeHtml(item.specialty)}</strong></div><div class="plan-count"><span>مطلوب</span><b>${required}</b></div></div>
-        <div class="plan-progress-label"><span>حالة التوزيع</span><b>${missing ? `متبقٍ ${missing}` : "مكتمل"} · ${names.length}/${required}</b></div>
-        <div class="plan-progress"><i style="width:${progress}%"></i></div>
-        <div class="plan-staff"><div class="plan-staff-title">الكوادر المسندة <b>${names.length} فرد</b></div>${names.length ? names.map((name) => `<span class="name-chip">${escapeHtml(name)}</span>`).join(" ") : '<span class="plan-empty">لم يتم تخصيص أسماء بعد</span>'}</div>
-        ${item.heavy_equipment ? `<div class="plan-item-note"><b>الآلية:</b> ${escapeHtml(item.equipment_name || "مطلوبة")}</div>` : ""}
-        ${item.notes ? `<div class="plan-item-note"><b>ملاحظة التخصص:</b> ${escapeHtml(item.notes)}</div>` : ""}
-      </article>`;
+  const allRows = specialties.map((item) => {
+    const names = plan.assigned_staff.find((group) => group.specialty === item.specialty)?.names ?? [];
+    const required = Number(item.quantity) || 0;
+    const assigned = names.length;
+    const missing = Math.max(0, required - assigned);
+    return {
+      item,
+      names,
+      required,
+      assigned,
+      missing,
+      complete: missing === 0,
+    };
+  });
+  const query = search.trim().toLocaleLowerCase("ar");
+  const rows = query
+    ? allRows.filter((row) =>
+        `${row.item.specialty} ${row.names.join(" ")}`.toLocaleLowerCase("ar").includes(query),
+      )
+    : allRows;
+  const requiredTotal = allRows.reduce((sum, row) => sum + row.required, 0);
+  const assignedTotal = allRows.reduce((sum, row) => sum + row.assigned, 0);
+  const remainingTotal = Math.max(0, requiredTotal - assignedTotal);
+  const progress = requiredTotal
+    ? Math.min(100, Math.round((assignedTotal / requiredTotal) * 100))
+    : 100;
+  return { specialties, allRows, rows, requiredTotal, assignedTotal, remainingTotal, progress };
+}
+
+function planPdfMarkup(plan: SiteWorkPlan, site?: Site) {
+  const coverage = getPlanCoverage(plan);
+  const rows = coverage.allRows
+    .map((row) => {
+      const color = row.item.color || "#0f766e";
+      const extras = [
+        row.item.heavy_equipment ? `آلية: ${escapeHtml(row.item.equipment_name || "مطلوبة")}` : "",
+        row.item.notes ? escapeHtml(row.item.notes) : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      return `<tr>
+        <td style="border-right:4px solid ${escapeHtml(color)}"><strong>${escapeHtml(row.item.specialty)}</strong>${extras ? `<div class="plan-sub">${extras}</div>` : ""}</td>
+        <td class="num">${row.required}</td>
+        <td class="num">${row.assigned}</td>
+        <td class="num">${row.missing}</td>
+        <td>${row.complete ? "مكتمل" : `نقص ${row.missing}`}</td>
+        <td>${row.names.length ? row.names.map((name, index) => `${index + 1}. ${escapeHtml(name)}`).join("<br>") : '<span class="plan-empty">لم يُسند أحد</span>'}</td>
+      </tr>`;
     })
     .join("");
 
   return `<section class="plan-sheet">
     <header class="plan-header">
-      <div><div class="eyebrow">خطة تشغيل معتمدة · ${escapeHtml(site?.ctr_code || "إدارة المشاريع")}</div><h2>${escapeHtml(plan.final_plan?.title || `الخطة النهائية - ${plan.site_name}`)}</h2><p>${escapeHtml(plan.site_name)}${site?.location ? ` · ${escapeHtml(site.location)}` : ""}</p></div>
+      <div>
+        <div class="eyebrow">وثيقة توزيع تشغيلية${site?.ctr_code ? ` · ${escapeHtml(site.ctr_code)}` : ""}</div>
+        <h2>${escapeHtml(plan.final_plan?.title || `الخطة النهائية - ${plan.site_name}`)}</h2>
+        <p>${escapeHtml(plan.site_name)}${site?.location ? ` · ${escapeHtml(site.location)}` : ""}</p>
+      </div>
       <div class="status">${escapeHtml(planStatusLabel[plan.status])}</div>
     </header>
     <div class="meta-grid">
-      <div><span>تاريخ الخطة</span><strong>${escapeHtml(plan.request_date)}</strong></div>
-      <div><span>منشئ الخطة</span><strong>${escapeHtml(planCreatorLabel(plan))}</strong></div>
+      <div><span>تاريخ التشغيل</span><strong>${escapeHtml(plan.request_date)}</strong></div>
+      <div><span>منشئ الطلب</span><strong>${escapeHtml(planCreatorLabel(plan))}</strong></div>
       <div><span>طالب الخطة</span><strong>${escapeHtml(plan.applicant_name || "غير محدد")}</strong></div>
-      <div><span>إجمالي المطلوب</span><strong>${totalRequired}</strong></div>
-      <div><span>الأسماء المخصصة</span><strong>${totalAssigned}</strong></div>
+      <div><span>الاحتياج</span><strong>${coverage.requiredTotal}</strong></div>
+      <div><span>الموزَّع / المتبقي</span><strong>${coverage.assignedTotal} / ${coverage.remainingTotal}</strong></div>
     </div>
-    <div class="plan-grid">${rows || `<div class="plan-empty">لا توجد تخصصات في هذه الخطة</div>`}</div>
-    <div class="plan-summary"><div><span>الاحتياج</span><b>${totalRequired} فرد</b></div><div><span>تم التوزيع</span><b>${totalAssigned} فرد</b></div><div><span>المتبقي</span><b>${Math.max(0, totalRequired - totalAssigned)} فرد</b></div></div>
-    <div class="note"><strong>ملاحظات المهندس</strong><p>${escapeHtml(plan.engineer_notes || plan.final_plan?.notes || plan.management_notes || plan.planning_notes || "لا توجد ملاحظات")}</p></div>
-    <footer class="plan-footer"><span>وثيقة تشغيلية · نظام إدارة المشاريع والموارد</span><span>تم إصدارها في ${new Date().toLocaleDateString("ar-IQ")}</span></footer>
+    <table class="plan-table">
+      <thead><tr><th>التخصص</th><th>المطلوب</th><th>الموزَّع</th><th>المتبقي</th><th>الحالة</th><th>كشف الأسماء</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="6">لا توجد تخصصات في هذه الخطة</td></tr>`}</tbody>
+    </table>
+    <div class="note"><strong>ملاحظات المهندس</strong><p>${escapeHtml(plan.engineer_notes || "لا توجد ملاحظات")}</p></div>
+    <div class="note"><strong>ملاحظات الخطة</strong><p>${escapeHtml(plan.final_plan?.notes || plan.management_notes || plan.planning_notes || "لا توجد ملاحظات إضافية")}</p></div>
+    <footer class="plan-footer"><span>كشف توزيع معتمد · منظومة إدارة المشاريع</span><span>${new Date().toLocaleDateString("ar-IQ")}</span></footer>
   </section>`;
 }
 
@@ -317,6 +357,295 @@ function ColoredNameChips({ names, color }: { names: string[]; color: string }) 
         </span>
       ))}
     </div>
+  );
+}
+
+const PLAN_PROCESS_STEPS: { status: SiteWorkPlan["status"]; label: string }[] = [
+  { status: "requested", label: "طلب الاحتياج" },
+  { status: "planning_approved", label: "اعتماد التخطيط" },
+  { status: "management_review", label: "توزيع الكوادر" },
+  { status: "finalized", label: "إصدار الخطة" },
+];
+
+function PlanProcessTrack({ status }: { status: SiteWorkPlan["status"] }) {
+  const current = PLAN_PROCESS_STEPS.findIndex((step) => step.status === status);
+  return (
+    <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {PLAN_PROCESS_STEPS.map((step, index) => {
+        const done = status === "finalized" || index < current;
+        const active = status !== "finalized" && index === current;
+        return (
+          <li
+            key={step.status}
+            className={cn(
+              "flex items-center gap-2 rounded-md border px-2.5 py-2 text-[11px] font-semibold sm:text-xs",
+              done && "border-emerald-700/20 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100",
+              active && "border-primary/40 bg-primary/10 text-foreground",
+              !done && !active && "border-border/70 bg-muted/30 text-muted-foreground",
+            )}
+          >
+            <span
+              className={cn(
+                "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] tabular-nums",
+                done && "bg-emerald-700 text-white",
+                active && "bg-primary text-primary-foreground",
+                !done && !active && "bg-muted text-muted-foreground",
+              )}
+            >
+              {done ? <Check className="h-3 w-3" /> : index + 1}
+            </span>
+            {step.label}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function RosterNames({ names }: { names: string[] }) {
+  if (!names.length) {
+    return <span className="text-xs text-muted-foreground">لم يُسند أحد لهذا التخصص</span>;
+  }
+  return (
+    <ol className="columns-1 gap-x-8 sm:columns-2">
+      {names.map((name, index) => (
+        <li
+          key={`${name}-${index}`}
+          className="flex break-inside-avoid items-baseline gap-2 py-0.5 text-sm leading-6"
+        >
+          <span className="w-5 shrink-0 text-[11px] tabular-nums text-muted-foreground">
+            {index + 1}.
+          </span>
+          <span dir="auto">{name}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function FinalPlanDocument({
+  plan,
+  site,
+  staffSearch = "",
+  onStaffSearchChange,
+  onExport,
+  issued,
+  children,
+}: {
+  plan: SiteWorkPlan;
+  site?: Site;
+  staffSearch?: string;
+  onStaffSearchChange?: (value: string) => void;
+  onExport?: () => void;
+  issued: boolean;
+  children?: ReactNode;
+}) {
+  const coverage = getPlanCoverage(plan, staffSearch);
+  const title = plan.final_plan?.title || `الخطة النهائية - ${plan.site_name}`;
+  const engineerNotes = plan.engineer_notes?.trim();
+  const planNotes = (plan.final_plan?.notes || plan.management_notes || plan.planning_notes || "").trim();
+
+  return (
+    <section dir="rtl" className="planning-final-print overflow-hidden rounded-lg border bg-card">
+      <header className="border-b">
+        <div className="h-1 bg-primary" />
+        <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
+          <div className="min-w-0 space-y-2">
+            <p className="text-[11px] font-semibold tracking-[0.18em] text-primary">
+              وثيقة توزيع تشغيلية
+            </p>
+            <h3 className="text-xl font-semibold tracking-tight sm:text-2xl">{title}</h3>
+            <p className="text-sm text-muted-foreground">
+              {plan.site_name}
+              {site?.ctr_code ? ` · ${site.ctr_code}` : ""}
+              {site?.location ? ` · ${site.location}` : ""}
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Badge variant={issued ? "default" : "outline"} className="rounded-md px-2.5 py-1">
+              {issued ? (
+                <span className="inline-flex items-center gap-1">
+                  <FileCheck2 className="h-3.5 w-3.5" /> صادرة
+                </span>
+              ) : (
+                "بانتظار الإصدار"
+              )}
+            </Badge>
+            <span className="text-sm tabular-nums text-muted-foreground">{plan.request_date}</span>
+            {onExport && (
+              <Button
+                type="button"
+                variant="outline"
+                className="planning-final-controls min-h-10"
+                onClick={onExport}
+              >
+                <Printer className="ml-2 h-4 w-4" /> تصدير
+              </Button>
+            )}
+          </div>
+        </div>
+        <dl className="grid grid-cols-2 border-t sm:grid-cols-4">
+          {[
+            { label: "طالب الخطة", value: plan.applicant_name || "غير محدد" },
+            { label: "منشئ الطلب", value: planCreatorLabel(plan) },
+            { label: "تاريخ التشغيل", value: plan.request_date },
+            { label: "حالة الوثيقة", value: planStatusLabel[plan.status] },
+          ].map((item) => (
+            <div key={item.label} className="border-b px-5 py-3 sm:border-b-0 sm:border-l sm:last:border-l-0">
+              <dt className="text-[11px] text-muted-foreground">{item.label}</dt>
+              <dd className="mt-1 truncate text-sm font-medium">{item.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </header>
+
+      <div className="space-y-5 p-5 sm:p-6">
+        <PlanProcessTrack status={plan.status} />
+
+        <div className="grid grid-cols-3 overflow-hidden rounded-md border">
+          <div className="px-4 py-3">
+            <p className="text-[11px] text-muted-foreground">الاحتياج</p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums">{coverage.requiredTotal}</p>
+          </div>
+          <div className="border-x px-4 py-3">
+            <p className="text-[11px] text-muted-foreground">تم التوزيع</p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums text-emerald-800 dark:text-emerald-300">
+              {coverage.assignedTotal}
+            </p>
+          </div>
+          <div className="px-4 py-3">
+            <p className="text-[11px] text-muted-foreground">المتبقي</p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums text-amber-800 dark:text-amber-300">
+              {coverage.remainingTotal}
+            </p>
+          </div>
+          <div className="col-span-3 border-t px-4 py-2.5">
+            <div className="mb-1.5 flex items-center justify-between text-[11px] text-muted-foreground">
+              <span>اكتمال التوزيع</span>
+              <span className="tabular-nums text-foreground">{coverage.progress}٪</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+              <div className="h-full bg-primary" style={{ width: `${coverage.progress}%` }} />
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h4 className="text-base font-semibold">كشف التوزيع حسب التخصص</h4>
+              <p className="text-xs text-muted-foreground">
+                العدد المطلوب مقابل الأسماء المسندة لكل بند تشغيلي
+              </p>
+            </div>
+            {onStaffSearchChange && (
+              <div className="planning-final-controls relative w-full sm:max-w-xs">
+                <Search className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  className="min-h-10 rounded-md pr-9"
+                  value={staffSearch}
+                  onChange={(event) => onStaffSearchChange(event.target.value)}
+                  placeholder="تصفية التخصص أو الاسم..."
+                  aria-label="بحث في الخطة النهائية"
+                />
+              </div>
+            )}
+          </div>
+
+          {!coverage.rows.length ? (
+            <div className="rounded-md border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
+              {coverage.specialties.length
+                ? "لا توجد تخصصات مطابقة للبحث."
+                : "لا توجد تخصصات في هذه الخطة."}
+            </div>
+          ) : (
+            <div className="planning-final-desktop overflow-x-auto rounded-md border">
+              <Table className="planning-final-table min-w-[720px]">
+                <TableHeader>
+                  <TableRow className="bg-muted/40 hover:bg-muted/40">
+                    <TableHead className="w-[22%] text-right">التخصص</TableHead>
+                    <TableHead className="w-20 text-center">المطلوب</TableHead>
+                    <TableHead className="w-20 text-center">الموزَّع</TableHead>
+                    <TableHead className="w-24 text-center">الحالة</TableHead>
+                    <TableHead className="text-right">كشف الأسماء</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {coverage.rows.map((row, index) => (
+                    <TableRow
+                      key={`${plan.id}-${row.item.specialty}`}
+                      className={cn(
+                        !row.complete && "bg-amber-50/40 dark:bg-amber-950/15",
+                        index % 2 && row.complete && "planning-final-stripe",
+                      )}
+                    >
+                      <TableCell className="align-top">
+                        <div className="flex gap-2">
+                          <span
+                            className="mt-1 h-8 w-1 shrink-0 rounded-full"
+                            style={{ backgroundColor: row.item.color || "#0f766e" }}
+                          />
+                          <div>
+                            <div className="font-semibold">{row.item.specialty}</div>
+                            {row.item.heavy_equipment && (
+                              <p className="text-[11px] text-muted-foreground">
+                                آلية: {row.item.equipment_name || "مطلوبة"}
+                              </p>
+                            )}
+                            {row.item.notes && (
+                              <p className="text-[11px] text-muted-foreground">{row.item.notes}</p>
+                            )}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center align-top text-base font-semibold tabular-nums">
+                        {row.required}
+                      </TableCell>
+                      <TableCell className="text-center align-top text-base font-semibold tabular-nums">
+                        {row.assigned}
+                      </TableCell>
+                      <TableCell className="text-center align-top">
+                        <span
+                          className={cn(
+                            "inline-flex rounded-md px-2 py-1 text-[11px] font-semibold",
+                            row.complete
+                              ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                              : "bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200",
+                          )}
+                        >
+                          {row.complete ? "مكتمل" : `نقص ${row.missing}`}
+                        </span>
+                      </TableCell>
+                      <TableCell className="align-top">
+                        <RosterNames names={row.names} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="rounded-md border p-4">
+            <p className="text-[11px] font-semibold text-muted-foreground">ملاحظات المهندس</p>
+            <p className="mt-2 whitespace-pre-line text-sm leading-7">
+              {engineerNotes || "لا توجد ملاحظات مرفقة."}
+            </p>
+          </div>
+          <div className="rounded-md border p-4">
+            <p className="text-[11px] font-semibold text-muted-foreground">ملاحظات الخطة</p>
+            <p className="mt-2 whitespace-pre-line text-sm leading-7">
+              {planNotes || "لا توجد ملاحظات إضافية."}
+            </p>
+          </div>
+        </div>
+
+        {children ? <div className="planning-final-controls">{children}</div> : null}
+        <div className="sr-only">إجمالي الأسماء المضافة: {coverage.assignedTotal}</div>
+      </div>
+    </section>
   );
 }
 
@@ -561,19 +890,6 @@ function PlanningPage() {
           : defaults.daily_rate;
     return sum + dailyRate * Number(item.quantity);
   }, 0);
-  const getFinalSpecialtyRows = (plan: SiteWorkPlan) =>
-    (plan.final_plan?.specialties ?? plan.specialties ?? [])
-      .map((item) => ({
-        item,
-        names: plan.assigned_staff.find((group) => group.specialty === item.specialty)?.names ?? [],
-      }))
-      .filter(({ item, names }) => {
-        const search = finalStaffSearch.trim().toLocaleLowerCase("ar");
-        return (
-          !search || `${item.specialty} ${names.join(" ")}`.toLocaleLowerCase("ar").includes(search)
-        );
-      });
-
   const exportPlanPdf = (plan: SiteWorkPlan) => {
     const ok = printReport(
       `الخطة النهائية - ${plan.site_name}`,
@@ -1838,20 +2154,18 @@ function PlanningPage() {
           )}
 
           {activeWorkPlanTab === "final" && !workPlansQuery.isLoading && (
-            <div className="space-y-3">
-              <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 dark:border-emerald-900 dark:bg-emerald-950/20 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-6">
+              <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="font-semibold text-emerald-950 dark:text-emerald-100">
-                    تصدير الخطط النهائية
-                  </p>
-                  <p className="text-xs text-emerald-800/80 dark:text-emerald-200/80">
-                    يتم إنشاء نافذة PDF تحتوي الخطط فقط، مع مقاس A4 وفاصل مستقل لكل خطة.
+                  <p className="font-semibold">مراجعة التوزيع والإصدار</p>
+                  <p className="text-xs text-muted-foreground">
+                    قارن الاحتياج بالأسماء المسندة، ثم أصدر الوثيقة أو صدّرها ككشف تشغيلي.
                   </p>
                 </div>
                 <Button
                   type="button"
                   variant="outline"
-                  className="min-h-11 shrink-0 bg-background"
+                  className="min-h-11 shrink-0"
                   onClick={exportAllPlansPdf}
                 >
                   <Printer className="ml-2 h-4 w-4" /> تصدير جميع الخطط
@@ -1859,417 +2173,100 @@ function PlanningPage() {
               </div>
               {planFilters}
               {visibleManagementReviewPlans.length === 0 && visibleFinalPlans.length === 0 ? (
-                <div className="rounded-xl border border-dashed p-6 text-center text-muted-foreground">
+                <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
                   {managementReviewPlans.length || finalPlans.length
                     ? "لا توجد نتائج مطابقة للبحث والتاريخ."
                     : "لا توجد خطط في مرحلة التحضير أو الإغلاق النهائي بعد إدراج الكوادر."}
                 </div>
-              ) : (
-                visibleManagementReviewPlans.map((plan) => (
-                  <details key={plan.id} className="group rounded-xl border bg-card shadow-sm">
-                    <summary className="flex min-h-16 cursor-pointer list-none flex-wrap items-center justify-between gap-3 p-4 [&::-webkit-details-marker]:hidden">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <MapPin className="h-5 w-5 shrink-0 text-primary" />
-                        <div className="min-w-0">
-                          <h3 className="truncate font-bold">{plan.site_name}</h3>
-                          <p className="text-sm text-muted-foreground">
-                            {plan.request_date} ·{" "}
-                            {(plan.specialties ?? []).reduce(
-                              (sum, item) => sum + Number(item.quantity || 0),
-                              0,
-                            )}{" "}
-                            مطلوب
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge>{planStatusLabel[plan.status]}</Badge>
-                        <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
-                      </div>
-                    </summary>
-                    <div className="space-y-3 border-t p-4">
-                      <div className="flex flex-wrap gap-2">
-                        {(plan.specialties ?? []).map((item) => (
-                          <Badge
-                            key={`${plan.id}-final-${item.specialty}`}
-                            style={{
-                              backgroundColor: `${item.color}22`,
-                              color: item.color,
-                              borderColor: item.color,
-                            }}
-                          >
-                            {item.specialty} ({item.quantity})
-                          </Badge>
-                        ))}
-                      </div>
+              ) : null}
 
-                      {(plan.assigned_staff ?? []).some((group) => group.names.length > 0) && (
-                        <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
-                          <div className="font-semibold">الكوادر المخصصة</div>
-                          <div className="space-y-3">
-                            {(plan.assigned_staff ?? [])
-                              .filter((group) => group.names.length > 0)
-                              .map((group) => (
-                                <div key={`${plan.id}-${group.specialty}`}>
-                                  <div className="mb-1 text-sm font-medium">{group.specialty}</div>
-                                  <ColoredNameChips
-                                    color={
-                                      plan.specialties.find(
-                                        (item) => item.specialty === group.specialty,
-                                      )?.color ?? "#0f766e"
-                                    }
-                                    names={group.names}
-                                  />
-                                </div>
-                              ))}
+              {visibleManagementReviewPlans.length > 0 && (
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-sm font-semibold">بانتظار إصدار الخطة</h3>
+                    <p className="text-xs text-muted-foreground">
+                      راجع الكشف ثم ثبّت العنوان والملاحظات قبل الإصدار النهائي.
+                    </p>
+                  </div>
+                  {visibleManagementReviewPlans.map((plan) => (
+                    <FinalPlanDocument
+                      key={plan.id}
+                      plan={plan}
+                      site={sites.find((site) => site.id === plan.site_id)}
+                      staffSearch={finalStaffSearch}
+                      onStaffSearchChange={setFinalStaffSearch}
+                      issued={false}
+                    >
+                      <div className="rounded-md border bg-muted/20 p-4">
+                        <p className="mb-3 text-sm font-semibold">إصدار الوثيقة النهائية</p>
+                        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                          <div className="space-y-1.5">
+                            <Label htmlFor={`final-title-${plan.id}`}>عنوان الخطة</Label>
+                            <Input
+                              id={`final-title-${plan.id}`}
+                              value={finalPlanTitle[plan.id] ?? ""}
+                              onChange={(e) =>
+                                setFinalPlanTitle((current) => ({
+                                  ...current,
+                                  [plan.id]: e.target.value,
+                                }))
+                              }
+                              placeholder={`الخطة النهائية - ${plan.site_name}`}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor={`final-notes-${plan.id}`}>ملاحظات الإصدار</Label>
+                            <Input
+                              id={`final-notes-${plan.id}`}
+                              value={finalPlanNotes[plan.id] ?? ""}
+                              onChange={(e) =>
+                                setFinalPlanNotes((current) => ({
+                                  ...current,
+                                  [plan.id]: e.target.value,
+                                }))
+                              }
+                              placeholder="تظهر مع الوثيقة المعتمدة"
+                            />
                           </div>
                         </div>
-                      )}
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        <Input
-                          value={finalPlanTitle[plan.id] ?? ""}
-                          onChange={(e) =>
-                            setFinalPlanTitle((current) => ({
-                              ...current,
-                              [plan.id]: e.target.value,
-                            }))
-                          }
-                          placeholder="عنوان الخطة النهائية"
-                        />
-                        <Input
-                          value={finalPlanNotes[plan.id] ?? ""}
-                          onChange={(e) =>
-                            setFinalPlanNotes((current) => ({
-                              ...current,
-                              [plan.id]: e.target.value,
-                            }))
-                          }
-                          placeholder="ملاحظات الخطة النهائية"
-                        />
+                        <div className="mt-3">
+                          <ResponsivePlanAction
+                            label="تأكيد الخطة النهائية ليوم"
+                            onAction={() =>
+                              finalizePlan.mutate({
+                                id: plan.id,
+                                finalTitle:
+                                  finalPlanTitle[plan.id] ?? `الخطة النهائية - ${plan.site_name}`,
+                                finalNotes: finalPlanNotes[plan.id] ?? "",
+                              })
+                            }
+                          />
+                        </div>
                       </div>
-
-                      <ResponsivePlanAction
-                        label="تأكيد الخطة النهائية ليوم"
-                        onAction={() =>
-                          finalizePlan.mutate({
-                            id: plan.id,
-                            finalTitle:
-                              finalPlanTitle[plan.id] ?? `الخطة النهائية - ${plan.site_name}`,
-                            finalNotes: finalPlanNotes[plan.id] ?? "",
-                          })
-                        }
-                      />
-                    </div>
-                  </details>
-                ))
+                    </FinalPlanDocument>
+                  ))}
+                </div>
               )}
 
               {visibleFinalPlans.length > 0 && (
-                <div className="space-y-3">
-                  <h3 className="font-bold">الخطة النهائية المعتمدة</h3>
-                  {visibleFinalPlans.map((plan) =>
-                    (() => {
-                      const rows = getFinalSpecialtyRows(plan);
-                      const specialties = plan.final_plan?.specialties ?? plan.specialties ?? [];
-                      const requiredTotal = specialties.reduce(
-                        (sum, item) => sum + Number(item.quantity || 0),
-                        0,
-                      );
-                      const assignedTotal = plan.assigned_staff.reduce(
-                        (sum, group) => sum + group.names.length,
-                        0,
-                      );
-                      const remainingTotal = Math.max(0, requiredTotal - assignedTotal);
-                      const staffingProgress = requiredTotal
-                        ? Math.min(100, Math.round((assignedTotal / requiredTotal) * 100))
-                        : 100;
-                      const ctrCode = sites.find((site) => site.id === plan.site_id)?.ctr_code;
-
-                      return (
-                        <section
-                          key={plan.id}
-                          dir="rtl"
-                          className="planning-final-print overflow-hidden rounded-xl border bg-card shadow-sm"
-                        >
-                          <header className="relative flex flex-col gap-4 overflow-hidden bg-gradient-to-br from-[#102b46] via-[#12465a] to-[#087d78] p-5 text-white sm:flex-row sm:items-center sm:justify-between sm:p-7">
-                            <div className="pointer-events-none absolute -left-12 -top-16 h-48 w-48 rounded-full border-[28px] border-white/5" />
-                            <div className="min-w-0">
-                              <div className="mb-2 flex flex-wrap items-center gap-2">
-                                <Badge
-                                  variant="outline"
-                                  className="border-white/25 bg-white/10 font-mono text-white"
-                                >
-                                  {ctrCode || plan.site_name}
-                                </Badge>
-                                <span className="text-sm text-white/75">{plan.request_date}</span>
-                                <Badge className="bg-teal-200 text-slate-900">
-                                  {planStatusLabel[plan.status]}
-                                </Badge>
-                              </div>
-                              <p className="mb-1 text-xs font-semibold tracking-widest text-teal-200">
-                                خطة تشغيل معتمدة · توزيع الموارد
-                              </p>
-                              <h4 className="truncate text-xl font-bold sm:text-2xl">
-                                {plan.final_plan?.title ?? `الخطة النهائية - ${plan.site_name}`}
-                              </h4>
-                              <p className="mt-1 text-sm text-white/75">{plan.site_name}</p>
-                              <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium text-white/90">
-                                <Badge
-                                  variant="outline"
-                                  className="border-white/25 bg-white/10 text-white"
-                                >
-                                  منشئ الخطة: {planCreatorLabel(plan)}
-                                </Badge>
-                                <Badge
-                                  variant="outline"
-                                  className="border-white/25 bg-white/10 text-white"
-                                >
-                                  طالب الخطة: {plan.applicant_name || "غير محدد"}
-                                </Badge>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <div className="grid grid-cols-2 gap-2 sm:min-w-56">
-                                <div className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-center">
-                                  <span className="block text-[11px] text-white/65">المطلوب</span>
-                                  <strong className="text-xl">{requiredTotal}</strong>
-                                </div>
-                                <div className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-center">
-                                  <span className="block text-[11px] text-white/65">
-                                    تم التعيين
-                                  </span>
-                                  <strong className="text-xl">{assignedTotal}</strong>
-                                </div>
-                              </div>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                className="planning-final-controls min-h-11 shrink-0 border-white/30 bg-white text-slate-900 hover:bg-teal-50"
-                                onClick={() => exportPlanPdf(plan)}
-                              >
-                                <Printer className="ml-2 h-4 w-4" /> تصدير PDF
-                              </Button>
-                            </div>
-                          </header>
-
-                          <div className="space-y-4 p-4 sm:p-5">
-                            <div className="flex gap-3 rounded-2xl border border-amber-200/80 bg-gradient-to-l from-amber-50 to-white p-4 text-sm shadow-sm dark:border-amber-900 dark:from-amber-950/30 dark:to-card">
-                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-400/15 text-amber-700 dark:text-amber-300">
-                                <NotebookPen className="h-4 w-4" />
-                              </span>
-                              <div>
-                                <span className="font-bold">ملاحظات المهندس</span>
-                                <p className="mt-1 whitespace-pre-line text-muted-foreground">
-                                  {plan.engineer_notes ||
-                                    plan.final_plan?.notes ||
-                                    "لا توجد ملاحظات مرفقة."}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="rounded-2xl border bg-card p-4 shadow-sm sm:p-5">
-                              <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                                <div className="flex items-start gap-3">
-                                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                                    <Users className="h-5 w-5" />
-                                  </span>
-                                  <div>
-                                    <h5 className="text-lg font-extrabold">توزيع القوى العاملة</h5>
-                                    <p className="mt-0.5 text-sm text-muted-foreground">
-                                      تفاصيل كل تخصص والكوادر المسندة إليه
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="planning-final-controls flex flex-col gap-3 sm:flex-row sm:items-center">
-                                  <div className="w-full sm:w-56">
-                                    <div className="mb-1 flex justify-between text-[11px] text-muted-foreground">
-                                      <span>اكتمال التوزيع</span>
-                                      <strong className="text-foreground">
-                                        {staffingProgress}٪
-                                      </strong>
-                                    </div>
-                                    <div className="h-2 overflow-hidden rounded-full bg-muted">
-                                      <div
-                                        className="h-full rounded-full bg-gradient-to-l from-teal-500 to-emerald-400"
-                                        style={{ width: `${staffingProgress}%` }}
-                                      />
-                                    </div>
-                                  </div>
-                                  <div className="relative w-full sm:w-64">
-                                    <Search className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
-                                    <Input
-                                      className="min-h-11 rounded-xl pr-9"
-                                      value={finalStaffSearch}
-                                      onChange={(event) => setFinalStaffSearch(event.target.value)}
-                                      placeholder="ابحث عن تخصص أو اسم..."
-                                      aria-label="بحث في الخطة النهائية"
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-
-                              {!rows.length ? (
-                                <div className="rounded-2xl border border-dashed bg-muted/20 p-10 text-center text-muted-foreground">
-                                  {specialties.length
-                                    ? "لا توجد تخصصات مطابقة للبحث."
-                                    : "لا توجد تخصصات في الخطة النهائية."}
-                                </div>
-                              ) : (
-                                <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                                  {rows.map(({ item, names }) => {
-                                    const required = Number(item.quantity) || 0;
-                                    const missing = Math.max(0, required - names.length);
-                                    const complete = missing === 0;
-                                    const progress =
-                                      required > 0
-                                        ? Math.min(100, (names.length / required) * 100)
-                                        : 100;
-                                    const specialtyColor = item.color || "#0f766e";
-                                    return (
-                                      <article
-                                        key={`${plan.id}-${item.specialty}`}
-                                        className="group relative overflow-hidden rounded-2xl border bg-card shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
-                                      >
-                                        <div
-                                          className="h-1.5"
-                                          style={{
-                                            background: `linear-gradient(90deg, ${specialtyColor}55, ${specialtyColor})`,
-                                          }}
-                                        />
-                                        <div className="space-y-4 p-4 sm:p-5">
-                                          <div className="flex items-center justify-between gap-3">
-                                            <div className="flex min-w-0 items-center gap-3">
-                                              <span
-                                                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-lg font-black"
-                                                style={{
-                                                  backgroundColor: `${specialtyColor}18`,
-                                                  color: specialtyColor,
-                                                }}
-                                              >
-                                                {item.specialty.trim().charAt(0)}
-                                              </span>
-                                              <div className="min-w-0">
-                                                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                                                  التخصص
-                                                </p>
-                                                <h6 className="truncate text-base font-extrabold">
-                                                  {item.specialty}
-                                                </h6>
-                                              </div>
-                                            </div>
-                                            <div className="flex shrink-0 items-center gap-2 rounded-xl border bg-muted/30 px-3 py-2">
-                                              <span className="text-[10px] text-muted-foreground">
-                                                العدد المطلوب
-                                              </span>
-                                              <strong className="text-xl tabular-nums">
-                                                {required}
-                                              </strong>
-                                            </div>
-                                          </div>
-                                          <div>
-                                            <div className="mb-1.5 flex items-center justify-between text-xs">
-                                              <span className="font-semibold text-muted-foreground">
-                                                حالة التوزيع
-                                              </span>
-                                              <span
-                                                className={`font-bold ${complete ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300"}`}
-                                              >
-                                                {complete
-                                                  ? `مكتمل · ${names.length}/${required}`
-                                                  : `متبقٍ ${missing} · ${names.length}/${required}`}
-                                              </span>
-                                            </div>
-                                            <div className="h-2 overflow-hidden rounded-full bg-muted">
-                                              <div
-                                                className={`h-full rounded-full transition-all ${complete ? "bg-gradient-to-l from-emerald-600 to-teal-400" : "bg-gradient-to-l from-amber-500 to-orange-300"}`}
-                                                style={{ width: `${progress}%` }}
-                                              />
-                                            </div>
-                                          </div>
-                                          <div className="rounded-xl border border-dashed bg-muted/15 p-3">
-                                            <div className="mb-2 flex items-center justify-between">
-                                              <span className="text-xs font-bold">
-                                                الكوادر المسندة
-                                              </span>
-                                              <Badge variant="secondary" className="rounded-full">
-                                                {names.length} فرد
-                                              </Badge>
-                                            </div>
-                                            {names.length ? (
-                                              <ColoredNameChips
-                                                color={specialtyColor}
-                                                names={names}
-                                              />
-                                            ) : (
-                                              <p className="text-xs text-muted-foreground">
-                                                لم تُسند كوادر لهذا التخصص.
-                                              </p>
-                                            )}
-                                          </div>
-                                          {item.notes && (
-                                            <p className="text-xs leading-6 text-muted-foreground">
-                                              <span className="font-bold text-foreground">
-                                                ملاحظة التخصص:{" "}
-                                              </span>
-                                              {item.notes}
-                                            </p>
-                                          )}
-                                        </div>
-                                      </article>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="grid gap-3 sm:grid-cols-3">
-                              <div className="rounded-2xl border bg-muted/25 p-4">
-                                <span className="text-xs text-muted-foreground">
-                                  إجمالي الاحتياج
-                                </span>
-                                <div className="mt-1 text-2xl font-black tabular-nums">
-                                  {requiredTotal}
-                                  <span className="mr-1 text-xs font-medium text-muted-foreground">
-                                    فرد
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900 dark:bg-emerald-950/20">
-                                <span className="text-xs text-muted-foreground">تم توزيعهم</span>
-                                <div className="mt-1 text-2xl font-black tabular-nums text-emerald-700 dark:text-emerald-300">
-                                  {assignedTotal}
-                                  <span className="mr-1 text-xs font-medium">فرد</span>
-                                </div>
-                              </div>
-                              <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900 dark:bg-amber-950/20">
-                                <span className="text-xs text-muted-foreground">
-                                  المتبقي للتوزيع
-                                </span>
-                                <div className="mt-1 text-2xl font-black tabular-nums text-amber-700 dark:text-amber-300">
-                                  {remainingTotal}
-                                  <span className="mr-1 text-xs font-medium">فرد</span>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex gap-3 rounded-2xl border bg-muted/20 p-4 text-sm">
-                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                                <NotebookPen className="h-4 w-4" />
-                              </span>
-                              <div>
-                                <span className="font-bold">ملاحظات الخطة</span>
-                                <p className="mt-1 whitespace-pre-line text-muted-foreground">
-                                  {plan.final_plan?.notes ??
-                                    plan.management_notes ??
-                                    "لا توجد ملاحظات إضافية."}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="sr-only">إجمالي الأسماء المضافة: {assignedTotal}</div>
-                          </div>
-                        </section>
-                      );
-                    })(),
-                  )}
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-sm font-semibold">الخطط الصادرة</h3>
+                    <p className="text-xs text-muted-foreground">
+                      الوثيقة المعتمدة للتوزيع اليومي حسب التخصص.
+                    </p>
+                  </div>
+                  {visibleFinalPlans.map((plan) => (
+                    <FinalPlanDocument
+                      key={plan.id}
+                      plan={plan}
+                      site={sites.find((site) => site.id === plan.site_id)}
+                      staffSearch={finalStaffSearch}
+                      onStaffSearchChange={setFinalStaffSearch}
+                      onExport={() => exportPlanPdf(plan)}
+                      issued
+                    />
+                  ))}
                 </div>
               )}
             </div>

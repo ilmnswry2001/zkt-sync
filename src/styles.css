@@ -252,6 +252,9 @@
 .planning-final-stripe {
   background-color: var(--muted);
 }
+.planning-final-print table th {
+  font-weight: 600;
+}
 
 @media print {
   @page {

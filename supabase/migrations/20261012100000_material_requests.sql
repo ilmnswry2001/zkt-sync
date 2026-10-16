@@ -105,6 +105,7 @@ CREATE TABLE IF NOT EXISTS public.material_request_receipts (
   idempotency_key uuid NOT NULL UNIQUE,
   request_id uuid NOT NULL REFERENCES public.material_requests(id) ON DELETE RESTRICT,
   batch_id uuid NOT NULL REFERENCES public.material_procurement_batches(id) ON DELETE RESTRICT,
+  warehouse_id uuid REFERENCES public.warehouses(id) ON DELETE RESTRICT,
   received_by uuid NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT,
   received_at timestamptz NOT NULL DEFAULT now(),
   notes text
