@@ -9,6 +9,7 @@ import {
 } from "./monthly-report.ts";
 import { z } from "zod";
 import { monthInstantRangeInBaghdad, todayInBaghdad } from "./date-time.ts";
+import { getEmployeePayType } from "./employee-pay-type.ts";
 
 async function approvedLeaveOverrides(supabase: any, employeeIds: string[], start: string, endDate: string) {
   const rows: { employee_id: string; work_date: string; status: "leave"; notes: string; overtime_hours: number; is_paid: boolean }[] = [];
@@ -218,7 +219,7 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
       ),
       approvedLeaveOverrides(supabase, [data.employee_id], start, endDate),
     ]);
-    const payType = emp.pay_type === "daily" ? ("daily" as const) : ("monthly" as const);
+    const payType = getEmployeePayType(emp);
     const days = buildAttendanceDays(
       dates,
       logs,

@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { printReport, escapeHtml } from "@/lib/report-print";
 import { amountInArabicIqd } from "@/lib/arabic-currency";
 import { currentMonthInBaghdad, monthInstantRangeInBaghdad, todayInBaghdad } from "@/lib/date-time";
+import { getEmployeePayType } from "@/lib/employee-pay-type";
 import {
   buildAttendanceDays,
   calculatePayroll,
@@ -44,6 +45,7 @@ type Employee = {
   full_name: string;
   base_salary: number | null;
   pay_type: string | null;
+  position: string | null;
   salary_type: string | null;
   contract_type: string | null;
   bank_name: string | null;
@@ -52,6 +54,7 @@ type Employee = {
   sites: { name: string } | null;
   departments: { name: string } | null;
   wage_rates: {
+    title: string | null;
     monthly_rate: number | null;
     daily_rate: number | null;
     overtime_hour_rate: number | null;
@@ -106,7 +109,7 @@ function PayrollPage() {
             supabase
               .from("employees")
               .select(
-                "id, employee_no, full_name, base_salary, pay_type, salary_type, contract_type, bank_name, bank_account, iban, sites!employees_site_id_fkey(name), departments!employees_department_id_fkey(name), wage_rates(monthly_rate, daily_rate, overtime_hour_rate, currency), shifts(end_time, grace_minutes)",
+                "id, employee_no, full_name, position, base_salary, pay_type, salary_type, contract_type, bank_name, bank_account, iban, sites!employees_site_id_fkey(name), departments!employees_department_id_fkey(name), wage_rates(title, monthly_rate, daily_rate, overtime_hour_rate, currency), shifts(end_time, grace_minutes)",
               )
               .order("employee_no")
               .order("id")
@@ -198,7 +201,7 @@ function PayrollPage() {
   const rows = useMemo(
     () =>
       (query.data?.employees ?? []).map((employee) => {
-        const payType = employee.pay_type === "daily" ? "daily" : "monthly";
+        const payType = getEmployeePayType(employee);
         const days = buildAttendanceDays(
           monthDates(month),
           (query.data?.logs ?? []).filter((log) => log.employee_no === employee.employee_no),
@@ -234,7 +237,7 @@ function PayrollPage() {
           deductions,
         });
         const total = payroll.netPay;
-        return { employee, payroll, summary, additions, deductions, penalties: employeePenalties, total };
+        return { employee, payType, payroll, summary, additions, deductions, penalties: employeePenalties, total };
       }),
     [query.data, month],
   );
@@ -247,7 +250,7 @@ function PayrollPage() {
     (row) => row.employee.bank_account?.trim() || row.employee.iban?.trim(),
   );
   const cashRows = rows.filter(({ employee }) => {
-    if (employee.pay_type === "daily") return true;
+    if (getEmployeePayType(employee) === "daily") return true;
     return [employee.salary_type, employee.contract_type].some((value) =>
       /نقد|cash/i.test(value ?? ""),
     );
@@ -301,7 +304,7 @@ function PayrollPage() {
       ({ employee, payroll, summary, additions, deductions, total: net }) => ({
         "رقم الموظف": employee.employee_no,
         "اسم الموظف": employee.full_name,
-        "نوع الأجر": employee.pay_type === "daily" ? "يومي" : "شهري",
+        "نوع الأجر": getEmployeePayType(employee) === "daily" ? "يومي" : "شهري",
         "أيام الحضور": summary.presentDays,
         "إجازة مدفوعة": payroll.leaveDays,
         "إجازة بدون راتب": payroll.unpaidLeaveDays,
@@ -538,7 +541,7 @@ function PayrollPage() {
                             <b>{row.employee.full_name}</b>
                             <div className="text-xs text-muted-foreground">
                               {row.employee.employee_no} ·{" "}
-                              {row.employee.pay_type === "daily" ? "يومي" : "شهري"}
+                              {row.payType === "daily" ? "يومي" : "شهري"}
                             </div>
                           </td>
                           <td className="p-3">

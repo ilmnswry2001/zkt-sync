@@ -1,6 +1,6 @@
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -146,12 +146,22 @@ function WagesPage() {
       return data as Rate[];
     },
   });
-  const { data: emps = [] } = useQuery<Employee[]>({
+  const { data: employeePages, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
     queryKey: ["emp-list"],
-    queryFn: async () =>
-      ((await supabase.from("employees").select("id, employee_no, full_name").order("employee_no"))
-        .data ?? []) as Employee[],
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }) => {
+      const { data, error } = await supabase
+        .from("employees")
+        .select("id, employee_no, full_name")
+        .order("employee_no")
+        .range(pageParam, pageParam + 49);
+      if (error) throw error;
+      return data as Employee[];
+    },
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.length === 50 ? allPages.length * 50 : undefined,
   });
+  const emps = employeePages?.pages.flat() ?? [];
   const { data: catalog = [] } = useQuery<string[]>({
     queryKey: ["worker-specialties-for-wages"],
     queryFn: async () => {
@@ -511,13 +521,25 @@ function WagesPage() {
                         <SelectValue placeholder="اختر موظفاً" />
                       </SelectTrigger>
                       <SelectContent>
-                        {emps.slice(0, 300).map((e) => (
+                        {emps.map((e) => (
                           <SelectItem key={e.id} value={e.id}>
                             {e.employee_no} — {e.full_name}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                    {hasNextPage && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="mt-1 w-full"
+                        disabled={isFetchingNextPage}
+                        onClick={() => void fetchNextPage()}
+                      >
+                        {isFetchingNextPage ? "جارٍ تحميل الموظفين…" : `تحميل 50 موظفاً إضافياً (${emps.length} محمّل)`}
+                      </Button>
+                    )}
                   </div>
                   <div>
                     <Label>الشهر</Label>
