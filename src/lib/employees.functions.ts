@@ -51,6 +51,7 @@ const rowSchema = z.object({
   emergency_contact_name: nullableText,
   emergency_contact_phone: nullableText,
   notes: nullableText,
+  employee_import_data: z.record(z.string(), z.union([z.string().max(32767), z.number(), z.boolean(), z.null()])).optional(),
 });
 
 const schema = z.object({ rows: z.array(rowSchema).min(1).max(1000) });
@@ -132,6 +133,10 @@ export const importEmployees = createServerFn({ method: "POST" })
         emergency_contact_name: existing?.emergency_contact_name ?? null,
         emergency_contact_phone: existing?.emergency_contact_phone ?? null,
         notes: keepExisting(r.notes, existing?.notes),
+        employee_import_data: {
+          ...(existing?.employee_import_data ?? {}),
+          ...Object.fromEntries(Object.entries(r.employee_import_data ?? {}).filter(([, value]) => value !== null && value !== "")),
+        },
         updated_at: new Date().toISOString(),
       };
     });

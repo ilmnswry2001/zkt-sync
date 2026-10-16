@@ -396,9 +396,9 @@ function EmployeesPage() {
               {importPreview && (
                 <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-1">
                   <div className="rounded-lg border bg-muted/40 p-3 text-sm">
-                    اربط أعمدة الملف بحقوق النظام. الأعمدة غير المرتبطة ستُتجاهل، والخلايا الفارغة لن تمسح بيانات موجودة.
+                    اربط الأعمدة التي تطابق حقول النظام. تُحفظ جميع أعمدة الملف وقيمها الأصلية في ملف الموظف حتى إن لم يكن لها حقل نظامي مباشر، والخلايا الفارغة لا تمسح بيانات موجودة.
                     <div className="mt-1 text-muted-foreground">
-                      تمت مطابقة {Object.values(importPreview.mapping).filter(Boolean).length} من {importPreview.headers.length} عموداً ·
+                      تمت مطابقة {Object.values(importPreview.mapping).filter(Boolean).length} عموداً مع الحقول النظامية، وستُحفظ بقية الأعمدة ضمن بيانات الملف ·
                       {" "}صفوف صالحة {importPlan.rows.length.toLocaleString("ar-IQ")} · متجاهلة {importPlan.skipped.toLocaleString("ar-IQ")}
                     </div>
                     {invalidDateCount > 0 && <p role="alert" className="mt-2 text-amber-700">تعذر تحويل {invalidDateCount.toLocaleString("ar-IQ")} قيمة إلى تاريخ ({invalidDateDetails})؛ لن تُستورد كتاريخ. الخلايا الفارغة أو غير الصالحة لا تمسح التاريخ الموجود.</p>}

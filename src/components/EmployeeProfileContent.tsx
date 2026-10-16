@@ -77,6 +77,7 @@ type Employee = {
   erp_no: string | null;
   ctr_code: string | null;
   notes: string | null;
+  employee_import_data?: Record<string, string | number | boolean | null> | null;
   departments?: { name: string } | null;
   sites?: { name: string; ctr_code: string | null } | null;
   wage_rates?: {
@@ -768,6 +769,20 @@ export function EmployeeProfileContent({
               {employee.notes || "لا توجد ملاحظات محفوظة."}
             </CardContent>
           </Card>
+          {Object.entries(employee.employee_import_data ?? {}).some(([, value]) => value !== null && value !== "") && (
+            <Card>
+              <CardHeader>
+                <CardTitle>البيانات المستوردة من الملف الأصلي</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {Object.entries(employee.employee_import_data ?? {})
+                  .filter(([, value]) => value !== null && value !== "")
+                  .map(([label, value]) => (
+                    <Info key={label} icon={ClipboardList} label={label} value={String(value)} />
+                  ))}
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
         <TabsContent value="custody" className="space-y-4">
           <Card>

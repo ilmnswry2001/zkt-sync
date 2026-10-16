@@ -36,6 +36,7 @@ export type EmployeeImportMapping = Record<string, EmployeeImportField | "">;
 export type EmployeeImportRow = {
   employee_no: string;
   full_name: string;
+  employee_import_data: Record<string, string | number | boolean | null>;
 } & Partial<Record<Exclude<EmployeeImportField, "employee_no" | "full_name">, string | null | "active" | "inactive" | "terminated">>;
 
 const HEADERS: Record<string, EmployeeImportField> = {
@@ -158,7 +159,14 @@ export function mapEmployeeImportRows(
     }
     seen.add(employeeNo);
 
-    const result: EmployeeImportRow = { employee_no: employeeNo, full_name: fullName };
+    const sourceData = Object.fromEntries(Object.entries(sourceRow).map(([header, value]) => {
+      if (value === null || value === undefined || value === "") return [header, null];
+      if (value instanceof Date && !Number.isNaN(value.getTime())) return [header, value.toISOString().slice(0, 10)];
+      if (typeof value === "string") return [header, value.trim() || null];
+      if (typeof value === "number" || typeof value === "boolean") return [header, value];
+      return [header, String(value).trim() || null];
+    }));
+    const result: EmployeeImportRow = { employee_no: employeeNo, full_name: fullName, employee_import_data: sourceData };
     for (const [field, value] of Object.entries(selected) as [EmployeeImportField, unknown][]) {
       if (field === "employee_no" || field === "full_name") continue;
       if (field === "status") result.status = toStatus(value) ?? undefined;

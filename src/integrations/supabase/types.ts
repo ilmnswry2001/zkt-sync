@@ -1141,6 +1141,7 @@ export type Database = {
           emergency_contact_name: string | null
           emergency_contact_phone: string | null
           employee_no: string
+          employee_import_data: Json
           erp_no: string | null
           full_name: string
           gender: string | null
@@ -1190,6 +1191,7 @@ export type Database = {
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
           employee_no: string
+          employee_import_data?: Json
           erp_no?: string | null
           full_name: string
           gender?: string | null
@@ -1239,6 +1241,7 @@ export type Database = {
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
           employee_no?: string
+          employee_import_data?: Json
           erp_no?: string | null
           full_name?: string
           gender?: string | null
