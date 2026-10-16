@@ -1142,6 +1142,42 @@ export type Database = {
           emergency_contact_phone: string | null
           employee_no: string
           employee_import_data: Json
+          department_name: string | null
+          course_nomination_form: string | null
+          course_nomination_date: string | null
+          executive_guidance_follow_up: string | null
+          executive_guidance_notes: string | null
+          appointment_decision: string | null
+          appointment_decision_date: string | null
+          safety_passport_status: string | null
+          passport_name: string | null
+          nationality_number: string | null
+          identity_or_passport_number: string | null
+          social_security_contract_number: string | null
+          email_submission_date: string | null
+          social_security_addition_nomination: string | null
+          employee_contract_nomination: string | null
+          clearance_date: string | null
+          employment_form: string | null
+          basic_safety_course: string | null
+          policies_undertaking: string | null
+          identity_residence_copy: string | null
+          paper_electronic_photos: string | null
+          safety_passport_copy: string | null
+          passport_copy: string | null
+          visa_copy: string | null
+          cv_copy: string | null
+          driving_license: string | null
+          graduation_certificate: string | null
+          data_entry_by: string | null
+          nomination_field: string | null
+          rumaila_courses: string | null
+          upload_notes: string | null
+          last_review_date: string | null
+          last_review_notes: string | null
+          notes_2: string | null
+          last_evaluation_date: string | null
+          last_evaluation_score: string | null
           erp_no: string | null
           full_name: string
           gender: string | null
@@ -1192,6 +1228,42 @@ export type Database = {
           emergency_contact_phone?: string | null
           employee_no: string
           employee_import_data?: Json
+          department_name?: string | null
+          course_nomination_form?: string | null
+          course_nomination_date?: string | null
+          executive_guidance_follow_up?: string | null
+          executive_guidance_notes?: string | null
+          appointment_decision?: string | null
+          appointment_decision_date?: string | null
+          safety_passport_status?: string | null
+          passport_name?: string | null
+          nationality_number?: string | null
+          identity_or_passport_number?: string | null
+          social_security_contract_number?: string | null
+          email_submission_date?: string | null
+          social_security_addition_nomination?: string | null
+          employee_contract_nomination?: string | null
+          clearance_date?: string | null
+          employment_form?: string | null
+          basic_safety_course?: string | null
+          policies_undertaking?: string | null
+          identity_residence_copy?: string | null
+          paper_electronic_photos?: string | null
+          safety_passport_copy?: string | null
+          passport_copy?: string | null
+          visa_copy?: string | null
+          cv_copy?: string | null
+          driving_license?: string | null
+          graduation_certificate?: string | null
+          data_entry_by?: string | null
+          nomination_field?: string | null
+          rumaila_courses?: string | null
+          upload_notes?: string | null
+          last_review_date?: string | null
+          last_review_notes?: string | null
+          notes_2?: string | null
+          last_evaluation_date?: string | null
+          last_evaluation_score?: string | null
           erp_no?: string | null
           full_name: string
           gender?: string | null
@@ -1242,6 +1314,42 @@ export type Database = {
           emergency_contact_phone?: string | null
           employee_no?: string
           employee_import_data?: Json
+          department_name?: string | null
+          course_nomination_form?: string | null
+          course_nomination_date?: string | null
+          executive_guidance_follow_up?: string | null
+          executive_guidance_notes?: string | null
+          appointment_decision?: string | null
+          appointment_decision_date?: string | null
+          safety_passport_status?: string | null
+          passport_name?: string | null
+          nationality_number?: string | null
+          identity_or_passport_number?: string | null
+          social_security_contract_number?: string | null
+          email_submission_date?: string | null
+          social_security_addition_nomination?: string | null
+          employee_contract_nomination?: string | null
+          clearance_date?: string | null
+          employment_form?: string | null
+          basic_safety_course?: string | null
+          policies_undertaking?: string | null
+          identity_residence_copy?: string | null
+          paper_electronic_photos?: string | null
+          safety_passport_copy?: string | null
+          passport_copy?: string | null
+          visa_copy?: string | null
+          cv_copy?: string | null
+          driving_license?: string | null
+          graduation_certificate?: string | null
+          data_entry_by?: string | null
+          nomination_field?: string | null
+          rumaila_courses?: string | null
+          upload_notes?: string | null
+          last_review_date?: string | null
+          last_review_notes?: string | null
+          notes_2?: string | null
+          last_evaluation_date?: string | null
+          last_evaluation_score?: string | null
           erp_no?: string | null
           full_name?: string
           gender?: string | null

@@ -312,6 +312,8 @@ function EmployeesPage() {
       emergency_contact_phone: toNull(raw.emergency_contact_phone),
       notes: toNull(raw.notes),
       employee_import_data: raw.employee_import_data ?? {},
+      department_name: toNull(raw.department_name),
+      ...Object.fromEntries(EMPLOYEE_EXTRA_SOURCE_FIELDS.map(({ column }) => [column, toNull(raw[column])])),
     };
   };
 
@@ -476,9 +478,13 @@ function EmployeesPage() {
               const sourceFields = Object.fromEntries([
                 ...Object.entries(EMPLOYEE_SOURCE_BINDINGS).map(([header, field]) => [
                   header,
-                  field === "department_id" ? selectedDepartment?.name ?? null : g(field),
+                  field === "department_name" ? selectedDepartment?.name ?? null : g(field),
                 ]),
-                ...EMPLOYEE_EXTRA_SOURCE_FIELDS.map((header) => [header, g(`source_${header}`)]),
+                ...EMPLOYEE_EXTRA_SOURCE_FIELDS.map(({ header }) => [header, g(`source_${header}`)]),
+              ]);
+              const sourceColumns = Object.fromEntries([
+                ["department_name", selectedDepartment?.name ?? null],
+                ...EMPLOYEE_EXTRA_SOURCE_FIELDS.map(({ header, column }) => [column, g(`source_${header}`)]),
               ]);
               save.mutate({
                 employee_no: f.get("employee_no") as string,
@@ -505,6 +511,7 @@ function EmployeesPage() {
                 emergency_contact_name: g("emergency_contact_name"), emergency_contact_phone: g("emergency_contact_phone"),
                 notes: g("notes"),
                 employee_import_data: { ...(editing?.employee_import_data ?? {}), ...sourceFields },
+                ...sourceColumns,
               });
             }} className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
               <section className="space-y-3 rounded-xl border bg-card p-4 shadow-sm">
@@ -638,10 +645,10 @@ function EmployeesPage() {
                 <h3 className="font-semibold text-sm text-muted-foreground">حقول الملف الشامل الإضافية</h3>
                 <p className="text-xs text-muted-foreground">تُحفظ هذه الحقول كما وردت في قاعدة البيانات الشاملة، وتظهر في ملف الموظف.</p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {EMPLOYEE_EXTRA_SOURCE_FIELDS.map((header) => (
-                    <div key={header}>
+                  {EMPLOYEE_EXTRA_SOURCE_FIELDS.map(({ header, column }) => (
+                    <div key={column}>
                       <Label htmlFor={`source_${header}`}>{header}</Label>
-                      <Input id={`source_${header}`} name={`source_${header}`} defaultValue={String(ed?.employee_import_data?.[header] ?? "")} />
+                      <Input id={`source_${header}`} name={`source_${header}`} defaultValue={String(ed?.[column] ?? ed?.employee_import_data?.[header] ?? "")} />
                     </div>
                   ))}
                 </div>

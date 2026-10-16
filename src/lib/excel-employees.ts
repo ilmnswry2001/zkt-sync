@@ -36,7 +36,7 @@ export const EMPLOYEE_SOURCE_BINDINGS: Record<string, string> = {
   "التسلسل": "employee_no",
   "اسم الموظف": "full_name",
   "المسمى الوظيفي": "position",
-  "القسم": "department_id",
+  "القسم": "department_name",
   "NO EM ERP": "erp_no",
   "مستمر بالعمل؟": "status",
   "ID NO.": "id_no",
@@ -58,15 +58,25 @@ export const EMPLOYEE_SOURCE_BINDINGS: Record<string, string> = {
 };
 
 export const EMPLOYEE_EXTRA_SOURCE_FIELDS = [
-  "استمارة ترشيح دورة", "تاريخ الاستمارة", "متابعة توجيهات الادارة العليا", "ملاحظات توجيهات الادارة",
-  "قرار التعيين", "تاريخ كتاب القرار", "حالة جواز السلامة", "الاسم في الجواز", "رقم الجنسية",
-  "رقم الهوية / الجواز", "رقم العقد الضمان الاجتماعي", "تاريخ الرفع بالإيميل", "ترشيح للاضافة في الضمان الاجتماعي",
-  "ترشيح لعمل عقد الموظف", "تاريخ براءة الذمة", "استمارة التوظيف", "دورة السلامة الأساسية", "تعهد السياسات",
-  "نسخة الهوية+السكن", "صور ورقية والكترونية", "نسخة جواز السلامة", "نسخة جواز السفر", "نسخة الفيزة",
-  "السيرة الذاتية", "جواز قيادة", "وثيقة التخرج", "مدخل البيانات", "حقل الترشيح",
-  "الدورات الرميلة التي حصل عليها", "ملاحظات الرفع", "تاريخ آخر مراجعة", "ملاحظات آخر مراجعة",
-  "ملاحظات 2", "تاريخ آخر تقييم", "درجة آخر تقييم",
-] as const;
+  ["استمارة ترشيح دورة", "course_nomination_form"], ["تاريخ الاستمارة", "course_nomination_date"],
+  ["متابعة توجيهات الادارة العليا", "executive_guidance_follow_up"], ["ملاحظات توجيهات الادارة", "executive_guidance_notes"],
+  ["قرار التعيين", "appointment_decision"], ["تاريخ كتاب القرار", "appointment_decision_date"],
+  ["حالة جواز السلامة", "safety_passport_status"], ["الاسم في الجواز", "passport_name"],
+  ["رقم الجنسية", "nationality_number"], ["رقم الهوية / الجواز", "identity_or_passport_number"],
+  ["رقم العقد الضمان الاجتماعي", "social_security_contract_number"], ["تاريخ الرفع بالإيميل", "email_submission_date"],
+  ["ترشيح للاضافة في الضمان الاجتماعي", "social_security_addition_nomination"],
+  ["ترشيح لعمل عقد الموظف", "employee_contract_nomination"], ["تاريخ براءة الذمة", "clearance_date"],
+  ["استمارة التوظيف", "employment_form"], ["دورة السلامة الأساسية", "basic_safety_course"],
+  ["تعهد السياسات", "policies_undertaking"], ["نسخة الهوية+السكن", "identity_residence_copy"],
+  ["صور ورقية والكترونية", "paper_electronic_photos"], ["نسخة جواز السلامة", "safety_passport_copy"],
+  ["نسخة جواز السفر", "passport_copy"], ["نسخة الفيزة", "visa_copy"], ["السيرة الذاتية", "cv_copy"],
+  ["جواز قيادة", "driving_license"], ["وثيقة التخرج", "graduation_certificate"],
+  ["مدخل البيانات", "data_entry_by"], ["حقل الترشيح", "nomination_field"],
+  ["الدورات الرميلة التي حصل عليها", "rumaila_courses"], ["ملاحظات الرفع", "upload_notes"],
+  ["تاريخ آخر مراجعة", "last_review_date"], ["ملاحظات آخر مراجعة", "last_review_notes"],
+  ["ملاحظات 2", "notes_2"], ["تاريخ آخر تقييم", "last_evaluation_date"],
+  ["درجة آخر تقييم", "last_evaluation_score"],
+].map(([header, column]) => ({ header, column })) as { header: string; column: string }[];
 
 export type EmployeeImportField = (typeof EMPLOYEE_IMPORT_FIELDS)[number]["key"];
 export type EmployeeImportMapping = Record<string, EmployeeImportField | "">;

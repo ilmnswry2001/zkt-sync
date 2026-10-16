@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { EMPLOYEE_EXTRA_SOURCE_FIELDS } from "@/lib/excel-employees";
 import { z } from "zod";
 
 const nullableText = z.string().max(400).nullable().optional();
@@ -92,6 +93,11 @@ export const importEmployees = createServerFn({ method: "POST" })
     const payload = data.rows.map((r) => {
       const employeeNo = String(r.employee_no).trim();
       const existing = existingByNo.get(employeeNo);
+      const currentSourceData = existing?.employee_import_data;
+      const previousSourceData = currentSourceData && typeof currentSourceData === "object" && !Array.isArray(currentSourceData)
+        ? currentSourceData as Record<string, string | number | boolean | null>
+        : {};
+      const existingRecord = existing as unknown as Record<string, unknown> | undefined;
       const departmentName = toNull(r.department);
       return {
         employee_no: employeeNo,
@@ -134,9 +140,15 @@ export const importEmployees = createServerFn({ method: "POST" })
         emergency_contact_phone: existing?.emergency_contact_phone ?? null,
         notes: keepExisting(r.notes, existing?.notes),
         employee_import_data: {
-          ...(existing?.employee_import_data ?? {}),
+          ...previousSourceData,
           ...Object.fromEntries(Object.entries(r.employee_import_data ?? {}).filter(([, value]) => value !== null && value !== "")),
         },
+        department_name: keepExisting(toNull(r.department), existing?.department_name),
+        ...Object.fromEntries(EMPLOYEE_EXTRA_SOURCE_FIELDS.map(({ header, column }) => {
+          const sourceValue = r.employee_import_data?.[header];
+          const currentValue = existingRecord?.[column];
+          return [column, keepExisting(toNull(sourceValue === undefined || sourceValue === null ? null : String(sourceValue)), typeof currentValue === "string" ? currentValue : null)];
+        })),
         updated_at: new Date().toISOString(),
       };
     });
