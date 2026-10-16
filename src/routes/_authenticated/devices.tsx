@@ -15,6 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Trash2, Plus, Pencil, KeyRound, Copy, Download, RefreshCw, Ban } from "lucide-react";
 import { toast } from "sonner";
+import agentScript from "../../../scripts/agent.py?raw";
+import agentRequirements from "../../../scripts/requirements.txt?raw";
 
 export const Route = createFileRoute("/_authenticated/devices")({
   head: () => ({ meta: [{ title: "الأجهزة" }] }),
@@ -94,7 +96,16 @@ function DevicesPage() {
     anchor.href = url;
     anchor.download = "agent_config.ini";
     anchor.click();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const downloadTextFile = (filename: string, contents: string, contentType: string) => {
+    const url = URL.createObjectURL(new Blob([contents], { type: contentType }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const save = useMutation({
@@ -172,12 +183,12 @@ function DevicesPage() {
         <CardContent className="space-y-3 text-sm">
           <p>أنشئ مفتاحاً لكل جهاز، ثم نزّل ملف الإعدادات وضعه بجانب وكيل Python على حاسوب متصل بشبكة الجهاز.</p>
           <div className="flex flex-wrap gap-x-5 gap-y-2">
-            <a className="inline-flex items-center gap-2 font-semibold text-primary underline" href="https://raw.githubusercontent.com/ilmnswry2001/zkt-sync/main/scripts/agent.py" download>
+            <button type="button" className="inline-flex items-center gap-2 font-semibold text-primary underline" onClick={() => downloadTextFile("agent.py", agentScript, "text/x-python;charset=utf-8")}>
               <Download className="h-4 w-4" /> تنزيل وكيل المزامنة
-            </a>
-            <a className="inline-flex items-center gap-2 font-semibold text-primary underline" href="https://raw.githubusercontent.com/ilmnswry2001/zkt-sync/main/scripts/requirements.txt" download>
+            </button>
+            <button type="button" className="inline-flex items-center gap-2 font-semibold text-primary underline" onClick={() => downloadTextFile("requirements.txt", agentRequirements, "text/plain;charset=utf-8")}>
               <Download className="h-4 w-4" /> تنزيل متطلبات Python
-            </a>
+            </button>
           </div>
           {syncStatusError && isAdmin && <p role="alert" className="text-destructive">تعذر تحميل حالة المزامنة. تحقق من تطبيق migration الخاصة بالمزامنة.</p>}
           {createdKey && (
