@@ -183,6 +183,18 @@ export function DailyWorkshopInventory() {
   const selectedEmployee = employees.find((employee) => employee.id === employeeId);
   const sites = sitesQuery.data ?? [];
   const presentLines = (reportQuery.data?.lines ?? []).filter((line) => line.attended);
+  const presentGroups = useMemo(() => {
+    const groups = new Map<string, { name: string; lines: AttendanceLine[] }>();
+    for (const line of presentLines) {
+      const report = reportQuery.data?.reports.find((item) => item.id === line.report_id);
+      const workshop = workshops.find((item) => item.id === report?.workshop_id);
+      const key = report?.workshop_id ?? line.report_id;
+      const group = groups.get(key) ?? { name: workshop?.name ?? "ورشة", lines: [] };
+      group.lines.push(line);
+      groups.set(key, group);
+    }
+    return Array.from(groups.values()).sort((a, b) => a.name.localeCompare(b.name, "ar"));
+  }, [presentLines, reportQuery.data?.reports, workshops]);
   const wageByTitle = new Map((wagesQuery.data ?? []).map((wage) => [wage.title.trim(), wage]));
   const dailyCost = (line: AttendanceLine) => {
     const title = line.role_label?.trim() || "";
@@ -786,23 +798,24 @@ export function DailyWorkshopInventory() {
                 <span>التاريخ: <b>{date}</b> · الحاضرون: <b>{presentLines.length}</b></span>
                 <span>إجمالي الكلفة المسندة: <b>{presentLines.reduce((sum, line) => sum + (line.site_id ? dailyCost(line) : 0), 0).toLocaleString("ar-IQ")} د.ع</b></span>
               </div>
-              {presentLines.map((line) => {
-                const report = reportQuery.data?.reports.find((item) => item.id === line.report_id);
-                const workshop = workshops.find((item) => item.id === report?.workshop_id);
-                return (
-                  <div key={line.id} className="grid gap-3 rounded-xl border p-3 sm:grid-cols-[1fr_1fr_auto] sm:items-center">
-                    <div>
-                      <p className="font-medium">{line.employee_name_snapshot}</p>
-                      <p className="text-xs text-muted-foreground">{workshop?.name ?? "ورشة"} · {line.role_label || "بدون صفة"}</p>
+              {presentGroups.map((group) => (
+                <section key={group.name} className="space-y-2 rounded-xl border p-3">
+                  <h3 className="font-semibold">{group.name} <Badge variant="secondary">{group.lines.length} حاضر</Badge></h3>
+                  {group.lines.map((line) => (
+                    <div key={line.id} className="grid gap-3 rounded-xl border bg-card p-3 sm:grid-cols-[1fr_1fr_auto] sm:items-center">
+                      <div>
+                        <p className="font-medium">{line.employee_name_snapshot}</p>
+                        <p className="text-xs text-muted-foreground">{line.role_label || "بدون صفة"}</p>
+                      </div>
+                      <select className={inputClass} aria-label={`مركز تكلفة ${line.employee_name_snapshot}`} value={line.site_id ?? "unassigned"} onChange={(event) => void assignSite(line, event.target.value === "unassigned" ? "" : event.target.value)}>
+                        <option value="unassigned">اختر مركز التكلفة CTR</option>
+                        {sites.map((site) => <option key={site.id} value={site.id}>{site.ctr_code} — {site.name}</option>)}
+                      </select>
+                      <Badge variant={line.site_id ? "default" : "secondary"}>{line.site_id ? `${dailyCost(line).toLocaleString("ar-IQ")} د.ع / يوم` : "غير مسند"}</Badge>
                     </div>
-                    <select className={inputClass} aria-label={`مركز تكلفة ${line.employee_name_snapshot}`} value={line.site_id ?? "unassigned"} onChange={(event) => void assignSite(line, event.target.value === "unassigned" ? "" : event.target.value)}>
-                      <option value="unassigned">اختر مركز التكلفة CTR</option>
-                      {sites.map((site) => <option key={site.id} value={site.id}>{site.ctr_code} — {site.name}</option>)}
-                    </select>
-                    <Badge variant={line.site_id ? "default" : "secondary"}>{line.site_id ? `${dailyCost(line).toLocaleString("ar-IQ")} د.ع / يوم` : "غير مسند"}</Badge>
-                  </div>
-                );
-              })}
+                  ))}
+                </section>
+              ))}
               {!presentLines.length && <p className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">احفظ جرد الحضور أولاً ليظهر الكادر الحاضر هنا.</p>}
               {sitesQuery.error && <p role="alert" className="text-sm text-destructive">تعذر تحميل مراكز التكلفة: {formatErrorMessage(sitesQuery.error)}</p>}
               {wagesQuery.error && <p role="alert" className="text-sm text-destructive">تعذر تحميل أجور التخصصات: {formatErrorMessage(wagesQuery.error)}</p>}
