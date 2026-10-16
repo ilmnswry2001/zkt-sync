@@ -19,12 +19,60 @@ const TableHeader = React.forwardRef<
 ));
 TableHeader.displayName = "TableHeader";
 
+const DEFAULT_VISIBLE_ROWS = 50;
+
+function flattenTableChildren(children: React.ReactNode): React.ReactNode[] {
+  const rows: React.ReactNode[] = [];
+  React.Children.forEach(children, (child) => {
+    if (React.isValidElement<{ children?: React.ReactNode }>(child) && child.type === React.Fragment) {
+      rows.push(...flattenTableChildren(child.props.children));
+    } else if (child !== null && child !== undefined && typeof child !== "boolean") {
+      rows.push(child);
+    }
+  });
+  return rows;
+}
+
 const TableBody = React.forwardRef<
   HTMLTableSectionElement,
-  React.HTMLAttributes<HTMLTableSectionElement>
->(({ className, ...props }, ref) => (
-  <tbody ref={ref} className={cn("[&_tr:last-child]:border-0", className)} {...props} />
-));
+  React.HTMLAttributes<HTMLTableSectionElement> & { showAllRows?: boolean }
+>(({ className, children, showAllRows = false, ...props }, ref) => {
+  const [visibleRows, setVisibleRows] = React.useState(DEFAULT_VISIBLE_ROWS);
+  const rows = flattenTableChildren(children);
+  const rowSignature = rows.map((row) => React.isValidElement(row) ? String(row.key) : String(row)).join("|");
+  React.useEffect(() => setVisibleRows(DEFAULT_VISIBLE_ROWS), [rowSignature]);
+
+  const rowLimit = showAllRows ? rows.length : visibleRows;
+  const shownRows = rows.slice(0, rowLimit);
+  const firstRow = rows[0];
+  const columnCount = React.isValidElement<{ children?: React.ReactNode }>(firstRow)
+    ? Math.max(1, React.Children.count(firstRow.props.children))
+    : 1;
+
+  return (
+    <>
+      <tbody ref={ref} className={cn("[&_tr:last-child]:border-0", className)} {...props}>
+        {shownRows}
+      </tbody>
+      {!showAllRows && rows.length > visibleRows && (
+        <tfoot>
+          <tr className="border-t">
+            <td colSpan={columnCount} className="px-3 py-3 text-center text-sm text-muted-foreground">
+              <span>يُعرض {visibleRows.toLocaleString("ar-IQ")} من {rows.length.toLocaleString("ar-IQ")} صفاً</span>
+              <button
+                type="button"
+                className="ms-3 font-semibold text-primary underline-offset-4 hover:underline"
+                onClick={() => setVisibleRows((count) => Math.min(count + DEFAULT_VISIBLE_ROWS, rows.length))}
+              >
+                عرض 50 صفاً إضافياً
+              </button>
+            </td>
+          </tr>
+        </tfoot>
+      )}
+    </>
+  );
+});
 TableBody.displayName = "TableBody";
 
 const TableFooter = React.forwardRef<
