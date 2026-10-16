@@ -446,6 +446,302 @@ export type Database = {
           },
         ]
       }
+      employee_goal_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          event_type: string
+          goal_id: string
+          id: string
+          new_values: Json | null
+          old_values: Json | null
+          reason: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          event_type: string
+          goal_id: string
+          id?: string
+          new_values?: Json | null
+          old_values?: Json | null
+          reason?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          event_type?: string
+          goal_id?: string
+          id?: string
+          new_values?: Json | null
+          old_values?: Json | null
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_goal_events_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "employee_goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_goal_notifications: {
+        Row: {
+          body: string
+          created_at: string
+          goal_id: string
+          id: string
+          read_at: string | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          goal_id: string
+          id?: string
+          read_at?: string | null
+          title: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          goal_id?: string
+          id?: string
+          read_at?: string | null
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_goal_notifications_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "employee_goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_goal_steps: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          created_by: string
+          due_date: string | null
+          goal_id: string
+          id: string
+          sort_order: number
+          status: string
+          title: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string
+          due_date?: string | null
+          goal_id: string
+          id?: string
+          sort_order?: number
+          status?: string
+          title: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string
+          due_date?: string | null
+          goal_id?: string
+          id?: string
+          sort_order?: number
+          status?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_goal_steps_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "employee_goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_goal_updates: {
+        Row: {
+          actor_id: string
+          completed_work: string | null
+          created_at: string
+          current_value: number | null
+          goal_id: string
+          help_requested: string | null
+          id: string
+          note: string | null
+          obstacles: string | null
+          progress_percent: number | null
+          proof_storage_path: string | null
+          remaining_work: string | null
+          update_type: string
+        }
+        Insert: {
+          actor_id?: string
+          completed_work?: string | null
+          created_at?: string
+          current_value?: number | null
+          goal_id: string
+          help_requested?: string | null
+          id?: string
+          note?: string | null
+          obstacles?: string | null
+          progress_percent?: number | null
+          proof_storage_path?: string | null
+          remaining_work?: string | null
+          update_type?: string
+        }
+        Update: {
+          actor_id?: string
+          completed_work?: string | null
+          created_at?: string
+          current_value?: number | null
+          goal_id?: string
+          help_requested?: string | null
+          id?: string
+          note?: string | null
+          obstacles?: string | null
+          progress_percent?: number | null
+          proof_storage_path?: string | null
+          remaining_work?: string | null
+          update_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_goal_updates_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "employee_goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_goals: {
+        Row: {
+          action_plan: string | null
+          approved_at: string | null
+          approved_by: string | null
+          category: string
+          completion_requested_at: string | null
+          created_at: string
+          created_by: string
+          current_value: number | null
+          department_id: string
+          description: string | null
+          desired_result: string | null
+          due_date: string
+          employee_id: string
+          id: string
+          manager_evaluation: string | null
+          manager_feedback: string | null
+          manager_note: string | null
+          manager_rating: number | null
+          priority: string
+          proposal_original: Json | null
+          proposal_reason: string | null
+          start_date: string
+          status: string
+          success_metric: string | null
+          support_needed: string | null
+          target_value: number | null
+          title: string
+          tracking_frequency: string
+          tracking_methods: string[]
+          unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          action_plan?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          category?: string
+          completion_requested_at?: string | null
+          created_at?: string
+          created_by?: string
+          current_value?: number | null
+          department_id: string
+          description?: string | null
+          desired_result?: string | null
+          due_date: string
+          employee_id: string
+          id?: string
+          manager_evaluation?: string | null
+          manager_feedback?: string | null
+          manager_note?: string | null
+          manager_rating?: number | null
+          priority?: string
+          proposal_original?: Json | null
+          proposal_reason?: string | null
+          start_date?: string
+          status?: string
+          success_metric?: string | null
+          support_needed?: string | null
+          target_value?: number | null
+          title: string
+          tracking_frequency?: string
+          tracking_methods?: string[]
+          unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          action_plan?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          category?: string
+          completion_requested_at?: string | null
+          created_at?: string
+          created_by?: string
+          current_value?: number | null
+          department_id?: string
+          description?: string | null
+          desired_result?: string | null
+          due_date?: string
+          employee_id?: string
+          id?: string
+          manager_evaluation?: string | null
+          manager_feedback?: string | null
+          manager_note?: string | null
+          manager_rating?: number | null
+          priority?: string
+          proposal_original?: Json | null
+          proposal_reason?: string | null
+          start_date?: string
+          status?: string
+          success_metric?: string | null
+          support_needed?: string | null
+          target_value?: number | null
+          title?: string
+          tracking_frequency?: string
+          tracking_methods?: string[]
+          unit?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_goals_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_goals_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employee_guidance_notes: {
         Row: {
           author_id: string
@@ -639,6 +935,7 @@ export type Database = {
           due_date: string | null
           duration_minutes: number
           employee_id: string | null
+          goal_id: string | null
           guidance_id: string | null
           id: string
           manager_note: string | null
@@ -675,6 +972,7 @@ export type Database = {
           due_date?: string | null
           duration_minutes?: number
           employee_id?: string | null
+          goal_id?: string | null
           guidance_id?: string | null
           id?: string
           manager_note?: string | null
@@ -711,6 +1009,7 @@ export type Database = {
           due_date?: string | null
           duration_minutes?: number
           employee_id?: string | null
+          goal_id?: string | null
           guidance_id?: string | null
           id?: string
           manager_note?: string | null
@@ -745,6 +1044,13 @@ export type Database = {
             columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_tasks_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "employee_goals"
             referencedColumns: ["id"]
           },
           {
