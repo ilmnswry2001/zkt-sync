@@ -135,6 +135,8 @@ function WagesPage() {
   const [editing, setEditing] = useState<Rate | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [month, setMonth] = useState(currentMonthInBaghdad);
+  const [rateRowsLimit, setRateRowsLimit] = useState(50);
+  const [additionRowsLimit, setAdditionRowsLimit] = useState(50);
 
   const { data: rates = [] } = useQuery({
     queryKey: ["wage-rates"],
@@ -408,7 +410,7 @@ function WagesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rates.map((r) => (
+              {rates.slice(0, rateRowsLimit).map((r) => (
                 <TableRow key={r.id}>
                   <TableCell className="font-medium">{r.title}</TableCell>
                   <TableCell>{Number(r.daily_rate).toLocaleString()}</TableCell>
@@ -449,6 +451,20 @@ function WagesPage() {
               )}
             </TableBody>
           </Table>
+          {rates.length > 50 && (
+            <div className="mt-3 flex items-center justify-end gap-2 text-sm">
+              <Label htmlFor="wage-rates-row-limit">عدد الصفوف</Label>
+              <select
+                id="wage-rates-row-limit"
+                className="h-9 rounded-md border border-input bg-background px-3"
+                value={rateRowsLimit}
+                onChange={(event) => setRateRowsLimit(Number(event.target.value))}
+              >
+                {[50, 100, 250, 500].map((limit) => <option key={limit} value={limit}>{limit}</option>)}
+                <option value={rates.length}>الكل ({rates.length})</option>
+              </select>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -550,7 +566,7 @@ function WagesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {additions.map((a) => (
+              {additions.slice(0, additionRowsLimit).map((a) => (
                 <TableRow key={a.id}>
                   <TableCell>
                     {a.employees?.employee_no} — {a.employees?.full_name}
@@ -582,6 +598,20 @@ function WagesPage() {
               )}
             </TableBody>
           </Table>
+          {additions.length > 50 && (
+            <div className="mt-3 flex items-center justify-end gap-2 text-sm">
+              <Label htmlFor="salary-additions-row-limit">عدد الصفوف</Label>
+              <select
+                id="salary-additions-row-limit"
+                className="h-9 rounded-md border border-input bg-background px-3"
+                value={additionRowsLimit}
+                onChange={(event) => setAdditionRowsLimit(Number(event.target.value))}
+              >
+                {[50, 100, 250, 500].map((limit) => <option key={limit} value={limit}>{limit}</option>)}
+                <option value={additions.length}>الكل ({additions.length})</option>
+              </select>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
