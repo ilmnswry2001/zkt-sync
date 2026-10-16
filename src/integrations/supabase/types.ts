@@ -1616,6 +1616,7 @@ export type Database = {
           received_at: string
           received_by: string
           request_id: string
+          warehouse_id: string | null
         }
         Insert: {
           batch_id: string
@@ -1625,6 +1626,7 @@ export type Database = {
           received_at?: string
           received_by: string
           request_id: string
+          warehouse_id?: string | null
         }
         Update: {
           batch_id?: string
@@ -1634,6 +1636,7 @@ export type Database = {
           received_at?: string
           received_by?: string
           request_id?: string
+          warehouse_id?: string | null
         }
         Relationships: [
           {
@@ -1648,6 +1651,13 @@ export type Database = {
             columns: ["request_id"]
             isOneToOne: false
             referencedRelation: "material_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "material_request_receipts_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
             referencedColumns: ["id"]
           },
         ]
