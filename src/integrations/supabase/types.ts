@@ -648,6 +648,8 @@ export type Database = {
           priority: string
           proposal_original: Json | null
           proposal_reason: string | null
+          reminder_days_before: number
+          reminders_enabled: boolean
           start_date: string
           status: string
           success_metric: string | null
@@ -681,6 +683,8 @@ export type Database = {
           priority?: string
           proposal_original?: Json | null
           proposal_reason?: string | null
+          reminder_days_before?: number
+          reminders_enabled?: boolean
           start_date?: string
           status?: string
           success_metric?: string | null
@@ -714,6 +718,8 @@ export type Database = {
           priority?: string
           proposal_original?: Json | null
           proposal_reason?: string | null
+          reminder_days_before?: number
+          reminders_enabled?: boolean
           start_date?: string
           status?: string
           success_metric?: string | null
@@ -3163,11 +3169,13 @@ export type Database = {
         Args: { _department_id: string; _user_id: string }
         Returns: boolean
       }
+      can_access_employee_goal: { Args: { _goal_id: string }; Returns: boolean }
       can_access_employee_penalty: {
         Args: { _employee_id: string }
         Returns: boolean
       }
       can_access_work_task: { Args: { _task_id: string }; Returns: boolean }
+      can_manage_employee_goal: { Args: { _goal_id: string }; Returns: boolean }
       can_manage_stock: { Args: { _uid: string }; Returns: boolean }
       can_manage_work_task: { Args: { _task_id: string }; Returns: boolean }
       create_work_task_assignments: {
@@ -3192,6 +3200,7 @@ export type Database = {
         Args: { _penalty_id: string }
         Returns: undefined
       }
+      generate_employee_goal_reminders: { Args: never; Returns: number }
       generate_recurring_tasks: {
         Args: { _from: string; _to: string }
         Returns: number
