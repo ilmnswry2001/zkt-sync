@@ -11,8 +11,27 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ClipboardCheck, HardHat, Plus, Printer, Save, Trash2, UsersRound } from "lucide-react";
+import {
+  Check,
+  ChevronsUpDown,
+  ClipboardCheck,
+  HardHat,
+  Plus,
+  Printer,
+  Save,
+  Trash2,
+  UsersRound,
+} from "lucide-react";
 import { toast } from "sonner";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 
 type Workshop = { id: string; name: string; is_active: boolean };
 type Employee = { id: string; employee_no: string; full_name: string; position: string | null };
@@ -61,6 +80,7 @@ export function DailyWorkshopInventory() {
   const [workshopId, setWorkshopId] = useState("");
   const [workshopName, setWorkshopName] = useState("");
   const [employeeId, setEmployeeId] = useState("");
+  const [employeePickerOpen, setEmployeePickerOpen] = useState(false);
   const [roleLabel, setRoleLabel] = useState("");
   const [notes, setNotes] = useState("");
   const [attendedByEmployee, setAttendedByEmployee] = useState<Record<string, boolean>>({});
@@ -139,6 +159,7 @@ export function DailyWorkshopInventory() {
     () => reportQuery.data?.lines.filter((line) => line.report_id === savedReport?.id) ?? [],
     [reportQuery.data?.lines, savedReport?.id],
   );
+  const selectedEmployee = employees.find((employee) => employee.id === employeeId);
 
   useEffect(() => {
     if (!workshopId && workshops[0]) setWorkshopId(workshops[0].id);
@@ -508,26 +529,57 @@ export function DailyWorkshopInventory() {
                 >
                   <div className="space-y-1.5">
                     <Label htmlFor="roster-employee">الموظف</Label>
-                    <select
-                      id="roster-employee"
-                      className={inputClass}
-                      value={employeeId}
-                      onChange={(event) => {
-                        const id = event.target.value;
-                        setEmployeeId(id);
-                        setRoleLabel(
-                          employees.find((employee) => employee.id === id)?.position ?? "",
-                        );
-                      }}
-                      required
-                    >
-                      <option value="">اختر موظفًا</option>
-                      {employees.map((employee) => (
-                        <option key={employee.id} value={employee.id}>
-                          {employee.employee_no} — {employee.full_name}
-                        </option>
-                      ))}
-                    </select>
+                    <Popover open={employeePickerOpen} onOpenChange={setEmployeePickerOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          id="roster-employee"
+                          type="button"
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={employeePickerOpen}
+                          aria-required="true"
+                          className="h-10 w-full justify-between font-normal"
+                        >
+                          <span className="truncate">
+                            {selectedEmployee
+                              ? `${selectedEmployee.employee_no} — ${selectedEmployee.full_name}`
+                              : "ابحث بالاسم أو الرقم الوظيفي..."}
+                          </span>
+                          <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        className="w-[--radix-popover-trigger-width] p-0"
+                        align="start"
+                      >
+                        <Command>
+                          <CommandInput placeholder="اكتب اسم الموظف أو رقمه الوظيفي..." />
+                          <CommandList>
+                            <CommandEmpty>لا يوجد موظف مطابق للبحث.</CommandEmpty>
+                            <CommandGroup>
+                              {employees.map((employee) => (
+                                <CommandItem
+                                  key={employee.id}
+                                  value={`${employee.employee_no} ${employee.full_name}`}
+                                  onSelect={() => {
+                                    setEmployeeId(employee.id);
+                                    setRoleLabel(employee.position ?? "");
+                                    setEmployeePickerOpen(false);
+                                  }}
+                                >
+                                  <Check
+                                    className={`h-4 w-4 ${employeeId === employee.id ? "opacity-100" : "opacity-0"}`}
+                                  />
+                                  <span>
+                                    {employee.employee_no} — {employee.full_name}
+                                  </span>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="roster-role">الصفة في الورشة</Label>
