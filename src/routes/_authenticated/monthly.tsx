@@ -67,6 +67,7 @@ const summaryColumns = [
   { key: "totalOvertimeHours", label: "الإضافي", className: "" },
 ] as const;
 type SheetRow = Awaited<ReturnType<typeof getMonthlySheet>>["rows"][number];
+type EmployeeOption = Pick<SheetRow["employee"], "id" | "employee_no" | "full_name" | "department_id" | "site_id" | "shift_id" | "departments" | "sites" | "shifts">;
 type MonthlyVehicle = { id: string; vehicle_no: string; name: string; vehicle_class: "light" | "heavy"; daily_rate: number; currency: string; is_active: boolean; operatingDays: number; operatingDates: string[]; total: number };
 const weekday = (date: string) =>
   new Date(`${date}T00:00:00Z`).toLocaleDateString("ar", { weekday: "short", timeZone: "UTC" });
@@ -80,12 +81,12 @@ const formatTime = (time: string | null) =>
     : "—";
 
 function optionsFor(
-  rows: SheetRow[],
+  employees: EmployeeOption[],
   field: "departments" | "sites" | "shifts",
   idField: "department_id" | "site_id" | "shift_id",
 ) {
   const options = new Map<string, string>();
-  for (const { employee } of rows) {
+  for (const employee of employees) {
     const id = employee[idField];
     const name = employee[field]?.name;
     if (id && name) options.set(id, name);
@@ -106,9 +107,34 @@ function MonthlyPage() {
   const [selection, setSelection] = useState<{ employeeId: string; date: string } | null>(null);
   const [vehicleSearch, setVehicleSearch] = useState("");
   const fetchSheet = useServerFn(getMonthlySheet);
+  const { data: allEmployees = [] } = useQuery<EmployeeOption[]>({
+    queryKey: ["monthly", "employee-options"],
+    queryFn: async () => {
+      const employees: EmployeeOption[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data: batch, error } = await (supabase as any)
+          .from("employees")
+          .select("id, employee_no, full_name, department_id, site_id, shift_id, departments(name), sites!employees_site_id_fkey(name), shifts(name)")
+          .order("employee_no")
+          .order("id")
+          .range(from, from + 999);
+        if (error) throw error;
+        employees.push(...(batch ?? []));
+        if (!batch || batch.length < 1000) return employees;
+      }
+    },
+  });
   const { data, isPending, isFetching, error, refetch } = useQuery({
-    queryKey: ["monthly", "sheet", month],
-    queryFn: () => fetchSheet({ data: { month } }),
+    queryKey: ["monthly", "sheet", month, page, employeeId, department, site, shift, search],
+    queryFn: () => fetchSheet({ data: {
+      month,
+      page,
+      employee_id: employeeId || undefined,
+      department_id: department || undefined,
+      site_id: site || undefined,
+      shift_id: shift || undefined,
+      search,
+    } }),
   });
   const vehicleReport = useQuery({
     queryKey: ["monthly", "vehicle-report", month],
@@ -162,42 +188,26 @@ function MonthlyPage() {
   };
   const filters = useMemo(
     () => ({
-      departments: optionsFor(data?.rows ?? [], "departments", "department_id"),
-      sites: optionsFor(data?.rows ?? [], "sites", "site_id"),
-      shifts: optionsFor(data?.rows ?? [], "shifts", "shift_id"),
+      departments: optionsFor(allEmployees, "departments", "department_id"),
+      sites: optionsFor(allEmployees, "sites", "site_id"),
+      shifts: optionsFor(allEmployees, "shifts", "shift_id"),
     }),
-    [data],
+    [allEmployees],
   );
-  const rows = useMemo(
-    () =>
-      (data?.rows ?? []).filter(
-        ({ employee: e }) =>
-          (!employeeId || e.id === employeeId) &&
-          (!department || e.department_id === department) &&
-          (!site || e.site_id === site) &&
-          (!shift || e.shift_id === shift) &&
-          (!search.trim() ||
-            `${e.employee_no} ${e.full_name}`
-              .toLocaleLowerCase("ar")
-              .includes(search.trim().toLocaleLowerCase("ar"))),
-      ),
-    [data, employeeId, department, site, shift, search],
-  );
+  const rows = useMemo(() => data?.rows ?? [], [data?.rows]);
   const chart = useMemo(
     () => dailyTotals(data?.dates ?? [], rows, data?.today ?? ""),
     [data, rows],
   );
-  const pageCount = Math.max(1, Math.ceil(rows.length / 50));
+  const pageCount = Math.max(1, Math.ceil((data?.totalRows ?? 0) / 50));
   const currentPage = Math.min(page, pageCount - 1);
-  const visibleRows = rows.slice(currentPage * 50, (currentPage + 1) * 50);
-  const employeeOptions = (data?.rows ?? []).filter(
-    ({ employee: e }) =>
-      !search.trim() ||
-      `${e.employee_no} ${e.full_name}`
-        .toLocaleLowerCase("ar")
-        .includes(search.trim().toLocaleLowerCase("ar")),
+  const visibleRows = rows;
+  const employeeOptions = allEmployees.filter(
+    (employee) => !search.trim() || `${employee.employee_no} ${employee.full_name}`
+      .toLocaleLowerCase("ar")
+      .includes(search.trim().toLocaleLowerCase("ar")),
   );
-  const selectedEmployee = data?.rows.find(({ employee }) => employee.id === employeeId);
+  const selectedEmployee = allEmployees.find((employee) => employee.id === employeeId);
   const setFilter = (setter: (value: string) => void, value: string) => {
     setter(value);
     setPage(0);
@@ -271,12 +281,12 @@ function MonthlyPage() {
               onChange={(e) => setFilter(setEmployeeId, e.target.value)}
             >
               <option value="">جميع الموظفين</option>
-              {selectedEmployee && !employeeOptions.some((r) => r.employee.id === employeeId) && (
-                <option value={employeeId}>{selectedEmployee.employee.full_name}</option>
+                {selectedEmployee && !employeeOptions.some((employee) => employee.id === employeeId) && (
+                <option value={employeeId}>{selectedEmployee.full_name}</option>
               )}
-              {employeeOptions.map(({ employee: e }) => (
-                <option key={e.id} value={e.id}>
-                  {e.employee_no} — {e.full_name}
+              {employeeOptions.map((employee) => (
+                <option key={employee.id} value={employee.id}>
+                  {employee.employee_no} — {employee.full_name}
                 </option>
               ))}
             </select>
@@ -350,7 +360,7 @@ function MonthlyPage() {
             </Button>
             {data && (
               <span className="mr-auto text-xs text-muted-foreground">
-                {rows.length.toLocaleString("ar")} موظف
+                {(data?.totalRows ?? 0).toLocaleString("ar")} موظف
               </span>
             )}
           </div>
@@ -388,7 +398,7 @@ function MonthlyPage() {
           </div>
         ) : !rows.length ? (
           <p role="status" className="py-20 text-center text-muted-foreground">
-            {data?.rows.length
+            {employeeId || department || site || shift || search.trim()
               ? "لا يوجد موظفون يطابقون الفلاتر المحددة"
               : "لا يوجد موظفون لعرضهم في التقرير"}
           </p>
@@ -396,13 +406,13 @@ function MonthlyPage() {
           <>
             <section className="border-b p-4" aria-labelledby="attendance-chart-title">
               <h2 id="attendance-chart-title" className="mb-3 text-sm font-medium">
-                الحضور والغياب خلال الشهر
+                الحضور والغياب خلال الشهر — موظفو الصفحة الحالية
               </h2>
               <div
                 dir="ltr"
                 className="h-56 w-full"
                 role="img"
-                aria-label="رسم يومي للحضور والغياب والإجازات للموظفين المطابقين للفلاتر"
+                aria-label="رسم يومي للحضور والغياب والإجازات لموظفي الصفحة الحالية"
               >
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chart} margin={{ top: 8, right: 12, left: -20, bottom: 5 }}>
@@ -583,7 +593,7 @@ function MonthlyPage() {
                 {summarized
                   ? "اضغط على اسم الموظف لعرض تفاصيل الأيام"
                   : "اسحب الجدول أفقيًا لعرض بقية أيام الشهر"}{" "}
-                · {rows.length} موظف
+                · {(data?.totalRows ?? 0).toLocaleString("ar")} موظف
               </span>
               <div className="flex items-center gap-3">
                 <Button

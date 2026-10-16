@@ -67,24 +67,39 @@ function monthRange(month: string) {
 
 export const getMonthlySheet = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ month: monthValue }).parse(d))
+  .inputValidator((d: unknown) => z.object({
+    month: monthValue,
+    page: z.number().int().min(0).default(0),
+    employee_id: z.string().uuid().optional(),
+    department_id: z.string().uuid().optional(),
+    site_id: z.string().uuid().optional(),
+    shift_id: z.string().uuid().optional(),
+    search: z.string().max(100).optional(),
+  }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = context;
     const { dates, start, endDate, logStart, logEnd } = monthRange(data.month);
     const today = todayInBaghdad();
-    const employees = await loadAllRows((from, to) =>
-      supabase
-        .from("employees")
-        .select(
-          "id, employee_no, full_name, status, pay_type, department_id, site_id, shift_id, departments(name), sites!employees_site_id_fkey(name), shifts(name, start_time, end_time, grace_minutes)",
-        )
-        .order("employee_no")
-        .order("id")
-        .range(from, to),
-    );
+    let employeeQuery = supabase
+      .from("employees")
+      .select(
+        "id, employee_no, full_name, status, pay_type, department_id, site_id, shift_id, departments(name), sites!employees_site_id_fkey(name), shifts(name, start_time, end_time, grace_minutes)",
+        { count: "exact" },
+      );
+    if (data.employee_id) employeeQuery = employeeQuery.eq("id", data.employee_id);
+    if (data.department_id) employeeQuery = employeeQuery.eq("department_id", data.department_id);
+    if (data.site_id) employeeQuery = employeeQuery.eq("site_id", data.site_id);
+    if (data.shift_id) employeeQuery = employeeQuery.eq("shift_id", data.shift_id);
+    const search = data.search?.trim().replace(/[^\p{L}\p{N}\s-]/gu, "");
+    if (search) employeeQuery = employeeQuery.or(`full_name.ilike.%${search}%,employee_no.ilike.%${search}%`);
+    const { data: employees, error: employeesError, count } = await employeeQuery
+      .order("employee_no")
+      .order("id")
+      .range(data.page * 50, data.page * 50 + 49);
+    if (employeesError) throw new Error(employeesError.message);
     const rows = [];
-    for (let i = 0; i < employees.length; i += 100) {
-      const batch = employees.slice(i, i + 100);
+    for (let i = 0; i < (employees ?? []).length; i += 100) {
+      const batch = (employees ?? []).slice(i, i + 100);
       const [logs, overrides] = await Promise.all([
         loadAllRows((from, to) =>
           supabase
@@ -141,7 +156,7 @@ export const getMonthlySheet = createServerFn({ method: "GET" })
         rows.push({ employee, days, summary: summarizeDays(days) });
       }
     }
-    return { dates, rows, today };
+    return { dates, rows, today, totalRows: count ?? 0 };
   });
 
 export const getEmployeeMonthly = createServerFn({ method: "GET" })
