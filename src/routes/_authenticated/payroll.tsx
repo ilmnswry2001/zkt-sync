@@ -60,7 +60,13 @@ type Employee = {
   shifts: { end_time: string | null; grace_minutes: number | null } | null;
 };
 type Addition = { employee_id: string; amount: number; kind: string };
-type Penalty = { employee_id: string | null; deduction_amount: number };
+type Penalty = {
+  id: string;
+  employee_id: string | null;
+  deduction_amount: number;
+  penalty_date: string;
+  notes: string | null;
+};
 type AttendanceLog = { employee_no: string; verify_time: string };
 type ApprovedLeaveCalendarDay = { employee_id: string; work_date: string; is_paid: boolean; status: string };
 type AttendanceOverride = {
@@ -117,7 +123,7 @@ function PayrollPage() {
           loadAllRows((from, to) =>
             supabase
               .from("employee_penalties")
-              .select("employee_id, deduction_amount")
+              .select("id, employee_id, deduction_amount, penalty_date, notes")
               .gte("penalty_date", `${month}-01`)
               .lt("penalty_date", nextMonth)
               .order("id")
@@ -212,8 +218,9 @@ function PayrollPage() {
         const additions = (query.data?.additions ?? [])
           .filter((item) => item.employee_id === employee.id)
           .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-        const deductions = (query.data?.penalties ?? [])
-          .filter((item) => item.employee_id === employee.id)
+        const employeePenalties = (query.data?.penalties ?? [])
+          .filter((item) => item.employee_id === employee.id);
+        const deductions = employeePenalties
           .reduce((sum, item) => sum + Number(item.deduction_amount || 0), 0);
         const payroll = calculatePayroll({
           payType,
@@ -227,7 +234,7 @@ function PayrollPage() {
           deductions,
         });
         const total = payroll.netPay;
-        return { employee, payroll, summary, additions, deductions, total };
+        return { employee, payroll, summary, additions, deductions, penalties: employeePenalties, total };
       }),
     [query.data, month],
   );
@@ -368,7 +375,8 @@ function PayrollPage() {
       const branch = row.employee.sites?.name || row.employee.departments?.name || "—";
       const gross = roundMoney(row.payroll.grossPay + row.additions);
       const net = roundMoney(row.total);
-      return `<article class="voucher"><header class="voucher-head"><div><strong>قسيمة صرف نقدي</strong><span>منظومة زِكت · الرواتب</span></div><div class="voucher-month">${escapeHtml(month)}</div></header><section class="identity"><div><span>اسم العامل</span><b>${escapeHtml(row.employee.full_name)}</b></div><div><span>رقم القيد</span><b>${escapeHtml(row.employee.employee_no)}</b></div><div><span>الموقع / القسم</span><b>${escapeHtml(branch)}</b></div><div><span>شهر الصرف</span><b>${escapeHtml(month)}</b></div></section><section class="attendance"><div><span>أيام الحضور</span><b>${row.summary.presentDays} يوم</b></div><div><span>ساعات الإضافي</span><b>${roundMoney(row.payroll.overtimeHours)} ساعة</b></div></section><table><tbody><tr><th>إجمالي الأجر</th><td>${money(gross)}</td></tr><tr><th>الخصومات والاستقطاعات</th><td>${money(row.deductions)}</td></tr><tr class="net"><th>صافي المستلم رقمًا</th><td>${money(net)}</td></tr></tbody></table><div class="amount-words"><span>المبلغ كتابةً</span><b>${escapeHtml(amountInArabicIqd(net))}</b></div><footer class="signatures"><div>توقيع / بصمة العامل</div><div>أمين الصندوق</div><div>المحاسب</div></footer></article>`;
+      const deductionRows = row.penalties.filter((penalty) => Number(penalty.deduction_amount) > 0).map((penalty) => `<tr><th>${escapeHtml(penalty.notes || "استقطاع")} · ${escapeHtml(penalty.penalty_date)}</th><td>${money(Number(penalty.deduction_amount))}</td></tr>`).join("");
+      return `<article class="voucher"><header class="voucher-head"><div><strong>قسيمة صرف نقدي</strong><span>منظومة زِكت · الرواتب</span></div><div class="voucher-month">${escapeHtml(month)}</div></header><section class="identity"><div><span>اسم العامل</span><b>${escapeHtml(row.employee.full_name)}</b></div><div><span>رقم القيد</span><b>${escapeHtml(row.employee.employee_no)}</b></div><div><span>الموقع / القسم</span><b>${escapeHtml(branch)}</b></div><div><span>شهر الصرف</span><b>${escapeHtml(month)}</b></div></section><section class="attendance"><div><span>أيام الحضور</span><b>${row.summary.presentDays} يوم</b></div><div><span>ساعات الإضافي</span><b>${roundMoney(row.payroll.overtimeHours)} ساعة</b></div></section><table><tbody><tr><th>إجمالي الأجر</th><td>${money(gross)}</td></tr>${deductionRows}<tr><th>إجمالي الخصومات والاستقطاعات</th><td>${money(row.deductions)}</td></tr><tr class="net"><th>صافي المستلم رقمًا</th><td>${money(net)}</td></tr></tbody></table><div class="amount-words"><span>المبلغ كتابةً</span><b>${escapeHtml(amountInArabicIqd(net))}</b></div><footer class="signatures"><div>توقيع / بصمة العامل</div><div>أمين الصندوق</div><div>المحاسب</div></footer></article>`;
     };
     const pages: (typeof cashRows)[] = [];
     for (let index = 0; index < cashRows.length; index += 3)
@@ -386,7 +394,8 @@ function PayrollPage() {
     printWindow.document.close();
   };
   const printSlip = (row: (typeof rows)[number]) => {
-    const body = `<div class="meta"><b>الموظف:</b> ${escapeHtml(row.employee.full_name)}<br/><b>الرقم:</b> ${escapeHtml(row.employee.employee_no)}<br/><b>الشهر:</b> ${escapeHtml(month)}<br/><b>إجازة مدفوعة:</b> ${row.payroll.leaveDays} يوم · <b>بدون راتب:</b> ${row.payroll.unpaidLeaveDays} يوم</div><table><tr><th>البند</th><th>المبلغ</th></tr><tr><td>الأجر الأساسي</td><td>${money(row.payroll.basePay)}</td></tr><tr><td>بدل الساعات الإضافية (${row.payroll.overtimeHours})</td><td>${money(row.payroll.overtimePay)}</td></tr><tr><td>الإضافات والمكافآت</td><td>${money(row.additions)}</td></tr><tr><td>الاستقطاعات</td><td>${money(row.deductions)}</td></tr><tr class="total"><td>الصافي المستحق</td><td>${money(row.total)}</td></tr></table>`;
+    const deductionRows = row.penalties.filter((penalty) => Number(penalty.deduction_amount) > 0).map((penalty) => `<tr><td>${escapeHtml(penalty.penalty_date)} · ${escapeHtml(penalty.notes || "استقطاع")}</td><td>${money(Number(penalty.deduction_amount))}</td></tr>`).join("");
+    const body = `<div class="meta"><b>الموظف:</b> ${escapeHtml(row.employee.full_name)}<br/><b>الرقم:</b> ${escapeHtml(row.employee.employee_no)}<br/><b>الشهر:</b> ${escapeHtml(month)}<br/><b>إجازة مدفوعة:</b> ${row.payroll.leaveDays} يوم · <b>بدون راتب:</b> ${row.payroll.unpaidLeaveDays} يوم</div><table><tr><th>البند</th><th>المبلغ</th></tr><tr><td>الأجر الأساسي</td><td>${money(row.payroll.basePay)}</td></tr><tr><td>بدل الساعات الإضافية (${row.payroll.overtimeHours})</td><td>${money(row.payroll.overtimePay)}</td></tr><tr><td>الإضافات والمكافآت</td><td>${money(row.additions)}</td></tr>${deductionRows}<tr><td>إجمالي الاستقطاعات</td><td>${money(row.deductions)}</td></tr><tr class="total"><td>الصافي المستحق</td><td>${money(row.total)}</td></tr></table>`;
     if (!printReport(`قصاصة راتب — ${row.employee.full_name}`, body))
       toast.error("اسمح بالنوافذ المنبثقة للطباعة");
   };

@@ -287,9 +287,10 @@ function ColoredNameChips({ names, color }: { names: string[]; color: string }) 
       {names.map((name) => (
         <span
           key={name}
-          className="rounded-full border px-2.5 py-1 text-xs font-medium"
+          className="inline-flex max-w-full items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold shadow-sm"
           style={{ borderColor: `${color}66`, backgroundColor: `${color}12`, color }}
         >
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />
           {name}
         </span>
       ))}

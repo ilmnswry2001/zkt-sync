@@ -7,6 +7,7 @@ import { getDailyReport } from "@/lib/attendance.functions";
 import { todayInBaghdad } from "@/lib/date-time";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { StaffNameChips } from "@/components/StaffNameChips";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -70,8 +71,18 @@ type PublishSummaryItem = {
   reported: number;
   missing: number;
   color: string;
+  excessAssignments: ExcessAssignment[];
 };
-type DailyCrewAssignment = { site_id: string | null; role_label: string | null; attended: boolean };
+type ExcessAssignment = {
+  id: string;
+  employee_id: string | null;
+  employee_name_snapshot: string;
+  employee_no_snapshot: string;
+  role_label: string | null;
+  alreadyDeducted?: boolean;
+};
+type DailyCrewAssignment = ExcessAssignment & { site_id: string | null; attended: boolean };
+type ResponsibleEmployee = { id: string; full_name: string; employee_no: string };
 type AttendanceRow = {
   employee_no: string;
   full_name: string;
@@ -98,8 +109,55 @@ function AttendancePage() {
   const [notes, setNotes] = useState("");
   const [rows, setRows] = useState<ReportLine[]>([]);
   const [editingReportId, setEditingReportId] = useState<string | null>(null);
+  const [selectedOverage, setSelectedOverage] = useState<PublishSummaryItem | null>(null);
+  const [responsibleSearch, setResponsibleSearch] = useState("");
+  const [responsibleEmployeeId, setResponsibleEmployeeId] = useState("");
+  const [savingDeduction, setSavingDeduction] = useState(false);
   const queryClient = useQueryClient();
   const fn = useServerFn(getDailyReport);
+  const responsibleEmployeesQuery = useQuery<ResponsibleEmployee[]>({
+    queryKey: ["daily-excess-deduction-responsibles"],
+    queryFn: async () => {
+      const rows: ResponsibleEmployee[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await supabase
+          .from("employees")
+          .select("id, full_name, employee_no")
+          .eq("status", "active")
+          .order("full_name")
+          .range(from, from + 999);
+        if (error) throw error;
+        rows.push(...((data ?? []) as ResponsibleEmployee[]));
+        if (!data || data.length < 1000) return rows;
+      }
+    },
+    enabled: activeTab === "publish",
+  });
+  const deductionPermissionQuery = useQuery({
+    queryKey: ["daily-excess-deduction-permission"],
+    queryFn: async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) return false;
+      const { data, error } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", auth.user.id);
+      if (error) throw error;
+      return (data ?? []).some((row) => row.role === "admin" || row.role === "hr");
+    },
+    enabled: activeTab === "publish",
+  });
+  const deductionWagesQuery = useQuery({
+    queryKey: ["daily-excess-deduction-wages"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("wage_rates")
+        .select("title, daily_rate, monthly_rate");
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: activeTab === "publish",
+  });
   const sitesQuery = useQuery({
     queryKey: ["sites"],
     queryFn: async () => {
@@ -207,14 +265,31 @@ function AttendancePage() {
       if (!ids.length) return [];
       const { data, error: linesError } = await (supabase as any)
         .from("daily_workshop_report_lines")
-        .select("site_id, role_label, attended")
+        .select("id, site_id, role_label, attended, employee_id, employee_name_snapshot, employee_no_snapshot")
         .in("report_id", ids)
         .eq("attended", true)
-        .not("site_id", "is", null);
+        .not("site_id", "is", null)
+        .order("employee_name_snapshot")
+        .order("id");
+      // Keep the overage order identical to the database validation order.
       if (linesError) throw linesError;
       return (data ?? []) as DailyCrewAssignment[];
     },
     enabled: activeTab === "publish" && !!date,
+  });
+  const deductionSourcesQuery = useQuery<string[]>({
+    queryKey: ["daily-excess-deduction-sources", date, dailyCrewQuery.data?.map((line) => line.id)],
+    queryFn: async () => {
+      const ids = (dailyCrewQuery.data ?? []).map((line) => line.id);
+      if (!ids.length) return [];
+      const { data, error } = await (supabase as any)
+        .from("employee_penalties")
+        .select("source_report_line_id")
+        .in("source_report_line_id", ids);
+      if (error) throw error;
+      return (data ?? []).map((row: { source_report_line_id: string }) => row.source_report_line_id);
+    },
+    enabled: activeTab === "publish" && deductionPermissionQuery.data === true && (dailyCrewQuery.data?.length ?? 0) > 0,
   });
 
   const buildRows = useCallback(
@@ -365,32 +440,102 @@ function AttendancePage() {
       ? finalizedPlan.specialtySummary
       : [];
     const reportLines = existingReport?.lines ?? [];
-    const assignedBySpecialty = new Map<string, number>();
+    const normalizeSpecialty = (value: string) => value.trim().toLocaleLowerCase("ar");
+    const assignedBySpecialty = new Map<string, ExcessAssignment[]>();
     (dailyCrewQuery.data ?? [])
       .filter((line) => line.site_id === siteId)
       .forEach((line) => {
-        const key = line.role_label?.trim() || "بدون صفة";
-        assignedBySpecialty.set(key, (assignedBySpecialty.get(key) ?? 0) + 1);
+        const key = normalizeSpecialty(line.role_label || "بدون صفة");
+        assignedBySpecialty.set(key, [...(assignedBySpecialty.get(key) ?? []), line]);
       });
     const totalsByName = new Map<string, number>();
     reportLines.forEach((line) => {
       const key = line.item_name.trim();
       totalsByName.set(key, (totalsByName.get(key) ?? 0) + Number(line.total_count || 0));
     });
-    return requiredItems.map((item: any) => {
+    const summary = requiredItems.map((item: any) => {
       const requestedCount = Number(item.quantity ?? 0);
-      const reportedCount = (dailyCrewQuery.data?.length ?? 0) > 0
-        ? assignedBySpecialty.get(item.specialty?.trim() ?? item.name?.trim() ?? "") ?? 0
-        : totalsByName.get(item.specialty?.trim() ?? item.name?.trim() ?? "") ?? 0;
+      const specialty = item.specialty?.trim() ?? item.name?.trim() ?? "";
+      const assignments = assignedBySpecialty.get(normalizeSpecialty(specialty)) ?? [];
+      const usingAssignments = (dailyCrewQuery.data?.length ?? 0) > 0;
+      const reportedCount = usingAssignments
+        ? assignments.length
+        : totalsByName.get(specialty) ?? 0;
       return {
         specialty: item.specialty ?? item.name ?? "غير محدد",
         quantity: requestedCount,
         reported: reportedCount,
         missing: Math.max(0, requestedCount - reportedCount),
         color: item.color ?? "#ef4444",
+        excessAssignments: usingAssignments
+          ? assignments.slice(requestedCount).map((assignment) => ({
+              ...assignment,
+              alreadyDeducted: (deductionSourcesQuery.data ?? []).includes(assignment.id),
+            }))
+          : [],
       };
     });
-  }, [dailyCrewQuery.data, existingReport, finalizedPlanQuery.data, siteId]);
+    if ((dailyCrewQuery.data?.length ?? 0) > 0) {
+      const known = new Set(requiredItems.map((item: any) => normalizeSpecialty(item.specialty?.trim() ?? item.name?.trim() ?? "")));
+      for (const [specialtyKey, assignments] of assignedBySpecialty) {
+        if (!known.has(specialtyKey)) {
+          summary.push({
+            specialty: assignments[0]?.role_label?.trim() || "بدون صفة",
+            quantity: 0,
+            reported: assignments.length,
+            missing: 0,
+            color: "#d97706",
+            excessAssignments: assignments.map((assignment) => ({
+              ...assignment,
+              alreadyDeducted: (deductionSourcesQuery.data ?? []).includes(assignment.id),
+            })),
+          });
+        }
+      }
+    }
+    return summary;
+  }, [dailyCrewQuery.data, deductionSourcesQuery.data, existingReport, finalizedPlanQuery.data, siteId]);
+  const wageByTitle = useMemo(
+    () => new Map((deductionWagesQuery.data ?? []).map((wage) => [wage.title.trim().toLocaleLowerCase("ar"), wage])),
+    [deductionWagesQuery.data],
+  );
+  const excessCost = (assignment: ExcessAssignment) => {
+    const wage = wageByTitle.get((assignment.role_label?.trim() || "").toLocaleLowerCase("ar"));
+    return Number(wage?.daily_rate) > 0
+      ? Number(wage?.daily_rate)
+      : Number(wage?.monthly_rate) > 0
+        ? Math.round((Number(wage.monthly_rate) / 26) * 100) / 100
+        : null;
+  };
+  const matchingResponsibleEmployees = (responsibleEmployeesQuery.data ?? []).filter((employee) =>
+    `${employee.full_name} ${employee.employee_no}`.toLocaleLowerCase("ar").includes(responsibleSearch.trim().toLocaleLowerCase("ar")),
+  );
+  const selectedResponsible = responsibleEmployeesQuery.data?.find((employee) => employee.id === responsibleEmployeeId);
+  const saveExcessDeduction = async () => {
+    if (!selectedOverage || !responsibleEmployeeId) return toast.error("اختر الموظف المسؤول أولاً");
+    const pendingExcess = selectedOverage.excessAssignments.filter((assignment) => !assignment.alreadyDeducted);
+    if (!pendingExcess.length) return toast.error("سبق تسجيل الاستقطاع لجميع الأسماء الزائدة");
+    if (pendingExcess.some((assignment) => excessCost(assignment) === null)) {
+      return toast.error("أضف الأجر اليومي أو الشهري لهذا التخصص في إعدادات الأجور أولاً");
+    }
+    setSavingDeduction(true);
+    try {
+      const { data, error } = await (supabase as any).rpc("record_daily_excess_staff_deductions", {
+        _report_line_ids: pendingExcess.map((assignment) => assignment.id),
+        _accountable_employee_id: responsibleEmployeeId,
+      });
+      if (error) throw error;
+      toast.success(`تم تسجيل استقطاع إجمالي ${Number(data).toLocaleString("ar-IQ")} د.ع على ${selectedResponsible?.full_name}`);
+      setSelectedOverage(null);
+      setResponsibleEmployeeId("");
+      await queryClient.invalidateQueries({ queryKey: ["payroll"] });
+      await queryClient.invalidateQueries({ queryKey: ["daily-excess-deduction-sources", date] });
+    } catch (error) {
+      toast.error(formatErrorMessage(error, "تعذر تسجيل استقطاع الزيادة"));
+    } finally {
+      setSavingDeduction(false);
+    }
+  };
   const attendanceRows = (attendance.data?.rows ?? []) as AttendanceRow[];
   const fmtTime = (value: string | null) =>
     value ? new Date(value).toLocaleTimeString("ar", { hour: "2-digit", minute: "2-digit" }) : "—";
@@ -514,6 +659,11 @@ function AttendancePage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
+            {dailyCrewQuery.error && (
+              <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                تعذر تحميل إسنادات كادر اليوم: {formatErrorMessage(dailyCrewQuery.error)}
+              </p>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label>الموقع</Label>
@@ -551,23 +701,23 @@ function AttendancePage() {
             ) : (
               <div className="space-y-5">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                  <div className="rounded-xl border bg-slate-50 p-3">
+                  <div className="rounded-xl border bg-muted/50 p-3 text-foreground">
                     <div className="text-xs text-muted-foreground">الموقع</div>
-                    <div className="font-bold mt-1">{finalizedPlanQuery.data.site_name}</div>
+                    <div className="mt-1 font-bold">{finalizedPlanQuery.data.site_name}</div>
                   </div>
-                  <div className="rounded-xl border bg-slate-50 p-3">
+                  <div className="rounded-xl border bg-muted/50 p-3 text-foreground">
                     <div className="text-xs text-muted-foreground">تاريخ الخطة</div>
-                    <div className="font-bold mt-1">{finalizedPlanQuery.data.request_date}</div>
+                    <div className="mt-1 font-bold">{finalizedPlanQuery.data.request_date}</div>
                   </div>
-                  <div className="rounded-xl border bg-slate-50 p-3">
+                  <div className="rounded-xl border bg-muted/50 p-3 text-foreground">
                     <div className="text-xs text-muted-foreground">مطلوب</div>
-                    <div className="font-bold mt-1">
+                    <div className="mt-1 font-bold">
                       {publishSummary.reduce((sum, item) => sum + item.quantity, 0)}
                     </div>
                   </div>
-                  <div className="rounded-xl border bg-slate-50 p-3">
+                  <div className="rounded-xl border bg-muted/50 p-3 text-foreground">
                     <div className="text-xs text-muted-foreground">منشور</div>
-                    <div className="font-bold mt-1">
+                    <div className="mt-1 font-bold">
                       {publishSummary.reduce((sum, item) => sum + item.reported, 0)}
                     </div>
                   </div>
@@ -615,10 +765,17 @@ function AttendancePage() {
                               variant={
                                 publishSummary.some((i) => i.missing > 0)
                                   ? "destructive"
+                                  : extra > 0
+                                    ? "secondary"
                                   : "default"
                               }
+                              className={extra > 0 && !publishSummary.some((i) => i.missing > 0) ? "bg-amber-500 text-white hover:bg-amber-500" : ""}
                             >
-                              {publishSummary.some((i) => i.missing > 0) ? "يوجد نقص" : "مكتمل"}
+                              {publishSummary.some((i) => i.missing > 0)
+                                ? "يوجد نقص"
+                                : extra > 0
+                                  ? "يوجد كادر زائد"
+                                  : "مكتمل"}
                             </Badge>
                           </div>
                         </div>
@@ -638,7 +795,9 @@ function AttendancePage() {
                                 <span className="font-medium">{item.specialty}</span>
                                 <span
                                   className={
-                                    item.missing > 0
+                                    over > 0
+                                      ? "text-amber-700 dark:text-amber-300 text-sm font-bold"
+                                      : item.missing > 0
                                       ? "text-destructive text-sm font-bold"
                                       : "text-success text-sm font-bold"
                                   }
@@ -653,7 +812,9 @@ function AttendancePage() {
                               <div className="h-2.5 overflow-hidden rounded-full bg-muted">
                                 <div
                                   className={
-                                    item.missing > 0
+                                    over > 0
+                                      ? "h-full rounded-full bg-amber-500"
+                                      : item.missing > 0
                                       ? "h-full rounded-full bg-destructive"
                                       : "h-full rounded-full bg-success"
                                   }
@@ -669,6 +830,34 @@ function AttendancePage() {
                                 </span>
                                 <span>{p}%</span>
                               </div>
+                              {over > 0 && (
+                                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-400/50 bg-amber-500/10 p-2">
+                                  <span className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                                    زيادة عن الخطة: {over} · تكلفة الفرد حسب أجر التخصص
+                                  </span>
+                                  {item.excessAssignments.some((assignment) => !assignment.alreadyDeducted) && deductionPermissionQuery.data && (
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                      className="border-amber-500 text-amber-800 hover:bg-amber-500/15 dark:text-amber-200"
+                                      onClick={() => {
+                                        setSelectedOverage(item);
+                                        setResponsibleEmployeeId("");
+                                        setResponsibleSearch("");
+                                      }}
+                                    >
+                                      ⚠ تحديد المسؤول عن الكلفة
+                                    </Button>
+                                  )}
+                                  {item.excessAssignments.some((assignment) => !assignment.alreadyDeducted) && !deductionPermissionQuery.data && (
+                                    <span className="text-xs text-muted-foreground">تسجيل الاستقطاع متاح للموارد البشرية والإدارة</span>
+                                  )}
+                                  {item.excessAssignments.length > 0 && item.excessAssignments.every((assignment) => assignment.alreadyDeducted) && (
+                                    <Badge variant="outline" className="border-emerald-600 text-emerald-700 dark:text-emerald-300">تم تسجيل استقطاع هذه الزيادة</Badge>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -1015,6 +1204,80 @@ function AttendancePage() {
           </Card>
         </>
       )}
+      <Dialog
+        open={!!selectedOverage}
+        onOpenChange={(open) => {
+          if (!open && !savingDeduction) setSelectedOverage(null);
+        }}
+      >
+        <DialogContent dir="rtl" className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>تسجيل تكلفة الكادر الزائد</DialogTitle>
+          </DialogHeader>
+          {selectedOverage && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                سيتم تسجيل استقطاع يومي لكل اسم زائد أدناه على الموظف المسؤول الذي تختاره. يتراكم
+                الاستقطاع في شهر العمل ويظهر مفصلاً في قصاصة الراتب. لا يمكن تسجيل السطر مرتين.
+              </p>
+              <div className="space-y-2 rounded-xl border border-amber-400/50 bg-amber-500/10 p-3">
+                {selectedOverage.excessAssignments.map((assignment) => {
+                  const cost = excessCost(assignment);
+                  return (
+                    <div key={assignment.id} className="flex items-center justify-between gap-3 text-sm">
+                      <span className="font-medium">{assignment.employee_name_snapshot} · {assignment.employee_no_snapshot}{assignment.alreadyDeducted ? " · مسجل مسبقاً" : ""}</span>
+                      <span className="shrink-0">{assignment.alreadyDeducted ? "تم الاستقطاع" : cost === null ? "الأجر غير مهيأ" : `${cost.toLocaleString("ar-IQ")} د.ع / يوم`}</span>
+                    </div>
+                  );
+                })}
+                <div className="border-t border-amber-500/30 pt-2 text-sm font-bold">
+                  المتبقي للتسجيل: {selectedOverage.excessAssignments.filter((assignment) => !assignment.alreadyDeducted).reduce((sum, assignment) => sum + (excessCost(assignment) ?? 0), 0).toLocaleString("ar-IQ")} د.ع
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="excess-responsible-search">ابحث عن الموظف المسؤول في سجل الموظفين</Label>
+                <Input
+                  id="excess-responsible-search"
+                  value={responsibleSearch}
+                  onChange={(event) => setResponsibleSearch(event.target.value)}
+                  placeholder="الاسم أو الرقم الوظيفي..."
+                />
+                <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border p-1">
+                  {matchingResponsibleEmployees.slice(0, 80).map((employee) => (
+                    <button
+                      key={employee.id}
+                      type="button"
+                      className={`flex min-h-10 w-full items-center justify-between rounded-md px-3 text-right text-sm hover:bg-accent ${responsibleEmployeeId === employee.id ? "bg-primary/10 font-semibold text-primary" : ""}`}
+                      onClick={() => setResponsibleEmployeeId(employee.id)}
+                    >
+                      <span>{employee.full_name}</span>
+                      <span className="text-xs text-muted-foreground">{employee.employee_no}</span>
+                    </button>
+                  ))}
+                  {!matchingResponsibleEmployees.length && (
+                    <p className="p-3 text-center text-sm text-muted-foreground">
+                      {responsibleEmployeesQuery.isLoading ? "جارٍ تحميل الموظفين..." : "لا يوجد موظف مطابق"}
+                    </p>
+                  )}
+                </div>
+                {selectedResponsible && (
+                  <p className="text-sm">سيُسجل الاستقطاع على: <b>{selectedResponsible.full_name}</b></p>
+                )}
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setSelectedOverage(null)} disabled={savingDeduction}>إلغاء</Button>
+                <Button
+                  type="button"
+                  onClick={() => void saveExcessDeduction()}
+                  disabled={savingDeduction || !responsibleEmployeeId || !selectedOverage.excessAssignments.some((assignment) => !assignment.alreadyDeducted) || selectedOverage.excessAssignments.some((assignment) => !assignment.alreadyDeducted && excessCost(assignment) === null)}
+                >
+                  {savingDeduction ? "جارٍ تسجيل الاستقطاع..." : "تسجيل الاستقطاع"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
