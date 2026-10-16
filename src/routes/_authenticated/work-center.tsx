@@ -2416,7 +2416,6 @@ function CompleteDialog({
         .from("employee_tasks")
         .update({
           status: "completed",
-          completed_at: task.require_review ? null : new Date().toISOString(),
           completion_note: note.trim() || null,
           proof_note: proofNote.trim() || null,
           proof_storage_path: proofPath,
