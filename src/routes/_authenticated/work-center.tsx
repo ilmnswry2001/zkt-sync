@@ -222,7 +222,7 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: str
 }
 
 function WorkCenterPage() {
-  const { user, roles, isAdmin, isHR, isSiteAdmin, permissionsLoading } = useAuth();
+  const { user, roles, isAdmin, isHR, permissionsLoading } = useAuth();
   const qc = useQueryClient();
   const [today, setToday] = useState(todayInBaghdad);
   useEffect(() => {
@@ -230,14 +230,14 @@ function WorkCenterPage() {
     return () => window.clearInterval(timer);
   }, []);
   const isManager =
-    isAdmin || isHR || isSiteAdmin || roles.includes("department_manager") || roles.includes("supervisor");
+    isAdmin || isHR || roles.includes("department_manager") || roles.includes("supervisor");
   const uid = user?.id;
 
   const deptsQ = useQuery({
-    queryKey: ["wc-depts", uid, isAdmin, isHR, isSiteAdmin],
+    queryKey: ["wc-depts", uid, isAdmin, isHR],
     enabled: !!uid && !permissionsLoading,
     queryFn: async (): Promise<Dept[]> => {
-      if (isAdmin || isHR || isSiteAdmin) {
+      if (isAdmin || isHR) {
         const { data, error } = await supabase.from("departments").select("id, name").order("name");
         if (error) throw error;
         return data ?? [];
