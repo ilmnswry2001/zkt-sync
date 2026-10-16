@@ -222,7 +222,7 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: str
 }
 
 function WorkCenterPage() {
-  const { user, roles, isAdmin, isHR, permissionsLoading } = useAuth();
+  const { user, roles, isAdmin, isHR, isSiteAdmin, permissionsLoading } = useAuth();
   const qc = useQueryClient();
   const [today, setToday] = useState(todayInBaghdad);
   useEffect(() => {
@@ -230,14 +230,14 @@ function WorkCenterPage() {
     return () => window.clearInterval(timer);
   }, []);
   const isManager =
-    isAdmin || isHR || roles.includes("department_manager") || roles.includes("supervisor");
+    isAdmin || isHR || isSiteAdmin || roles.includes("department_manager") || roles.includes("supervisor");
   const uid = user?.id;
 
   const deptsQ = useQuery({
-    queryKey: ["wc-depts", uid, isAdmin, isHR],
+    queryKey: ["wc-depts", uid, isAdmin, isHR, isSiteAdmin],
     enabled: !!uid && !permissionsLoading,
     queryFn: async (): Promise<Dept[]> => {
-      if (isAdmin || isHR) {
+      if (isAdmin || isHR || isSiteAdmin) {
         const { data, error } = await supabase.from("departments").select("id, name").order("name");
         if (error) throw error;
         return data ?? [];
@@ -2412,7 +2412,7 @@ function CompleteDialog({
         if (upload.error) throw upload.error;
         proofPath = upload.data.path;
       }
-      const { error } = await workCenterDb
+      const { data, error } = await workCenterDb
         .from("employee_tasks")
         .update({
           status: "completed",
@@ -2423,8 +2423,10 @@ function CompleteDialog({
           proof_link: proofLink.trim() || null,
           proof_result: proofResult.trim() || null,
         })
-        .eq("id", task.id);
+        .eq("id", task.id)
+        .select("id");
       if (error) throw error;
+      if (!data?.length) throw new Error("لم تُحدّث المهمة. تحقق من صلاحيات الحساب أو ارتباط الموظف بالحساب.");
       toast.success(
         task.require_review ? "تم إرسال الإنجاز إلى المدير للمراجعة" : "تم تسجيل الإنجاز",
       );
