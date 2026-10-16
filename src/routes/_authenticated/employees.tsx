@@ -1,7 +1,7 @@
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,13 +20,21 @@ import { EmployeeProfileContent } from "@/components/EmployeeProfileContent";
 import { useServerFn } from "@tanstack/react-start";
 import { importEmployees } from "@/lib/employees.functions";
 import { useAuth } from "@/hooks/use-auth";
+import {
+  EMPLOYEE_IMPORT_FIELDS,
+  getDefaultEmployeeImportField,
+  mapEmployeeImportRows,
+  readEmployeesWorkbook,
+  type EmployeeImportMapping,
+  type EmployeeWorkbook,
+} from "@/lib/excel-employees";
 
 export const Route = createFileRoute("/_authenticated/employees")({
   head: () => ({ meta: [{ title: "الموظفون" }] }),
   component: EmployeesPage,
 });
 
-type Emp = { id: string; employee_no: string; full_name: string; email?: string | null; department_id: string | null; position: string | null; status: string; departments?: { name: string } | null };
+type Emp = { id: string; employee_no: string; attendance_device_id?: string | null; full_name: string; email?: string | null; department_id: string | null; position: string | null; status: string; departments?: { name: string } | null };
 type LoginProfile = { id: string; full_name: string | null; email: string | null };
 
 function EmployeesPage() {
@@ -43,14 +51,47 @@ function EmployeesPage() {
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importPreview, setImportPreview] = useState<(EmployeeWorkbook & { fileName: string; mapping: EmployeeImportMapping }) | null>(null);
+  const importPlan = useMemo(
+    () => importPreview ? mapEmployeeImportRows(importPreview.rows, importPreview.mapping) : { rows: [], skipped: 0, invalidDates: {} },
+    [importPreview],
+  );
+  const invalidDateCount = Object.values(importPlan.invalidDates).reduce((total, count) => total + (count ?? 0), 0);
+  const invalidDateDetails = Object.entries(importPlan.invalidDates)
+    .filter(([, count]) => !!count)
+    .map(([field, count]) => `${EMPLOYEE_IMPORT_FIELDS.find((item) => item.key === field)?.label ?? field}: ${count?.toLocaleString("ar-IQ")}`)
+    .join("، ");
 
   async function handleExcel(file: File) {
-    setImporting(true); setProgress(0); setImportMsg("جاري قراءة الملف...");
+    setImportMsg("جاري قراءة الملف...");
     try {
-      const { parseEmployeesWorkbook } = await import("@/lib/excel-employees");
       const buf = await file.arrayBuffer();
-      const { rows: parsed, skipped } = parseEmployeesWorkbook(buf);
-      if (!parsed.length) throw new Error("لم يتم العثور على صفوف صالحة — تأكد من وجود أعمدة «التسلسل» و«اسم الموظف»");
+      const workbook = readEmployeesWorkbook(buf);
+      if (!workbook.rows.length) throw new Error("الورقة الأولى لا تحتوي على بيانات موظفين");
+      const mapping = Object.fromEntries(workbook.headers.map((header) => [header, getDefaultEmployeeImportField(header)]));
+      setImportPreview({ ...workbook, fileName: file.name, mapping });
+      setImportDialogOpen(true);
+      setImportMsg(null);
+    } catch (error) {
+      setImportMsg(null);
+      toast.error(formatErrorMessage(error, "تعذرت قراءة ملف Excel"));
+    }
+  }
+
+  async function confirmExcelImport() {
+    if (!importPreview) return;
+    const { rows: parsed, skipped } = importPlan;
+    const targets = Object.values(importPreview.mapping).filter(Boolean);
+    const duplicateTargets = new Set(targets.filter((target, index) => targets.indexOf(target) !== index));
+    if (duplicateTargets.size) return toast.error("لا يمكن ربط أكثر من عمود مصدر بالحقل النظامي نفسه");
+    if (!Object.values(importPreview.mapping).includes("employee_no") || !Object.values(importPreview.mapping).includes("full_name")) {
+      return toast.error("اربط عمود الرقم الوظيفي وعمود اسم الموظف قبل المتابعة");
+    }
+    if (!parsed.length) return toast.error("لا توجد صفوف صالحة؛ تحقق من مطابقة الرقم الوظيفي واسم الموظف");
+
+    setImporting(true); setProgress(0); setImportMsg("جاري استيراد البيانات...");
+    try {
       const CHUNK = 500;
       let done = 0;
       for (let i = 0; i < parsed.length; i += CHUNK) {
@@ -63,8 +104,10 @@ function EmployeesPage() {
       qc.invalidateQueries({ queryKey: ["employees"] });
       qc.invalidateQueries({ queryKey: ["departments"] });
       setImportMsg(`تم استيراد ${done} موظف${skipped ? ` (تم تجاهل ${skipped} صف بدون رقم/اسم أو مكرر)` : ""}`);
+      setImportDialogOpen(false);
+      setImportPreview(null);
       toast.success(`تم استيراد ${done} موظف`);
-    } catch (e: any) {
+    } catch (e: unknown) {
       setImportMsg(null);
       toast.error(formatErrorMessage(e, "فشل الاستيراد"));
     } finally {
@@ -196,6 +239,11 @@ function EmployeesPage() {
     queryKey: ["departments"],
     queryFn: async () => (await supabase.from("departments").select("id, name").order("name")).data ?? [],
   });
+  const departmentsToCreate = useMemo(() => {
+    if (!importPreview || !Object.values(importPreview.mapping).includes("department")) return [];
+    const existingNames = new Set(depts.map((department) => department.name.trim()));
+    return [...new Set(importPlan.rows.map((row) => row.department?.trim()).filter((name): name is string => !!name && !existingNames.has(name)))];
+  }, [depts, importPlan.rows, importPreview]);
   const { data: sites = [] } = useQuery({
     queryKey: ["sites"],
     queryFn: async () => (await supabase.from("sites").select("id, name, ctr_code").order("name")).data ?? [],
@@ -229,6 +277,7 @@ function EmployeesPage() {
       base_salary: toNumber(raw.base_salary),
       pay_type: raw.pay_type === "daily" ? "daily" : "monthly",
       erp_no: toNull(raw.erp_no),
+      attendance_device_id: toNull(raw.attendance_device_id),
       id_no: toNull(raw.id_no),
       ctr_code: toNull(raw.ctr_code),
       nationality: toNull(raw.nationality),
@@ -336,6 +385,80 @@ function EmployeesPage() {
             {importing ? <Loader2 className="w-4 h-4 ml-2 animate-spin" /> : <Upload className="w-4 h-4 ml-2" />}
             استيراد من Excel
           </Button>
+          <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+            <DialogContent dir="rtl" className="flex max-h-[92vh] max-w-5xl flex-col overflow-hidden">
+              <DialogHeader>
+                <DialogTitle>مطابقة حقول ملف الموظفين</DialogTitle>
+                <p className="text-sm text-muted-foreground">
+                  {importPreview?.fileName} · {importPreview?.sheetName} · {importPreview?.rows.length.toLocaleString("ar-IQ")} صفوف
+                </p>
+              </DialogHeader>
+              {importPreview && (
+                <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-1">
+                  <div className="rounded-lg border bg-muted/40 p-3 text-sm">
+                    اربط أعمدة الملف بحقوق النظام. الأعمدة غير المرتبطة ستُتجاهل، والخلايا الفارغة لن تمسح بيانات موجودة.
+                    <div className="mt-1 text-muted-foreground">
+                      تمت مطابقة {Object.values(importPreview.mapping).filter(Boolean).length} من {importPreview.headers.length} عموداً ·
+                      {" "}صفوف صالحة {importPlan.rows.length.toLocaleString("ar-IQ")} · متجاهلة {importPlan.skipped.toLocaleString("ar-IQ")}
+                    </div>
+                    {invalidDateCount > 0 && <p role="alert" className="mt-2 text-amber-700">تعذر تحويل {invalidDateCount.toLocaleString("ar-IQ")} قيمة إلى تاريخ ({invalidDateDetails})؛ لن تُستورد كتاريخ. الخلايا الفارغة أو غير الصالحة لا تمسح التاريخ الموجود.</p>}
+                    {departmentsToCreate.length > 0 && <p className="mt-2 text-amber-700">توجد {departmentsToCreate.length.toLocaleString("ar-IQ")} أسماء أقسام غير مطابقة للأقسام الحالية؛ سيُنشئها النظام تلقائياً عند الاستيراد.</p>}
+                  </div>
+                  <div className="space-y-2">
+                    {importPreview.headers.map((header, index) => (
+                      <div key={index} className="grid items-center gap-2 rounded-lg border p-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium" title={header}>{header || "عمود بلا عنوان"}</p>
+                          <p className="text-xs text-muted-foreground">عمود الملف</p>
+                        </div>
+                        <Select
+                          value={importPreview.mapping[header] || "__ignore__"}
+                          onValueChange={(value) => setImportPreview((current) => current ? {
+                            ...current,
+                            mapping: { ...current.mapping, [header]: value === "__ignore__" ? "" : value as EmployeeImportMapping[string] },
+                          } : current)}
+                        >
+                          <SelectTrigger><SelectValue placeholder="تجاهل هذا العمود" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__ignore__">تجاهل هذا العمود</SelectItem>
+                            {EMPLOYEE_IMPORT_FIELDS.map((field) => {
+                              const usedElsewhere = Object.entries(importPreview.mapping)
+                                .some(([source, target]) => source !== header && target === field.key);
+                              return <SelectItem key={field.key} value={field.key} disabled={usedElsewhere}>{field.label}</SelectItem>;
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <p className="mb-2 text-sm font-semibold">معاينة السجلات بعد المطابقة</p>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader><TableRow><TableHead>الرقم الوظيفي</TableHead><TableHead>اسم الموظف</TableHead><TableHead>القسم</TableHead><TableHead>رقم جهاز البصمة</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                          {importPlan.rows.slice(0, 5).map((row) => (
+                            <TableRow key={row.employee_no}>
+                              <TableCell>{row.employee_no}</TableCell><TableCell>{row.full_name}</TableCell>
+                              <TableCell>{row.department || "—"}</TableCell><TableCell>{row.attendance_device_id || "—"}</TableCell>
+                            </TableRow>
+                          ))}
+                          {!importPlan.rows.length && <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground">اربط الرقم الوظيفي واسم الموظف لعرض المعاينة.</TableCell></TableRow>}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div className="flex shrink-0 justify-end gap-2 border-t pt-3">
+                <Button type="button" variant="outline" onClick={() => setImportDialogOpen(false)} disabled={importing}>إلغاء</Button>
+                <Button type="button" onClick={confirmExcelImport} disabled={importing || !importPlan.rows.length}>
+                  {importing ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Upload className="ml-2 h-4 w-4" />}
+                  استيراد {importPlan.rows.length.toLocaleString("ar-IQ")} سجل
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setEditing(null); }}>
           <DialogTrigger asChild><Button><Plus className="w-4 h-4 ml-2" /> موظف جديد</Button></DialogTrigger>
           <DialogContent dir="rtl" className="flex max-h-[92vh] max-w-5xl flex-col overflow-hidden rounded-2xl border-0 p-0 shadow-2xl">
@@ -352,6 +475,7 @@ function EmployeesPage() {
                 department_id: g("department_id"),
                 site_id: g("site_id"),
                 wage_rate_id: g("wage_rate_id"),
+                attendance_device_id: g("attendance_device_id"),
                 position: g("position"),
                 status: f.get("status") as any,
                 base_salary: n("base_salary"),
@@ -375,6 +499,7 @@ function EmployeesPage() {
                 <div><h3 className="font-semibold">البيانات الأساسية</h3><p className="text-xs text-muted-foreground">الحقول ذات النجمة مطلوبة لإتمام الحفظ.</p></div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div><Label>الرقم الوظيفي *</Label><Input name="employee_no" required autoFocus placeholder="مثال: 10428" defaultValue={ed?.employee_no ?? ""} /></div>
+                  <div><Label>رقم جهاز البصمة</Label><Input name="attendance_device_id" defaultValue={ed?.attendance_device_id ?? ""} /></div>
                   <div className="md:col-span-2"><Label>الاسم الكامل *</Label><Input name="full_name" required placeholder="الاسم كما في المستندات الرسمية" defaultValue={ed?.full_name ?? ""} /></div>
                   <div><Label>المسمى الوظيفي</Label><Input name="position" defaultValue={ed?.position ?? ""} /></div>
                   <div>

@@ -1125,6 +1125,7 @@ export type Database = {
       employees: {
         Row: {
           address: string | null
+          attendance_device_id: string | null
           bank_account: string | null
           bank_name: string | null
           base_salary: number | null
@@ -1173,6 +1174,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          attendance_device_id?: string | null
           bank_account?: string | null
           bank_name?: string | null
           base_salary?: number | null
@@ -1221,6 +1223,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          attendance_device_id?: string | null
           bank_account?: string | null
           bank_name?: string | null
           base_salary?: number | null

@@ -1,34 +1,49 @@
 import * as XLSX from "xlsx";
 
-export type ImportRow = {
+export const EMPLOYEE_IMPORT_FIELDS = [
+  { key: "employee_no", label: "الرقم الوظيفي (مفتاح المطابقة)" },
+  { key: "full_name", label: "اسم الموظف" },
+  { key: "attendance_device_id", label: "رقم الموظف في جهاز البصمة" },
+  { key: "position", label: "المسمى الوظيفي" },
+  { key: "department", label: "القسم" },
+  { key: "erp_no", label: "رقم ERP" },
+  { key: "id_no", label: "رقم الهوية" },
+  { key: "ctr_code", label: "رمز العقد" },
+  { key: "status", label: "حالة الموظف" },
+  { key: "nationality", label: "الجنسية" },
+  { key: "birth_date", label: "تاريخ الميلاد" },
+  { key: "hire_date", label: "تاريخ المباشرة" },
+  { key: "last_working_day", label: "آخر يوم عمل" },
+  { key: "contract_end_date", label: "تاريخ انتهاء العقد" },
+  { key: "phone1", label: "الهاتف الأول" },
+  { key: "phone2", label: "الهاتف الثاني" },
+  { key: "email", label: "البريد الإلكتروني" },
+  { key: "address", label: "عنوان السكن" },
+  { key: "salary_type", label: "نوع الراتب" },
+  { key: "salary_structure", label: "هيكل الراتب" },
+  { key: "project", label: "المشروع" },
+  { key: "passport_no", label: "رقم جواز السفر" },
+  { key: "passport_expiry", label: "انتهاء جواز السفر" },
+  { key: "residency_no", label: "رقم الإقامة" },
+  { key: "residency_expiry", label: "انتهاء الإقامة" },
+  { key: "safety_passport_no", label: "رقم جواز السلامة" },
+  { key: "safety_passport_expiry", label: "انتهاء جواز السلامة" },
+  { key: "notes", label: "ملاحظات" },
+] as const;
+
+export type EmployeeImportField = (typeof EMPLOYEE_IMPORT_FIELDS)[number]["key"];
+export type EmployeeImportMapping = Record<string, EmployeeImportField | "">;
+export type EmployeeImportRow = {
   employee_no: string;
   full_name: string;
-  position: string | null;
-  department: string | null;
-  erp_no: string | null;
-  id_no: string | null;
-  status: "active" | "inactive";
-  nationality: string | null;
-  birth_date: string | null;
-  hire_date: string | null;
-  last_working_day: string | null;
-  phone1: string | null;
-  phone2: string | null;
-  address: string | null;
-  salary_type: string | null;
-  salary_structure: string | null;
-  project: string | null;
-  safety_passport_no: string | null;
-  safety_passport_expiry: string | null;
-  notes: string | null;
-};
+} & Partial<Record<Exclude<EmployeeImportField, "employee_no" | "full_name">, string | null | "active" | "inactive" | "terminated">>;
 
-/** Arabic (and English) header aliases → internal field */
-const HEADERS: Record<string, keyof ImportRow | "department"> = {
+const HEADERS: Record<string, EmployeeImportField> = {
   "التسلسل": "employee_no",
   "الرقم الوظيفي": "employee_no",
   "اسم الموظف": "full_name",
   "الاسم الكامل": "full_name",
+  "Attendance Device ID": "attendance_device_id",
   "المسمى الوظيفي": "position",
   "المنصب": "position",
   "القسم": "department",
@@ -47,88 +62,119 @@ const HEADERS: Record<string, keyof ImportRow | "department"> = {
   "المشاريع": "project",
   "رقم جواز السلامة": "safety_passport_no",
   "تاريخ انتهاء جواز السلامة": "safety_passport_expiry",
+  "رقم العقد الموظف": "ctr_code",
   "ملاحظات 1": "notes",
 };
 
-const norm = (v: unknown) => {
-  if (v === null || v === undefined) return null;
-  const s = String(v).trim();
-  return s && s.toLowerCase() !== "nan" ? s : null;
+const norm = (value: unknown): string | null => {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  return text && text.toLowerCase() !== "nan" ? text : null;
 };
 
-const toDate = (v: unknown): string | null => {
-  if (v === null || v === undefined || v === "") return null;
-  if (v instanceof Date && !isNaN(v.getTime())) {
-    const y = v.getFullYear();
-    if (y < 1920 || y > 2100) return null;
-    return `${y}-${String(v.getMonth() + 1).padStart(2, "0")}-${String(v.getDate()).padStart(2, "0")}`;
+const toDate = (value: unknown): string | null => {
+  if (value === null || value === undefined || value === "") return null;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    const year = value.getFullYear();
+    if (year < 1920 || year > 2100) return null;
+    return `${year}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
   }
-  if (typeof v === "number") {
-    const d = XLSX.SSF.parse_date_code(v);
-    if (!d || d.y < 1920 || d.y > 2100) return null;
-    return `${d.y}-${String(d.m).padStart(2, "0")}-${String(d.d).padStart(2, "0")}`;
+  if (typeof value === "number") {
+    const date = XLSX.SSF.parse_date_code(value);
+    if (!date || date.y < 1920 || date.y > 2100) return null;
+    return `${date.y}-${String(date.m).padStart(2, "0")}-${String(date.d).padStart(2, "0")}`;
   }
-  const s = String(v).trim();
-  const t = Date.parse(s);
-  if (isNaN(t)) return null;
-  const d = new Date(t);
-  if (d.getFullYear() < 1920 || d.getFullYear() > 2100) return null;
-  return d.toISOString().slice(0, 10);
+  const text = String(value).trim().replace(/[٠-٩]/g, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)));
+  const parts = text.match(/^(\d{1,4})[-/.](\d{1,2})[-/.](\d{1,4})$/);
+  if (parts) {
+    const [, first, second, third] = parts;
+    const yearFirst = first.length === 4;
+    const year = Number(yearFirst ? first : third);
+    const month = Number(second);
+    const day = Number(yearFirst ? third : first);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    if (year < 1920 || year > 2100 || date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+    return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime()) || parsed.getFullYear() < 1920 || parsed.getFullYear() > 2100) return null;
+  return parsed.toISOString().slice(0, 10);
 };
 
-const toStatus = (v: unknown): "active" | "inactive" => {
-  const s = norm(v)?.toLowerCase() ?? "";
-  return ["yes", "y", "true", "1", "نعم", "مستمر"].includes(s) ? "active" : "inactive";
+const toStatus = (value: unknown): "active" | "inactive" | "terminated" | null => {
+  const text = norm(value)?.toLowerCase();
+  if (!text) return null;
+  if (["yes", "y", "true", "1", "نعم", "مستمر", "active", "نشط"].includes(text)) return "active";
+  if (["terminated", "مفصول", "منتهي الخدمة", "منتهية خدمته"].includes(text)) return "terminated";
+  if (["no", "n", "false", "0", "لا", "غير مستمر", "inactive", "غير نشط"].includes(text)) return "inactive";
+  return null;
 };
 
-export type ParseResult = { rows: ImportRow[]; skipped: number; headers: string[] };
+export type EmployeeWorkbook = { headers: string[]; rows: Record<string, unknown>[]; sheetName: string };
 
-export function parseEmployeesWorkbook(buffer: ArrayBuffer): ParseResult {
-  const wb = XLSX.read(buffer, { cellDates: true });
-  const sheet = wb.Sheets[wb.SheetNames[0]];
-  const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: null, raw: true });
-  const headers = raw.length ? Object.keys(raw[0]) : [];
+export function readEmployeesWorkbook(buffer: ArrayBuffer): EmployeeWorkbook {
+  const workbook = XLSX.read(buffer, { cellDates: true });
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) throw new Error("المصنف لا يحتوي على أوراق بيانات");
+  const sheet = workbook.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: null, raw: true });
+  return { headers: rows.length ? Object.keys(rows[0]) : [], rows, sheetName };
+}
 
-  const rows: ImportRow[] = [];
+export function guessEmployeeImportMapping(headers: string[]): EmployeeImportMapping {
+  const mapping: EmployeeImportMapping = {};
+  const used = new Set<EmployeeImportField>();
+  for (const header of headers) {
+    const target = HEADERS[header.trim()];
+    mapping[header] = target && !used.has(target) ? target : "";
+    if (target && mapping[header]) used.add(target);
+  }
+  return mapping;
+}
+
+export function mapEmployeeImportRows(
+  rows: Record<string, unknown>[],
+  mapping: EmployeeImportMapping,
+): { rows: EmployeeImportRow[]; skipped: number; invalidDates: Partial<Record<EmployeeImportField, number>> } {
+  const mappedRows: EmployeeImportRow[] = [];
   const seen = new Set<string>();
+  const invalidDates: Partial<Record<EmployeeImportField, number>> = {};
   let skipped = 0;
+  const dateFields = new Set<EmployeeImportField>([
+    "birth_date", "hire_date", "last_working_day", "contract_end_date", "passport_expiry",
+    "residency_expiry", "safety_passport_expiry",
+  ]);
 
-  for (const r of raw) {
-    const picked: Record<string, unknown> = {};
-    for (const [key, val] of Object.entries(r)) {
-      const field = HEADERS[key.trim()];
-      if (field) picked[field] = val;
+  for (const sourceRow of rows) {
+    const selected: Partial<Record<EmployeeImportField, unknown>> = {};
+    for (const [header, field] of Object.entries(mapping)) {
+      if (field) selected[field] = sourceRow[header];
     }
-    const employee_no = norm(picked.employee_no);
-    const full_name = norm(picked.full_name);
-    if (!employee_no || !full_name || seen.has(employee_no)) {
+    const employeeNo = norm(selected.employee_no);
+    const fullName = norm(selected.full_name);
+    if (!employeeNo || !fullName || seen.has(employeeNo)) {
       skipped++;
       continue;
     }
-    seen.add(employee_no);
-    rows.push({
-      employee_no,
-      full_name,
-      position: norm(picked.position),
-      department: norm(picked.department),
-      erp_no: norm(picked.erp_no),
-      id_no: norm(picked.id_no),
-      status: toStatus(picked.status),
-      nationality: norm(picked.nationality),
-      birth_date: toDate(picked.birth_date),
-      hire_date: toDate(picked.hire_date),
-      last_working_day: toDate(picked.last_working_day),
-      phone1: norm(picked.phone1),
-      phone2: norm(picked.phone2),
-      address: norm(picked.address),
-      salary_type: norm(picked.salary_type),
-      salary_structure: norm(picked.salary_structure),
-      project: norm(picked.project),
-      safety_passport_no: norm(picked.safety_passport_no),
-      safety_passport_expiry: toDate(picked.safety_passport_expiry),
-      notes: norm(picked.notes),
-    });
+    seen.add(employeeNo);
+
+    const result: EmployeeImportRow = { employee_no: employeeNo, full_name: fullName };
+    for (const [field, value] of Object.entries(selected) as [EmployeeImportField, unknown][]) {
+      if (field === "employee_no" || field === "full_name") continue;
+      if (field === "status") result.status = toStatus(value) ?? undefined;
+      else if (dateFields.has(field)) {
+        const parsed = toDate(value);
+        if (norm(value) && !parsed) invalidDates[field] = (invalidDates[field] ?? 0) + 1;
+        result[field] = parsed;
+      }
+      else result[field] = norm(value);
+    }
+    mappedRows.push(result);
   }
 
-  return { rows, skipped, headers };
+  return { rows: mappedRows, skipped, invalidDates };
+}
+
+export function getDefaultEmployeeImportField(header: string): EmployeeImportField | "" {
+  return HEADERS[header.trim()] ?? "";
 }

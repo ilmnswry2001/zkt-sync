@@ -58,16 +58,34 @@ export const Route = createFileRoute("/api/public/zk-sync")({
       batchDeviceId = device.id;
 
       const pins = [...new Set(payload.logs.map((log) => log.user_pin))];
-      const employees = new Map<string, string>();
+      const byEmployeeNo = new Map<string, { id: string; employee_no: string; attendance_device_id: string | null }>();
+      const byDeviceId = new Map<string, { id: string; employee_no: string; attendance_device_id: string | null }>();
+      const ambiguousDeviceIds = new Set<string>();
       for (let i = 0; i < pins.length; i += 500) {
-        const { data, error } = await admin.from("employees").select("id, employee_no").in("employee_no", pins.slice(i, i + 500));
-        if (error) throw error;
-        for (const row of data ?? []) employees.set(row.employee_no, row.id);
+        const chunk = pins.slice(i, i + 500);
+        const { data: numberMatches, error: numberError } = await admin.from("employees")
+          .select("id, employee_no, attendance_device_id").in("employee_no", chunk);
+        if (numberError) throw numberError;
+        const { data: deviceMatches, error: deviceError } = await admin.from("employees")
+          .select("id, employee_no, attendance_device_id").in("attendance_device_id", chunk);
+        if (deviceError) throw deviceError;
+        for (const row of numberMatches ?? []) byEmployeeNo.set(row.employee_no, row);
+        for (const row of deviceMatches ?? []) {
+          const pin = String(row.attendance_device_id ?? "").trim();
+          const previous = byDeviceId.get(pin);
+          if (previous && previous.id !== row.id) ambiguousDeviceIds.add(pin);
+          else byDeviceId.set(pin, row);
+        }
       }
-      const knownPins = new Set(employees.keys());
-      const unmatched = payload.logs.filter((log) => !knownPins.has(log.user_pin)).length;
-      const logRows = payload.logs.filter((log) => knownPins.has(log.user_pin)).map((log) => ({
-        employee_no: log.user_pin, employee_id: employees.get(log.user_pin), device_id: device.id, upload_id: null,
+      const employeeByPin = new Map<string, { id: string; employee_no: string }>();
+      for (const pin of pins) {
+        if (ambiguousDeviceIds.has(pin)) continue;
+        const employee = byDeviceId.get(pin) ?? byEmployeeNo.get(pin);
+        if (employee) employeeByPin.set(pin, employee);
+      }
+      const unmatched = payload.logs.filter((log) => !employeeByPin.has(log.user_pin)).length;
+      const logRows = payload.logs.filter((log) => employeeByPin.has(log.user_pin)).map((log) => ({
+        employee_no: employeeByPin.get(log.user_pin)!.employee_no, employee_id: employeeByPin.get(log.user_pin)!.id, device_id: device.id, upload_id: null,
         verify_time: new Date(log.verify_time).toISOString(), verify_type: log.verify_type, status: log.status,
         external_log_id: log.external_id ?? null, source: "zk_agent",
       }));

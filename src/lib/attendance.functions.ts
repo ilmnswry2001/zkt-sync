@@ -47,25 +47,44 @@ export const ingestZkData = createServerFn({ method: "POST" })
 
     try {
       // ملفات البصمة تُستخدم للحضور فقط: لا يتم إنشاء أو تعديل بيانات الموظفين أو الأقسام.
-      // الربط يتم عبر الرقم التعريفي للموظف (employee_no) الموجود مسبقاً في النظام.
+      // ربط رقم جهاز البصمة أولاً، ثم الرقم الوظيفي كتوافق مع السجلات القديمة.
       const pins = [...new Set(data.logs.map((l) => l.user_pin))];
-      const empIdByPin = new Map<string, string>();
+      const empByNo = new Map<string, { id: string; employee_no: string; attendance_device_id: string | null }>();
+      const empByDevicePin = new Map<string, { id: string; employee_no: string; attendance_device_id: string | null }>();
+      const ambiguousDevicePins = new Set<string>();
       for (let i = 0; i < pins.length; i += 500) {
         const chunk = pins.slice(i, i + 500);
-        const { data: rows, error } = await supabase
+        const { data: numberRows, error: numberError } = await supabase
           .from("employees")
-          .select("id, employee_no")
+          .select("id, employee_no, attendance_device_id")
           .in("employee_no", chunk);
-        if (error) throw error;
-        rows?.forEach((r: any) => empIdByPin.set(r.employee_no, r.id));
+        if (numberError) throw numberError;
+        const { data: deviceRows, error: deviceError } = await supabase
+          .from("employees")
+          .select("id, employee_no, attendance_device_id")
+          .in("attendance_device_id", chunk);
+        if (deviceError) throw deviceError;
+        numberRows?.forEach((row) => empByNo.set(row.employee_no, row));
+        deviceRows?.forEach((row) => {
+          const pin = String(row.attendance_device_id ?? "").trim();
+          const previous = empByDevicePin.get(pin);
+          if (previous && previous.id !== row.id) ambiguousDevicePins.add(pin);
+          else empByDevicePin.set(pin, row);
+        });
       }
-      const unmatched = pins.filter((p) => !empIdByPin.has(p)).length;
+      const empByPin = new Map<string, { id: string; employee_no: string }>();
+      for (const pin of pins) {
+        if (ambiguousDevicePins.has(pin)) continue;
+        const employee = empByDevicePin.get(pin) ?? empByNo.get(pin);
+        if (employee) empByPin.set(pin, employee);
+      }
+      const unmatched = pins.filter((pin) => !empByPin.has(pin)).length;
 
       // إدراج سجلات البصمة (تجاهل المكرر)
       const logRows = data.logs.map((l) => {
         return {
-          employee_no: l.user_pin,
-          employee_id: empIdByPin.get(l.user_pin) ?? null,
+          employee_no: empByPin.get(l.user_pin)?.employee_no ?? l.user_pin,
+          employee_id: empByPin.get(l.user_pin)?.id ?? null,
           device_id: data.device_id,
           upload_id: data.upload_id,
           verify_time: normalizeVerifyTime(l.verify_time),
