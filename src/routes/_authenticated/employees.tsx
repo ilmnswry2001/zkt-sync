@@ -21,7 +21,9 @@ import { useServerFn } from "@tanstack/react-start";
 import { importEmployees } from "@/lib/employees.functions";
 import { useAuth } from "@/hooks/use-auth";
 import {
+  EMPLOYEE_EXTRA_SOURCE_FIELDS,
   EMPLOYEE_IMPORT_FIELDS,
+  EMPLOYEE_SOURCE_BINDINGS,
   getDefaultEmployeeImportField,
   mapEmployeeImportRows,
   readEmployeesWorkbook,
@@ -34,7 +36,7 @@ export const Route = createFileRoute("/_authenticated/employees")({
   component: EmployeesPage,
 });
 
-type Emp = { id: string; employee_no: string; attendance_device_id?: string | null; full_name: string; email?: string | null; department_id: string | null; position: string | null; status: string; departments?: { name: string } | null };
+type Emp = { id: string; employee_no: string; attendance_device_id?: string | null; employee_import_data?: Record<string, string | number | boolean | null> | null; full_name: string; email?: string | null; department_id: string | null; position: string | null; status: string; departments?: { name: string } | null };
 type LoginProfile = { id: string; full_name: string | null; email: string | null };
 
 function EmployeesPage() {
@@ -309,6 +311,7 @@ function EmployeesPage() {
       emergency_contact_name: toNull(raw.emergency_contact_name),
       emergency_contact_phone: toNull(raw.emergency_contact_phone),
       notes: toNull(raw.notes),
+      employee_import_data: raw.employee_import_data ?? {},
     };
   };
 
@@ -469,6 +472,14 @@ function EmployeesPage() {
             <form onSubmit={(e) => { e.preventDefault(); const f = new FormData(e.currentTarget);
               const g = (k: string) => { const v = (f.get(k) as string ?? "").trim(); return v === "" || v === "none" ? null : v; };
               const n = (k: string) => { const v = g(k); return v === null ? null : Number(v); };
+              const selectedDepartment = depts.find((department: any) => department.id === g("department_id"));
+              const sourceFields = Object.fromEntries([
+                ...Object.entries(EMPLOYEE_SOURCE_BINDINGS).map(([header, field]) => [
+                  header,
+                  field === "department_id" ? selectedDepartment?.name ?? null : g(field),
+                ]),
+                ...EMPLOYEE_EXTRA_SOURCE_FIELDS.map((header) => [header, g(`source_${header}`)]),
+              ]);
               save.mutate({
                 employee_no: f.get("employee_no") as string,
                 full_name: f.get("full_name") as string,
@@ -493,6 +504,7 @@ function EmployeesPage() {
                 bank_name: g("bank_name"), bank_account: g("bank_account"), iban: g("iban"),
                 emergency_contact_name: g("emergency_contact_name"), emergency_contact_phone: g("emergency_contact_phone"),
                 notes: g("notes"),
+                employee_import_data: { ...(editing?.employee_import_data ?? {}), ...sourceFields },
               });
             }} className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
               <section className="space-y-3 rounded-xl border bg-card p-4 shadow-sm">
@@ -622,6 +634,18 @@ function EmployeesPage() {
                 </div>
               </section>
 
+              <section className="space-y-3">
+                <h3 className="font-semibold text-sm text-muted-foreground">حقول الملف الشامل الإضافية</h3>
+                <p className="text-xs text-muted-foreground">تُحفظ هذه الحقول كما وردت في قاعدة البيانات الشاملة، وتظهر في ملف الموظف.</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {EMPLOYEE_EXTRA_SOURCE_FIELDS.map((header) => (
+                    <div key={header}>
+                      <Label htmlFor={`source_${header}`}>{header}</Label>
+                      <Input id={`source_${header}`} name={`source_${header}`} defaultValue={String(ed?.employee_import_data?.[header] ?? "")} />
+                    </div>
+                  ))}
+                </div>
+              </section>
               <section className="space-y-3">
                 <h3 className="font-semibold text-sm text-muted-foreground">المعلومات البنكية والملاحظات</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

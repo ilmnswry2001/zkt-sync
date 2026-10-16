@@ -31,6 +31,43 @@ export const EMPLOYEE_IMPORT_FIELDS = [
   { key: "notes", label: "ملاحظات" },
 ] as const;
 
+// Columns represented by regular employee form fields are saved under their source headings too.
+export const EMPLOYEE_SOURCE_BINDINGS: Record<string, string> = {
+  "التسلسل": "employee_no",
+  "اسم الموظف": "full_name",
+  "المسمى الوظيفي": "position",
+  "القسم": "department_id",
+  "NO EM ERP": "erp_no",
+  "مستمر بالعمل؟": "status",
+  "ID NO.": "id_no",
+  "Salary Structure": "salary_structure",
+  "نوع الراتب": "salary_type",
+  "المشاريع": "project",
+  "رقم جواز السلامة": "safety_passport_no",
+  "تاريخ انتهاء جواز السلامة": "safety_passport_expiry",
+  "تاريخ المباشرة": "hire_date",
+  "رقم العقد الموظف": "ctr_code",
+  "الجنسية": "nationality",
+  "آخر يوم عمل": "last_working_day",
+  "هاتف 1": "phone1",
+  "هاتف 2": "phone2",
+  "عنوان السكن": "address",
+  "المواليد": "birth_date",
+  "Attendance Device ID": "attendance_device_id",
+  "ملاحظات 1": "notes",
+};
+
+export const EMPLOYEE_EXTRA_SOURCE_FIELDS = [
+  "استمارة ترشيح دورة", "تاريخ الاستمارة", "متابعة توجيهات الادارة العليا", "ملاحظات توجيهات الادارة",
+  "قرار التعيين", "تاريخ كتاب القرار", "حالة جواز السلامة", "الاسم في الجواز", "رقم الجنسية",
+  "رقم الهوية / الجواز", "رقم العقد الضمان الاجتماعي", "تاريخ الرفع بالإيميل", "ترشيح للاضافة في الضمان الاجتماعي",
+  "ترشيح لعمل عقد الموظف", "تاريخ براءة الذمة", "استمارة التوظيف", "دورة السلامة الأساسية", "تعهد السياسات",
+  "نسخة الهوية+السكن", "صور ورقية والكترونية", "نسخة جواز السلامة", "نسخة جواز السفر", "نسخة الفيزة",
+  "السيرة الذاتية", "جواز قيادة", "وثيقة التخرج", "مدخل البيانات", "حقل الترشيح",
+  "الدورات الرميلة التي حصل عليها", "ملاحظات الرفع", "تاريخ آخر مراجعة", "ملاحظات آخر مراجعة",
+  "ملاحظات 2", "تاريخ آخر تقييم", "درجة آخر تقييم",
+] as const;
+
 export type EmployeeImportField = (typeof EMPLOYEE_IMPORT_FIELDS)[number]["key"];
 export type EmployeeImportMapping = Record<string, EmployeeImportField | "">;
 export type EmployeeImportRow = {
