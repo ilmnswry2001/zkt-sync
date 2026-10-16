@@ -37,6 +37,7 @@ import { toast } from "sonner";
 import type { Database } from "@/integrations/supabase/types";
 import { addCalendarDays, instantAtMidnightInTimeZone, todayInBaghdad } from "@/lib/date-time";
 import { workCenterDb } from "@/lib/work-center-db";
+import { GoalsTab } from "@/components/work-center/GoalsTab";
 import type {
   TaskAuditEvent,
   TaskChecklistItem,
@@ -676,6 +677,7 @@ function WorkCenterPage() {
           <TabsTrigger value="today">اليوم</TabsTrigger>
           <TabsTrigger value="tasks">المهام</TabsTrigger>
           {isManager && <TabsTrigger value="team">الفريق</TabsTrigger>}
+          <TabsTrigger value="goals">الأهداف</TabsTrigger>
           <TabsTrigger value="guidance">التوجيهات</TabsTrigger>
           <TabsTrigger value="performance">الأداء</TabsTrigger>
         </TabsList>
@@ -936,6 +938,16 @@ function WorkCenterPage() {
             isManager={isManager}
             loading={tasksQ.isLoading}
             error={tasksQ.error}
+          />
+        </TabsContent>
+        <TabsContent value="goals">
+          <GoalsTab
+            uid={uid ?? ""}
+            employeeId={meQ.data ?? null}
+            employees={emps}
+            departments={deptsQ.data ?? []}
+            isManager={isManager}
+            scopeIds={scopeIds}
           />
         </TabsContent>
       </Tabs>
