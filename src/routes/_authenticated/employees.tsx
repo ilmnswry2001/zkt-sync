@@ -35,7 +35,7 @@ export const Route = createFileRoute("/_authenticated/employees")({
   component: EmployeesPage,
 });
 
-type Emp = { id: string; employee_no: string; attendance_device_id?: string | null; employee_import_data?: Record<string, string | number | boolean | null> | null; full_name: string; email?: string | null; department_id: string | null; position: string | null; status: string; departments?: { name: string } | null };
+type Emp = { id: string; employee_no: string; attendance_device_id?: string | null; id_no?: string | null; employee_import_data?: Record<string, string | number | boolean | null> | null; full_name: string; email?: string | null; department_id: string | null; position: string | null; status: string; departments?: { name: string } | null };
 function EmployeesPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -241,6 +241,17 @@ function EmployeesPage() {
     mutationFn: async (id: string) => { const { error } = await supabase.from("employees").delete().eq("id", id); if (error) throw error; },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); qc.invalidateQueries({ queryKey: ["employees_count"] }); toast.success("تم الحذف"); },
     onError: (e: any) => toast.error(formatErrorMessage(e)),
+  });
+  const updateStatus = useMutation({
+    mutationFn: async ({ employeeId, status }: { employeeId: string; status: string }) => {
+      const { error } = await supabase.from("employees").update({ status }).eq("id", employeeId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      toast.success("تم تحديث حالة الموظف");
+    },
+    onError: (error: unknown) => toast.error(formatErrorMessage(error)),
   });
 
   const filtered = rows;
@@ -566,16 +577,27 @@ function EmployeesPage() {
         </CardHeader>
         <CardContent>
           <Table>
-            <TableHeader><TableRow><TableHead>الرقم</TableHead><TableHead>الاسم</TableHead><TableHead>القسم</TableHead><TableHead>المنصب</TableHead><TableHead>تصنيف الأجر</TableHead><TableHead>الحالة</TableHead><TableHead></TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>الرقم الوظيفي</TableHead><TableHead>اسم الموظف</TableHead><TableHead>القسم</TableHead><TableHead>رقم الهوية</TableHead><TableHead>التخصص / المسمى</TableHead><TableHead>رقم جهاز البصمة</TableHead><TableHead>تصنيف الأجر</TableHead><TableHead>الحالة</TableHead><TableHead></TableHead></TableRow></TableHeader>
             <TableBody showAllRows>
               {filtered.map((e) => (
                 <TableRow key={e.id}>
                   <TableCell className="font-mono">{e.employee_no}</TableCell>
                   <TableCell className="font-medium"><a href={`/employees/${encodeURIComponent(e.id)}`} onClick={(event) => { event.preventDefault(); navigate({ to: "/employees/$employeeId", params: { employeeId: e.id } }); }} className="inline-flex min-h-10 items-center text-primary underline-offset-4 hover:underline" aria-label={`فتح ملف ${e.full_name}`}>{e.full_name}</a></TableCell>
                   <TableCell>{e.departments?.name ?? "-"}</TableCell>
+                  <TableCell className="font-mono">{e.id_no || "-"}</TableCell>
                   <TableCell>{e.position ?? "-"}</TableCell>
+                  <TableCell className="font-mono">{e.attendance_device_id || "-"}</TableCell>
                   <TableCell>{(e as any).pay_type === "daily" ? "يومي" : "شهري"}</TableCell>
-                  <TableCell><Badge variant={e.status === "active" ? "default" : "secondary"}>{e.status === "active" ? "نشط" : "معطل"}</Badge></TableCell>
+                  <TableCell>
+                    <Select value={e.status} onValueChange={(status) => updateStatus.mutate({ employeeId: e.id, status })}>
+                      <SelectTrigger className="h-9 min-w-28" aria-label={`حالة ${e.full_name}`}><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">نشط</SelectItem>
+                        <SelectItem value="inactive">معطل</SelectItem>
+                        <SelectItem value="terminated">منتهي</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
                       <Button size="icon" variant="ghost" title="فتح ملف الموظف" aria-label="فتح ملف الموظف" onClick={() => navigate({ to: "/employees/$employeeId", params: { employeeId: e.id } })}><UserRound className="w-4 h-4" /></Button>
@@ -585,7 +607,7 @@ function EmployeesPage() {
                   </TableCell>
                 </TableRow>
               ))}
-              {!filtered.length && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">لا توجد بيانات</TableCell></TableRow>}
+              {!filtered.length && <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">لا توجد بيانات</TableCell></TableRow>}
             </TableBody>
           </Table>
           <div className="mt-4 flex items-center justify-center gap-3">
