@@ -1,3 +1,4 @@
+import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -113,7 +114,7 @@ function VehiclesPage() {
       await client.invalidateQueries({ queryKey: ["payroll"] });
       await client.invalidateQueries({ queryKey: ["monthly", "vehicle-report"] });
     },
-    onError: (error: Error) => toast.error(`تعذر تسجيل المركبة: ${error.message}`),
+    onError: (error: Error) => toast.error(`تعذر تسجيل المركبة: ${formatErrorMessage(error)}`),
   });
   const monthDates = useMemo(() => Array.from({ length: monthDayCount }, (_, index) => {
     const day = String(index + 1).padStart(2, "0");
@@ -140,7 +141,7 @@ function VehiclesPage() {
       await client.invalidateQueries({ queryKey: ["payroll"] });
       await client.invalidateQueries({ queryKey: ["monthly", "vehicle-report"] });
     },
-    onError: (error: Error) => toast.error(`تعذر حفظ التشغيل: ${error.message}`),
+    onError: (error: Error) => toast.error(`تعذر حفظ التشغيل: ${formatErrorMessage(error)}`),
   });
   const deleteVehicle = useMutation({
     mutationFn: async (id: string) => {
@@ -152,7 +153,7 @@ function VehiclesPage() {
       await client.invalidateQueries({ queryKey: ["vehicles"] });
       await client.invalidateQueries({ queryKey: ["payroll"] });
     },
-    onError: (error: Error) => toast.error(`تعذر حذف المركبة: ${error.message}`),
+    onError: (error: Error) => toast.error(`تعذر حذف المركبة: ${formatErrorMessage(error)}`),
   });
   return (
     <div dir="rtl" className="space-y-6">

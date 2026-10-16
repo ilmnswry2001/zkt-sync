@@ -1,3 +1,4 @@
+import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -685,7 +686,7 @@ function EmployeeDetails({
       await qc.invalidateQueries({ queryKey: ["monthly"] });
       toast.success("تم تحديث اليوم");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error(formatErrorMessage(e)),
   });
   const day = data?.days.find((d) => d.date === date);
   const status = statuses.find((s) => s.value === day?.status);

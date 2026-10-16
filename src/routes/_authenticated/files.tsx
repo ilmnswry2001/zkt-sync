@@ -1,3 +1,4 @@
+import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -58,7 +59,7 @@ function FilesPage() {
       toast.success(`تمت المعالجة وحفظ ${result.inserted} سجل بصمة`);
       await queryClient.invalidateQueries({ queryKey: ["uploaded_files"] });
     } catch (error) {
-      toast.error(`فشلت معالجة الملف: ${error instanceof Error ? error.message : String(error)}`);
+      toast.error(`فشلت معالجة الملف: ${formatErrorMessage(error, "حدث خطأ غير متوقع")}`);
       await queryClient.invalidateQueries({ queryKey: ["uploaded_files"] });
     } finally {
       setProcessingId(null);

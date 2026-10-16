@@ -1,3 +1,4 @@
+import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -201,7 +202,7 @@ function FormsPage() {
       setEmployeeId("");
       toast.success("تم إرسال الاستمارة إلى قائمة التنفيذ");
     },
-    onError: (e: any) => toast.error(e.message ?? "فشل إرسال الاستمارة"),
+    onError: (e: any) => toast.error(formatErrorMessage(e) ?? "فشل إرسال الاستمارة"),
   });
 
   const act = useMutation({
@@ -211,7 +212,7 @@ function FormsPage() {
       qc.invalidateQueries({ queryKey: ["forms"] });
       toast.success("تم تحديث الاستمارة");
     },
-    onError: (e: any) => toast.error(e.message ?? "تعذر تنفيذ الإجراء"),
+    onError: (e: any) => toast.error(formatErrorMessage(e) ?? "تعذر تنفيذ الإجراء"),
   });
 
   const counts = useMemo(() => {
@@ -545,7 +546,7 @@ function FormRolesCard() {
       qc.invalidateQueries({ queryKey: ["form-roles"] });
       toast.success("تم تحديث الصلاحيات");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(formatErrorMessage(e)),
   });
 
   const roles = [

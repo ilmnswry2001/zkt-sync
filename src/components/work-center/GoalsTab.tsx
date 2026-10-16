@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { workCenterDb, type EmployeeGoal, type EmployeeGoalEvent, type EmployeeGoalStep, type EmployeeGoalUpdate } from "@/lib/work-center-db";
 import { todayInBaghdad } from "@/lib/date-time";
+import { formatErrorMessage } from "@/lib/error-message";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -205,7 +206,7 @@ export function GoalsTab({ uid, employeeId, employees, departments, isManager, s
       setFormFeedback("");
       setEditingProposal(null); setForm(emptyForm); setMethods(["دوري"]); setTargetEmployee(""); setTargetEmployees([]); setShowForm(false); refresh();
     } catch (e) {
-      const message = `تعذر حفظ الهدف: ${e instanceof Error ? e.message : String(e)}`;
+      const message = `تعذر حفظ الهدف: ${formatErrorMessage(e)}`;
       setFormFeedback(message);
       toast.error(message);
     }
@@ -218,7 +219,7 @@ export function GoalsTab({ uid, employeeId, employees, departments, isManager, s
       ...edits, status, manager_feedback: feedback.trim() || null,
       approved_by: status === "approved" ? uid : null, approved_at: status === "approved" ? new Date().toISOString() : null,
     }).eq("id", goal.id);
-    if (error) { toast.error(`تعذرت مراجعة الهدف: ${error.message}`); return; }
+    if (error) { toast.error(`تعذرت مراجعة الهدف: ${formatErrorMessage(error)}`); return; }
     toast.success(status === "approved" ? "تم اعتماد الهدف" : status === "rejected" ? "تم رفض الاقتراح" : "أعيد الاقتراح للموظف للتعديل"); refresh();
   };
 
@@ -233,7 +234,7 @@ export function GoalsTab({ uid, employeeId, employees, departments, isManager, s
       const safeName = proofFile.name.replace(/[^\p{L}\p{N}._-]+/gu, "-");
       proofPath = `${goal.id}/${uid}/${crypto.randomUUID()}-${safeName}`;
       const { error: uploadError } = await supabase.storage.from("goal-evidence").upload(proofPath, proofFile, { contentType: proofFile.type, upsert: false });
-      if (uploadError) return toast.error(`تعذر رفع الدليل: ${uploadError.message}`);
+      if (uploadError) return toast.error(`تعذر رفع الدليل: ${formatErrorMessage(uploadError)}`);
     }
     const { error } = await workCenterDb.from("employee_goal_updates").insert({
       goal_id: goal.id, actor_id: uid, update_type: "progress", progress_percent: amount,
@@ -241,12 +242,12 @@ export function GoalsTab({ uid, employeeId, employees, departments, isManager, s
       completed_work: workDone.trim() || null, remaining_work: remaining.trim() || null,
       obstacles: obstacles.trim() || null, help_requested: help.trim() || null, note: note.trim() || null, proof_storage_path: proofPath,
     });
-    if (error) return toast.error(`تعذر تسجيل التقدم: ${error.message}`);
+    if (error) return toast.error(`تعذر تسجيل التقدم: ${formatErrorMessage(error)}`);
     const nextStatus = amount === 100 ? "completed_pending_review" : goal.status === "approved" ? "in_progress" : goal.status;
     const goalPatch: Partial<EmployeeGoal> = { status: nextStatus };
     if (currentValue.trim()) goalPatch.current_value = Number(currentValue);
     const { error: goalError } = await workCenterDb.from("employee_goals").update(goalPatch).eq("id", goal.id);
-    if (goalError) toast.error(goalError.message);
+    if (goalError) toast.error(formatErrorMessage(goalError));
     else toast.success("تم حفظ تحديث التقدم في السجل");
     setUpdateGoal(""); setProgress(""); setCurrentValue(""); setProofFile(null); setWorkDone(""); setRemaining(""); setObstacles(""); setHelp(""); setNote(""); refresh();
   };
@@ -254,12 +255,12 @@ export function GoalsTab({ uid, employeeId, employees, departments, isManager, s
   const addStep = async (goal: EmployeeGoal) => {
     if (stepTitle.trim().length < 2) return toast.error("اكتب عنوان المرحلة");
     const { error } = await workCenterDb.from("employee_goal_steps").insert({ goal_id: goal.id, title: stepTitle.trim(), due_date: stepDate || null, created_by: uid, sort_order: steps.filter((s) => s.goal_id === goal.id).length });
-    if (error) return toast.error(`تعذر إضافة المرحلة: ${error.message}`);
+    if (error) return toast.error(`تعذر إضافة المرحلة: ${formatErrorMessage(error)}`);
     setStepTitle(""); setStepDate(""); setStepGoal(""); refresh();
   };
   const setStepStatus = async (step: EmployeeGoalStep, status: string) => {
     const { error } = await workCenterDb.from("employee_goal_steps").update({ status }).eq("id", step.id);
-    if (error) toast.error(`تعذر تحديث المرحلة: ${error.message}`); else refresh();
+    if (error) toast.error(`تعذر تحديث المرحلة: ${formatErrorMessage(error)}`); else refresh();
   };
   const createTask = async (goal: EmployeeGoal) => {
     const title = window.prompt("عنوان المهمة", goal.title);
@@ -270,26 +271,26 @@ export function GoalsTab({ uid, employeeId, employees, departments, isManager, s
       _goal_id: goal.id, _title: title.trim(), _description: description?.trim() || null,
       _due_date: dueDate, _priority: goal.priority,
     });
-    if (error) toast.error(`تعذر ربط المهمة بالهدف: ${error.message}`); else { toast.success("تم إنشاء مهمة مرتبطة بالهدف"); void qc.invalidateQueries({ queryKey: ["wc-tasks"] }); void qc.invalidateQueries({ queryKey: ["wc-goal-tasks"] }); }
+    if (error) toast.error(`تعذر ربط المهمة بالهدف: ${formatErrorMessage(error)}`); else { toast.success("تم إنشاء مهمة مرتبطة بالهدف"); void qc.invalidateQueries({ queryKey: ["wc-tasks"] }); void qc.invalidateQueries({ queryKey: ["wc-goal-tasks"] }); }
   };
   const markNotificationRead = async (id: string) => {
     const { error } = await workCenterDb.from("employee_goal_notifications").update({ read_at: new Date().toISOString() }).eq("id", id);
-    if (error) toast.error(error.message); else void qc.invalidateQueries({ queryKey: ["wc-goal-notifications", uid] });
+    if (error) toast.error(formatErrorMessage(error)); else void qc.invalidateQueries({ queryKey: ["wc-goal-notifications", uid] });
   };
   const addManagerComment = async (goal: EmployeeGoal, text: string) => {
     if (!text.trim()) return;
     const { error } = await workCenterDb.from("employee_goal_updates").insert({ goal_id: goal.id, actor_id: uid, update_type: "manager_comment", note: text.trim() });
-    if (error) toast.error(`تعذر إضافة التعليق: ${error.message}`); else { toast.success("تمت إضافة التعليق"); refresh(); }
+    if (error) toast.error(`تعذر إضافة التعليق: ${formatErrorMessage(error)}`); else { toast.success("تمت إضافة التعليق"); refresh(); }
   };
   const changeManagerStatus = async (goal: EmployeeGoal, status: string, prompt: string) => {
     const reason = window.prompt(prompt);
     if (!reason?.trim()) return;
     const { error } = await workCenterDb.from("employee_goals").update({ status, manager_feedback: reason.trim() }).eq("id", goal.id);
-    if (error) toast.error(`تعذر تحديث الحالة: ${error.message}`); else { toast.success("تم تحديث حالة الهدف"); refresh(); }
+    if (error) toast.error(`تعذر تحديث الحالة: ${formatErrorMessage(error)}`); else { toast.success("تم تحديث حالة الهدف"); refresh(); }
   };
   const openEvidence = async (path: string) => {
     const { data, error } = await supabase.storage.from("goal-evidence").createSignedUrl(path, 60);
-    if (error) toast.error(`تعذر فتح الدليل: ${error.message}`); else window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    if (error) toast.error(`تعذر فتح الدليل: ${formatErrorMessage(error)}`); else window.open(data.signedUrl, "_blank", "noopener,noreferrer");
   };
 
   const renderGoal = (goal: EmployeeGoal, reviewMode = false, archive = false) => {
@@ -326,7 +327,7 @@ export function GoalsTab({ uid, employeeId, employees, departments, isManager, s
           {manager && ["approved", "in_progress"].includes(goal.status) && <Button size="sm" variant="outline" onClick={() => void changeManagerStatus(goal, "at_risk", "اذكر سبب تعثر الهدف")}>تمييز متعثر</Button>}
           {manager && ["approved", "in_progress", "at_risk"].includes(goal.status) && <Button size="sm" variant="outline" onClick={() => void changeManagerStatus(goal, "postponed", "اذكر سبب تأجيل الهدف")}>تأجيل</Button>}
           {manager && ["approved", "in_progress", "at_risk", "postponed"].includes(goal.status) && <Button size="sm" variant="destructive" onClick={() => void changeManagerStatus(goal, "cancelled", "اذكر سبب إلغاء الهدف")}>إلغاء</Button>}
-          {manager && goal.status === "completed_pending_review" && <Button size="sm" onClick={() => { const score = Number(window.prompt("تقييم الإنجاز من 1 إلى 5", "5")); const evaluation = window.prompt("ملاحظات التقييم"); if (!Number.isInteger(score) || score < 1 || score > 5 || !evaluation?.trim()) return toast.error("أدخل تقييماً من 1 إلى 5 وملاحظات التقييم"); void workCenterDb.from("employee_goals").update({ status: "completed", manager_rating: score, manager_evaluation: evaluation.trim(), approved_by: uid, approved_at: new Date().toISOString() }).eq("id", goal.id).then(({ error }) => { if (error) toast.error(error.message); else { toast.success("تم اعتماد الإنجاز"); refresh(); } }); }}>تقييم واعتماد</Button>}
+          {manager && goal.status === "completed_pending_review" && <Button size="sm" onClick={() => { const score = Number(window.prompt("تقييم الإنجاز من 1 إلى 5", "5")); const evaluation = window.prompt("ملاحظات التقييم"); if (!Number.isInteger(score) || score < 1 || score > 5 || !evaluation?.trim()) return toast.error("أدخل تقييماً من 1 إلى 5 وملاحظات التقييم"); void workCenterDb.from("employee_goals").update({ status: "completed", manager_rating: score, manager_evaluation: evaluation.trim(), approved_by: uid, approved_at: new Date().toISOString() }).eq("id", goal.id).then(({ error }) => { if (error) toast.error(formatErrorMessage(error)); else { toast.success("تم اعتماد الإنجاز"); refresh(); } }); }}>تقييم واعتماد</Button>}
           {manager && risk(goal) && <Button size="sm" variant="outline" onClick={() => void changeManagerStatus(goal, "incomplete", "اكتب سبب اعتبار الهدف غير مكتمل")}>تسجيل غير مكتمل</Button>}
         </div>}
         {updateGoal === goal.id && <div className="grid gap-2 rounded border p-3 md:grid-cols-2"><div><Label>نسبة الإنجاز (٪)</Label><Input type="number" min="0" max="100" value={progress} onChange={(e) => setProgress(e.target.value)} placeholder="0–100" /></div><div><Label>قيمة القياس الحالية</Label><Input type="number" value={currentValue} onChange={(e) => setCurrentValue(e.target.value)} /></div><div><Label>ما أُنجز</Label><Textarea value={workDone} onChange={(e) => setWorkDone(e.target.value)} /></div><div><Label>المتبقي</Label><Textarea value={remaining} onChange={(e) => setRemaining(e.target.value)} /></div><div><Label>المعوقات</Label><Textarea value={obstacles} onChange={(e) => setObstacles(e.target.value)} /></div><div><Label>المساعدة المطلوبة</Label><Textarea value={help} onChange={(e) => setHelp(e.target.value)} /></div><div className="md:col-span-2"><Label>ملاحظات</Label><Textarea value={note} onChange={(e) => setNote(e.target.value)} /><Input className="mt-2" type="file" accept="application/pdf,image/jpeg,image/png,image/webp,text/plain" onChange={(e) => setProofFile(e.target.files?.[0] ?? null)} /></div><Button className="md:col-span-2" onClick={() => void addUpdate()}>حفظ التحديث</Button></div>}

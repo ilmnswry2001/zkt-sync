@@ -1,3 +1,4 @@
+import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -188,7 +189,7 @@ function PlanningPage() {
       setEditing(null);
       toast.success("تم الحفظ");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(formatErrorMessage(e)),
   });
   const del = useMutation({
     mutationFn: async (id: string) => {
@@ -199,7 +200,7 @@ function PlanningPage() {
       qc.invalidateQueries({ queryKey: ["sites"] });
       toast.success("تم الحذف");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(formatErrorMessage(e)),
   });
 
   return (

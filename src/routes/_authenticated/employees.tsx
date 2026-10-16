@@ -1,3 +1,4 @@
+import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -65,7 +66,7 @@ function EmployeesPage() {
       toast.success(`تم استيراد ${done} موظف`);
     } catch (e: any) {
       setImportMsg(null);
-      toast.error(e?.message ?? "فشل الاستيراد");
+      toast.error(formatErrorMessage(e, "فشل الاستيراد"));
     } finally {
       setImporting(false);
     }
@@ -170,7 +171,7 @@ function EmployeesPage() {
     );
     if (collisions.length) return toast.error("هذا الحساب مرتبط بسجل موظف آخر بالفعل");
     const { error } = await supabase.from("employees").update({ email }).eq("id", employeeId);
-    if (error) return toast.error(`تعذر ربط الحساب: ${error.message}`);
+    if (error) return toast.error(`تعذر ربط الحساب: ${formatErrorMessage(error)}`);
     setAccountBindings((current) => ({ ...current, [employeeId]: "" }));
     await employeeAccountsQuery.refetch();
     toast.success("تم ربط حساب الدخول بسجل الموظف");
@@ -187,7 +188,7 @@ function EmployeesPage() {
       email: "admin@attendance.app",
       status: "active",
     });
-    if (error) return toast.error(`تعذر إنشاء سجل الأدمن: ${error.message}`);
+    if (error) return toast.error(`تعذر إنشاء سجل الأدمن: ${formatErrorMessage(error)}`);
     await Promise.all([employeeAccountsQuery.refetch(), qc.invalidateQueries({ queryKey: ["employees"] }), qc.invalidateQueries({ queryKey: ["employees_count"] })]);
     toast.success("تم إنشاء سجل موظف وربطه بحساب الأدمن");
   };
@@ -269,12 +270,12 @@ function EmployeesPage() {
       else { const { error } = await supabase.from("employees").insert(payload); if (error) throw error; }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); qc.invalidateQueries({ queryKey: ["employees_count"] }); setOpen(false); setEditing(null); toast.success("تم الحفظ"); },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(formatErrorMessage(e)),
   });
   const del = useMutation({
     mutationFn: async (id: string) => { const { error } = await supabase.from("employees").delete().eq("id", id); if (error) throw error; },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); qc.invalidateQueries({ queryKey: ["employees_count"] }); toast.success("تم الحذف"); },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(formatErrorMessage(e)),
   });
 
   const filtered = rows;

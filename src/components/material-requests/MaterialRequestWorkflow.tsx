@@ -1,3 +1,4 @@
+import { formatErrorMessage } from "@/lib/error-message";
 import { useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, FileDown, Plus, Search, Send, SlidersHorizontal, X } from "lucide-react";
@@ -445,7 +446,7 @@ function RequestForm({ requestType, existing, options, onCancel, onSaved }: {
       toast.success(submit ? "تم إرسال الطلب إلى التخطيط" : "تم حفظ التعديلات");
       onSaved();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "تعذر حفظ الطلب");
+      toast.error(formatErrorMessage(error, "تعذر حفظ الطلب"));
     } finally {
       setBusy(false);
     }
@@ -700,7 +701,7 @@ function PlanningReview({ request, onDone }: { request: MaterialRequest; onDone:
       } });
       toast.success(action === "approve" ? "تم اعتماد الطلب وإرساله للمخازن" : action === "return" ? "أعيد الطلب لمقدمه" : "تم رفض الطلب");
       onDone();
-    } catch (error) { toast.error(error instanceof Error ? error.message : "تعذر تنفيذ مراجعة التخطيط"); }
+    } catch (error) { toast.error(formatErrorMessage(error, "تعذر تنفيذ مراجعة التخطيط")); }
     finally { setBusy(false); }
   };
   return (
@@ -752,7 +753,7 @@ function WarehouseReview({ request, options, onDone }: { request: MaterialReques
       await reviewMaterialRequestWarehouse({ data: { request_id: request.id, items } });
       toast.success("تم تأكيد المراجعة وتسجيل الصرف المخزني");
       onDone();
-    } catch (error) { toast.error(error instanceof Error ? error.message : "تعذر تأكيد مراجعة المخازن"); }
+    } catch (error) { toast.error(formatErrorMessage(error, "تعذر تأكيد مراجعة المخازن")); }
     finally { setBusy(false); }
   };
   return (
@@ -828,7 +829,7 @@ function ProcurementPanel({ request, onDone }: { request: MaterialRequest; onDon
       toast.success("تم تسجيل دفعة الشراء دون تغيير المخزون");
       onDone();
       if (record.id) toast.info("أرسل الدفعة إلى المخزن عند اكتمال مستندات الشراء.");
-    } catch (error) { toast.error(error instanceof Error ? error.message : "تعذر تسجيل الشراء"); }
+    } catch (error) { toast.error(formatErrorMessage(error, "تعذر تسجيل الشراء")); }
     finally { setBusy(false); }
   };
   return (
@@ -945,7 +946,7 @@ function ReceiptForm({ request, batch, receipts, options, onDone }: {
       idempotencyKey.current = "";
       toast.success("تم تسجيل الاستلام الفعلي وتحديث المخزون بالكميات المستلمة فقط");
       onDone();
-    } catch (error) { toast.error(error instanceof Error ? error.message : "تعذر تأكيد الاستلام"); }
+    } catch (error) { toast.error(formatErrorMessage(error, "تعذر تأكيد الاستلام")); }
     finally { setBusy(false); }
   };
   return (
@@ -1006,7 +1007,7 @@ function SendBatchAction({ batch, onDone }: { batch: PurchaseBatch; onDone: () =
   const send = async () => {
     setBusy(true);
     try { await sendMaterialPurchaseBatch({ data: { batch_id: batch.id } }); toast.success("أرسلت الدفعة إلى المخزن للاستلام"); onDone(); }
-    catch (error) { toast.error(error instanceof Error ? error.message : "تعذر إرسال الدفعة"); }
+    catch (error) { toast.error(formatErrorMessage(error, "تعذر إرسال الدفعة")); }
     finally { setBusy(false); }
   };
   return <Button size="sm" disabled={busy} onClick={() => void send()}><Send className="ml-2 h-4 w-4" /> إرسال للاستلام</Button>;
@@ -1033,7 +1034,7 @@ function CloseRequest({ request, onDone }: { request: MaterialRequest; onDone: (
   const submit = async () => {
     setBusy(true);
     try { await closeMaterialRequest({ data: { request_id: request.id, reason } }); toast.success("تم إغلاق الطلب وحفظ سجل النقص"); setOpen(false); onDone(); }
-    catch (error) { toast.error(error instanceof Error ? error.message : "تعذر إغلاق الطلب"); }
+    catch (error) { toast.error(formatErrorMessage(error, "تعذر إغلاق الطلب")); }
     finally { setBusy(false); }
   };
   return <><Button size="sm" variant="outline" onClick={() => setOpen(true)}>إغلاق</Button><Dialog open={open} onOpenChange={setOpen}><DialogContent dir="rtl"><DialogHeader><DialogTitle>إغلاق {request.request_number}</DialogTitle></DialogHeader><Field label="سبب الإغلاق"><Input value={reason} onChange={(event) => setReason(event.target.value)} /></Field><Button disabled={busy || reason.trim().length < 3} onClick={() => void submit()}>تأكيد الإغلاق</Button></DialogContent></Dialog></>;
@@ -1046,7 +1047,7 @@ function ReopenRequest({ request, onDone }: { request: MaterialRequest; onDone: 
     if (reason.length < 3) return;
     setBusy(true);
     try { await reopenMaterialRequest({ data: { request_id: request.id, reason } }); toast.success("أعيد فتح الطلب وسُجل السبب"); onDone(); }
-    catch (error) { toast.error(error instanceof Error ? error.message : "تعذر إعادة فتح الطلب"); }
+    catch (error) { toast.error(formatErrorMessage(error, "تعذر إعادة فتح الطلب")); }
     finally { setBusy(false); }
   };
   return <Button size="sm" variant="outline" disabled={busy} onClick={() => void submit()}>إعادة فتح</Button>;
@@ -1057,7 +1058,7 @@ function CancelRequest({ request, onDone }: { request: MaterialRequest; onDone: 
   const submit = async () => {
     setBusy(true);
     try { await cancelMaterialRequest({ data: { request_id: request.id } }); toast.success("تم إلغاء الطلب"); onDone(); }
-    catch (error) { toast.error(error instanceof Error ? error.message : "تعذر إلغاء الطلب"); }
+    catch (error) { toast.error(formatErrorMessage(error, "تعذر إلغاء الطلب")); }
     finally { setBusy(false); }
   };
   return <Button size="sm" variant="outline" disabled={busy} onClick={() => void submit()}>إلغاء</Button>;

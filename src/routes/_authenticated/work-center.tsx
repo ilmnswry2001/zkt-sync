@@ -1,3 +1,4 @@
+import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
@@ -140,13 +141,6 @@ const PRIORITIES: Record<string, string> = {
 const WEEKDAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 
 const addDays = addCalendarDays;
-const errText = (e: unknown) =>
-  e instanceof Error
-    ? e.message
-    : typeof e === "object" && e && "message" in e
-      ? String((e as { message: unknown }).message)
-      : "خطأ غير معروف";
-
 function effectiveStatus(t: Task, today: string) {
   if (t.status === "completed" || t.status === "cancelled") return t.status;
   const due = t.due_date ?? t.task_date;
@@ -185,7 +179,7 @@ function State({
         role="alert"
         className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive"
       >
-        تعذر تحميل البيانات: {errText(error)}
+        تعذر تحميل البيانات: {formatErrorMessage(error)}
       </div>
     );
   if (empty)
@@ -459,7 +453,7 @@ function WorkCenterPage() {
       .from("employee_tasks")
       .delete({ count: "exact" })
       .eq("id", t.id);
-    if (error || !count) return toast.error(error?.message ?? "لا تملك صلاحية حذف هذه المهمة");
+    if (error || !count) return toast.error(formatErrorMessage(error, "لا تملك صلاحية حذف هذه المهمة"));
     toast.success("تم حذف المهمة");
     refresh();
   };
@@ -471,7 +465,7 @@ function WorkCenterPage() {
       toast.success("تم تحديث الحالة");
       refresh();
     } catch (e) {
-      toast.error(`تعذر التحديث: ${errText(e)}`);
+      toast.error(`تعذر التحديث: ${formatErrorMessage(e)}`);
     }
   };
 
@@ -812,7 +806,7 @@ function WorkCenterPage() {
                                   );
                                   refresh();
                                 } catch (e) {
-                                  toast.error(errText(e));
+                                  toast.error(formatErrorMessage(e));
                                 }
                               }}
                             >
@@ -1193,7 +1187,7 @@ function GuidanceInbox({
       if (error) throw error;
       onRead();
     } catch (e) {
-      toast.error(`تعذر التحديث: ${errText(e)}`);
+      toast.error(`تعذر التحديث: ${formatErrorMessage(e)}`);
     }
   };
   return (
@@ -1467,7 +1461,7 @@ function PerformanceTab({
       );
       await qc.invalidateQueries({ queryKey: ["wc-evals"] });
     } catch (e) {
-      toast.error(errText(e));
+      toast.error(formatErrorMessage(e));
     }
   };
   const list = isManager
@@ -1613,7 +1607,7 @@ function PersonalTaskDialog({
       onDone();
       onOpenChange(false);
     } catch (error) {
-      toast.error(`تعذر إنشاء المهمة: ${errText(error)}`);
+      toast.error(`تعذر إنشاء المهمة: ${formatErrorMessage(error)}`);
     } finally {
       setSaving(false);
     }
@@ -1686,7 +1680,7 @@ function EmployeePicker({
       </label>
       {!!error && (
         <div role="alert" className="text-sm text-destructive">
-          تعذر تحميل بيانات الموظفين أو الحضور: {errText(error)}
+          تعذر تحميل بيانات الموظفين أو الحضور: {formatErrorMessage(error)}
         </div>
       )}
       {!all && (
@@ -1884,7 +1878,7 @@ function CreateTaskDialog({
       setAll(false);
       setWeekdays([]);
     } catch (e) {
-      toast.error(`تعذر الإنشاء: ${errText(e)}`);
+      toast.error(`تعذر الإنشاء: ${formatErrorMessage(e)}`);
     } finally {
       setSaving(false);
     }
@@ -2135,7 +2129,7 @@ function SendGuidanceDialog({
       setDueDate("");
       setPriority("normal");
     } catch (e) {
-      toast.error(`تعذر الإرسال: ${errText(e)}`);
+      toast.error(`تعذر الإرسال: ${formatErrorMessage(e)}`);
     } finally {
       setSaving(false);
     }
@@ -2291,7 +2285,7 @@ function EditTaskDialog({
       onDone();
       onClose();
     } catch (e) {
-      toast.error(`تعذر الحفظ: ${errText(e)}`);
+      toast.error(`تعذر الحفظ: ${formatErrorMessage(e)}`);
     } finally {
       setSaving(false);
     }
@@ -2444,7 +2438,7 @@ function CompleteDialog({
       onDone();
       onClose();
     } catch (e) {
-      toast.error(`تعذر التسجيل: ${errText(e)}`);
+      toast.error(`تعذر التسجيل: ${formatErrorMessage(e)}`);
     } finally {
       setSaving(false);
     }
@@ -2552,7 +2546,7 @@ function ReviewTaskDialog({
       onDone();
       onClose();
     } catch (error) {
-      toast.error(`تعذرت المراجعة: ${errText(error)}`);
+      toast.error(`تعذرت المراجعة: ${formatErrorMessage(error)}`);
     } finally {
       setSaving(false);
     }
@@ -2618,7 +2612,7 @@ function DelayReasonDialog({
       onDone();
       onClose();
     } catch (error) {
-      toast.error(`تعذر حفظ السبب: ${errText(error)}`);
+      toast.error(`تعذر حفظ السبب: ${formatErrorMessage(error)}`);
     } finally {
       setSaving(false);
     }
@@ -2733,7 +2727,7 @@ function TaskDetailsDialog({
       await Promise.all([checklistQ.refetch(), eventsQ.refetch()]);
       onDone();
     } catch (error) {
-      toast.error(`تعذر تحديث قائمة التحقق: ${errText(error)}`);
+      toast.error(`تعذر تحديث قائمة التحقق: ${formatErrorMessage(error)}`);
     }
   };
   const eventLabel = (event: TaskAuditEvent) => {
@@ -2948,7 +2942,7 @@ function EditTemplateDialog({
       onDone();
       onClose();
     } catch (e) {
-      toast.error(`تعذر الحفظ: ${errText(e)}`);
+      toast.error(`تعذر الحفظ: ${formatErrorMessage(e)}`);
     } finally {
       setSaving(false);
     }

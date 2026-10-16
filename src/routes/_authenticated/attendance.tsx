@@ -1,3 +1,4 @@
+import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -264,12 +265,12 @@ function AttendancePage() {
       )
       .select("id")
       .single();
-    if (headerError || !header) return toast.error(headerError?.message ?? "تعذر حفظ التقرير");
+    if (headerError || !header) return toast.error(formatErrorMessage(headerError, "تعذر حفظ التقرير"));
     const { error: deleteError } = await supabase
       .from("site_daily_report_lines")
       .delete()
       .eq("report_id", header.id);
-    if (deleteError) return toast.error(deleteError.message);
+    if (deleteError) return toast.error(formatErrorMessage(deleteError));
     const { error: linesError } = await supabase.from("site_daily_report_lines").insert(
       rows.map((row) => ({
         report_id: header.id,
@@ -281,7 +282,7 @@ function AttendancePage() {
         idle_count: row.kind === "equipment_type" ? row.idle_count : 0,
       })),
     );
-    if (linesError) return toast.error(linesError.message);
+    if (linesError) return toast.error(formatErrorMessage(linesError));
     setEditingReportId(header.id);
     await queryClient.invalidateQueries({ queryKey: ["site-daily-reports"] });
     toast.success("تم حفظ التقرير بنجاح");
@@ -303,7 +304,7 @@ function AttendancePage() {
     )
       return;
     const { error } = await supabase.from("site_daily_reports").delete().eq("id", report.id);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(formatErrorMessage(error));
     await queryClient.invalidateQueries({ queryKey: ["site-daily-reports"] });
     if (editingReportId === report.id) {
       setEditingReportId(null);

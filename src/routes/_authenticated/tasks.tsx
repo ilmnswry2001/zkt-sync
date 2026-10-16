@@ -1,3 +1,4 @@
+import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
@@ -198,7 +199,7 @@ function EmployeeTasksPage() {
               content,
               author_id: user.id,
             });
-      if (result.error) return toast.error(`تعذر إرسال التوجيه: ${result.error.message}`);
+      if (result.error) return toast.error(`تعذر إرسال التوجيه: ${formatErrorMessage(result.error)}`);
       await queryClient.invalidateQueries({ queryKey: ["employee-tasks", "department-guidance"] });
       toast.success("تم إرسال التوجيه إلى القسم");
     } finally {
@@ -321,7 +322,7 @@ function EmployeeTasksPage() {
       employee_id: currentEmployee?.id ?? null,
       department_id: currentEmployee?.department_id ?? t.department_id,
     } as any);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(formatErrorMessage(error));
     await queryClient.invalidateQueries({ queryKey: ["employee-tasks"] });
     toast.success("تم إنجاز المهمة المجدولة");
   };
@@ -413,7 +414,7 @@ function EmployeeTasksPage() {
           "قاعدة البيانات ما زالت تشترط employee_id. نفّذ كود تحديث جدول employee_tasks في Lovable Cloud SQL editor ثم أعد المحاولة.",
         );
       }
-      return toast.error(result.error.message);
+      return toast.error(formatErrorMessage(result.error));
     }
     await invalidate();
     resetForm();
@@ -437,7 +438,7 @@ function EmployeeTasksPage() {
       .from("employee_tasks")
       .update({ archived_at: restore ? null : new Date().toISOString() })
       .eq("id", task.id);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(formatErrorMessage(error));
     await invalidate();
     toast.success(restore ? "تمت استعادة المهمة" : "تمت أرشفة المهمة");
   };
@@ -447,7 +448,7 @@ function EmployeeTasksPage() {
     }
     if (!window.confirm("سيتم حذف المهمة نهائياً. هل أنت متأكد؟")) return;
     const { error } = await supabase.from("employee_tasks").delete().eq("id", task.id);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(formatErrorMessage(error));
     await invalidate();
     toast.success("تم حذف المهمة");
   };
@@ -459,7 +460,7 @@ function EmployeeTasksPage() {
       .delete()
       .eq("id", note.id)
       .select("id");
-    if (error) return toast.error(`تعذر حذف التوجيه: ${error.message}`);
+    if (error) return toast.error(`تعذر حذف التوجيه: ${formatErrorMessage(error)}`);
     if (!data?.length) return toast.error("لم يتم حذف التوجيه؛ تحقق من صلاحية مدير النظام.");
     await queryClient.invalidateQueries({ queryKey: ["employee-guidance"] });
     toast.success("تم حذف التوجيه");

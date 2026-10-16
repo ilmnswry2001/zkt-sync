@@ -1,3 +1,4 @@
+import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -516,7 +517,7 @@ function LeavesPage() {
       setEmployeeId("");
       toast.success("أُرسل طلب الإجازة إلى مسار الاعتماد");
     },
-    onError: (error: Error) => toast.error(error.message || "تعذر إرسال طلب الإجازة"),
+    onError: (error: Error) => toast.error(formatErrorMessage(error, "تعذر إرسال طلب الإجازة")),
   });
   const actionMutation = useMutation({
     mutationFn: (payload: {
@@ -534,7 +535,7 @@ function LeavesPage() {
       }
       toast.success("تم تحديث الطلب وسجل الإجراء");
     },
-    onError: (error: Error) => toast.error(error.message || "تعذر تنفيذ الإجراء"),
+    onError: (error: Error) => toast.error(formatErrorMessage(error, "تعذر تنفيذ الإجراء")),
   });
 
   const openNewPolicy = () => {
@@ -583,7 +584,7 @@ function LeavesPage() {
           code: `custom_${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`,
           sort_order: 100,
         });
-    if (result.error) return toast.error(`تعذر حفظ السياسة: ${result.error.message}`);
+    if (result.error) return toast.error(`تعذر حفظ السياسة: ${formatErrorMessage(result.error)}`);
     await qc.invalidateQueries({ queryKey: ["leaves"] });
     setPolicyOpen(false);
     toast.success(editingPolicy ? "تم تحديث سياسة الإجازة" : "أُضيف نوع الإجازة");
@@ -603,7 +604,7 @@ function LeavesPage() {
       amount,
       reason: note,
     });
-    if (error) return toast.error(`تعذر تسجيل الحركة: ${error.message}`);
+    if (error) return toast.error(`تعذر تسجيل الحركة: ${formatErrorMessage(error)}`);
     await qc.invalidateQueries({ queryKey: ["leaves"] });
     setAdjustmentRow(null);
     setAdjustmentAmount("");

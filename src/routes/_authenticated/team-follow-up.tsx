@@ -1,3 +1,4 @@
+import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
@@ -595,7 +596,7 @@ function TeamFollowUpPage() {
         .from("employee_guidance_notes")
         .insert(payload)
         .select("id");
-      if (error) return toast.error(`تعذر إرسال التوجيه: ${error.message}`);
+      if (error) return toast.error(`تعذر إرسال التوجيه: ${formatErrorMessage(error)}`);
       if (!data || data.length !== selected.length) {
         return toast.error("لم يتم تأكيد حفظ التوجيه لكل المستلمين؛ تحقق من ربط حسابات الموظفين.");
       }
@@ -606,7 +607,7 @@ function TeamFollowUpPage() {
         ? `تم إرسال التوجيه إلى ${selected.length} من موظفي النطاق المحدد`
         : "تم إرسال التوجيه إلى الموظف المحدد");
     } catch (error) {
-      toast.error(`تعذر إرسال التوجيه: ${error instanceof Error ? error.message : "حدث خطأ غير متوقع"}`);
+      toast.error(`تعذر إرسال التوجيه: ${formatErrorMessage(error, "حدث خطأ غير متوقع")}`);
     } finally {
       setIsSendingGuidance(false);
     }
@@ -617,7 +618,7 @@ function TeamFollowUpPage() {
       .from("employee_tasks")
       .update({ manager_note: managerNote.trim() || null })
       .eq("id", task.id);
-    if (error) return toast.error(`تعذر حفظ ملاحظة المهمة: ${error.message}`);
+    if (error) return toast.error(`تعذر حفظ ملاحظة المهمة: ${formatErrorMessage(error)}`);
     await queryClient.invalidateQueries({ queryKey: ["team-follow-up-tasks"] });
     toast.success("تم حفظ ملاحظة المهمة");
   };
@@ -641,7 +642,7 @@ function TeamFollowUpPage() {
       assignee_employee_ids: [],
       created_by: authData.user.id,
     });
-    if (error) return toast.error(`تعذر حفظ القالب: ${error.message}`);
+    if (error) return toast.error(`تعذر حفظ القالب: ${formatErrorMessage(error)}`);
     setTemplateForm({ title: "", description: "", recurrenceRule: "daily", priority: "normal", startDate: today, endDate: "", scheduledTime: "" });
     await taskTemplatesQuery.refetch();
     toast.success("تم حفظ المهمة المجدولة");

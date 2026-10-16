@@ -1,3 +1,4 @@
+import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -1012,7 +1013,7 @@ function PlanningPage() {
       qc.invalidateQueries({ queryKey: ["projects-dashboard"] });
       toast.success("تم تحديث حالة الخطة");
     },
-    onError: (error: any) => toast.error(error?.message ?? "تعذر تحديث الخطة"),
+    onError: (error: any) => toast.error(formatErrorMessage(error, "تعذر تحديث الخطة")),
   });
   const deleteWorkPlan = useMutation({
     mutationFn: async (plan: SiteWorkPlan) => {
@@ -1024,7 +1025,7 @@ function PlanningPage() {
       void qc.invalidateQueries({ queryKey: ["projects-dashboard"] });
       toast.success("تم حذف خطة العمل");
     },
-    onError: (error: any) => toast.error(error?.message ?? "تعذر حذف خطة العمل"),
+    onError: (error: any) => toast.error(formatErrorMessage(error, "تعذر حذف خطة العمل")),
   });
 
   const finalizePlan = useMutation({
@@ -1080,7 +1081,7 @@ function PlanningPage() {
       setActiveWorkPlanTab("final");
       toast.success("تم تأكيد الخطة النهائية واستعراضها في قسم الخطة النهائية");
     },
-    onError: (error: any) => toast.error(error?.message ?? "تعذر إغلاق الخطة النهائية"),
+    onError: (error: any) => toast.error(formatErrorMessage(error, "تعذر إغلاق الخطة النهائية")),
   });
 
   const updateDraftSpecialty = (
@@ -1128,7 +1129,7 @@ function PlanningPage() {
       .catch((error: any) => {
         void qc.invalidateQueries({ queryKey: ["planning-project-plans"] });
         void qc.invalidateQueries({ queryKey: ["projects-dashboard"] });
-        toast.error(error?.message ?? "تعذر حفظ الكوادر");
+        toast.error(formatErrorMessage(error, "تعذر حفظ الكوادر"));
       });
 
     assignmentSaveQueue.current.set(planId, queued);
@@ -1226,7 +1227,7 @@ function PlanningPage() {
       setEditing(null);
       toast.success("تم الحفظ");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(formatErrorMessage(e)),
   });
   const del = useMutation({
     mutationFn: async (id: string) => {
@@ -1237,7 +1238,7 @@ function PlanningPage() {
       qc.invalidateQueries({ queryKey: ["sites"] });
       toast.success("تم الحذف");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(formatErrorMessage(e)),
   });
 
   const siteForm = (

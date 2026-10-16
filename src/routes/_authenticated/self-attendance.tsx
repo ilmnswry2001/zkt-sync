@@ -1,3 +1,4 @@
+import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
@@ -168,7 +169,7 @@ function SelfAttendancePage() {
       .eq("status", "active")
       .maybeSingle();
     if (employeeResult.error) {
-      toast.error(`تعذر قراءة بيانات الموظف: ${employeeResult.error.message}`);
+      toast.error(`تعذر قراءة بيانات الموظف: ${formatErrorMessage(employeeResult.error)}`);
       setLoading(false);
       return;
     }
@@ -187,7 +188,7 @@ function SelfAttendancePage() {
       .gte("verify_time", start)
       .lt("verify_time", end)
       .order("verify_time", { ascending: true });
-    if (logsResult.error) toast.error(`تعذر قراءة حالة حضور اليوم: ${logsResult.error.message}`);
+    if (logsResult.error) toast.error(`تعذر قراءة حالة حضور اليوم: ${formatErrorMessage(logsResult.error)}`);
     setLogs((logsResult.data ?? []) as AttendanceLog[]);
     setLoading(false);
   };
@@ -217,7 +218,7 @@ function SelfAttendancePage() {
         p_client_event_id: item.id,
         p_device_info: { user_agent: navigator.userAgent, platform: navigator.platform, offline_queue_id: item.id },
       });
-      if (error) { toast.error(`تعذر إرسال حركة محفوظة: ${error.message}`); break; }
+      if (error) { toast.error(`تعذر إرسال حركة محفوظة: ${formatErrorMessage(error)}`); break; }
       await removeQueuedSelfAttendance(item.id);
     }
     const remaining = await readSelfAttendanceQueue();
@@ -251,7 +252,7 @@ function SelfAttendancePage() {
         .from("sites")
         .select("id, name, latitude, longitude, geofence_radius_meters")
         .order("name");
-      if (error) return toast.error(`تعذر تحميل المواقع: ${error.message}`);
+      if (error) return toast.error(`تعذر تحميل المواقع: ${formatErrorMessage(error)}`);
       const nextSites = (data ?? []) as Site[];
       setSites(nextSites);
       if (nextSites.length && !selectedSiteId) setSelectedSiteId(nextSites[0].id);
@@ -349,7 +350,7 @@ function SelfAttendancePage() {
     if (uploaded.error) {
       setRecording(null);
       if (!navigator.onLine) { await saveForLater(); return; }
-      return toast.error(`تعذر حفظ صورة التحقق: ${uploaded.error.message}`);
+      return toast.error(`تعذر حفظ صورة التحقق: ${formatErrorMessage(uploaded.error)}`);
     }
     const rpc = supabase as unknown as SelfAttendanceRpc;
     const { data, error } = await rpc.rpc("record_mobile_self_attendance", {
@@ -370,7 +371,7 @@ function SelfAttendancePage() {
     setRecording(null);
     if (error) {
       if (!navigator.onLine) { await saveForLater(); return; }
-      return toast.error(error.message);
+      return toast.error(formatErrorMessage(error));
     }
     const result = data?.[0];
     if (!result?.id) return toast.error("رُفضت الحركة بسبب انتقال غير منطقي وسُجلت للمراجعة الإدارية");
@@ -421,7 +422,7 @@ function SelfAttendancePage() {
       .select("id, name, latitude, longitude, geofence_radius_meters")
       .single();
     setSiteSaving(false);
-    if (error) return toast.error(`تعذر حفظ إعدادات الموقع: ${error.message}`);
+    if (error) return toast.error(`تعذر حفظ إعدادات الموقع: ${formatErrorMessage(error)}`);
     setSites((current) =>
       current.map((item) => (item.id === selectedSiteId ? (data as Site) : item)),
     );

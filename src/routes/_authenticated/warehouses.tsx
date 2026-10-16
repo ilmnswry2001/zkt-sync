@@ -1,3 +1,4 @@
+import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -218,7 +219,7 @@ function WarehousesPage() {
             },
           ];
     const { error } = await supabase.from("stock_movements").insert(rows as never);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(formatErrorMessage(error));
     toast.success("تم تسجيل الحركة");
     setMv({ ...mv, qty: "", notes: "" });
     refresh();
@@ -243,7 +244,7 @@ function WarehousesPage() {
       min_qty: Number(it.min_qty) || 0,
       unit_cost: Number(it.unit_cost) || 0,
     });
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(formatErrorMessage(error));
     toast.success("تمت إضافة الصنف");
     setIt({ name: "", code: "", kind: "material", unit: "قطعة", min_qty: "", unit_cost: "" });
     refresh();
@@ -254,7 +255,7 @@ function WarehousesPage() {
     const { error } = await supabase
       .from("warehouses")
       .insert({ name: wh.name.trim(), site_id: wh.site_id || null, is_main: wh.is_main });
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(formatErrorMessage(error));
     toast.success("تمت إضافة المخزن");
     setWh({ name: "", site_id: "", is_main: false });
     refresh();
@@ -296,11 +297,11 @@ function WarehousesPage() {
       .insert({ warehouse_id: countWh, count_date: today, created_by: user?.id })
       .select("id")
       .single();
-    if (error || !c) return toast.error(error?.message ?? "تعذر حفظ الجرد");
+    if (error || !c) return toast.error(formatErrorMessage(error, "تعذر حفظ الجرد"));
     const { error: e2 } = await supabase
       .from("stock_count_lines")
       .insert(lines.map((l) => ({ ...l, count_id: c.id })));
-    if (e2) return toast.error(e2.message);
+    if (e2) return toast.error(formatErrorMessage(e2));
     const adjust = lines
       .filter((l) => l.counted_qty !== l.system_qty)
       .map((l) => ({
@@ -315,7 +316,7 @@ function WarehousesPage() {
       }));
     if (adjust.length) {
       const { error: e3 } = await supabase.from("stock_movements").insert(adjust);
-      if (e3) return toast.error(e3.message);
+      if (e3) return toast.error(formatErrorMessage(e3));
     }
     toast.success(`تم حفظ الجرد — ${adjust.length} فروقات سُوّيت`);
     setCounted({});

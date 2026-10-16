@@ -1,3 +1,4 @@
+import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -54,12 +55,12 @@ function DevicesPage() {
       qc.invalidateQueries({ queryKey: ["zkteco-sync-status"] });
       toast.success("تم إنشاء المفتاح. انسخه الآن أو نزّل إعداد الوكيل؛ لن يظهر المفتاح مرة أخرى.");
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => toast.error(formatErrorMessage(error)),
   });
   const revokeKey = useMutation({
     mutationFn: (deviceId: string) => revokeZktecoSyncKey({ data: { device_id: deviceId } }),
     onSuccess: () => { setCreatedKey(null); qc.invalidateQueries({ queryKey: ["zkteco-sync-status"] }); toast.success("تم إلغاء مفتاح الجهاز"); },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => toast.error(formatErrorMessage(error)),
   });
 
   const copySyncKey = async () => {
@@ -107,13 +108,13 @@ function DevicesPage() {
       }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["devices"] }); setOpen(false); setEditing(null); toast.success("تم الحفظ"); },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(formatErrorMessage(e)),
   });
 
   const del = useMutation({
     mutationFn: async (id: string) => { const { error } = await supabase.from("devices").delete().eq("id", id); if (error) throw error; },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["devices"] }); toast.success("تم الحذف"); },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(formatErrorMessage(e)),
   });
 
   const submit = (e: React.FormEvent<HTMLFormElement>) => {

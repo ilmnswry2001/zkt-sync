@@ -1,3 +1,4 @@
+import { formatErrorMessage } from "@/lib/error-message";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -411,7 +412,7 @@ export function EmployeeProfileContent({
       toast.success("تم تسجيل استرجاع العهدة");
     },
     onError: (returnError: Error) =>
-      toast.error(returnError.message || "تعذر تسجيل استرجاع العهدة"),
+      toast.error(formatErrorMessage(returnError, "تعذر تسجيل استرجاع العهدة")),
   });
   const issueClearanceMutation = useMutation({
     mutationFn: async () => {
@@ -427,7 +428,7 @@ export function EmployeeProfileContent({
       toast.success("تم اعتماد براءة الذمة. يمكنك الآن طباعة الوثيقة الرسمية.");
     },
     onError: (clearanceError: Error) =>
-      toast.error(clearanceError.message || "تعذر إصدار براءة الذمة"),
+      toast.error(formatErrorMessage(clearanceError, "تعذر إصدار براءة الذمة")),
   });
   const stats = useMemo(() => {
     const attendance = data?.attendance ?? [];

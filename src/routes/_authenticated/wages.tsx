@@ -1,3 +1,4 @@
+import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -93,8 +94,6 @@ type AdditionPayload = {
   description: string | null;
   amount: number;
 };
-
-const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 const DEFAULT_SPECIALTY_WAGES: DefaultWage[] = [
   { title: "إدارة وإشراف", daily_rate: 75000, monthly_rate: 1950000, overtime_hour_rate: 10000 },
@@ -197,7 +196,7 @@ function WagesPage() {
       setEditing(null);
       toast.success("تم الحفظ");
     },
-    onError: (e: unknown) => toast.error(errorMessage(e)),
+    onError: (e: unknown) => toast.error(formatErrorMessage(e)),
   });
   const delRate = useMutation({
     mutationFn: async (id: string) => {
@@ -208,7 +207,7 @@ function WagesPage() {
       qc.invalidateQueries({ queryKey: ["wage-rates"] });
       toast.success("تم الحذف");
     },
-    onError: (e: unknown) => toast.error(errorMessage(e)),
+    onError: (e: unknown) => toast.error(formatErrorMessage(e)),
   });
   const saveAddition = useMutation({
     mutationFn: async (d: AdditionPayload) => {
@@ -220,7 +219,7 @@ function WagesPage() {
       setAddOpen(false);
       toast.success("تمت الإضافة");
     },
-    onError: (e: unknown) => toast.error(errorMessage(e)),
+    onError: (e: unknown) => toast.error(formatErrorMessage(e)),
   });
   const delAddition = useMutation({
     mutationFn: async (id: string) => {
@@ -231,7 +230,7 @@ function WagesPage() {
       qc.invalidateQueries({ queryKey: ["salary-additions"] });
       toast.success("تم الحذف");
     },
-    onError: (e: unknown) => toast.error(errorMessage(e)),
+    onError: (e: unknown) => toast.error(formatErrorMessage(e)),
   });
 
   const specialtyNames = Array.from(
@@ -259,7 +258,7 @@ function WagesPage() {
       void qc.invalidateQueries({ queryKey: ["wage-rates"] });
       toast.success(`تمت تهيئة أجور ${count} تخصص`);
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => toast.error(formatErrorMessage(error)),
   });
 
   const KINDS: Record<string, string> = {

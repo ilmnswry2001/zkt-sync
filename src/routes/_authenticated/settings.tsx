@@ -1,3 +1,4 @@
+import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -145,14 +146,14 @@ function SettingsPage() {
       const { error } = await supabase
         .from("report_catalog_items")
         .insert({ kind, name, sort_order: maxOrder + 10 });
-      if (error) return toast.error(error.message);
+      if (error) return toast.error(formatErrorMessage(error));
       if (kind === "worker_specialty") {
         const wage = getDefaultWage(name);
         const { error: wageError } = await supabase.from("wage_rates").upsert(
           { title: name, ...wage },
           { onConflict: "title", ignoreDuplicates: true },
         );
-        if (wageError) return toast.error(`تمت إضافة التخصص لكن تعذر إنشاء أجره الافتراضي: ${wageError.message}`);
+        if (wageError) return toast.error(`تمت إضافة التخصص لكن تعذر إنشاء أجره الافتراضي: ${formatErrorMessage(wageError)}`);
       }
     }
     setNewNames((current) => ({ ...current, [kind]: "" }));
@@ -170,7 +171,7 @@ function SettingsPage() {
         .from("report_catalog_items")
         .update({ name })
         .eq("id", item.id);
-      if (error) return toast.error(error.message);
+      if (error) return toast.error(formatErrorMessage(error));
     }
     setEditingId(null);
     await refresh();
@@ -189,7 +190,7 @@ function SettingsPage() {
         .from("report_catalog_items")
         .update({ is_archived: !item.is_archived })
         .eq("id", item.id);
-      if (error) return toast.error(error.message);
+      if (error) return toast.error(formatErrorMessage(error));
     }
     await refresh();
     toast.success(item.is_archived ? "تمت إعادة تفعيل البند" : "تمت أرشفة البند");
@@ -224,7 +225,7 @@ function SettingsPage() {
           is_archived: target.is_archived,
         },
       ]);
-      if (error) return toast.error(error.message);
+      if (error) return toast.error(formatErrorMessage(error));
     }
     await refresh();
   };
@@ -244,7 +245,7 @@ function SettingsPage() {
     const result = editingShiftId
       ? await supabase.from("shifts").update(payload).eq("id", editingShiftId)
       : await supabase.from("shifts").insert(payload);
-    if (result.error) return toast.error(result.error.message);
+    if (result.error) return toast.error(formatErrorMessage(result.error));
     setEditingShiftId(null);
     setShiftForm({ name: "", start_time: "08:00", end_time: "17:00", grace_minutes: "0" });
     await queryClient.invalidateQueries({ queryKey: ["settings", "shift-rules"] });

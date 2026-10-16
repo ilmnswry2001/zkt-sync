@@ -1,3 +1,4 @@
+import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -193,12 +194,12 @@ function AccountsPage() {
     }
     if (enabled) {
       const { error } = await supabase.from("user_roles").insert({ user_id: userId, role: role as never });
-      if (error) return toast.error(error.message);
+      if (error) return toast.error(formatErrorMessage(error));
     } else {
       const assignment = rolesByUser.get(userId)?.find((item) => item.role === role);
       if (!assignment) return;
       const { error } = await supabase.from("user_roles").delete().eq("id", assignment.id);
-      if (error) return toast.error(error.message);
+      if (error) return toast.error(formatErrorMessage(error));
     }
     await queryClient.invalidateQueries({ queryKey: ["accounts", "roles"] });
     toast.success("تم تحديث صلاحيات الحساب");
@@ -234,7 +235,7 @@ function AccountsPage() {
       ]);
       toast.success("تم إنشاء الحساب وتعيين الصلاحية");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "تعذر إنشاء الحساب");
+      toast.error(formatErrorMessage(error, "تعذر إنشاء الحساب"));
     } finally {
       setActionBusy(false);
     }
@@ -252,7 +253,7 @@ function AccountsPage() {
       setResetPassword("");
       toast.success("تم تغيير كلمة المرور. لا يتم عرضها داخل النظام");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "تعذر تغيير كلمة المرور");
+      toast.error(formatErrorMessage(error, "تعذر تغيير كلمة المرور"));
     } finally {
       setActionBusy(false);
     }
@@ -272,7 +273,7 @@ function AccountsPage() {
       ]);
       toast.success(`تم حذف حساب ${deletedName}`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "تعذر حذف الحساب");
+      toast.error(formatErrorMessage(error, "تعذر حذف الحساب"));
     } finally {
       setActionBusy(false);
     }
@@ -286,7 +287,7 @@ function AccountsPage() {
       await Promise.all([userDepartmentsQuery.refetch(), profilesQuery.refetch()]);
       toast.success("تم تحديث نطاق الوصول والصلاحيات");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "تعذر تحديث الأقسام");
+      toast.error(formatErrorMessage(error, "تعذر تحديث الأقسام"));
     } finally {
       setActionBusy(false);
     }

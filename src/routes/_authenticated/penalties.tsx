@@ -1,3 +1,4 @@
+import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -176,7 +177,7 @@ function PenaltiesPage() {
       qc.invalidateQueries({ queryKey: ["employee-penalties"] });
       toast.success("تم حذف السجل");
     },
-    onError: (error: any) => toast.error(error.message),
+    onError: (error: any) => toast.error(formatErrorMessage(error)),
   });
   const executePenalty = useMutation({
     mutationFn: async (penalty: Penalty) => {
@@ -201,7 +202,7 @@ function PenaltiesPage() {
         toast.info("تم تسجيل العقوبة في السجل فقط لأن نوعها لا يغيّر يوم الحضور");
       }
     },
-    onError: (error: any) => toast.error(error.message ?? "تعذر تنفيذ العقوبة"),
+    onError: (error: any) => toast.error(formatErrorMessage(error) ?? "تعذر تنفيذ العقوبة"),
   });
 
   return (

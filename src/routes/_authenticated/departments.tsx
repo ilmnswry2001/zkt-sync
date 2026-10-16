@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { formatErrorMessage } from "@/lib/error-message";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,16 +53,6 @@ type Profile = { id: string; full_name: string | null; email: string | null };
 type DepartmentTask = { id: string; title: string; status: string; task_date: string; employee_id: string | null };
 type DepartmentForm = { id: string; kind: string; status: string; work_date: string; employee_id: string };
 const db = supabase as typeof supabase & { from: (table: string) => any; rpc: (fn: string, args: Record<string, unknown>) => any };
-const errorMessage = (error: unknown) => {
-  if (error instanceof Error) return error.message;
-  if (error && typeof error === "object") {
-    const detail = error as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
-    const parts = [detail.message, detail.details, detail.hint]
-      .filter((part): part is string => typeof part === "string" && part.length > 0);
-    return parts.join(" · ") || (typeof detail.code === "string" ? `رمز الخطأ: ${detail.code}` : JSON.stringify(error));
-  }
-  return String(error);
-};
 const normalizeEmail = (email: string | null | undefined) => email?.trim().toLocaleLowerCase() ?? "";
 const selectClass = "h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
@@ -140,7 +131,7 @@ function DepartmentsPage() {
       setEditing(null);
       toast.success("تم حفظ بيانات القسم");
     },
-    onError: (error: unknown) => toast.error(`تعذر حفظ القسم: ${errorMessage(error)}`),
+    onError: (error: unknown) => toast.error(`تعذر حفظ القسم: ${formatErrorMessage(error)}`),
   });
   const remove = useMutation({
     mutationFn: async (department: Department) => {
@@ -153,7 +144,7 @@ function DepartmentsPage() {
       await qc.invalidateQueries({ queryKey: ["departments"] });
       toast.success("تم حذف القسم");
     },
-    onError: (error: unknown) => toast.error(`تعذر حذف القسم: ${errorMessage(error)}`),
+    onError: (error: unknown) => toast.error(`تعذر حذف القسم: ${formatErrorMessage(error)}`),
   });
   const updateEmployeeDepartment = useMutation({
     mutationFn: async ({ employeeId, departmentId }: { employeeId: string; departmentId: string | null }) => {
@@ -169,7 +160,7 @@ function DepartmentsPage() {
       if (details && variables.departmentId === details.id) toast.success("تمت إضافة الموظف إلى القسم");
       else toast.success("تم نقل الموظف من القسم");
     },
-    onError: (error: unknown) => toast.error(`تعذر تحديث القسم: ${errorMessage(error)}`),
+    onError: (error: unknown) => toast.error(`تعذر تحديث القسم: ${formatErrorMessage(error)}`),
   });
   const setManager = useMutation({
     mutationFn: async ({ departmentId, employeeId }: { departmentId: string; employeeId: string | null }) => {
@@ -188,7 +179,7 @@ function DepartmentsPage() {
       ]);
       toast.success("تم تحديث مسؤول القسم وصلاحيات حسابه");
     },
-    onError: (error: unknown) => toast.error(`تعذر تعيين مسؤول القسم: ${errorMessage(error)}`),
+    onError: (error: unknown) => toast.error(`تعذر تعيين مسؤول القسم: ${formatErrorMessage(error)}`),
   });
 
   return (
@@ -227,7 +218,7 @@ function DepartmentsPage() {
           <div><h2 className="font-semibold">دليل الأقسام</h2><p className="mt-1 text-sm text-muted-foreground">إجمالي {filtered.length.toLocaleString("ar")} قسم</p></div>
           <div className="flex gap-2"><div className="relative w-full sm:w-72"><Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input value={search} onChange={(event) => setSearch(event.target.value)} className="pr-9" placeholder="ابحث باسم القسم أو وصفه" aria-label="بحث في الأقسام" /></div><Button variant="outline" size="icon" aria-label="تحديث الأقسام" onClick={() => void query.refetch()} disabled={query.isFetching}><RefreshCw className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} /></Button></div>
         </div>
-        {query.isError ? <div role="alert" className="space-y-3 p-10 text-center"><p className="text-destructive">تعذر تحميل الأقسام وبيانات الربط: {errorMessage(query.error)}</p><Button variant="outline" onClick={() => void query.refetch()}>إعادة المحاولة</Button></div> : query.isPending ? <p role="status" className="p-12 text-center text-muted-foreground">جارٍ تحميل الهيكل التنظيمي…</p> : !filtered.length ? <div className="p-12 text-center"><div className="mx-auto mb-3 w-fit rounded-full bg-muted p-3"><Building2 className="h-6 w-6 text-muted-foreground" /></div><p className="font-medium">{search ? "لا توجد أقسام مطابقة للبحث" : "لا توجد أقسام مسجلة بعد"}</p><p className="mt-1 text-sm text-muted-foreground">{search ? "جرّب كلمة بحث أخرى." : "أضف القسم الأول لبدء تنظيم الموظفين."}</p></div> : <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3 sm:p-5">
+        {query.isError ? <div role="alert" className="space-y-3 p-10 text-center"><p className="text-destructive">تعذر تحميل الأقسام وبيانات الربط: {formatErrorMessage(query.error)}</p><Button variant="outline" onClick={() => void query.refetch()}>إعادة المحاولة</Button></div> : query.isPending ? <p role="status" className="p-12 text-center text-muted-foreground">جارٍ تحميل الهيكل التنظيمي…</p> : !filtered.length ? <div className="p-12 text-center"><div className="mx-auto mb-3 w-fit rounded-full bg-muted p-3"><Building2 className="h-6 w-6 text-muted-foreground" /></div><p className="font-medium">{search ? "لا توجد أقسام مطابقة للبحث" : "لا توجد أقسام مسجلة بعد"}</p><p className="mt-1 text-sm text-muted-foreground">{search ? "جرّب كلمة بحث أخرى." : "أضف القسم الأول لبدء تنظيم الموظفين."}</p></div> : <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3 sm:p-5">
           {filtered.map((department) => {
             const members = employeesByDepartment.get(department.id) ?? [];
             const activeCount = members.filter((employee) => !employee.status || employee.status === "active").length;
@@ -352,8 +343,8 @@ function DepartmentDetailsDialog({
         </section>
 
         <section className="grid gap-4 lg:grid-cols-2">
-          <div className="space-y-3 rounded-2xl border p-4"><div className="flex items-center gap-2 font-semibold"><ClipboardList className="h-4 w-4 text-primary" /> مهام القسم</div>{report.isError ? <p className="text-sm text-destructive">تعذر تحميل المهام: {errorMessage(report.error)}</p> : report.isPending ? <p className="text-sm text-muted-foreground">جارٍ تحميل المهام…</p> : <div className="max-h-64 space-y-2 overflow-y-auto">{(report.data?.tasks ?? []).map((task) => <div key={task.id} className="rounded-lg bg-muted/40 p-3"><div className="flex justify-between gap-2"><span className="font-medium">{task.title}</span><span className="text-xs text-muted-foreground">{task.status}</span></div><p className="mt-1 text-xs text-muted-foreground">{task.task_date} · {employeeById.get(task.employee_id ?? "")?.full_name ?? "غير مسند"}</p></div>)}{!report.data?.tasks.length && <p className="py-4 text-center text-sm text-muted-foreground">لا توجد مهام مسجلة للقسم.</p>}</div>}</div>
-          <div className="space-y-3 rounded-2xl border p-4"><div className="flex items-center gap-2 font-semibold"><FileClock className="h-4 w-4 text-primary" /> طلبات واستمارات القسم</div>{report.isError ? <p className="text-sm text-destructive">تعذر تحميل الطلبات: {errorMessage(report.error)}</p> : report.isPending ? <p className="text-sm text-muted-foreground">جارٍ تحميل الطلبات…</p> : <div className="max-h-64 space-y-2 overflow-y-auto">{(report.data?.forms ?? []).map((form) => <div key={form.id} className="flex items-center justify-between gap-2 rounded-lg bg-muted/40 p-3"><div><p className="font-medium">{form.kind}</p><p className="mt-1 text-xs text-muted-foreground">{form.work_date} · {employeeById.get(form.employee_id)?.full_name ?? "موظف"}</p></div><span className="rounded-full bg-background px-2 py-1 text-xs">{form.status}</span></div>)}{!report.data?.forms.length && <p className="py-4 text-center text-sm text-muted-foreground">لا توجد طلبات مسجلة للقسم.</p>}</div>}</div>
+          <div className="space-y-3 rounded-2xl border p-4"><div className="flex items-center gap-2 font-semibold"><ClipboardList className="h-4 w-4 text-primary" /> مهام القسم</div>{report.isError ? <p className="text-sm text-destructive">تعذر تحميل المهام: {formatErrorMessage(report.error)}</p> : report.isPending ? <p className="text-sm text-muted-foreground">جارٍ تحميل المهام…</p> : <div className="max-h-64 space-y-2 overflow-y-auto">{(report.data?.tasks ?? []).map((task) => <div key={task.id} className="rounded-lg bg-muted/40 p-3"><div className="flex justify-between gap-2"><span className="font-medium">{task.title}</span><span className="text-xs text-muted-foreground">{task.status}</span></div><p className="mt-1 text-xs text-muted-foreground">{task.task_date} · {employeeById.get(task.employee_id ?? "")?.full_name ?? "غير مسند"}</p></div>)}{!report.data?.tasks.length && <p className="py-4 text-center text-sm text-muted-foreground">لا توجد مهام مسجلة للقسم.</p>}</div>}</div>
+          <div className="space-y-3 rounded-2xl border p-4"><div className="flex items-center gap-2 font-semibold"><FileClock className="h-4 w-4 text-primary" /> طلبات واستمارات القسم</div>{report.isError ? <p className="text-sm text-destructive">تعذر تحميل الطلبات: {formatErrorMessage(report.error)}</p> : report.isPending ? <p className="text-sm text-muted-foreground">جارٍ تحميل الطلبات…</p> : <div className="max-h-64 space-y-2 overflow-y-auto">{(report.data?.forms ?? []).map((form) => <div key={form.id} className="flex items-center justify-between gap-2 rounded-lg bg-muted/40 p-3"><div><p className="font-medium">{form.kind}</p><p className="mt-1 text-xs text-muted-foreground">{form.work_date} · {employeeById.get(form.employee_id)?.full_name ?? "موظف"}</p></div><span className="rounded-full bg-background px-2 py-1 text-xs">{form.status}</span></div>)}{!report.data?.forms.length && <p className="py-4 text-center text-sm text-muted-foreground">لا توجد طلبات مسجلة للقسم.</p>}</div>}</div>
         </section>
       </>}
     </DialogContent>

@@ -1,3 +1,4 @@
+import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -39,12 +40,12 @@ function ShiftSchedulesPage() {
       employee_id: employeeId, weekday: Number(weekday), start_time: start, end_time: end,
       grace_minutes: Number(grace), effective_from: from,
     }, { onConflict: "employee_id,weekday,effective_from" });
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(formatErrorMessage(error));
     toast.success("تم حفظ الوردية"); client.invalidateQueries({ queryKey: ["employee-weekly-schedules"] });
   };
   const remove = async (id: string) => {
     const { error } = await (supabase as any).from("employee_weekly_schedules").delete().eq("id", id);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(formatErrorMessage(error));
     client.invalidateQueries({ queryKey: ["employee-weekly-schedules"] });
   };
   if (!isAdmin && !isHR) return <p className="p-8 text-center">هذه الصفحة مخصصة للإدارة والموارد البشرية.</p>;

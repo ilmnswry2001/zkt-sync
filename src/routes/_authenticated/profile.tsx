@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { formatErrorMessage } from "@/lib/error-message";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -124,7 +125,7 @@ function ProfilePage() {
       }
     },
     onError: (error: unknown) => {
-      const message = error instanceof Error ? error.message : "تعذر حفظ الملف الشخصي";
+      const message = formatErrorMessage(error, "تعذر حفظ الملف الشخصي");
       toast.error(message);
     },
   });

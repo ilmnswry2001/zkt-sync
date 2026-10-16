@@ -1,3 +1,4 @@
+import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -125,7 +126,7 @@ function TeamTasksPage() {
       .from("employee_tasks")
       .update({ manager_note: note })
       .eq("id", task.id);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(formatErrorMessage(error));
     await queryClient.invalidateQueries({ queryKey: ["team-tasks"] });
     toast.success("تم حفظ ملاحظة المدير");
   };

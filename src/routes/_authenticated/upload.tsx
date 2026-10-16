@@ -1,3 +1,4 @@
+import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -84,8 +85,8 @@ function UploadPage() {
       setFile(null);
       toast.success("تم رفع الملف. اذهب إلى سجل الملفات واضغط «بدء معالجة البصمة»");
     } catch (e: any) {
-      toast.error("فشل الرفع: " + (e?.message ?? e));
-      setStep("فشل: " + (e?.message ?? e));
+      toast.error(`فشل الرفع: ${formatErrorMessage(e)}`);
+      setStep(`فشل: ${formatErrorMessage(e)}`);
     } finally {
       setBusy(false);
     }
@@ -112,7 +113,7 @@ function UploadPage() {
       await doUpload(hash, false);
     } catch (e: any) {
       setBusy(false);
-      toast.error("فشل: " + (e?.message ?? e));
+      toast.error(`فشل: ${formatErrorMessage(e)}`);
     }
   };
 
