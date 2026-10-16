@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   ClipboardList,
+  ClipboardCheck,
   AlertTriangle,
   FileDown,
   FileText,
@@ -38,6 +39,7 @@ import { printReport } from "@/lib/report-print";
 import { toast } from "sonner";
 import { readLocalCatalog, type CatalogItem, type CatalogKind } from "@/lib/report-catalog";
 import { normalizeStaffAssignments } from "@/lib/planning-staff";
+import { DailyWorkshopInventory } from "@/components/DailyWorkshopInventory";
 
 export const Route = createFileRoute("/_authenticated/attendance")({
   head: () => ({ meta: [{ title: "التقارير اليومية" }] }),
@@ -89,7 +91,7 @@ type AttendanceRow = {
 const today = todayInBaghdad();
 
 function AttendancePage() {
-  const [activeTab, setActiveTab] = useState<"attendance" | "sites" | "publish">("sites");
+  const [activeTab, setActiveTab] = useState<"attendance" | "sites" | "publish" | "inventory">("sites");
   const [date, setDate] = useState(today);
   const [siteId, setSiteId] = useState("");
   const [notes, setNotes] = useState("");
@@ -419,7 +421,7 @@ function AttendancePage() {
           تعذر تحميل التقارير المحفوظة: {reportsQuery.error.message}
         </p>
       )}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
         <button
           onClick={() => setActiveTab("sites")}
           className={`rounded-xl border p-4 text-right transition ${activeTab === "sites" ? "border-primary bg-accent shadow-sm" : "bg-card hover:bg-muted/50"}`}
@@ -447,6 +449,18 @@ function AttendancePage() {
           </div>
         </button>
         <button
+          onClick={() => setActiveTab("inventory")}
+          className={`rounded-xl border p-4 text-right transition ${activeTab === "inventory" ? "border-primary bg-accent shadow-sm" : "bg-card hover:bg-muted/50"}`}
+        >
+          <div className="flex items-center gap-3">
+            <ClipboardCheck className="w-5 h-5 text-primary" />
+            <div>
+              <div className="font-semibold">الجرد اليومي</div>
+              <div className="text-xs text-muted-foreground">حضور كوادر الورش</div>
+            </div>
+          </div>
+        </button>
+        <button
           onClick={() => setActiveTab("attendance")}
           className={`rounded-xl border p-4 text-right transition ${activeTab === "attendance" ? "border-primary bg-accent shadow-sm" : "bg-card hover:bg-muted/50"}`}
         >
@@ -459,7 +473,9 @@ function AttendancePage() {
           </div>
         </button>
       </div>
-      {activeTab === "publish" ? (
+      {activeTab === "inventory" ? (
+        <DailyWorkshopInventory />
+      ) : activeTab === "publish" ? (
         <Card className="border-primary/20">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
