@@ -181,7 +181,7 @@ function DevicesPage() {
           <CardTitle className="flex items-center gap-2"><RefreshCw className="h-5 w-5" /> المزامنة السحابية التلقائية</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
-          <p>أنشئ مفتاحاً لكل جهاز، ثم نزّل ملف الإعدادات وضعه بجانب وكيل Python على حاسوب متصل بشبكة الجهاز.</p>
+          <p>ضع الوكيل ومتطلباته على حاسوب متصل بشبكة جهاز البصمة والإنترنت. ثبّت المتطلبات بالأمر <code dir="ltr">python -m pip install -r requirements.txt</code>، ثم شغّل <code dir="ltr">python agent.py --setup</code> لإعداد الربط، و<code dir="ltr">python agent.py --check</code> لاختباره، ثم <code dir="ltr">python agent.py</code> لبدء الرفع المستمر.</p>
           <div className="flex flex-wrap gap-x-5 gap-y-2">
             <button type="button" className="inline-flex items-center gap-2 font-semibold text-primary underline" onClick={() => downloadTextFile("agent.py", agentScript, "text/x-python;charset=utf-8")}>
               <Download className="h-4 w-4" /> تنزيل وكيل المزامنة
