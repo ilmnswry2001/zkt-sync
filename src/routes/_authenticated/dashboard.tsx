@@ -27,6 +27,9 @@ import {
   FileSignature,
   Fingerprint,
   MapPinned,
+  Building2,
+  CalendarDays,
+  ClipboardList,
   RefreshCw,
   ShieldAlert,
   Users,
@@ -115,7 +118,7 @@ const isDeviceConnected = (status: string, lastSyncAt: string | null, nowMs: num
 };
 
 function Dashboard() {
-  const { isAdmin, isCompanyManager, permissionsLoading } = useAuth();
+  const { isAdmin, isCompanyManager, permissionsLoading, canAccessSection } = useAuth();
   const canView = isAdmin || isCompanyManager;
   const dailyFn = useServerFn(getDailyReport);
   const monthlyFn = useServerFn(getMonthlySheet);
@@ -387,6 +390,39 @@ function Dashboard() {
           </div>
         </div>
       </header>
+
+      <section aria-label="أقسام النظام" className="space-y-3">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-bold">أقسام النظام</h2>
+            <p className="text-sm text-muted-foreground">وصول سريع إلى الوحدات التشغيلية المتاحة لحسابك</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            { to: "/work-center", title: "مركز العمل", description: "المهام والتوجيهات والأهداف ومتابعة الإنجاز", icon: ClipboardCheck, tone: "text-teal-700 bg-teal-500/10" },
+            { to: "/employees", title: "الموظفون", description: "ملفات الموظفين والبيانات الوظيفية", icon: Users, tone: "text-blue-700 bg-blue-500/10" },
+            { to: "/departments", title: "الأقسام", description: "الهيكل التنظيمي والأقسام", icon: Building2, tone: "text-violet-700 bg-violet-500/10" },
+            { to: "/attendance", title: "الحضور والتقارير", description: "الحضور اليومي ومؤشرات الدوام", icon: CalendarDays, tone: "text-amber-700 bg-amber-500/10" },
+            { to: "/tasks", title: "المهام اليومية", description: "تنفيذ المهام ومراجعة حالاتها", icon: ClipboardCheck, tone: "text-cyan-700 bg-cyan-500/10" },
+            { to: "/planning", title: "الخطط والمواقع", description: "خطط العمل ومتابعة المواقع", icon: MapPinned, tone: "text-emerald-700 bg-emerald-500/10" },
+            { to: "/requests", title: "الطلبات", description: "متابعة الطلبات والإجراءات", icon: ClipboardList, tone: "text-orange-700 bg-orange-500/10" },
+            { to: "/devices", title: "أجهزة البصمة", description: "حالة الأجهزة وآخر عمليات المزامنة", icon: Fingerprint, tone: "text-rose-700 bg-rose-500/10" },
+          ].filter((section) => canAccessSection(section.to)).map(({ to, title, description, icon: Icon, tone }) => (
+            <Link key={to} to={to as any} className="group rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <Card className="h-full border-border/70 transition-all duration-200 group-hover:-translate-y-0.5 group-hover:border-primary/40 group-hover:shadow-lg">
+                <CardContent className="flex min-h-28 items-start gap-3 p-4">
+                  <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${tone}`}><Icon className="h-5 w-5" /></span>
+                  <span className="min-w-0">
+                    <span className="block font-bold text-foreground">{title}</span>
+                    <span className="mt-1 block text-sm leading-6 text-muted-foreground">{description}</span>
+                  </span>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      </section>
 
       {hasQueryError && (
         <Card role="alert" className="border-destructive/40 bg-destructive/5">
