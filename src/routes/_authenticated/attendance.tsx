@@ -71,6 +71,7 @@ type PublishSummaryItem = {
   missing: number;
   color: string;
 };
+type DailyCrewAssignment = { site_id: string | null; role_label: string | null; attended: boolean };
 type AttendanceRow = {
   employee_no: string;
   full_name: string;
@@ -193,6 +194,27 @@ function AttendancePage() {
       };
     },
     enabled: activeTab === "publish" && !!siteId,
+  });
+  const dailyCrewQuery = useQuery<DailyCrewAssignment[]>({
+    queryKey: ["daily-crew-assignments", date],
+    queryFn: async () => {
+      const { data: reports, error } = await supabase
+        .from("daily_workshop_reports")
+        .select("id")
+        .eq("report_date", date);
+      if (error) throw error;
+      const ids = (reports ?? []).map((report) => report.id);
+      if (!ids.length) return [];
+      const { data, error: linesError } = await (supabase as any)
+        .from("daily_workshop_report_lines")
+        .select("site_id, role_label, attended")
+        .in("report_id", ids)
+        .eq("attended", true)
+        .not("site_id", "is", null);
+      if (linesError) throw linesError;
+      return (data ?? []) as DailyCrewAssignment[];
+    },
+    enabled: activeTab === "publish" && !!date,
   });
 
   const buildRows = useCallback(
@@ -343,6 +365,13 @@ function AttendancePage() {
       ? finalizedPlan.specialtySummary
       : [];
     const reportLines = existingReport?.lines ?? [];
+    const assignedBySpecialty = new Map<string, number>();
+    (dailyCrewQuery.data ?? [])
+      .filter((line) => line.site_id === siteId)
+      .forEach((line) => {
+        const key = line.role_label?.trim() || "بدون صفة";
+        assignedBySpecialty.set(key, (assignedBySpecialty.get(key) ?? 0) + 1);
+      });
     const totalsByName = new Map<string, number>();
     reportLines.forEach((line) => {
       const key = line.item_name.trim();
@@ -350,8 +379,9 @@ function AttendancePage() {
     });
     return requiredItems.map((item: any) => {
       const requestedCount = Number(item.quantity ?? 0);
-      const reportedCount =
-        totalsByName.get(item.specialty?.trim() ?? item.name?.trim() ?? "") ?? 0;
+      const reportedCount = (dailyCrewQuery.data?.length ?? 0) > 0
+        ? assignedBySpecialty.get(item.specialty?.trim() ?? item.name?.trim() ?? "") ?? 0
+        : totalsByName.get(item.specialty?.trim() ?? item.name?.trim() ?? "") ?? 0;
       return {
         specialty: item.specialty ?? item.name ?? "غير محدد",
         quantity: requestedCount,
@@ -360,7 +390,7 @@ function AttendancePage() {
         color: item.color ?? "#ef4444",
       };
     });
-  }, [existingReport, finalizedPlanQuery.data]);
+  }, [dailyCrewQuery.data, existingReport, finalizedPlanQuery.data, siteId]);
   const attendanceRows = (attendance.data?.rows ?? []) as AttendanceRow[];
   const fmtTime = (value: string | null) =>
     value ? new Date(value).toLocaleTimeString("ar", { hour: "2-digit", minute: "2-digit" }) : "—";

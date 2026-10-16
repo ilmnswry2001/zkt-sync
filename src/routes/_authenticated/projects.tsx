@@ -56,6 +56,7 @@ type ProjectPlan = {
   final_plan: { specialties?: PlanSpecialty[] } | null;
   request_date: string;
 };
+type CrewAssignment = { site_id: string; role_label: string | null };
 
 const today = todayInBaghdad();
 
@@ -91,7 +92,7 @@ function ProjectsPage() {
   const query = useQuery({
     queryKey: ["projects-dashboard", reportDate],
     queryFn: async () => {
-      const [projectsResult, reportsResult, wagesResult, plansResult] = await Promise.all([
+      const [projectsResult, reportsResult, wagesResult, plansResult, crewReportsResult] = await Promise.all([
         supabase.from("sites").select("id, name, ctr_code").order("name").limit(500),
         supabase
           .from("site_daily_reports")
@@ -110,11 +111,13 @@ function ProjectsPage() {
           .eq("status", "finalized")
           .order("request_date", { ascending: false })
           .limit(1000),
+        supabase.from("daily_workshop_reports").select("id").eq("report_date", reportDate).limit(1000),
       ]);
       if (projectsResult.error) throw projectsResult.error;
       if (reportsResult.error) throw reportsResult.error;
       if (wagesResult.error) throw wagesResult.error;
       if (plansResult.error) throw plansResult.error;
+      if (crewReportsResult.error) throw crewReportsResult.error;
 
       const reports = (reportsResult.data ?? []) as ProjectReport[];
       const reportIds = reports.map((report) => report.id);
@@ -128,12 +131,26 @@ function ProjectsPage() {
         if (linesResult.error) throw linesResult.error;
         lines = (linesResult.data ?? []) as ProjectLine[];
       }
+      const crewReportIds = (crewReportsResult.data ?? []).map((report) => report.id);
+      let crewAssignments: CrewAssignment[] = [];
+      if (crewReportIds.length) {
+        const crewResult = await (supabase as any)
+          .from("daily_workshop_report_lines")
+          .select("site_id, role_label")
+          .in("report_id", crewReportIds)
+          .eq("attended", true)
+          .not("site_id", "is", null)
+          .limit(5000);
+        if (crewResult.error) throw crewResult.error;
+        crewAssignments = (crewResult.data ?? []) as CrewAssignment[];
+      }
       return {
         projects: (projectsResult.data ?? []) as Project[],
         reports,
         lines,
         wages: (wagesResult.data ?? []) as WageRate[],
         plans: (plansResult.data ?? []) as ProjectPlan[],
+        crewAssignments,
       };
     },
   });
@@ -144,6 +161,7 @@ function ProjectsPage() {
     lines: [],
     wages: [] as WageRate[],
     plans: [] as ProjectPlan[],
+    crewAssignments: [] as CrewAssignment[],
   };
   const wageByTitle = useMemo(
     () => new Map(data.wages.map((wage) => [wage.title.trim(), wage])),
@@ -188,7 +206,21 @@ function ProjectsPage() {
           .filter((line) => line.kind === "equipment_type")
           .reduce((sum, line) => sum + Number(line.total_count || 0), 0);
         const workerLines = lines.filter((line) => line.kind === "worker_specialty");
-        const specialtyCosts = workerLines.map((line) => {
+        const assignedSpecialties = new Map<string, number>();
+        data.crewAssignments
+          .filter((line) => line.site_id === project.id)
+          .forEach((line) => {
+            const name = line.role_label?.trim() || "بدون صفة";
+            assignedSpecialties.set(name, (assignedSpecialties.get(name) ?? 0) + 1);
+          });
+        const specialtyCosts = data.crewAssignments.length > 0
+          ? Array.from(assignedSpecialties, ([name, count]) => {
+              const wage = wageByTitle.get(name);
+              const fallback = getDefaultWage(name);
+              const dailyRate = Number(wage?.daily_rate) > 0 ? Number(wage.daily_rate) : Number(wage?.monthly_rate) > 0 ? Number(wage.monthly_rate) / 26 : fallback.daily_rate;
+              return { name, count, dailyRate, cost: count * dailyRate, hasRate: Boolean(wage), usedDefault: !wage && fallback.daily_rate > 0 };
+            })
+          : workerLines.map((line) => {
           const count = Number(line.total_count || 0);
           const wage = wageByTitle.get(line.item_name.trim());
           const fallback = getDefaultWage(line.item_name);
@@ -206,7 +238,7 @@ function ProjectsPage() {
             hasRate: Boolean(wage),
             usedDefault: !wage && fallback.daily_rate > 0,
           };
-        });
+          });
         const siteDailyCost = specialtyCosts.reduce((sum, item) => sum + item.cost, 0);
         const plan = finalPlanByProject.get(project.id);
         const plannedSpecialties = plan?.final_plan?.specialties?.length
@@ -241,7 +273,7 @@ function ProjectsPage() {
           plannedDailyCost: plannedSpecialtyCosts.reduce((sum, item) => sum + item.cost, 0),
         };
       }),
-    [finalPlanByProject, linesByReport, reportByProject, visibleProjects, wageByTitle],
+    [data.crewAssignments, finalPlanByProject, linesByReport, reportByProject, visibleProjects, wageByTitle],
   );
   const workerSpecialties = useMemo(
     () =>

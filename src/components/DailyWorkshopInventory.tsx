@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { todayInBaghdad } from "@/lib/date-time";
 import { escapeHtml, printReport } from "@/lib/report-print";
 import { formatErrorMessage } from "@/lib/error-message";
+import { getDefaultWage } from "@/lib/wage-defaults";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -51,7 +52,10 @@ type AttendanceLine = {
   employee_name_snapshot: string;
   role_label: string | null;
   attended: boolean;
+  site_id: string | null;
 };
+type WorkSite = { id: string; name: string; ctr_code: string };
+type WageRate = { title: string; daily_rate: number; monthly_rate: number };
 const supa = supabase as any;
 const inputClass = "flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm";
 const noWorkshops: Workshop[] = [];
@@ -85,6 +89,23 @@ export function DailyWorkshopInventory() {
   const [notes, setNotes] = useState("");
   const [attendedByEmployee, setAttendedByEmployee] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
+
+  const sitesQuery = useQuery<WorkSite[]>({
+    queryKey: ["daily-work-allocation-sites"],
+    queryFn: async () => {
+      const { data, error } = await supa.from("sites").select("id, name, ctr_code").order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const wagesQuery = useQuery<WageRate[]>({
+    queryKey: ["daily-work-allocation-wages"],
+    queryFn: async () => {
+      const { data, error } = await supa.from("wage_rates").select("title, daily_rate, monthly_rate");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
   const workshopsQuery = useQuery<Workshop[]>({
     queryKey: ["daily-workshops"],
@@ -131,7 +152,7 @@ export function DailyWorkshopInventory() {
       const { data: lines, error: linesError } = await supa
         .from("daily_workshop_report_lines")
         .select(
-          "id, report_id, employee_id, employee_no_snapshot, employee_name_snapshot, role_label, attended",
+          "id, report_id, employee_id, employee_no_snapshot, employee_name_snapshot, role_label, attended, site_id",
         )
         .in("report_id", ids)
         .order("employee_name_snapshot");
@@ -160,6 +181,19 @@ export function DailyWorkshopInventory() {
     [reportQuery.data?.lines, savedReport?.id],
   );
   const selectedEmployee = employees.find((employee) => employee.id === employeeId);
+  const sites = sitesQuery.data ?? [];
+  const presentLines = (reportQuery.data?.lines ?? []).filter((line) => line.attended);
+  const wageByTitle = new Map((wagesQuery.data ?? []).map((wage) => [wage.title.trim(), wage]));
+  const dailyCost = (line: AttendanceLine) => {
+    const title = line.role_label?.trim() || "";
+    const wage = wageByTitle.get(title);
+    const fallback = getDefaultWage(title);
+    return Number(wage?.daily_rate) > 0
+      ? Number(wage?.daily_rate)
+      : Number(wage?.monthly_rate) > 0
+        ? Number(wage?.monthly_rate) / 26
+        : fallback.daily_rate;
+  };
 
   useEffect(() => {
     if (!workshopId && workshops[0]) setWorkshopId(workshops[0].id);
@@ -282,6 +316,25 @@ export function DailyWorkshopInventory() {
     }
   };
 
+  const assignSite = async (line: AttendanceLine, siteId: string) => {
+    const otherAssignment = presentLines.find(
+      (item) => item.employee_id === line.employee_id && item.id !== line.id && item.site_id,
+    );
+    if (siteId && otherAssignment) {
+      return toast.error("هذا الموظف مسند بالفعل إلى مركز تكلفة آخر اليوم؛ ألغِ إسناده السابق أولاً");
+    }
+    const { error } = await supa
+      .from("daily_workshop_report_lines")
+      .update({ site_id: siteId || null })
+      .eq("id", line.id);
+    if (error) return toast.error(formatErrorMessage(error, "تعذر إسناد الموظف إلى مركز التكلفة"));
+    await queryClient.invalidateQueries({ queryKey: ["daily-workshop-reports", date] });
+    await queryClient.invalidateQueries({ queryKey: ["daily-crew-assignments", date] });
+    await queryClient.invalidateQueries({ queryKey: ["projects-dashboard", date] });
+    await queryClient.invalidateQueries({ queryKey: ["site-finalized-plan-follow-up"] });
+    toast.success("تم تحديث مركز تكلفة الموظف لهذا اليوم");
+  };
+
   const printDailyReport = () => {
     const savedReports = reportQuery.data?.reports ?? [];
     const allLines = reportQuery.data?.lines ?? [];
@@ -325,7 +378,7 @@ export function DailyWorkshopInventory() {
         </p>
       )}
       <Tabs value={tab} onValueChange={setTab} dir="rtl" className="space-y-4">
-        <TabsList className="grid h-auto w-full grid-cols-3 gap-2 bg-transparent p-0">
+        <TabsList className="grid h-auto w-full grid-cols-4 gap-2 bg-transparent p-0">
           <TabsTrigger value="inventory" className="min-h-11 rounded-xl border bg-card">
             <ClipboardCheck className="ml-2 h-4 w-4" /> تسجيل الجرد
           </TabsTrigger>
@@ -334,6 +387,9 @@ export function DailyWorkshopInventory() {
           </TabsTrigger>
           <TabsTrigger value="reports" className="min-h-11 rounded-xl border bg-card">
             <Printer className="ml-2 h-4 w-4" /> سجل وتقارير اليوم
+          </TabsTrigger>
+          <TabsTrigger value="allocation" className="min-h-11 rounded-xl border bg-card">
+            <UsersRound className="ml-2 h-4 w-4" /> تقسيم الكادر
           </TabsTrigger>
         </TabsList>
 
@@ -715,6 +771,41 @@ export function DailyWorkshopInventory() {
                   لا توجد جردات محفوظة لهذا التاريخ.
                 </p>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="allocation" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>تقسيم الكادر الحاضر على مراكز التكلفة</CardTitle>
+              <p className="text-sm text-muted-foreground">يعرض الموظفين المسجل حضورهم في جرد هذا اليوم فقط. اختر CTR لحساب كلفة العامل ضمن متابعة نشر الموقع.</p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/30 p-3 text-sm">
+                <span>التاريخ: <b>{date}</b> · الحاضرون: <b>{presentLines.length}</b></span>
+                <span>إجمالي الكلفة المسندة: <b>{presentLines.reduce((sum, line) => sum + (line.site_id ? dailyCost(line) : 0), 0).toLocaleString("ar-IQ")} د.ع</b></span>
+              </div>
+              {presentLines.map((line) => {
+                const report = reportQuery.data?.reports.find((item) => item.id === line.report_id);
+                const workshop = workshops.find((item) => item.id === report?.workshop_id);
+                return (
+                  <div key={line.id} className="grid gap-3 rounded-xl border p-3 sm:grid-cols-[1fr_1fr_auto] sm:items-center">
+                    <div>
+                      <p className="font-medium">{line.employee_name_snapshot}</p>
+                      <p className="text-xs text-muted-foreground">{workshop?.name ?? "ورشة"} · {line.role_label || "بدون صفة"}</p>
+                    </div>
+                    <select className={inputClass} aria-label={`مركز تكلفة ${line.employee_name_snapshot}`} value={line.site_id ?? "unassigned"} onChange={(event) => void assignSite(line, event.target.value === "unassigned" ? "" : event.target.value)}>
+                      <option value="unassigned">اختر مركز التكلفة CTR</option>
+                      {sites.map((site) => <option key={site.id} value={site.id}>{site.ctr_code} — {site.name}</option>)}
+                    </select>
+                    <Badge variant={line.site_id ? "default" : "secondary"}>{line.site_id ? `${dailyCost(line).toLocaleString("ar-IQ")} د.ع / يوم` : "غير مسند"}</Badge>
+                  </div>
+                );
+              })}
+              {!presentLines.length && <p className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">احفظ جرد الحضور أولاً ليظهر الكادر الحاضر هنا.</p>}
+              {sitesQuery.error && <p role="alert" className="text-sm text-destructive">تعذر تحميل مراكز التكلفة: {formatErrorMessage(sitesQuery.error)}</p>}
+              {wagesQuery.error && <p role="alert" className="text-sm text-destructive">تعذر تحميل أجور التخصصات: {formatErrorMessage(wagesQuery.error)}</p>}
             </CardContent>
           </Card>
         </TabsContent>
