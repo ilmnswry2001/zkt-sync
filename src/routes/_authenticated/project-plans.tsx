@@ -110,6 +110,7 @@ type WorkPlanSpecialty = {
   quantity: number;
   heavy_equipment: boolean;
   equipment_name: string;
+  equipment_quantity?: number;
   notes: string;
   color: string;
 };
@@ -203,7 +204,7 @@ function planPdfMarkup(plan: SiteWorkPlan, site?: Site) {
       const names = assigned.get(item.specialty) ?? [];
       const color = item.color || "#0f766e";
       return `<tr>
-      <td style="border-right:5px solid ${escapeHtml(color)}"><strong>${escapeHtml(item.specialty)}</strong><br><span style="color:#64748b;font-size:11px">${item.heavy_equipment ? `آلية: ${escapeHtml(item.equipment_name || "مطلوبة")}` : ""}</span></td>
+      <td style="border-right:5px solid ${escapeHtml(color)}"><strong>${escapeHtml(item.specialty)}</strong><br><span style="color:#64748b;font-size:11px">${item.heavy_equipment ? `آلية: ${escapeHtml(item.equipment_name || "مطلوبة")} · العدد ${Math.max(1, Number(item.equipment_quantity) || 1)}` : ""}</span></td>
       <td style="text-align:center;font-weight:700">${Number(item.quantity || 0)}</td>
       <td>${names.length ? names.map((name) => `<span class="name-chip" style="border-color:${escapeHtml(color)};color:${escapeHtml(color)}">${escapeHtml(name)}</span>`).join(" ") : '<span style="color:#94a3b8">لم يتم تخصيص أسماء</span>'}</td>
     </tr>`;
@@ -233,6 +234,7 @@ function newPlanSpecialty(index = 0): WorkPlanSpecialty {
     quantity: 0,
     heavy_equipment: false,
     equipment_name: "",
+    equipment_quantity: 0,
     notes: "",
     color: WORK_PLAN_COLORS[index % WORK_PLAN_COLORS.length],
   };
@@ -614,6 +616,7 @@ export function PlanningPage() {
           quantity: Number(item.quantity),
           heavy_equipment: Boolean(item.heavy_equipment),
           equipment_name: item.heavy_equipment ? item.equipment_name || "آلة" : "",
+          equipment_quantity: item.heavy_equipment ? Math.max(1, Number(item.equipment_quantity) || 1) : 0,
           notes: item.notes.trim(),
           color: item.color,
         })),
@@ -1357,21 +1360,23 @@ export function PlanningPage() {
                             <input
                               type="checkbox"
                               checked={item.heavy_equipment}
-                              onChange={(event) =>
-                                updateDraftSpecialty(index, "heavy_equipment", event.target.checked)
-                              }
+                              onChange={(event) => {
+                                updateDraftSpecialty(index, "heavy_equipment", event.target.checked);
+                                updateDraftSpecialty(index, "equipment_quantity", event.target.checked ? Math.max(1, item.equipment_quantity || 1) : 0);
+                              }}
                             />
                             آلية
                           </label>
                         </div>
                         {item.heavy_equipment && (
+                          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                           <Select
                             value={item.equipment_name || equipmentOptions[0]}
                             onValueChange={(value) =>
                               updateDraftSpecialty(index, "equipment_name", value)
                             }
                           >
-                            <SelectTrigger className="mt-2 min-h-11">
+                            <SelectTrigger className="min-h-11">
                               <SelectValue placeholder="نوع الآلية" />
                             </SelectTrigger>
                             <SelectContent>
@@ -1382,6 +1387,11 @@ export function PlanningPage() {
                               ))}
                             </SelectContent>
                           </Select>
+                          <div>
+                            <Label htmlFor={`plan-equipment-quantity-${index}`} className="text-xs">عدد الآليات المطلوبة</Label>
+                            <Input id={`plan-equipment-quantity-${index}`} type="number" min={1} className="min-h-11" value={item.equipment_quantity || 1} onChange={(event) => updateDraftSpecialty(index, "equipment_quantity", Math.max(1, Number(event.target.value) || 1))} />
+                          </div>
+                          </div>
                         )}
                         {visibleSpecialtyNotes[item.specialty] && (
                           <Input
@@ -1499,7 +1509,7 @@ export function PlanningPage() {
                                 <TableCell className="font-medium">{item.specialty}</TableCell>
                                 <TableCell>{item.quantity}</TableCell>
                                 <TableCell>
-                                  {item.heavy_equipment ? item.equipment_name || "آلية" : "—"}
+                                  {item.heavy_equipment ? `${item.equipment_name || "آلية"} (${Math.max(1, Number(item.equipment_quantity) || 1)})` : "—"}
                                 </TableCell>
                                 <TableCell>{item.notes || "—"}</TableCell>
                               </TableRow>

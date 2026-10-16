@@ -66,9 +66,12 @@ type SiteReport = {
   lines: ReportLine[];
 };
 type PublishSummaryItem = {
+  kind: "worker_specialty" | "equipment_type";
   specialty: string;
   quantity: number;
   reported: number;
+  working: number;
+  idle: number;
   missing: number;
   color: string;
   excessAssignments: ExcessAssignment[];
@@ -343,12 +346,21 @@ function AttendancePage() {
     id: string,
     field: "total_count" | "working_count" | "idle_count",
     value: string,
-  ) =>
-    setRows((current) =>
-      current.map((row) =>
-        row.id === id ? { ...row, [field]: Math.max(0, Number(value) || 0) } : row,
-      ),
-    );
+  ) => {
+    const count = Math.max(0, Number(value) || 0);
+    setRows((current) => current.map((row) => {
+      if (row.id !== id) return row;
+      if (field === "total_count") {
+        const working = Math.min(row.working_count, count);
+        return { ...row, total_count: count, working_count: working, idle_count: Math.min(row.idle_count, count - working) };
+      }
+      if (field === "working_count") {
+        const working = Math.min(count, row.total_count);
+        return { ...row, working_count: working, idle_count: Math.min(row.idle_count, row.total_count - working) };
+      }
+      return { ...row, idle_count: Math.min(count, row.total_count - row.working_count) };
+    }));
+  };
   const saveReport = async () => {
     if (!siteId) return toast.error("اختر الموقع أولاً");
     const { data: header, error: headerError } = await supabase
@@ -419,11 +431,11 @@ function AttendancePage() {
     const sourceRows = report?.lines ?? rows;
     const workers = sourceRows.filter((row) => row.kind === "worker_specialty");
     const equipment = sourceRows.filter((row) => row.kind === "equipment_type");
-    const table = (list: ReportLine[], label: string) =>
-      `<table><thead><tr><th>${label}</th><th>العدد</th></tr></thead><tbody>${list.map((row) => `<tr><td>${row.item_name}</td><td>${row.total_count}</td></tr>`).join("")}</tbody></table>`;
+    const workerTable = `<table><thead><tr><th>التخصص</th><th>العدد</th></tr></thead><tbody>${workers.map((row) => `<tr><td>${row.item_name}</td><td>${row.total_count}</td></tr>`).join("")}</tbody></table>`;
+    const equipmentTable = `<table><thead><tr><th>الآلية / المركبة</th><th>الإجمالي</th><th>عاملة</th><th>متوقفة</th></tr></thead><tbody>${equipment.map((row) => `<tr><td>${row.item_name}</td><td>${row.total_count}</td><td>${row.working_count}</td><td>${row.idle_count}</td></tr>`).join("")}</tbody></table>`;
     const ok = printReport(
       "تقرير الموقع اليومي",
-      `<div class="meta"><span><b>الموقع:</b> ${reportSite?.name ?? "-"}</span><span><b>التاريخ:</b> ${reportDate}</span></div><h2>العاملون</h2>${table(workers, "التخصص")}<h2>الآليات والمركبات</h2>${table(equipment, "الآلية / المركبة")}${reportNotes ? `<div class="note"><b>الملاحظات:</b> ${reportNotes}</div>` : ""}`,
+      `<div class="meta"><span><b>الموقع:</b> ${reportSite?.name ?? "-"}</span><span><b>التاريخ:</b> ${reportDate}</span></div><h2>العاملون</h2>${workerTable}<h2>الآليات والمركبات</h2>${equipmentTable}${reportNotes ? `<div class="note"><b>الملاحظات:</b> ${reportNotes}</div>` : ""}`,
     );
     if (!ok) toast.error("اسمح للنوافذ المنبثقة لتصدير التقرير");
   };
@@ -440,7 +452,7 @@ function AttendancePage() {
       ? finalizedPlan.specialtySummary
       : [];
     const reportLines = existingReport?.lines ?? [];
-    const normalizeSpecialty = (value: string) => value.trim().toLocaleLowerCase("ar");
+    const normalizeSpecialty = (value: string) => value.trim().toLocaleLowerCase("ar").replace(/[\u064B-\u065F\u0670\u0640]/g, "");
     const assignedBySpecialty = new Map<string, ExcessAssignment[]>();
     (dailyCrewQuery.data ?? [])
       .filter((line) => line.site_id === siteId)
@@ -457,17 +469,19 @@ function AttendancePage() {
       const requestedCount = Number(item.quantity ?? 0);
       const specialty = item.specialty?.trim() ?? item.name?.trim() ?? "";
       const assignments = assignedBySpecialty.get(normalizeSpecialty(specialty)) ?? [];
-      const usingAssignments = (dailyCrewQuery.data?.length ?? 0) > 0;
-      const reportedCount = usingAssignments
+      const reportedCount = assignments.length > 0
         ? assignments.length
         : totalsByName.get(specialty) ?? 0;
       return {
+        kind: "worker_specialty" as const,
         specialty: item.specialty ?? item.name ?? "غير محدد",
         quantity: requestedCount,
         reported: reportedCount,
+        working: 0,
+        idle: 0,
         missing: Math.max(0, requestedCount - reportedCount),
         color: item.color ?? "#ef4444",
-        excessAssignments: usingAssignments
+        excessAssignments: assignments.length > 0
           ? assignments.slice(requestedCount).map((assignment) => ({
               ...assignment,
               alreadyDeducted: (deductionSourcesQuery.data ?? []).includes(assignment.id),
@@ -475,14 +489,17 @@ function AttendancePage() {
           : [],
       };
     });
-    if ((dailyCrewQuery.data?.length ?? 0) > 0) {
+    if (assignedBySpecialty.size > 0) {
       const known = new Set(requiredItems.map((item: any) => normalizeSpecialty(item.specialty?.trim() ?? item.name?.trim() ?? "")));
       for (const [specialtyKey, assignments] of assignedBySpecialty) {
         if (!known.has(specialtyKey)) {
           summary.push({
+            kind: "worker_specialty",
             specialty: assignments[0]?.role_label?.trim() || "بدون صفة",
             quantity: 0,
             reported: assignments.length,
+            working: 0,
+            idle: 0,
             missing: 0,
             color: "#d97706",
             excessAssignments: assignments.map((assignment) => ({
@@ -492,6 +509,52 @@ function AttendancePage() {
           });
         }
       }
+    }
+    const plannedEquipment = new Map<string, { name: string; quantity: number }>();
+    requiredItems
+      .filter((item: any) => item.heavy_equipment && (item.equipment_name || "").trim())
+      .forEach((item: any) => {
+        const name = String(item.equipment_name).trim();
+        const key = normalizeSpecialty(name);
+        const current = plannedEquipment.get(key);
+        plannedEquipment.set(key, {
+          name,
+          quantity: (current?.quantity ?? 0) + Math.max(1, Number(item.equipment_quantity) || 1),
+        });
+      });
+    const equipmentLines = reportLines.filter((line) => line.kind === "equipment_type");
+    const equipmentKeys = new Set<string>();
+    for (const [key, planned] of plannedEquipment) {
+      equipmentKeys.add(key);
+      const matching = equipmentLines.filter((line) => normalizeSpecialty(line.item_name) === key);
+      const reported = matching.reduce((sum, line) => sum + Number(line.total_count || 0), 0);
+      summary.push({
+        kind: "equipment_type",
+        specialty: planned.name,
+        quantity: planned.quantity,
+        reported,
+        working: matching.reduce((sum, line) => sum + Number(line.working_count || 0), 0),
+        idle: matching.reduce((sum, line) => sum + Number(line.idle_count || 0), 0),
+        missing: Math.max(0, planned.quantity - reported),
+        color: "#0ea5e9",
+        excessAssignments: [],
+      });
+    }
+    for (const line of equipmentLines) {
+      const key = normalizeSpecialty(line.item_name);
+      if (equipmentKeys.has(key)) continue;
+      equipmentKeys.add(key);
+      summary.push({
+        kind: "equipment_type",
+        specialty: line.item_name,
+        quantity: 0,
+        reported: Number(line.total_count || 0),
+        working: Number(line.working_count || 0),
+        idle: Number(line.idle_count || 0),
+        missing: 0,
+        color: "#d97706",
+        excessAssignments: [],
+      });
     }
     return summary;
   }, [dailyCrewQuery.data, deductionSourcesQuery.data, existingReport, finalizedPlanQuery.data, siteId]);
@@ -570,6 +633,30 @@ function AttendancePage() {
               onChange={(e) => updateCount(row.id, "total_count", e.target.value)}
             />
           </TableCell>
+          {kind === "equipment_type" && (
+            <>
+              <TableCell>
+                <Input
+                  aria-label={`الآليات العاملة من ${row.item_name}`}
+                  type="number"
+                  min="0"
+                  max={row.total_count}
+                  value={row.working_count || ""}
+                  onChange={(e) => updateCount(row.id, "working_count", e.target.value)}
+                />
+              </TableCell>
+              <TableCell>
+                <Input
+                  aria-label={`الآليات المتوقفة من ${row.item_name}`}
+                  type="number"
+                  min="0"
+                  max={row.total_count}
+                  value={row.idle_count || ""}
+                  onChange={(e) => updateCount(row.id, "idle_count", e.target.value)}
+                />
+              </TableCell>
+            </>
+          )}
         </TableRow>
       ));
 
@@ -710,13 +797,13 @@ function AttendancePage() {
                     <div className="mt-1 font-bold">{finalizedPlanQuery.data.request_date}</div>
                   </div>
                   <div className="rounded-xl border bg-muted/50 p-3 text-foreground">
-                    <div className="text-xs text-muted-foreground">مطلوب</div>
+                    <div className="text-xs text-muted-foreground">مطلوب (كوادر وآليات)</div>
                     <div className="mt-1 font-bold">
                       {publishSummary.reduce((sum, item) => sum + item.quantity, 0)}
                     </div>
                   </div>
                   <div className="rounded-xl border bg-muted/50 p-3 text-foreground">
-                    <div className="text-xs text-muted-foreground">منشور</div>
+                    <div className="text-xs text-muted-foreground">مرصود (كوادر وآليات)</div>
                     <div className="mt-1 font-bold">
                       {publishSummary.reduce((sum, item) => sum + item.reported, 0)}
                     </div>
@@ -738,7 +825,7 @@ function AttendancePage() {
                     <div className="rounded-2xl border bg-card p-4 shadow-sm">
                       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                         <div>
-                          <h3 className="font-bold">مقارنة الخطة النهائية والتقرير المرفوع</h3>
+                          <h3 className="font-bold">مقارنة الخطة النهائية وتقرير الموقع</h3>
                           <p className="text-xs text-muted-foreground">
                             {existingReport
                               ? `تقرير يوم ${date}`
@@ -774,7 +861,7 @@ function AttendancePage() {
                               {publishSummary.some((i) => i.missing > 0)
                                 ? "يوجد نقص"
                                 : extra > 0
-                                  ? "يوجد كادر زائد"
+                                  ? "يوجد تجاوز للعدد"
                                   : "مكتمل"}
                             </Badge>
                           </div>
@@ -793,6 +880,9 @@ function AttendancePage() {
                             >
                               <div className="mb-2 flex items-center justify-between">
                                 <span className="font-medium">{item.specialty}</span>
+                                <Badge variant="outline" className="mr-auto ml-2">
+                                  {item.kind === "equipment_type" ? "آليات" : "كادر"}
+                                </Badge>
                                 <span
                                   className={
                                     over > 0
@@ -830,7 +920,13 @@ function AttendancePage() {
                                 </span>
                                 <span>{p}%</span>
                               </div>
-                              {over > 0 && (
+                              {item.kind === "equipment_type" && (
+                                <div className="mt-2 flex gap-3 rounded-md bg-muted/40 px-2 py-1.5 text-xs text-muted-foreground">
+                                  <span>عاملة: <b className="text-foreground">{item.working}</b></span>
+                                  <span>متوقفة: <b className="text-foreground">{item.idle}</b></span>
+                                </div>
+                              )}
+                              {over > 0 && item.kind === "worker_specialty" && (
                                 <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-400/50 bg-amber-500/10 p-2">
                                   <span className="text-sm font-semibold text-amber-800 dark:text-amber-200">
                                     زيادة عن الخطة: {over} · تكلفة الفرد حسب أجر التخصص
@@ -1015,13 +1111,15 @@ function AttendancePage() {
                     <TableRow>
                       <TableHead>الآلية / المركبة</TableHead>
                       <TableHead>العدد</TableHead>
+                      <TableHead>عاملة</TableHead>
+                      <TableHead>متوقفة</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {renderRows("equipment_type")}
                     {!activeEquipment.length && (
                       <TableRow>
-                        <TableCell colSpan={2} className="text-center text-muted-foreground">
+                        <TableCell colSpan={4} className="text-center text-muted-foreground">
                           أضف أنواع الآليات من إعدادات التقارير
                         </TableCell>
                       </TableRow>
