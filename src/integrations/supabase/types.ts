@@ -266,6 +266,177 @@ export type Database = {
           },
         ]
       }
+      daily_workshop_members: {
+        Row: {
+          created_at: string
+          employee_id: string
+          id: string
+          is_active: boolean
+          role_label: string | null
+          updated_at: string
+          workshop_id: string
+        }
+        Insert: {
+          created_at?: string
+          employee_id: string
+          id?: string
+          is_active?: boolean
+          role_label?: string | null
+          updated_at?: string
+          workshop_id: string
+        }
+        Update: {
+          created_at?: string
+          employee_id?: string
+          id?: string
+          is_active?: boolean
+          role_label?: string | null
+          updated_at?: string
+          workshop_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_workshop_members_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_workshop_members_workshop_id_fkey"
+            columns: ["workshop_id"]
+            isOneToOne: false
+            referencedRelation: "daily_workshops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      daily_workshop_report_lines: {
+        Row: {
+          attended: boolean
+          created_at: string
+          employee_id: string | null
+          employee_name_snapshot: string
+          employee_no_snapshot: string
+          id: string
+          report_id: string
+          role_label: string | null
+          site_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          attended?: boolean
+          created_at?: string
+          employee_id?: string | null
+          employee_name_snapshot: string
+          employee_no_snapshot: string
+          id?: string
+          report_id: string
+          role_label?: string | null
+          site_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          attended?: boolean
+          created_at?: string
+          employee_id?: string | null
+          employee_name_snapshot?: string
+          employee_no_snapshot?: string
+          id?: string
+          report_id?: string
+          role_label?: string | null
+          site_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_workshop_report_lines_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_workshop_report_lines_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "daily_workshop_reports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_workshop_report_lines_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      daily_workshop_reports: {
+        Row: {
+          created_at: string
+          id: string
+          notes: string | null
+          recorded_by: string | null
+          report_date: string
+          updated_at: string
+          workshop_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          recorded_by?: string | null
+          report_date: string
+          updated_at?: string
+          workshop_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          recorded_by?: string | null
+          report_date?: string
+          updated_at?: string
+          workshop_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_workshop_reports_workshop_id_fkey"
+            columns: ["workshop_id"]
+            isOneToOne: false
+            referencedRelation: "daily_workshops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      daily_workshops: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       department_managers: {
         Row: {
           created_at: string
@@ -850,6 +1021,7 @@ export type Database = {
           notes: string | null
           penalty_date: string
           penalty_type: string
+          source_report_line_id: string | null
         }
         Insert: {
           created_at?: string
@@ -863,6 +1035,7 @@ export type Database = {
           notes?: string | null
           penalty_date?: string
           penalty_type: string
+          source_report_line_id?: string | null
         }
         Update: {
           created_at?: string
@@ -876,6 +1049,7 @@ export type Database = {
           notes?: string | null
           penalty_date?: string
           penalty_type?: string
+          source_report_line_id?: string | null
         }
         Relationships: [
           {
@@ -883,6 +1057,13 @@ export type Database = {
             columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_penalties_source_report_line_id_fkey"
+            columns: ["source_report_line_id"]
+            isOneToOne: false
+            referencedRelation: "daily_workshop_report_lines"
             referencedColumns: ["id"]
           },
         ]
@@ -1125,260 +1306,260 @@ export type Database = {
       employees: {
         Row: {
           address: string | null
+          appointment_decision: string | null
+          appointment_decision_date: string | null
           attendance_device_id: string | null
           bank_account: string | null
           bank_name: string | null
           base_salary: number | null
+          basic_safety_course: string | null
           birth_date: string | null
           blood_type: string | null
+          clearance_date: string | null
           contract_end_date: string | null
           contract_type: string | null
+          course_nomination_date: string | null
+          course_nomination_form: string | null
           created_at: string
           ctr_code: string | null
+          cv_copy: string | null
+          data_entry_by: string | null
           department_id: string | null
+          department_name: string | null
+          driving_license: string | null
           education: string | null
           email: string | null
+          email_submission_date: string | null
           emergency_contact_name: string | null
           emergency_contact_phone: string | null
-          employee_no: string
+          employee_contract_nomination: string | null
           employee_import_data: Json
-          department_name: string | null
-          course_nomination_form: string | null
-          course_nomination_date: string | null
+          employee_no: string
+          employment_form: string | null
+          erp_no: string | null
           executive_guidance_follow_up: string | null
           executive_guidance_notes: string | null
-          appointment_decision: string | null
-          appointment_decision_date: string | null
-          safety_passport_status: string | null
-          passport_name: string | null
-          nationality_number: string | null
-          identity_or_passport_number: string | null
-          social_security_contract_number: string | null
-          email_submission_date: string | null
-          social_security_addition_nomination: string | null
-          employee_contract_nomination: string | null
-          clearance_date: string | null
-          employment_form: string | null
-          basic_safety_course: string | null
-          policies_undertaking: string | null
-          identity_residence_copy: string | null
-          paper_electronic_photos: string | null
-          safety_passport_copy: string | null
-          passport_copy: string | null
-          visa_copy: string | null
-          cv_copy: string | null
-          driving_license: string | null
-          graduation_certificate: string | null
-          data_entry_by: string | null
-          nomination_field: string | null
-          rumaila_courses: string | null
-          upload_notes: string | null
-          last_review_date: string | null
-          last_review_notes: string | null
-          notes_2: string | null
-          last_evaluation_date: string | null
-          last_evaluation_score: string | null
-          erp_no: string | null
           full_name: string
           gender: string | null
+          graduation_certificate: string | null
           hire_date: string | null
           iban: string | null
           id: string
           id_no: string | null
+          identity_or_passport_number: string | null
+          identity_residence_copy: string | null
+          last_evaluation_date: string | null
+          last_evaluation_score: string | null
+          last_review_date: string | null
+          last_review_notes: string | null
           last_working_day: string | null
           marital_status: string | null
           nationality: string | null
+          nationality_number: string | null
+          nomination_field: string | null
           notes: string | null
+          notes_2: string | null
+          paper_electronic_photos: string | null
+          passport_copy: string | null
           passport_expiry: string | null
+          passport_name: string | null
           passport_no: string | null
           pay_type: string
           phone1: string | null
           phone2: string | null
+          policies_undertaking: string | null
           position: string | null
           privilege: number | null
           project: string | null
           residency_expiry: string | null
           residency_no: string | null
+          rumaila_courses: string | null
+          safety_passport_copy: string | null
           safety_passport_expiry: string | null
           safety_passport_no: string | null
+          safety_passport_status: string | null
           salary_structure: string | null
           salary_type: string | null
           shift_id: string | null
           site_id: string | null
+          social_security_addition_nomination: string | null
+          social_security_contract_number: string | null
           status: Database["public"]["Enums"]["employee_status"]
           updated_at: string
+          upload_notes: string | null
+          visa_copy: string | null
           wage_rate_id: string | null
         }
         Insert: {
           address?: string | null
+          appointment_decision?: string | null
+          appointment_decision_date?: string | null
           attendance_device_id?: string | null
           bank_account?: string | null
           bank_name?: string | null
           base_salary?: number | null
+          basic_safety_course?: string | null
           birth_date?: string | null
           blood_type?: string | null
+          clearance_date?: string | null
           contract_end_date?: string | null
           contract_type?: string | null
+          course_nomination_date?: string | null
+          course_nomination_form?: string | null
           created_at?: string
           ctr_code?: string | null
+          cv_copy?: string | null
+          data_entry_by?: string | null
           department_id?: string | null
+          department_name?: string | null
+          driving_license?: string | null
           education?: string | null
           email?: string | null
+          email_submission_date?: string | null
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
-          employee_no: string
+          employee_contract_nomination?: string | null
           employee_import_data?: Json
-          department_name?: string | null
-          course_nomination_form?: string | null
-          course_nomination_date?: string | null
+          employee_no: string
+          employment_form?: string | null
+          erp_no?: string | null
           executive_guidance_follow_up?: string | null
           executive_guidance_notes?: string | null
-          appointment_decision?: string | null
-          appointment_decision_date?: string | null
-          safety_passport_status?: string | null
-          passport_name?: string | null
-          nationality_number?: string | null
-          identity_or_passport_number?: string | null
-          social_security_contract_number?: string | null
-          email_submission_date?: string | null
-          social_security_addition_nomination?: string | null
-          employee_contract_nomination?: string | null
-          clearance_date?: string | null
-          employment_form?: string | null
-          basic_safety_course?: string | null
-          policies_undertaking?: string | null
-          identity_residence_copy?: string | null
-          paper_electronic_photos?: string | null
-          safety_passport_copy?: string | null
-          passport_copy?: string | null
-          visa_copy?: string | null
-          cv_copy?: string | null
-          driving_license?: string | null
-          graduation_certificate?: string | null
-          data_entry_by?: string | null
-          nomination_field?: string | null
-          rumaila_courses?: string | null
-          upload_notes?: string | null
-          last_review_date?: string | null
-          last_review_notes?: string | null
-          notes_2?: string | null
-          last_evaluation_date?: string | null
-          last_evaluation_score?: string | null
-          erp_no?: string | null
           full_name: string
           gender?: string | null
+          graduation_certificate?: string | null
           hire_date?: string | null
           iban?: string | null
           id?: string
           id_no?: string | null
+          identity_or_passport_number?: string | null
+          identity_residence_copy?: string | null
+          last_evaluation_date?: string | null
+          last_evaluation_score?: string | null
+          last_review_date?: string | null
+          last_review_notes?: string | null
           last_working_day?: string | null
           marital_status?: string | null
           nationality?: string | null
+          nationality_number?: string | null
+          nomination_field?: string | null
           notes?: string | null
+          notes_2?: string | null
+          paper_electronic_photos?: string | null
+          passport_copy?: string | null
           passport_expiry?: string | null
+          passport_name?: string | null
           passport_no?: string | null
           pay_type?: string
           phone1?: string | null
           phone2?: string | null
+          policies_undertaking?: string | null
           position?: string | null
           privilege?: number | null
           project?: string | null
           residency_expiry?: string | null
           residency_no?: string | null
+          rumaila_courses?: string | null
+          safety_passport_copy?: string | null
           safety_passport_expiry?: string | null
           safety_passport_no?: string | null
+          safety_passport_status?: string | null
           salary_structure?: string | null
           salary_type?: string | null
           shift_id?: string | null
           site_id?: string | null
+          social_security_addition_nomination?: string | null
+          social_security_contract_number?: string | null
           status?: Database["public"]["Enums"]["employee_status"]
           updated_at?: string
+          upload_notes?: string | null
+          visa_copy?: string | null
           wage_rate_id?: string | null
         }
         Update: {
           address?: string | null
+          appointment_decision?: string | null
+          appointment_decision_date?: string | null
           attendance_device_id?: string | null
           bank_account?: string | null
           bank_name?: string | null
           base_salary?: number | null
+          basic_safety_course?: string | null
           birth_date?: string | null
           blood_type?: string | null
+          clearance_date?: string | null
           contract_end_date?: string | null
           contract_type?: string | null
+          course_nomination_date?: string | null
+          course_nomination_form?: string | null
           created_at?: string
           ctr_code?: string | null
+          cv_copy?: string | null
+          data_entry_by?: string | null
           department_id?: string | null
+          department_name?: string | null
+          driving_license?: string | null
           education?: string | null
           email?: string | null
+          email_submission_date?: string | null
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
-          employee_no?: string
+          employee_contract_nomination?: string | null
           employee_import_data?: Json
-          department_name?: string | null
-          course_nomination_form?: string | null
-          course_nomination_date?: string | null
+          employee_no?: string
+          employment_form?: string | null
+          erp_no?: string | null
           executive_guidance_follow_up?: string | null
           executive_guidance_notes?: string | null
-          appointment_decision?: string | null
-          appointment_decision_date?: string | null
-          safety_passport_status?: string | null
-          passport_name?: string | null
-          nationality_number?: string | null
-          identity_or_passport_number?: string | null
-          social_security_contract_number?: string | null
-          email_submission_date?: string | null
-          social_security_addition_nomination?: string | null
-          employee_contract_nomination?: string | null
-          clearance_date?: string | null
-          employment_form?: string | null
-          basic_safety_course?: string | null
-          policies_undertaking?: string | null
-          identity_residence_copy?: string | null
-          paper_electronic_photos?: string | null
-          safety_passport_copy?: string | null
-          passport_copy?: string | null
-          visa_copy?: string | null
-          cv_copy?: string | null
-          driving_license?: string | null
-          graduation_certificate?: string | null
-          data_entry_by?: string | null
-          nomination_field?: string | null
-          rumaila_courses?: string | null
-          upload_notes?: string | null
-          last_review_date?: string | null
-          last_review_notes?: string | null
-          notes_2?: string | null
-          last_evaluation_date?: string | null
-          last_evaluation_score?: string | null
-          erp_no?: string | null
           full_name?: string
           gender?: string | null
+          graduation_certificate?: string | null
           hire_date?: string | null
           iban?: string | null
           id?: string
           id_no?: string | null
+          identity_or_passport_number?: string | null
+          identity_residence_copy?: string | null
+          last_evaluation_date?: string | null
+          last_evaluation_score?: string | null
+          last_review_date?: string | null
+          last_review_notes?: string | null
           last_working_day?: string | null
           marital_status?: string | null
           nationality?: string | null
+          nationality_number?: string | null
+          nomination_field?: string | null
           notes?: string | null
+          notes_2?: string | null
+          paper_electronic_photos?: string | null
+          passport_copy?: string | null
           passport_expiry?: string | null
+          passport_name?: string | null
           passport_no?: string | null
           pay_type?: string
           phone1?: string | null
           phone2?: string | null
+          policies_undertaking?: string | null
           position?: string | null
           privilege?: number | null
           project?: string | null
           residency_expiry?: string | null
           residency_no?: string | null
+          rumaila_courses?: string | null
+          safety_passport_copy?: string | null
           safety_passport_expiry?: string | null
           safety_passport_no?: string | null
+          safety_passport_status?: string | null
           salary_structure?: string | null
           salary_type?: string | null
           shift_id?: string | null
           site_id?: string | null
+          social_security_addition_nomination?: string | null
+          social_security_contract_number?: string | null
           status?: Database["public"]["Enums"]["employee_status"]
           updated_at?: string
+          upload_notes?: string | null
+          visa_copy?: string | null
           wage_rate_id?: string | null
         }
         Relationships: [
@@ -3292,6 +3473,16 @@ export type Database = {
       can_manage_employee_goal: { Args: { _goal_id: string }; Returns: boolean }
       can_manage_stock: { Args: { _uid: string }; Returns: boolean }
       can_manage_work_task: { Args: { _task_id: string }; Returns: boolean }
+      create_employee_goal_task: {
+        Args: {
+          _description?: string
+          _due_date?: string
+          _goal_id: string
+          _priority?: string
+          _title: string
+        }
+        Returns: string
+      }
       create_work_task_assignments: {
         Args: {
           _checklist_items: string[]
@@ -3495,6 +3686,10 @@ export type Database = {
         Returns: Json
       }
       normalize_ar_name: { Args: { _s: string }; Returns: string }
+      record_daily_excess_staff_deductions: {
+        Args: { _accountable_employee_id: string; _report_line_ids: string[] }
+        Returns: number
+      }
       record_mobile_self_attendance: {
         Args: {
           p_accuracy_meters?: number
