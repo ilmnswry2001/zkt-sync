@@ -78,6 +78,20 @@ async function uploadVehicleImage(file: File, vehicleId: string) {
   return data.publicUrl;
 }
 
+function describeVehicleImageError(error: unknown) {
+  const message =
+    error instanceof Error
+      ? error.message
+      : String((error as { message?: unknown } | null)?.message ?? error ?? "");
+  if (/bucket not found/i.test(message)) {
+    return "مخزن صور المركبات (vehicle-images) غير موجود على قاعدة البيانات. شغّل ترحيل 20261019130000_vehicle_images.sql لإنشائه ثم أعد المحاولة.";
+  }
+  if (/vehicle_image_url/i.test(message) && /column|does not exist/i.test(message)) {
+    return "عمود صورة المركبة (vehicle_image_url) غير موجود. شغّل ترحيل 20261019130000_vehicle_images.sql.";
+  }
+  return formatErrorMessage(error);
+}
+
 function VehiclesPage() {
   const client = useQueryClient();
   const [month, setMonth] = useState(currentMonthInBaghdad);
@@ -447,7 +461,7 @@ function VehicleDetailsTab({ vehicles, isLoading }: { vehicles: Vehicle[]; isLoa
       toast.success("تم اعتماد شكل المركبة");
       await client.invalidateQueries({ queryKey: ["vehicles"] });
     },
-    onError: (error: Error) => toast.error(`تعذر اعتماد الشكل: ${formatErrorMessage(error)}`),
+    onError: (error: Error) => toast.error(`تعذر اعتماد الشكل: ${describeVehicleImageError(error)}`),
   });
 
   const attachImage = async (file: File) => {
@@ -463,7 +477,7 @@ function VehicleDetailsTab({ vehicles, isLoading }: { vehicles: Vehicle[]; isLoa
       await client.invalidateQueries({ queryKey: ["vehicles"] });
       toast.success("تم إرفاق شكل المركبة");
     } catch (error) {
-      toast.error(`تعذر إرفاق الصورة: ${formatErrorMessage(error)}`);
+      toast.error(`تعذر إرفاق الصورة: ${describeVehicleImageError(error)}`);
     } finally {
       setAttaching(false);
     }
@@ -633,7 +647,7 @@ function VehicleDetailForm({
       setImageUrl(url);
       toast.success("تم رفع صورة المركبة، اضغط «حفظ التفاصيل» لتثبيتها");
     } catch (error) {
-      toast.error(`تعذر رفع الصورة: ${formatErrorMessage(error)}`);
+      toast.error(`تعذر رفع الصورة: ${describeVehicleImageError(error)}`);
     } finally {
       setUploading(false);
     }
@@ -666,7 +680,7 @@ function VehicleDetailForm({
       await client.invalidateQueries({ queryKey: ["monthly", "vehicle-report"] });
       onSaved();
     },
-    onError: (error: Error) => toast.error(`تعذر حفظ التفاصيل: ${formatErrorMessage(error)}`),
+    onError: (error: Error) => toast.error(`تعذر حفظ التفاصيل: ${describeVehicleImageError(error)}`),
   });
 
   return (
