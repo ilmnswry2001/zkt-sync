@@ -85,6 +85,39 @@ const nav = [
 
 export const SECTION_OPTIONS = nav.map(({ to, label }) => ({ to, label }));
 
+type NavItem = (typeof nav)[number];
+
+const NAV_GROUPS = [
+  { label: "الرئيسية", icon: LayoutDashboard, tos: ["/dashboard", "/monthly"] },
+  {
+    label: "الحضور والدوام",
+    icon: ClockIcon,
+    tos: ["/attendance", "/self-attendance", "/shift-schedules"],
+  },
+  {
+    label: "المهام والفريق",
+    icon: ListChecks,
+    tos: ["/tasks", "/work-center", "/team-follow-up", "/forms"],
+  },
+  {
+    label: "الموارد البشرية",
+    icon: Users,
+    tos: ["/employees", "/departments", "/leaves", "/penalties", "/wages", "/payroll"],
+  },
+  { label: "المركبات والوقود", icon: Truck, tos: ["/vehicles", "/fuel"] },
+  {
+    label: "المشاريع والخطط",
+    icon: ClipboardList,
+    tos: ["/planning", "/sites", "/projects", "/requests"],
+  },
+  {
+    label: "المخازن والأجهزة",
+    icon: Boxes,
+    tos: ["/warehouses", "/devices", "/upload", "/files"],
+  },
+  { label: "الإعدادات", icon: Settings2, tos: ["/settings", "/accounts"] },
+] as const;
+
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const {
@@ -262,6 +295,52 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       return false;
     return true;
   });
+  const [openGroups, setOpenGroups] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const saved = window.localStorage.getItem("zkt-nav-groups");
+      const parsed = saved ? JSON.parse(saved) : null;
+      return Array.isArray(parsed)
+        ? parsed.filter((value): value is string => typeof value === "string")
+        : [];
+    } catch {
+      return [];
+    }
+  });
+  useEffect(() => {
+    const activeGroup = NAV_GROUPS.find((group) =>
+      group.tos.some((to) => pathname === to || pathname.startsWith(`${to}/`)),
+    );
+    if (!activeGroup) return;
+    setOpenGroups((current) => {
+      if (current.includes(activeGroup.label)) return current;
+      const next = [...current, activeGroup.label];
+      window.localStorage.setItem("zkt-nav-groups", JSON.stringify(next));
+      return next;
+    });
+  }, [pathname]);
+  const toggleGroup = (label: string) => {
+    setOpenGroups((current) => {
+      const next = current.includes(label)
+        ? current.filter((value) => value !== label)
+        : [...current, label];
+      window.localStorage.setItem("zkt-nav-groups", JSON.stringify(next));
+      return next;
+    });
+  };
+  const visibleByTo = new Map<string, NavItem>(
+    visibleNav.map((item): [string, NavItem] => [item.to, item]),
+  );
+  const visibleGroups = NAV_GROUPS.map((group) => ({
+    label: group.label,
+    icon: group.icon,
+    items: group.tos
+      .map((to) => visibleByTo.get(to))
+      .filter((item): item is NavItem => item !== undefined),
+  })).filter((group) => group.items.length > 0);
+  const delayByTo = new Map<string, number>(
+    visibleNav.map((item, index): [string, number] => [item.to, index * 28]),
+  );
   return (
     <div dir="rtl" className="app-shell flex min-h-screen bg-background">
       <button
@@ -340,31 +419,77 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <p className="px-3 pb-1 pt-2 text-[10px] font-bold tracking-[0.16em] text-sidebar-foreground/40">
             القائمة الرئيسية
           </p>
-          {visibleNav.map((item, index) => {
-            const active = pathname === item.to || pathname.startsWith(item.to + "/");
-            const Icon = item.icon;
+          {visibleGroups.map((group) => {
+            const isOpen = openGroups.includes(group.label);
+            const isGroupActive = group.items.some(
+              (item) => pathname === item.to || pathname.startsWith(item.to + "/"),
+            );
+            const GroupIcon = group.icon;
             return (
-              <Link
-                key={item.to}
-                to={item.to as any}
-                onClick={() => {
-                  if (window.innerWidth < 768) setSidebarOpen(false);
-                }}
-                className={cn(
-                  "group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-[13px] font-semibold transition-all duration-300",
-                  sidebarOpen && "sidebar-item-enter",
-                  active
-                    ? "bg-gradient-to-l from-teal-300 to-cyan-400 text-slate-950 shadow-md shadow-black/15 ring-1 ring-white/20"
-                    : "text-sidebar-foreground/70 hover:translate-x-[-2px] hover:bg-black/[0.04] hover:text-sidebar-foreground dark:hover:bg-white/[0.07]",
-                )}
-                style={{ animationDelay: sidebarOpen ? `${index * 28}ms` : undefined }}
-              >
-                {active && (
-                  <span className="sidebar-active-indicator absolute inset-y-2 right-0 w-1 rounded-full bg-slate-950/90 shadow-[0_1px_6px_rgba(2,44,55,0.4)]" />
-                )}
-                <Icon className="w-4 h-4 shrink-0 transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3" />
-                {item.label}
-              </Link>
+              <div key={group.label} className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.label)}
+                  aria-expanded={isOpen}
+                  className={cn(
+                    "flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-[12px] font-bold tracking-wide transition-colors",
+                    isGroupActive
+                      ? "text-primary"
+                      : "text-sidebar-foreground/55 hover:bg-black/[0.04] hover:text-sidebar-foreground dark:hover:bg-white/[0.06]",
+                  )}
+                >
+                  <span className="flex items-center gap-2">
+                    <GroupIcon className="h-4 w-4 shrink-0" />
+                    {group.label}
+                  </span>
+                  <ChevronDown
+                    className={cn(
+                      "h-3.5 w-3.5 shrink-0 transition-transform duration-300",
+                      isOpen && "rotate-180",
+                    )}
+                  />
+                </button>
+                <div
+                  className={cn(
+                    "grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                    isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
+                  )}
+                >
+                  <div className="overflow-hidden">
+                    <div className="space-y-1 pr-2">
+                      {group.items.map((item) => {
+                        const active = pathname === item.to || pathname.startsWith(item.to + "/");
+                        const Icon = item.icon;
+                        return (
+                          <Link
+                            key={item.to}
+                            to={item.to as any}
+                            onClick={() => {
+                              if (window.innerWidth < 768) setSidebarOpen(false);
+                            }}
+                            className={cn(
+                              "group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-[13px] font-semibold transition-all duration-300",
+                              sidebarOpen && "sidebar-item-enter",
+                              active
+                                ? "bg-gradient-to-l from-teal-300 to-cyan-400 text-slate-950 shadow-md shadow-black/15 ring-1 ring-white/20"
+                                : "text-sidebar-foreground/70 hover:translate-x-[-2px] hover:bg-black/[0.04] hover:text-sidebar-foreground dark:hover:bg-white/[0.07]",
+                            )}
+                            style={{
+                              animationDelay: sidebarOpen ? `${delayByTo.get(item.to) ?? 0}ms` : undefined,
+                            }}
+                          >
+                            {active && (
+                              <span className="sidebar-active-indicator absolute inset-y-2 right-0 w-1 rounded-full bg-slate-950/90 shadow-[0_1px_6px_rgba(2,44,55,0.4)]" />
+                            )}
+                            <Icon className="w-4 h-4 shrink-0 transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3" />
+                            {item.label}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
             );
           })}
         </nav>
