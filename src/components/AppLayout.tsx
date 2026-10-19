@@ -192,18 +192,89 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       pathname.startsWith(item.to + "/") ||
       (item.to === "/planning" && pathname === "/project-plans"),
   );
+  const visibleNav = nav.filter((item) => {
+    if (!canAccessSection(item.to)) return false;
+    if ("access" in item && item.access === "admin" && !isAdmin) return false;
+    if ("access" in item && item.access === "hr" && !isHR) return false;
+    if (
+      "access" in item &&
+      item.access === "leave" &&
+      !isAdmin &&
+      !isHR &&
+      !isCompanyManager &&
+      !roles.some((role) => ["department_manager", "data_entry"].includes(role)) &&
+      !hasLinkedEmployee
+    )
+      return false;
+    if ("access" in item && item.access === "executive" && !isAdmin && !isCompanyManager)
+      return false;
+    if (
+      "access" in item &&
+      item.access === "planning" &&
+      !isAdmin &&
+      !isHR &&
+      !isCompanyManager &&
+      !roles.some((role) =>
+        ["supervisor", "department_manager", "planning_officer", "engineer", "site_admin"].includes(
+          role,
+        ),
+      )
+    )
+      return false;
+    if (
+      "access" in item &&
+      item.access === "procurement" &&
+      !isAdmin &&
+      !isCompanyManager &&
+      !roles.includes("procurement_officer")
+    )
+      return false;
+    if (
+      "access" in item &&
+      item.access === "requests" &&
+      !isAdmin &&
+      !isHR &&
+      !isCompanyManager &&
+      !roles.some((role) =>
+        [
+          "supervisor",
+          "department_manager",
+          "engineer",
+          "site_admin",
+          "planning_officer",
+          "warehouse_keeper",
+          "procurement_officer",
+        ].includes(role),
+      )
+    )
+      return false;
+    if (
+      "access" in item &&
+      item.access === "project_plans" &&
+      !isAdmin &&
+      !isHR &&
+      !roles.some((role) =>
+        ["supervisor", "department_manager", "engineer", "site_admin"].includes(role),
+      )
+    )
+      return false;
+    return true;
+  });
   return (
     <div dir="rtl" className="app-shell flex min-h-screen bg-background">
-      {sidebarOpen && (
-        <button
-          aria-label="إغلاق القائمة"
-          className="fixed inset-0 z-30 bg-slate-950/45 backdrop-blur-sm md:hidden"
-          onClick={toggleSidebar}
-        />
-      )}
+      <button
+        aria-label="إغلاق القائمة"
+        aria-hidden={!sidebarOpen}
+        tabIndex={sidebarOpen ? undefined : -1}
+        className={cn(
+          "fixed inset-0 z-30 bg-slate-950/45 backdrop-blur-sm transition-opacity duration-300 md:hidden",
+          sidebarOpen ? "opacity-100" : "pointer-events-none opacity-0",
+        )}
+        onClick={toggleSidebar}
+      />
       <aside
         className={cn(
-          "app-sidebar fixed inset-y-0 right-0 z-40 flex w-[min(19rem,88vw)] shrink-0 flex-col overflow-hidden border-l border-white/45 bg-white/75 text-sidebar-foreground shadow-2xl shadow-slate-950/15 backdrop-blur-2xl backdrop-saturate-150 transition-transform duration-300 dark:border-white/10 dark:bg-slate-950/75 md:sticky md:top-0 md:h-screen md:w-64 md:translate-x-0 md:shadow-xl md:shadow-slate-950/10",
+          "app-sidebar fixed inset-y-0 right-0 z-40 flex w-[min(19rem,88vw)] shrink-0 flex-col overflow-hidden border-l border-white/45 bg-white/75 text-sidebar-foreground shadow-2xl shadow-slate-950/15 backdrop-blur-2xl backdrop-saturate-150 transition-[width,transform,border-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] dark:border-white/10 dark:bg-slate-950/75 md:sticky md:top-0 md:h-screen md:w-64 md:translate-x-0 md:shadow-xl md:shadow-slate-950/10",
           sidebarOpen ? "translate-x-0" : "translate-x-full md:w-0 md:border-0",
         )}
         aria-hidden={!sidebarOpen}
@@ -260,82 +331,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         <nav
+          key={sidebarOpen ? "sidebar-open" : "sidebar-closed"}
           aria-label="التنقل الرئيسي"
-          className="flex-1 space-y-1.5 overflow-y-auto p-3.5 min-w-64"
+          className="app-sidebar-nav flex-1 space-y-1.5 overflow-y-auto p-3.5 min-w-64"
         >
           <p className="px-3 pb-1 pt-2 text-[10px] font-bold tracking-[0.16em] text-sidebar-foreground/40">
             القائمة الرئيسية
           </p>
-          {nav.map((item) => {
-            if (!canAccessSection(item.to)) return null;
-            if ("access" in item && item.access === "admin" && !isAdmin) return null;
-            if ("access" in item && item.access === "hr" && !isHR) return null;
-            if (
-              "access" in item &&
-              item.access === "leave" &&
-              !isAdmin &&
-              !isHR &&
-              !isCompanyManager &&
-              !roles.some((role) => ["department_manager", "data_entry"].includes(role)) &&
-              !hasLinkedEmployee
-            )
-              return null;
-            if ("access" in item && item.access === "executive" && !isAdmin && !isCompanyManager)
-              return null;
-            if (
-              "access" in item &&
-              item.access === "planning" &&
-              !isAdmin &&
-              !isHR &&
-              !isCompanyManager &&
-              !roles.some((role) =>
-                [
-                  "supervisor",
-                  "department_manager",
-                  "planning_officer",
-                  "engineer",
-                  "site_admin",
-                ].includes(role),
-              )
-            )
-              return null;
-            if (
-              "access" in item &&
-              item.access === "procurement" &&
-              !isAdmin &&
-              !isCompanyManager &&
-              !roles.includes("procurement_officer")
-            )
-              return null;
-            if (
-              "access" in item &&
-              item.access === "requests" &&
-              !isAdmin &&
-              !isHR &&
-              !isCompanyManager &&
-              !roles.some((role) =>
-                [
-                  "supervisor",
-                  "department_manager",
-                  "engineer",
-                  "site_admin",
-                  "planning_officer",
-                  "warehouse_keeper",
-                  "procurement_officer",
-                ].includes(role),
-              )
-            )
-              return null;
-            if (
-              "access" in item &&
-              item.access === "project_plans" &&
-              !isAdmin &&
-              !isHR &&
-              !roles.some((role) =>
-                ["supervisor", "department_manager", "engineer", "site_admin"].includes(role),
-              )
-            )
-              return null;
+          {visibleNav.map((item, index) => {
             const active = pathname === item.to || pathname.startsWith(item.to + "/");
             const Icon = item.icon;
             return (
@@ -346,13 +349,18 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   if (window.innerWidth < 768) setSidebarOpen(false);
                 }}
                 className={cn(
-                  "group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-[13px] font-semibold transition-all duration-200",
+                  "group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-[13px] font-semibold transition-all duration-300",
+                  sidebarOpen && "sidebar-item-enter",
                   active
                     ? "bg-gradient-to-l from-teal-300 to-cyan-400 text-slate-950 shadow-md shadow-black/15 ring-1 ring-white/20"
                     : "text-sidebar-foreground/70 hover:translate-x-[-2px] hover:bg-black/[0.04] hover:text-sidebar-foreground dark:hover:bg-white/[0.07]",
                 )}
+                style={{ animationDelay: sidebarOpen ? `${index * 28}ms` : undefined }}
               >
-                <Icon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
+                {active && (
+                  <span className="sidebar-active-indicator absolute inset-y-2 right-0 w-1 rounded-full bg-slate-950/90 shadow-[0_1px_6px_rgba(2,44,55,0.4)]" />
+                )}
+                <Icon className="w-4 h-4 shrink-0 transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3" />
                 {item.label}
               </Link>
             );
