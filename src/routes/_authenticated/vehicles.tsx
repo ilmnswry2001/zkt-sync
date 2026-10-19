@@ -21,16 +21,24 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { VehicleDiagram, DEFAULT_VEHICLE_IMAGE } from "@/components/vehicles/VehicleDiagram";
 import { cn } from "@/lib/utils";
 import {
+  Building2,
   CalendarDays,
+  CalendarRange,
   CarFront,
   Check,
+  Fuel,
+  Gauge,
   ListChecks,
+  Loader2,
   PencilLine,
+  Phone,
   Plus,
   Save,
+  Sparkles,
   Trash2,
   Truck,
   Upload,
+  UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
 import { currentMonthInBaghdad } from "@/lib/date-time";
@@ -63,7 +71,29 @@ type Vehicle = {
   last_fuel_date: string | null;
   security_permit_expiry: string | null;
   vehicle_image_url: string | null;
+  fuel_type: "gasoline" | "diesel";
+  current_driver_id: string | null;
+  current_odometer: number;
 };
+
+type Driver = {
+  id: string;
+  full_name: string;
+  position: string | null;
+  phone1: string | null;
+  department_id: string | null;
+  departments?: { name: string } | null;
+};
+
+const EMPTY_VEHICLE_COLUMNS = {
+  notes: null,
+  last_fuel_date: null,
+  security_permit_expiry: null,
+  vehicle_image_url: null,
+  fuel_type: "diesel",
+  current_driver_id: null,
+  current_odometer: 0,
+} as const;
 
 async function uploadVehicleImage(file: File, vehicleId: string) {
   if (!file.type.startsWith("image/")) throw new Error("اختر ملف صورة صالحاً");
@@ -92,6 +122,167 @@ function describeVehicleImageError(error: unknown) {
   return formatErrorMessage(error);
 }
 
+type BackgroundRemover = {
+  removeBackground: (
+    imageSource: Blob | File | string | ArrayBuffer | Uint8Array,
+    config?: {
+      progress?: (key: string, current: number, total: number) => void;
+      [key: string]: unknown;
+    },
+  ) => Promise<Blob>;
+};
+
+async function removeImageBackground(
+  file: File,
+  onProgress?: (message: string) => void,
+): Promise<File> {
+  let remover: BackgroundRemover;
+  try {
+    remover = (await import("@imgly/background-removal")) as unknown as BackgroundRemover;
+  } catch {
+    throw new Error(
+      "أداة تفريغ الخلفية غير متوفرة. شغّل pnpm install لتثبيت @imgly/background-removal ثم أعد المحاولة.",
+    );
+  }
+  onProgress?.("جارٍ تجهيز نموذج تفريغ الخلفية…");
+  const blob = await remover.removeBackground(file, {
+    progress: (key: string, current: number, total: number) => {
+      if (typeof total === "number" && total > 0) {
+        onProgress?.(`جارٍ تفريغ الخلفية… ${Math.round((current / total) * 100)}%`);
+      }
+    },
+  });
+  const baseName = file.name.replace(/\.[^.]+$/, "") || "vehicle";
+  return new File([blob], `${baseName}-transparent.png`, { type: "image/png" });
+}
+
+type MonthlyFuelStats = {
+  liters: number;
+  cost: number;
+  count: number;
+  lastDate: string | null;
+};
+
+function formatArabicDate(value: string | null) {
+  if (!value) return "غير مسجل";
+  const date = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return "غير مسجل";
+  return date.toLocaleDateString("ar-IQ", { day: "numeric", month: "long", year: "numeric" });
+}
+
+function ReportStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-border/60 bg-background/50 p-3">
+      <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
+      <p className="mt-1 text-sm font-bold tabular-nums">{value}</p>
+    </div>
+  );
+}
+
+function RemoveBackgroundToggle({
+  value,
+  onChange,
+}: {
+  value: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center justify-start gap-2 text-xs font-medium text-muted-foreground">
+      <Switch checked={value} onCheckedChange={onChange} />
+      <Sparkles className={cn("h-3.5 w-3.5", value ? "text-primary" : "text-muted-foreground")} />
+      تفريغ الخلفية تلقائياً
+    </label>
+  );
+}
+
+function VehicleMonthlyReport({
+  month,
+  vehicle,
+  driver,
+  operatingDays,
+  operatingDates,
+  wage,
+  fuel,
+}: {
+  month: string;
+  vehicle: Vehicle;
+  driver: Driver | null;
+  operatingDays: number;
+  operatingDates: string[];
+  wage: number;
+  fuel: MonthlyFuelStats;
+}) {
+  const monthLabel = new Date(`${month}-01T12:00:00`).toLocaleDateString("ar-IQ", {
+    month: "long",
+    year: "numeric",
+  });
+  return (
+    <section className="space-y-4">
+      <div className="flex items-center gap-2">
+        <CalendarRange className="h-4 w-4 text-primary" />
+        <h3 className="text-sm font-bold">تقرير شهر {monthLabel}</h3>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="glass-card rounded-3xl p-5">
+          <div className="flex items-center gap-2 text-sm font-bold">
+            <UserRound className="h-4 w-4 text-primary" /> السائق الحالي
+          </div>
+          {driver ? (
+            <div className="mt-3 space-y-2 text-sm">
+              <p className="text-base font-bold">{driver.full_name}</p>
+              <p className="text-muted-foreground">{driver.position || "بدون مسمى وظيفي"}</p>
+              <p className="flex items-center gap-2">
+                <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                {driver.phone1 || "لا يوجد هاتف"}
+              </p>
+              <p className="flex items-center gap-2">
+                <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+                {driver.departments?.name || "بدون قسم"}
+              </p>
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-muted-foreground">لم يُحدَّد سائق لهذه المركبة بعد.</p>
+          )}
+        </div>
+
+        <div className="glass-card rounded-3xl p-5">
+          <div className="flex items-center gap-2 text-sm font-bold">
+            <CalendarDays className="h-4 w-4 text-primary" /> أيام التشغيل والأجر
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <ReportStat label="أيام التشغيل" value={`${operatingDays} يوم`} />
+            <ReportStat label="الأجر المستحق" value={`${Math.round(wage).toLocaleString()} د.ع`} />
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            {operatingDates.length
+              ? `التواريخ: ${operatingDates.map((date) => Number(date.slice(8))).join("، ")}`
+              : operatingDays
+                ? "عدد الأيام محفوظ دون تواريخ."
+                : "لم تُسجَّل أيام تشغيل."}
+          </p>
+        </div>
+
+        <div className="glass-card rounded-3xl p-5 lg:col-span-2">
+          <div className="flex items-center gap-2 text-sm font-bold">
+            <Fuel className="h-4 w-4 text-primary" /> استهلاك الوقود
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <ReportStat label="إجمالي اللترات" value={`${fuel.liters.toLocaleString()} لتر`} />
+            <ReportStat label="إجمالي الكلفة" value={`${Math.round(fuel.cost).toLocaleString()} د.ع`} />
+            <ReportStat label="عدد الوصولات" value={`${fuel.count}`} />
+            <ReportStat label="آخر تعبئة" value={formatArabicDate(fuel.lastDate)} />
+          </div>
+          <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+            <Gauge className="h-3.5 w-3.5" />
+            نوع الوقود: {vehicle.fuel_type === "diesel" ? "كاز (ديزل)" : "بنزين"} · العداد الحالي:{" "}
+            {Number(vehicle.current_odometer).toLocaleString()} كم
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function VehiclesPage() {
   const client = useQueryClient();
   const [month, setMonth] = useState(currentMonthInBaghdad);
@@ -112,7 +303,7 @@ function VehiclesPage() {
         (supabase as any)
           .from("vehicles")
           .select(
-            "id, vehicle_no, name, vehicle_class, daily_rate, currency, is_active, notes, last_fuel_date, security_permit_expiry, vehicle_image_url",
+            "id, vehicle_no, name, vehicle_class, daily_rate, currency, is_active, notes, last_fuel_date, security_permit_expiry, vehicle_image_url, fuel_type, current_driver_id, current_odometer",
           )
           .order("vehicle_no"),
         (supabase as any)
@@ -121,16 +312,14 @@ function VehiclesPage() {
           .eq("month", `${month}-01`),
       ]);
       vehicleError = vehiclesErr;
-      if (vehiclesErr && /last_fuel_date|security_permit_expiry|vehicle_image_url|column/i.test(vehiclesErr.message)) {
+      if (vehiclesErr && /last_fuel_date|security_permit_expiry|vehicle_image_url|fuel_type|current_driver_id|current_odometer|column/i.test(vehiclesErr.message)) {
         const fallback = await (supabase as any)
           .from("vehicles")
-          .select("id, vehicle_no, name, vehicle_class, daily_rate, currency, is_active, notes")
+          .select("id, vehicle_no, name, vehicle_class, daily_rate, currency, is_active")
           .order("vehicle_no");
         vehicles = (fallback.data ?? []).map((row: any) => ({
           ...row,
-          last_fuel_date: null,
-          security_permit_expiry: null,
-          vehicle_image_url: null,
+          ...EMPTY_VEHICLE_COLUMNS,
         }));
         vehicleError = fallback.error;
       } else {
@@ -398,7 +587,13 @@ function VehiclesPage() {
           </Card>
         </TabsContent>
         <TabsContent value="details">
-          <VehicleDetailsTab vehicles={query.data?.vehicles ?? []} isLoading={query.isLoading} />
+          <VehicleDetailsTab
+            vehicles={query.data?.vehicles ?? []}
+            isLoading={query.isLoading}
+            month={month}
+            dates={dates}
+            legacyDays={legacyDays}
+          />
         </TabsContent>
       </Tabs>
       <Dialog open={!!activeVehicle} onOpenChange={(open) => { if (!open) setActiveVehicle(null); }}>
@@ -442,12 +637,77 @@ function VehiclesPage() {
   );
 }
 
-function VehicleDetailsTab({ vehicles, isLoading }: { vehicles: Vehicle[]; isLoading: boolean }) {
+function VehicleDetailsTab({
+  vehicles,
+  isLoading,
+  month,
+  dates,
+  legacyDays,
+}: {
+  vehicles: Vehicle[];
+  isLoading: boolean;
+  month: string;
+  dates: Record<string, string[]>;
+  legacyDays: Record<string, number>;
+}) {
   const client = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [attaching, setAttaching] = useState(false);
+  const [attachStatus, setAttachStatus] = useState<string | null>(null);
+  const [removeBg, setRemoveBg] = useState(true);
   const selected = vehicles.find((vehicle) => vehicle.id === selectedId) ?? vehicles[0] ?? null;
+
+  const driversQuery = useQuery({
+    queryKey: ["vehicle-drivers"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("employees")
+        .select("id, full_name, position, phone1, department_id, departments(name)")
+        .eq("status", "active")
+        .order("full_name");
+      if (error) throw error;
+      return (data ?? []) as Driver[];
+    },
+  });
+  const drivers = driversQuery.data ?? [];
+
+  const vouchersQuery = useQuery({
+    queryKey: ["vehicle-month-fuel", selected?.id ?? null, month],
+    enabled: Boolean(selected),
+    queryFn: async () => {
+      if (!selected) return [];
+      const [year, monthNumber] = month.split("-").map(Number);
+      const nextMonth = new Date(Date.UTC(year, monthNumber, 1)).toISOString().slice(0, 10);
+      const { data, error } = await (supabase as any)
+        .from("vehicle_fuel_vouchers")
+        .select("voucher_no, voucher_date, liters, price_per_liter, total_cost, odometer_reading, fuel_type")
+        .eq("vehicle_id", selected.id)
+        .gte("voucher_date", `${month}-01`)
+        .lt("voucher_date", nextMonth)
+        .order("voucher_date", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Array<{
+        voucher_no: string;
+        voucher_date: string;
+        liters: number;
+        price_per_liter: number;
+        total_cost: number;
+        odometer_reading: number | null;
+        fuel_type: "gasoline" | "diesel";
+      }>;
+    },
+  });
+
+  const fuelStats = useMemo<MonthlyFuelStats>(() => {
+    const rows = vouchersQuery.data ?? [];
+    return {
+      liters: rows.reduce((total, row) => total + Number(row.liters ?? 0), 0),
+      cost: rows.reduce((total, row) => total + Number(row.total_cost ?? 0), 0),
+      count: rows.length,
+      lastDate: rows[0]?.voucher_date ?? selected?.last_fuel_date ?? null,
+    };
+  }, [vouchersQuery.data, selected?.last_fuel_date]);
 
   const attachDefault = useMutation({
     mutationFn: async (vehicleId: string) => {
@@ -467,19 +727,31 @@ function VehicleDetailsTab({ vehicles, isLoading }: { vehicles: Vehicle[]; isLoa
   const attachImage = async (file: File) => {
     if (!selected) return;
     setAttaching(true);
+    let prepared = file;
     try {
-      const url = await uploadVehicleImage(file, selected.id);
+      if (removeBg) {
+        setAttachStatus("جارٍ تجهيز أداة تفريغ الخلفية…");
+        try {
+          prepared = await removeImageBackground(file, setAttachStatus);
+        } catch (error) {
+          toast.error(`تعذر تفريغ الخلفية: ${formatErrorMessage(error)} — رُفعت الصورة الأصلية`);
+          prepared = file;
+        }
+      }
+      setAttachStatus("جارٍ رفع الصورة…");
+      const url = await uploadVehicleImage(prepared, selected.id);
       const { error } = await (supabase as any)
         .from("vehicles")
         .update({ vehicle_image_url: url })
         .eq("id", selected.id);
       if (error) throw error;
       await client.invalidateQueries({ queryKey: ["vehicles"] });
-      toast.success("تم إرفاق شكل المركبة");
+      toast.success(removeBg ? "تم تفريغ الخلفية وإرفاق شكل المركبة" : "تم إرفاق شكل المركبة");
     } catch (error) {
       toast.error(`تعذر إرفاق الصورة: ${describeVehicleImageError(error)}`);
     } finally {
       setAttaching(false);
+      setAttachStatus(null);
     }
   };
 
@@ -495,6 +767,9 @@ function VehicleDetailsTab({ vehicles, isLoading }: { vehicles: Vehicle[]; isLoa
   }
 
   const hasImage = Boolean(selected.vehicle_image_url?.trim());
+  const operatingDates = dates[selected.id] ?? [];
+  const operatingDays = operatingDates.length || legacyDays[selected.id] || 0;
+  const driver = drivers.find((item) => item.id === selected.current_driver_id) ?? null;
 
   return (
     <div className="space-y-6">
@@ -575,7 +850,7 @@ function VehicleDetailsTab({ vehicles, isLoading }: { vehicles: Vehicle[]; isLoa
               )}
             >
               <Upload className="h-4 w-4" />
-              {attaching ? "جارٍ الرفع…" : "إرفاق شكل المركبة"}
+              {attaching ? "جارٍ المعالجة…" : "إرفاق شكل المركبة"}
               <input
                 type="file"
                 accept="image/png,image/jpeg,image/webp"
@@ -599,6 +874,13 @@ function VehicleDetailsTab({ vehicles, isLoading }: { vehicles: Vehicle[]; isLoa
               تعديل التفاصيل
             </Button>
           </div>
+          <RemoveBackgroundToggle value={removeBg} onChange={setRemoveBg} />
+          {attaching && (
+            <p className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+              {attachStatus ?? "جارٍ معالجة الصورة…"}
+            </p>
+          )}
         </div>
       ) : null}
 
@@ -606,6 +888,9 @@ function VehicleDetailsTab({ vehicles, isLoading }: { vehicles: Vehicle[]; isLoa
         <VehicleDetailForm
           key={selected.id}
           vehicle={selected}
+          drivers={drivers}
+          removeBg={removeBg}
+          onRemoveBgChange={setRemoveBg}
           onCancel={() => setEditing(false)}
           onSaved={() => setEditing(false)}
         />
@@ -616,16 +901,32 @@ function VehicleDetailsTab({ vehicles, isLoading }: { vehicles: Vehicle[]; isLoa
           </Button>
         </div>
       ) : null}
+
+      <VehicleMonthlyReport
+        month={month}
+        vehicle={selected}
+        driver={driver}
+        operatingDays={operatingDays}
+        operatingDates={operatingDates}
+        wage={operatingDays * Number(selected.daily_rate || 0)}
+        fuel={fuelStats}
+      />
     </div>
   );
 }
 
 function VehicleDetailForm({
   vehicle,
+  drivers,
+  removeBg,
+  onRemoveBgChange,
   onCancel,
   onSaved,
 }: {
   vehicle: Vehicle;
+  drivers: Driver[];
+  removeBg: boolean;
+  onRemoveBgChange: (value: boolean) => void;
   onCancel: () => void;
   onSaved: () => void;
 }) {
@@ -638,26 +939,44 @@ function VehicleDetailForm({
   const [notes, setNotes] = useState(vehicle.notes ?? "");
   const [isActive, setIsActive] = useState(vehicle.is_active);
   const [imageUrl, setImageUrl] = useState(vehicle.vehicle_image_url ?? "");
+  const [fuelType, setFuelType] = useState<"gasoline" | "diesel">(vehicle.fuel_type ?? "diesel");
+  const [driverId, setDriverId] = useState(vehicle.current_driver_id ?? "");
+  const [odometer, setOdometer] = useState(String(vehicle.current_odometer ?? 0));
   const [uploading, setUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
 
   const handleImageUpload = async (file: File) => {
     setUploading(true);
+    let prepared = file;
     try {
-      const url = await uploadVehicleImage(file, vehicle.id);
+      if (removeBg) {
+        setUploadStatus("جارٍ تجهيز أداة تفريغ الخلفية…");
+        try {
+          prepared = await removeImageBackground(file, setUploadStatus);
+        } catch (error) {
+          toast.error(`تعذر تفريغ الخلفية: ${formatErrorMessage(error)} — رُفعت الصورة الأصلية`);
+          prepared = file;
+        }
+      }
+      setUploadStatus("جارٍ رفع الصورة…");
+      const url = await uploadVehicleImage(prepared, vehicle.id);
       setImageUrl(url);
       toast.success("تم رفع صورة المركبة، اضغط «حفظ التفاصيل» لتثبيتها");
     } catch (error) {
       toast.error(`تعذر رفع الصورة: ${describeVehicleImageError(error)}`);
     } finally {
       setUploading(false);
+      setUploadStatus(null);
     }
   };
 
   const save = useMutation({
     mutationFn: async () => {
       const rate = Number(dailyRate);
+      const odo = Number(odometer);
       if (!name.trim()) throw new Error("اسم المركبة مطلوب");
       if (!Number.isFinite(rate) || rate < 0) throw new Error("أدخل أجراً يومياً صحيحاً");
+      if (!Number.isFinite(odo) || odo < 0) throw new Error("أدخل قراءة عداد صحيحة");
       const { error } = await (supabase as any)
         .from("vehicles")
         .update({
@@ -669,6 +988,9 @@ function VehicleDetailForm({
           notes: notes.trim() || null,
           is_active: isActive,
           vehicle_image_url: imageUrl.trim() || null,
+          fuel_type: fuelType,
+          current_driver_id: driverId || null,
+          current_odometer: odo,
         })
         .eq("id", vehicle.id);
       if (error) throw error;
@@ -707,6 +1029,46 @@ function VehicleDetailForm({
           </Select>
         </div>
         <div className="space-y-2">
+          <Label>نوع الوقود</Label>
+          <Select value={fuelType} onValueChange={(value) => setFuelType(value as "gasoline" | "diesel")}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="diesel">كاز (ديزل)</SelectItem>
+              <SelectItem value="gasoline">بنزين</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>السائق الحالي</Label>
+          <Select value={driverId || "none"} onValueChange={(value) => setDriverId(value === "none" ? "" : value)}>
+            <SelectTrigger>
+              <SelectValue placeholder="اختر السائق" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">بدون سائق</SelectItem>
+              {drivers.map((driver) => (
+                <SelectItem key={driver.id} value={driver.id}>
+                  {driver.full_name}
+                  {driver.position ? ` · ${driver.position}` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="d-odo">عداد الكيلومترات الحالي</Label>
+          <Input
+            id="d-odo"
+            type="number"
+            min="0"
+            step="0.01"
+            value={odometer}
+            onChange={(event) => setOdometer(event.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
           <Label htmlFor="d-rate">الأجر اليومي (د.ع)</Label>
           <Input
             id="d-rate"
@@ -738,7 +1100,7 @@ function VehicleDetailForm({
               )}
             >
               <Upload className="h-4 w-4" />
-              {uploading ? "جارٍ الرفع…" : imageUrl ? "استبدال الصورة" : "إرفاق شكل المركبة"}
+              {uploading ? "جارٍ المعالجة…" : imageUrl ? "استبدال الصورة" : "إرفاق شكل المركبة"}
               <input
                 type="file"
                 accept="image/png,image/jpeg,image/webp"
@@ -767,6 +1129,13 @@ function VehicleDetailForm({
             )}
             <span className="text-xs text-muted-foreground">PNG أو JPG أو WebP — حتى 5MB</span>
           </div>
+          <RemoveBackgroundToggle value={removeBg} onChange={onRemoveBgChange} />
+          {uploading && (
+            <p className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+              {uploadStatus ?? "جارٍ معالجة الصورة…"}
+            </p>
+          )}
           {imageUrl ? (
             <img
               src={imageUrl}
