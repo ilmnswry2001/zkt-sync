@@ -3275,8 +3275,10 @@ export type Database = {
           daily_rate: number
           id: string
           is_active: boolean
+          last_fuel_date: string | null
           name: string
           notes: string | null
+          security_permit_expiry: string | null
           updated_at: string
           vehicle_class: string
           vehicle_image_url: string | null
@@ -3288,8 +3290,10 @@ export type Database = {
           daily_rate?: number
           id?: string
           is_active?: boolean
+          last_fuel_date?: string | null
           name: string
           notes?: string | null
+          security_permit_expiry?: string | null
           updated_at?: string
           vehicle_class: string
           vehicle_image_url?: string | null
@@ -3301,8 +3305,10 @@ export type Database = {
           daily_rate?: number
           id?: string
           is_active?: boolean
+          last_fuel_date?: string | null
           name?: string
           notes?: string | null
+          security_permit_expiry?: string | null
           updated_at?: string
           vehicle_class?: string
           vehicle_image_url?: string | null
