@@ -35,8 +35,10 @@ import {
   Sun,
   Bell,
   ChevronDown,
+  SlidersHorizontal,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -44,6 +46,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useOperationalAlerts } from "@/hooks/use-operational-alerts";
 import { supabase } from "@/integrations/supabase/client";
+import { NavigationCustomizer } from "@/components/NavigationCustomizer";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -88,35 +91,45 @@ export const SECTION_OPTIONS = nav.map(({ to, label }) => ({ to, label }));
 type NavItem = (typeof nav)[number];
 
 const NAV_GROUPS = [
-  { label: "الرئيسية", icon: LayoutDashboard, tos: ["/dashboard", "/monthly"] },
+  { key: "home", label: "الرئيسية", icon: LayoutDashboard, tos: ["/dashboard", "/monthly"] },
   {
+    key: "attendance",
     label: "الحضور والدوام",
     icon: ClockIcon,
     tos: ["/attendance", "/self-attendance", "/shift-schedules"],
   },
   {
+    key: "tasks",
     label: "المهام والفريق",
     icon: ListChecks,
     tos: ["/tasks", "/work-center", "/team-follow-up", "/forms"],
   },
   {
+    key: "hr",
     label: "الموارد البشرية",
     icon: Users,
     tos: ["/employees", "/departments", "/leaves", "/penalties", "/wages", "/payroll"],
   },
-  { label: "المركبات والوقود", icon: Truck, tos: ["/vehicles", "/fuel"] },
+  { key: "vehicles", label: "المركبات والوقود", icon: Truck, tos: ["/vehicles", "/fuel"] },
   {
+    key: "projects",
     label: "المشاريع والخطط",
     icon: ClipboardList,
     tos: ["/planning", "/sites", "/projects", "/requests"],
   },
   {
+    key: "inventory",
     label: "المخازن والأجهزة",
     icon: Boxes,
     tos: ["/warehouses", "/devices", "/upload", "/files"],
   },
-  { label: "الإعدادات", icon: Settings2, tos: ["/settings", "/accounts"] },
+  { key: "settings", label: "الإعدادات", icon: Settings2, tos: ["/settings", "/accounts"] },
 ] as const;
+
+const EMPTY_NAV_CONFIG = {
+  labels: {} as Record<string, string>,
+  assignments: {} as Record<string, string>,
+};
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -295,10 +308,48 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       return false;
     return true;
   });
+  const navSettingsQuery = useQuery({
+    queryKey: ["navigation-settings"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("navigation_settings")
+        .select("labels, assignments")
+        .eq("id", "default")
+        .maybeSingle();
+      if (error) throw error;
+      return (data ?? EMPTY_NAV_CONFIG) as {
+        labels: Record<string, string>;
+        assignments: Record<string, string>;
+      };
+    },
+  });
+  const navConfig = navSettingsQuery.data ?? EMPTY_NAV_CONFIG;
+  const navLabels = navConfig.labels ?? EMPTY_NAV_CONFIG.labels;
+  const navAssignments = navConfig.assignments ?? EMPTY_NAV_CONFIG.assignments;
+  const baseGroupKeyByTo = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const group of NAV_GROUPS) for (const to of group.tos) map.set(to, group.key);
+    return map;
+  }, []);
+  const resolveGroupKey = useCallback(
+    (to: string) => {
+      const assigned = navAssignments[to];
+      if (assigned && NAV_GROUPS.some((group) => group.key === assigned)) return assigned;
+      return baseGroupKeyByTo.get(to) ?? "";
+    },
+    [navAssignments, baseGroupKeyByTo],
+  );
+  const mergedGroups = NAV_GROUPS.map((group) => ({
+    key: group.key,
+    label: navLabels[group.key]?.trim() || group.label,
+    icon: group.icon,
+    items: visibleNav.filter((item) => resolveGroupKey(item.to) === group.key),
+  })).filter((group) => group.items.length > 0);
+
   const [openGroups, setOpenGroups] = useState<string[]>(() => {
     if (typeof window === "undefined") return [];
     try {
-      const saved = window.localStorage.getItem("zkt-nav-groups");
+      const saved = window.localStorage.getItem("zkt-nav-groups-v2");
       const parsed = saved ? JSON.parse(saved) : null;
       return Array.isArray(parsed)
         ? parsed.filter((value): value is string => typeof value === "string")
@@ -308,38 +359,38 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     }
   });
   useEffect(() => {
-    const activeGroup = NAV_GROUPS.find((group) =>
-      group.tos.some((to) => pathname === to || pathname.startsWith(`${to}/`)),
-    );
-    if (!activeGroup) return;
+    const activeItem = nav.find((item) => pathname === item.to || pathname.startsWith(item.to + "/"));
+    if (!activeItem) return;
+    const groupKey = resolveGroupKey(activeItem.to);
+    if (!groupKey) return;
     setOpenGroups((current) => {
-      if (current.includes(activeGroup.label)) return current;
-      const next = [...current, activeGroup.label];
-      window.localStorage.setItem("zkt-nav-groups", JSON.stringify(next));
+      if (current.includes(groupKey)) return current;
+      const next = [...current, groupKey];
+      window.localStorage.setItem("zkt-nav-groups-v2", JSON.stringify(next));
       return next;
     });
-  }, [pathname]);
-  const toggleGroup = (label: string) => {
+  }, [pathname, resolveGroupKey]);
+  const toggleGroup = (key: string) => {
     setOpenGroups((current) => {
-      const next = current.includes(label)
-        ? current.filter((value) => value !== label)
-        : [...current, label];
-      window.localStorage.setItem("zkt-nav-groups", JSON.stringify(next));
+      const next = current.includes(key)
+        ? current.filter((value) => value !== key)
+        : [...current, key];
+      window.localStorage.setItem("zkt-nav-groups-v2", JSON.stringify(next));
       return next;
     });
   };
-  const visibleByTo = new Map<string, NavItem>(
-    visibleNav.map((item): [string, NavItem] => [item.to, item]),
-  );
-  const visibleGroups = NAV_GROUPS.map((group) => ({
-    label: group.label,
-    icon: group.icon,
-    items: group.tos
-      .map((to) => visibleByTo.get(to))
-      .filter((item): item is NavItem => item !== undefined),
-  })).filter((group) => group.items.length > 0);
+  const [customizerOpen, setCustomizerOpen] = useState(false);
   const delayByTo = new Map<string, number>(
     visibleNav.map((item, index): [string, number] => [item.to, index * 28]),
+  );
+  const editorItems = useMemo(
+    () =>
+      nav.map((item: NavItem) => ({
+        to: item.to,
+        label: item.label,
+        groupKey: resolveGroupKey(item.to) || NAV_GROUPS[0].key,
+      })),
+    [resolveGroupKey],
   );
   return (
     <div dir="rtl" className="app-shell flex min-h-screen bg-background">
@@ -419,17 +470,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <p className="px-3 pb-1 pt-2 text-[10px] font-bold tracking-[0.16em] text-sidebar-foreground/40">
             القائمة الرئيسية
           </p>
-          {visibleGroups.map((group) => {
-            const isOpen = openGroups.includes(group.label);
+          {mergedGroups.map((group) => {
+            const isOpen = openGroups.includes(group.key);
             const isGroupActive = group.items.some(
               (item) => pathname === item.to || pathname.startsWith(item.to + "/"),
             );
             const GroupIcon = group.icon;
             return (
-              <div key={group.label} className="space-y-1">
+              <div key={group.key} className="space-y-1">
                 <button
                   type="button"
-                  onClick={() => toggleGroup(group.label)}
+                  onClick={() => toggleGroup(group.key)}
                   aria-expanded={isOpen}
                   className={cn(
                     "flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-[12px] font-bold tracking-wide transition-colors",
@@ -494,8 +545,19 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         <div className="border-t border-sidebar-border/80 px-4 py-3 min-w-64">
-          <div className="flex items-center gap-2 text-[10px] text-sidebar-foreground/45">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> النظام متصل
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-[10px] text-sidebar-foreground/45">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> النظام متصل
+            </div>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setCustomizerOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] font-semibold text-sidebar-foreground/60 transition-colors hover:bg-black/[0.04] hover:text-sidebar-foreground dark:hover:bg-white/[0.06]"
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" /> تخصيص القائمة
+              </button>
+            )}
           </div>
         </div>
       </aside>
@@ -675,6 +737,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           )}
         </div>
       </main>
+      {customizerOpen && isAdmin && (
+        <NavigationCustomizer
+          groups={NAV_GROUPS.map((group) => ({ key: group.key, label: group.label }))}
+          items={editorItems}
+          initialLabels={navLabels}
+          onClose={() => setCustomizerOpen(false)}
+          updatedBy={user?.id ?? null}
+        />
+      )}
       <Toaster richColors position="top-center" />
     </div>
   );
