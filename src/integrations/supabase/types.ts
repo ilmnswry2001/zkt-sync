@@ -3279,6 +3279,7 @@ export type Database = {
           notes: string | null
           updated_at: string
           vehicle_class: string
+          vehicle_image_url: string | null
           vehicle_no: string
         }
         Insert: {
@@ -3291,6 +3292,7 @@ export type Database = {
           notes?: string | null
           updated_at?: string
           vehicle_class: string
+          vehicle_image_url?: string | null
           vehicle_no: string
         }
         Update: {
@@ -3303,6 +3305,7 @@ export type Database = {
           notes?: string | null
           updated_at?: string
           vehicle_class?: string
+          vehicle_image_url?: string | null
           vehicle_no?: string
         }
         Relationships: []
