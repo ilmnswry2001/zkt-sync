@@ -75,6 +75,7 @@ const nav = [
   { to: "/departments", label: "الأقسام", icon: Building2 },
   { to: "/planning", label: "الخطط", icon: ClipboardList, access: "planning" },
   { to: "/requests", label: "الطلبات", icon: ClipboardList, access: "requests" },
+  { to: "/procurement", label: "المشتريات", icon: ShoppingCart, access: "procurement" },
   { to: "/sites", label: "المواقع", icon: MapPinned, access: "planning" },
   { to: "/wages", label: "الأجور", icon: Wallet, access: "hr" },
   { to: "/payroll", label: "الرواتب", icon: Wallet, access: "hr" },
@@ -122,13 +123,19 @@ const NAV_GROUPS = [
     icon: ClipboardList,
     tos: ["/planning", "/sites", "/projects", "/requests"],
   },
+  { key: "procurement", label: "المشتريات", icon: ShoppingCart, tos: ["/procurement"] },
   {
     key: "inventory",
     label: "المخازن والأجهزة",
     icon: Boxes,
     tos: ["/warehouses", "/devices", "/upload", "/files"],
   },
-  { key: "settings", label: "الإعدادات", icon: Settings2, tos: ["/settings", "/accounts", "/system-map"] },
+  {
+    key: "settings",
+    label: "الإعدادات",
+    icon: Settings2,
+    tos: ["/settings", "/accounts", "/system-map"],
+  },
 ] as const;
 
 const EMPTY_NAV_CONFIG = {
@@ -200,10 +207,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (blocked && allowedSections?.[0]) navigate({ to: allowedSections[0] as any });
   }, [blocked, allowedSections, navigate]);
-  const [sidebarOpen, setSidebarOpen] = useState(() => {
-    if (typeof window === "undefined") return true;
-    return window.localStorage.getItem("zkt-sidebar-hidden") !== "true";
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return (
+      window.localStorage.getItem("zkt-sidebar-collapsed") === "true" ||
+      window.localStorage.getItem("zkt-sidebar-hidden") === "true"
+    );
   });
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
   const [workspaceName, setWorkspaceName] = useState("منظومة زِكت");
   const [isEditingWorkspaceName, setIsEditingWorkspaceName] = useState(false);
@@ -211,12 +222,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     const savedWorkspaceName = window.localStorage.getItem("zkt-workspace-name");
     if (savedWorkspaceName?.trim()) setWorkspaceName(savedWorkspaceName.trim());
     const savedTheme = window.localStorage.getItem("zkt-theme");
-    const theme =
-      savedTheme === "dark" || savedTheme === "light"
-        ? savedTheme
-        : window.matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light";
+    const theme = savedTheme === "dark" ? "dark" : "light";
     document.documentElement.classList.toggle("dark", theme === "dark");
     setThemeMode(theme);
   }, []);
@@ -233,9 +239,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     setIsEditingWorkspaceName(false);
   };
   const toggleSidebar = () => {
-    setSidebarOpen((open) => {
-      const next = !open;
-      window.localStorage.setItem("zkt-sidebar-hidden", String(!next));
+    setSidebarCollapsed((collapsed) => {
+      const next = !collapsed;
+      window.localStorage.setItem("zkt-sidebar-collapsed", String(next));
+      window.localStorage.removeItem("zkt-sidebar-hidden");
       return next;
     });
   };
@@ -303,16 +310,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     )
       return false;
     if ("access" in item && item.access === "maintenance" && !isMaintenanceStaff) return false;
-    if (
-      "access" in item &&
-      item.access === "project_plans" &&
-      !isAdmin &&
-      !isHR &&
-      !roles.some((role) =>
-        ["supervisor", "department_manager", "engineer", "site_admin"].includes(role),
-      )
-    )
-      return false;
     return true;
   });
   const navSettingsQuery = useQuery({
@@ -366,7 +363,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     }
   });
   useEffect(() => {
-    const activeItem = nav.find((item) => pathname === item.to || pathname.startsWith(item.to + "/"));
+    const activeItem = nav.find(
+      (item) => pathname === item.to || pathname.startsWith(item.to + "/"),
+    );
     if (!activeItem) return;
     const groupKey = resolveGroupKey(activeItem.to);
     if (!groupKey) return;
@@ -403,28 +402,33 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     <div dir="rtl" className="app-shell flex min-h-screen bg-background">
       <button
         aria-label="إغلاق القائمة"
-        aria-hidden={!sidebarOpen}
-        tabIndex={sidebarOpen ? undefined : -1}
+        aria-hidden={!mobileSidebarOpen}
+        tabIndex={mobileSidebarOpen ? undefined : -1}
         className={cn(
           "fixed inset-0 z-30 bg-slate-950/45 backdrop-blur-sm transition-opacity duration-300 md:hidden",
-          sidebarOpen ? "opacity-100" : "pointer-events-none opacity-0",
+          mobileSidebarOpen ? "opacity-100" : "pointer-events-none opacity-0",
         )}
-        onClick={toggleSidebar}
+        onClick={() => setMobileSidebarOpen(false)}
       />
       <aside
         className={cn(
-          "app-sidebar fixed inset-y-0 right-0 z-40 flex w-[min(19rem,88vw)] shrink-0 flex-col overflow-hidden border-l border-white/45 bg-white/75 text-sidebar-foreground shadow-2xl shadow-slate-950/15 backdrop-blur-2xl backdrop-saturate-150 transition-[width,transform,border-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] dark:border-white/10 dark:bg-slate-950/75 md:sticky md:top-0 md:h-screen md:w-64 md:translate-x-0 md:shadow-xl md:shadow-slate-950/10",
-          sidebarOpen ? "translate-x-0" : "translate-x-full md:w-0 md:border-0",
+          "app-sidebar fixed inset-y-0 right-0 z-40 flex w-[min(19rem,88vw)] shrink-0 flex-col overflow-hidden border-l border-border bg-sidebar text-sidebar-foreground shadow-xl shadow-slate-950/10 transition-[width,transform] duration-200 ease-out md:sticky md:top-0 md:h-screen md:translate-x-0 md:shadow-none",
+          mobileSidebarOpen ? "translate-x-0" : "translate-x-full",
+          sidebarCollapsed ? "md:w-[4.5rem]" : "md:w-64",
         )}
-        aria-hidden={!sidebarOpen}
       >
-        <div className="relative border-b border-white/40 bg-gradient-to-bl from-teal-400/15 via-white/10 to-transparent p-5 flex items-center justify-between min-w-64 dark:border-white/10 dark:via-white/[0.03]">
+        <div
+          className={cn(
+            "flex min-h-16 items-center justify-between border-b border-border px-4 py-3",
+            sidebarCollapsed && "md:justify-center md:px-2",
+          )}
+        >
           <div className="flex items-center gap-3">
             <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-300 to-cyan-500 shadow-lg shadow-teal-950/25 ring-1 ring-white/20">
               <Fingerprint className="h-6 w-6 text-slate-950" />
               <span className="absolute -bottom-1 -left-1 h-3 w-3 rounded-full border-2 border-sidebar bg-emerald-400" />
             </div>
-            <div className="min-w-0">
+            <div className={cn("min-w-0", sidebarCollapsed && "md:hidden")}>
               {isEditingWorkspaceName ? (
                 <input
                   autoFocus
@@ -443,7 +447,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <p className="mt-1 text-[11px] text-sidebar-foreground/55">إدارة الموارد والمشاريع</p>
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className={cn("flex items-center gap-1", sidebarCollapsed && "md:hidden")}>
             <Button
               variant="ghost"
               size="icon"
@@ -460,7 +464,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               variant="ghost"
               size="icon"
               className="h-8 w-8 rounded-lg text-sidebar-foreground/65 hover:bg-black/[0.05] hover:text-sidebar-foreground dark:hover:bg-white/10"
-              onClick={toggleSidebar}
+              onClick={() => setMobileSidebarOpen(false)}
               title="إخفاء اللوحة الجانبية"
               aria-label="إخفاء اللوحة الجانبية"
             >
@@ -470,11 +474,19 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         <nav
-          key={sidebarOpen ? "sidebar-open" : "sidebar-closed"}
+          key={sidebarCollapsed ? "sidebar-collapsed" : "sidebar-expanded"}
           aria-label="التنقل الرئيسي"
-          className="app-sidebar-nav flex-1 space-y-1.5 overflow-y-auto p-3.5 min-w-64"
+          className={cn(
+            "app-sidebar-nav flex-1 space-y-1.5 overflow-y-auto p-3",
+            sidebarCollapsed && "md:px-2",
+          )}
         >
-          <p className="px-3 pb-1 pt-2 text-[10px] font-bold tracking-[0.16em] text-sidebar-foreground/40">
+          <p
+            className={cn(
+              "px-3 pb-1 pt-2 text-[10px] font-bold tracking-[0.16em] text-sidebar-foreground/40",
+              sidebarCollapsed && "md:hidden",
+            )}
+          >
             القائمة الرئيسية
           </p>
           {mergedGroups.map((group) => {
@@ -484,29 +496,69 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             );
             const GroupIcon = group.icon;
             return (
-              <div key={group.key} className="space-y-1">
-                <button
-                  type="button"
-                  onClick={() => toggleGroup(group.key)}
-                  aria-expanded={isOpen}
-                  className={cn(
-                    "flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-[12px] font-bold tracking-wide transition-colors",
-                    isGroupActive
-                      ? "text-primary"
-                      : "text-sidebar-foreground/55 hover:bg-black/[0.04] hover:text-sidebar-foreground dark:hover:bg-white/[0.06]",
-                  )}
-                >
-                  <span className="flex items-center gap-2">
-                    <GroupIcon className="h-4 w-4 shrink-0" />
-                    {group.label}
-                  </span>
-                  <ChevronDown
+              <div key={group.key} dir="rtl" className="space-y-1">
+                <div className={cn("hidden", sidebarCollapsed && "md:block")}>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        aria-label={group.label}
+                        title={group.label}
+                        className={cn(
+                          "flex w-full items-center justify-center rounded-lg px-2 py-2.5 transition-colors",
+                          isGroupActive
+                            ? "bg-primary/10 text-primary"
+                            : "text-sidebar-foreground/65 hover:bg-muted hover:text-sidebar-foreground",
+                        )}
+                      >
+                        <GroupIcon className="h-4 w-4 shrink-0" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent side="left" align="start" className="w-56">
+                      <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {group.items.map((item) => {
+                        const Icon = item.icon;
+                        return (
+                          <DropdownMenuItem key={item.to} asChild>
+                            <Link
+                              to={item.to as any}
+                              onClick={() => setMobileSidebarOpen(false)}
+                              className="cursor-pointer"
+                            >
+                              <Icon className="ml-2 h-4 w-4" />
+                              {item.label}
+                            </Link>
+                          </DropdownMenuItem>
+                        );
+                      })}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                <div className={cn(sidebarCollapsed && "md:hidden")}>
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(group.key)}
+                    aria-expanded={isOpen}
                     className={cn(
-                      "h-3.5 w-3.5 shrink-0 transition-transform duration-300",
-                      isOpen && "rotate-180",
+                      "flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-[12px] font-semibold transition-colors",
+                      isGroupActive
+                        ? "bg-primary/10 text-primary"
+                        : "text-sidebar-foreground/65 hover:bg-muted hover:text-sidebar-foreground",
                     )}
-                  />
-                </button>
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <GroupIcon className="h-4 w-4 shrink-0" />
+                      {group.label}
+                    </span>
+                    <ChevronDown
+                      className={cn(
+                        "h-3.5 w-3.5 shrink-0 transition-transform",
+                        isOpen && "rotate-180",
+                      )}
+                    />
+                  </button>
+                </div>
                 <div
                   className={cn(
                     "grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
@@ -523,21 +575,21 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                             key={item.to}
                             to={item.to as any}
                             onClick={() => {
-                              if (window.innerWidth < 768) setSidebarOpen(false);
+                              if (window.innerWidth < 768) setMobileSidebarOpen(false);
                             }}
                             className={cn(
-                              "group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-[13px] font-semibold transition-all duration-300",
-                              sidebarOpen && "sidebar-item-enter",
+                              "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors",
+                              sidebarCollapsed && "md:hidden",
                               active
-                                ? "bg-gradient-to-l from-teal-300 to-cyan-400 text-slate-950 shadow-md shadow-black/15 ring-1 ring-white/20"
-                                : "text-sidebar-foreground/70 hover:translate-x-[-2px] hover:bg-black/[0.04] hover:text-sidebar-foreground dark:hover:bg-white/[0.07]",
+                                ? "bg-primary/10 text-primary"
+                                : "text-sidebar-foreground/70 hover:bg-muted hover:text-sidebar-foreground",
                             )}
                             style={{
-                              animationDelay: sidebarOpen ? `${delayByTo.get(item.to) ?? 0}ms` : undefined,
+                              animationDelay: `${delayByTo.get(item.to) ?? 0}ms`,
                             }}
                           >
                             {active && (
-                              <span className="sidebar-active-indicator absolute inset-y-2 right-0 w-1 rounded-full bg-slate-950/90 shadow-[0_1px_6px_rgba(2,44,55,0.4)]" />
+                              <span className="absolute inset-y-2 right-0 w-0.5 rounded-full bg-primary" />
                             )}
                             <Icon className="w-4 h-4 shrink-0 transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3" />
                             {item.label}
@@ -551,16 +603,36 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
-        <div className="border-t border-sidebar-border/80 px-4 py-3 min-w-64">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-[10px] text-sidebar-foreground/45">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> النظام متصل
+        <div
+          className={cn(
+            "border-t border-sidebar-border/80 px-4 py-3",
+            sidebarCollapsed && "md:px-2",
+          )}
+        >
+          <div
+            className={cn(
+              "flex items-center justify-between gap-2",
+              sidebarCollapsed && "md:flex-col md:justify-center",
+            )}
+          >
+            <div
+              title="النظام متصل"
+              className={cn(
+                "flex items-center gap-2 text-[10px] text-sidebar-foreground/55",
+                sidebarCollapsed && "md:justify-center",
+              )}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />{" "}
+              <span className={cn(sidebarCollapsed && "md:hidden")}>النظام متصل</span>
             </div>
             {isAdmin && (
               <button
                 type="button"
                 onClick={() => setCustomizerOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] font-semibold text-sidebar-foreground/60 transition-colors hover:bg-black/[0.04] hover:text-sidebar-foreground dark:hover:bg-white/[0.06]"
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] font-semibold text-sidebar-foreground/60 transition-colors hover:bg-muted hover:text-sidebar-foreground",
+                  sidebarCollapsed && "md:hidden",
+                )}
               >
                 <SlidersHorizontal className="h-3.5 w-3.5" /> تخصيص القائمة
               </button>
@@ -576,22 +648,25 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 variant="outline"
                 size="icon"
                 className="md:hidden"
-                onClick={toggleSidebar}
+                onClick={() => setMobileSidebarOpen(true)}
                 aria-label="فتح القائمة"
               >
                 <Menu className="h-4 w-4" />
               </Button>
-              {!sidebarOpen && (
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="hidden md:inline-flex"
-                  onClick={toggleSidebar}
-                  aria-label="فتح القائمة"
-                >
+              <Button
+                variant="outline"
+                size="icon"
+                className="hidden md:inline-flex"
+                onClick={toggleSidebar}
+                aria-label={sidebarCollapsed ? "توسيع القائمة" : "طي القائمة"}
+                title={sidebarCollapsed ? "توسيع القائمة" : "طي القائمة"}
+              >
+                {sidebarCollapsed ? (
                   <PanelRightOpen className="h-4 w-4" />
-                </Button>
-              )}
+                ) : (
+                  <PanelRightClose className="h-4 w-4" />
+                )}
+              </Button>
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold text-muted-foreground">
                   مساحة العمل <span className="mx-1 text-primary">/</span> الإدارة
@@ -618,7 +693,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     <ChevronDown className="hidden h-3.5 w-3.5 text-muted-foreground sm:block" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-60" dir="rtl">
+                <DropdownMenuContent align="end" className="w-60" style={{ direction: "rtl" }}>
                   <DropdownMenuLabel className="font-normal">
                     <div className="truncate text-sm font-semibold text-foreground">
                       {profileName || user?.user_metadata?.full_name || "صاحب الحساب"}
