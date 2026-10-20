@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
@@ -33,7 +34,7 @@ export function MaintenanceCatalogDialog({ onClose }: { onClose: () => void }) {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("machinery")
-        .select("id, code, name, category, plate_no, model, year, status, current_hours, current_odometer, notes")
+        .select("id, code, name, asset_number, owner_name, category, plate_no, model, year, status, current_hours, current_odometer, notes")
         .order("code");
       if (error) throw error;
       return (data ?? []) as Machinery[];
@@ -69,10 +70,25 @@ export function MaintenanceCatalogDialog({ onClose }: { onClose: () => void }) {
   const [machineForm, setMachineForm] = useState({
     code: "",
     name: "",
+    asset_number: "",
+    owner_name: "",
     category: "",
     plate_no: "",
     model: "",
     year: "",
+    color: "",
+    driver_name: "",
+    document_status: "",
+    document_days_remaining: "",
+    requires_ato: false,
+    ato_status: "",
+    ato_expiry: "",
+    security_permit_no: "",
+    security_permit_status: "",
+    security_permit_expiry: "",
+    daily_rent: "",
+    driver_daily_cost: "",
+    extra_hourly_rate: "",
     notes: "",
   });
   const [typeForm, setTypeForm] = useState({ name: "", category: "" });
@@ -84,21 +100,36 @@ export function MaintenanceCatalogDialog({ onClose }: { onClose: () => void }) {
 
   const addMachine = useMutation({
     mutationFn: async () => {
-      if (!machineForm.code.trim() || !machineForm.name.trim()) throw new Error("رقم الآلية واسمها مطلوبان");
+      if (!machineForm.name.trim() || !machineForm.asset_number.trim() || !machineForm.owner_name.trim()) throw new Error("اسم الآلية ورقمها والمالك حقول مطلوبة");
       const { error } = await (supabase as any).from("machinery").insert({
-        code: machineForm.code.trim(),
+        code: machineForm.code.trim() || machineForm.asset_number.trim(),
         name: machineForm.name.trim(),
+        asset_number: machineForm.asset_number.trim(),
+        owner_name: machineForm.owner_name.trim(),
         category: machineForm.category.trim() || null,
         plate_no: machineForm.plate_no.trim() || null,
         model: machineForm.model.trim() || null,
         year: machineForm.year.trim() ? Number(machineForm.year) : null,
+        color: machineForm.color.trim() || null,
+        driver_name: machineForm.driver_name.trim() || null,
+        document_status: machineForm.document_status.trim() || null,
+        document_days_remaining: machineForm.document_days_remaining.trim() || null,
+        requires_ato: machineForm.requires_ato,
+        ato_status: machineForm.ato_status.trim() || null,
+        ato_expiry: machineForm.ato_expiry || null,
+        security_permit_no: machineForm.security_permit_no.trim() || null,
+        security_permit_status: machineForm.security_permit_status.trim() || null,
+        security_permit_expiry: machineForm.security_permit_expiry || null,
+        daily_rent: Number(machineForm.daily_rent || 0),
+        driver_daily_cost: Number(machineForm.driver_daily_cost || 0),
+        extra_hourly_rate: Number(machineForm.extra_hourly_rate || 0),
         notes: machineForm.notes.trim() || null,
       });
       if (error) throw error;
     },
     onSuccess: async () => {
       toast.success("تمت إضافة الآلية");
-      setMachineForm({ code: "", name: "", category: "", plate_no: "", model: "", year: "", notes: "" });
+      setMachineForm({ code: "", name: "", asset_number: "", owner_name: "", category: "", plate_no: "", model: "", year: "", color: "", driver_name: "", document_status: "", document_days_remaining: "", requires_ato: false, ato_status: "", ato_expiry: "", security_permit_no: "", security_permit_status: "", security_permit_expiry: "", daily_rent: "", driver_daily_cost: "", extra_hourly_rate: "", notes: "" });
       await invalidate("maintenance-machinery");
     },
     onError: (error: Error) => toast.error(`تعذر إضافة الآلية: ${formatErrorMessage(error)}`),
@@ -208,14 +239,10 @@ export function MaintenanceCatalogDialog({ onClose }: { onClose: () => void }) {
 
           <TabsContent value="machinery" className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="m-code">رقم الآلية *</Label>
-                <Input id="m-code" value={machineForm.code} onChange={(e) => setMachineForm({ ...machineForm, code: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="m-name">الاسم / النوع *</Label>
-                <Input id="m-name" value={machineForm.name} onChange={(e) => setMachineForm({ ...machineForm, name: e.target.value })} />
-              </div>
+              <div className="space-y-1.5"><Label htmlFor="m-name">اسم الآلية *</Label><Input id="m-name" value={machineForm.name} onChange={(e) => setMachineForm({ ...machineForm, name: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label htmlFor="m-code">الكود الداخلي (اختياري)</Label><Input id="m-code" value={machineForm.code} onChange={(e) => setMachineForm({ ...machineForm, code: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label htmlFor="m-number">رقم الآلية / المركبة *</Label><Input id="m-number" value={machineForm.asset_number} onChange={(e) => setMachineForm({ ...machineForm, asset_number: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label htmlFor="m-owner">المالك *</Label><Input id="m-owner" value={machineForm.owner_name} onChange={(e) => setMachineForm({ ...machineForm, owner_name: e.target.value })} /></div>
               <div className="space-y-1.5">
                 <Label htmlFor="m-cat">التصنيف</Label>
                 <Input id="m-cat" value={machineForm.category} onChange={(e) => setMachineForm({ ...machineForm, category: e.target.value })} />
@@ -232,6 +259,19 @@ export function MaintenanceCatalogDialog({ onClose }: { onClose: () => void }) {
                 <Label htmlFor="m-year">سنة الصنع</Label>
                 <Input id="m-year" type="number" value={machineForm.year} onChange={(e) => setMachineForm({ ...machineForm, year: e.target.value })} />
               </div>
+              <div className="space-y-1.5"><Label htmlFor="m-color">اللون</Label><Input id="m-color" value={machineForm.color} onChange={(e) => setMachineForm({ ...machineForm, color: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label htmlFor="m-driver">السائق</Label><Input id="m-driver" value={machineForm.driver_name} onChange={(e) => setMachineForm({ ...machineForm, driver_name: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label htmlFor="m-docs">حالة المستندات</Label><Input id="m-docs" value={machineForm.document_status} onChange={(e) => setMachineForm({ ...machineForm, document_status: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label htmlFor="m-doc-days">الأيام المتبقية للمستندات</Label><Input id="m-doc-days" value={machineForm.document_days_remaining} onChange={(e) => setMachineForm({ ...machineForm, document_days_remaining: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label htmlFor="m-ato-status">حالة ATO</Label><Input id="m-ato-status" value={machineForm.ato_status} onChange={(e) => setMachineForm({ ...machineForm, ato_status: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label htmlFor="m-ato-expiry">انتهاء ATO</Label><Input id="m-ato-expiry" type="date" value={machineForm.ato_expiry} onChange={(e) => setMachineForm({ ...machineForm, ato_expiry: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label htmlFor="m-permit-no">رقم التصريح الأمني</Label><Input id="m-permit-no" value={machineForm.security_permit_no} onChange={(e) => setMachineForm({ ...machineForm, security_permit_no: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label htmlFor="m-permit-status">حالة التصريح الأمني</Label><Input id="m-permit-status" value={machineForm.security_permit_status} onChange={(e) => setMachineForm({ ...machineForm, security_permit_status: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label htmlFor="m-permit-expiry">انتهاء التصريح الأمني</Label><Input id="m-permit-expiry" type="date" value={machineForm.security_permit_expiry} onChange={(e) => setMachineForm({ ...machineForm, security_permit_expiry: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label htmlFor="m-rent">سعر الإيجار اليومي</Label><Input id="m-rent" type="number" min="0" value={machineForm.daily_rent} onChange={(e) => setMachineForm({ ...machineForm, daily_rent: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label htmlFor="m-driver-cost">تكلفة السائق اليومية</Label><Input id="m-driver-cost" type="number" min="0" value={machineForm.driver_daily_cost} onChange={(e) => setMachineForm({ ...machineForm, driver_daily_cost: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label htmlFor="m-extra-rate">سعر الساعة الإضافية</Label><Input id="m-extra-rate" type="number" min="0" value={machineForm.extra_hourly_rate} onChange={(e) => setMachineForm({ ...machineForm, extra_hourly_rate: e.target.value })} /></div>
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={machineForm.requires_ato} onChange={(e) => setMachineForm({ ...machineForm, requires_ato: e.target.checked })} /> يتطلب ATO</label>
               <div className="space-y-1.5 sm:col-span-2 lg:col-span-3">
                 <Label htmlFor="m-notes">ملاحظات</Label>
                 <Input id="m-notes" value={machineForm.notes} onChange={(e) => setMachineForm({ ...machineForm, notes: e.target.value })} />
@@ -247,7 +287,8 @@ export function MaintenanceCatalogDialog({ onClose }: { onClose: () => void }) {
                 <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl border p-3 text-sm">
                   <div>
                     <b>{item.name}</b>
-                    <span className="mr-2 text-xs text-muted-foreground">#{item.code}{item.category ? ` · ${item.category}` : ""}</span>
+                    <span className="mr-2 text-xs text-muted-foreground">#{item.code} · رقم {item.asset_number || "غير مسجل"} · المالك {item.owner_name || "غير مسجل"}</span>
+                    {(!item.name || !item.asset_number || !item.owner_name) && <Badge variant="outline" className="mr-2 border-amber-500/40 text-amber-700">بيانات أساسية ناقصة</Badge>}
                   </div>
                   <Button
                     size="icon"

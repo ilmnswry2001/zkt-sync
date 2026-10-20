@@ -34,7 +34,6 @@ import {
   Phone,
   Plus,
   Save,
-  Sparkles,
   Trash2,
   Truck,
   Upload,
@@ -89,8 +88,12 @@ type Machinery = {
   id: string;
   code: string;
   name: string;
+  asset_number: string | null;
+  owner_name: string | null;
   category: string | null;
   plate_no: string | null;
+  model: string | null;
+  year: number | null;
   status: "active" | "maintenance" | "inactive";
   current_hours: number;
   current_odometer: number;
@@ -133,40 +136,6 @@ function describeVehicleImageError(error: unknown) {
   return formatErrorMessage(error);
 }
 
-type BackgroundRemover = {
-  removeBackground: (
-    imageSource: Blob | File | string | ArrayBuffer | Uint8Array,
-    config?: {
-      progress?: (key: string, current: number, total: number) => void;
-      [key: string]: unknown;
-    },
-  ) => Promise<Blob>;
-};
-
-async function removeImageBackground(
-  file: File,
-  onProgress?: (message: string) => void,
-): Promise<File> {
-  let remover: BackgroundRemover;
-  try {
-    remover = (await import("@imgly/background-removal")) as unknown as BackgroundRemover;
-  } catch {
-    throw new Error(
-      "أداة تفريغ الخلفية غير متوفرة. شغّل pnpm install لتثبيت @imgly/background-removal ثم أعد المحاولة.",
-    );
-  }
-  onProgress?.("جارٍ تجهيز نموذج تفريغ الخلفية…");
-  const blob = await remover.removeBackground(file, {
-    progress: (key: string, current: number, total: number) => {
-      if (typeof total === "number" && total > 0) {
-        onProgress?.(`جارٍ تفريغ الخلفية… ${Math.round((current / total) * 100)}%`);
-      }
-    },
-  });
-  const baseName = file.name.replace(/\.[^.]+$/, "") || "vehicle";
-  return new File([blob], `${baseName}-transparent.png`, { type: "image/png" });
-}
-
 type MonthlyFuelStats = {
   liters: number;
   cost: number;
@@ -187,22 +156,6 @@ function ReportStat({ label, value }: { label: string; value: string }) {
       <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
       <p className="mt-1 text-sm font-bold tabular-nums">{value}</p>
     </div>
-  );
-}
-
-function RemoveBackgroundToggle({
-  value,
-  onChange,
-}: {
-  value: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <label className="flex items-center justify-start gap-2 text-xs font-medium text-muted-foreground">
-      <Switch checked={value} onCheckedChange={onChange} />
-      <Sparkles className={cn("h-3.5 w-3.5", value ? "text-primary" : "text-muted-foreground")} />
-      تفريغ الخلفية تلقائياً
-    </label>
   );
 }
 
@@ -310,7 +263,7 @@ function VehiclesPage() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("machinery")
-        .select("id, code, name, category, plate_no, status, current_hours, current_odometer")
+        .select("id, code, name, asset_number, owner_name, category, plate_no, model, year, status, current_hours, current_odometer")
         .order("code");
       if (error) throw error;
       return (data ?? []) as Machinery[];
@@ -624,7 +577,7 @@ function VehiclesPage() {
             </CardHeader>
             <CardContent className="overflow-x-auto p-0">
               {machineryQuery.isLoading ? <p className="p-8 text-center text-muted-foreground">جارٍ تحميل الآليات…</p> : (
-                <table className="w-full min-w-[760px] text-sm"><thead><tr className="border-b bg-muted/40 text-right"><th className="p-3">الآلية</th><th className="p-3">الكود / اللوحة</th><th className="p-3">الحالة</th><th className="p-3">ساعات التشغيل</th><th className="p-3">العداد</th></tr></thead><tbody>{(machineryQuery.data ?? []).map((machine) => <tr key={machine.id} className="border-b"><td className="p-3 font-medium">{machine.name}<div className="text-xs text-muted-foreground">{machine.category ?? "—"}</div></td><td className="p-3">{machine.code}{machine.plate_no ? ` · ${machine.plate_no}` : ""}</td><td className="p-3"><Badge variant={machine.status === "active" ? "secondary" : "outline"}>{machine.status === "active" ? "نشطة" : machine.status === "maintenance" ? "قيد الصيانة" : "متوقفة"}</Badge></td><td className="p-3 tabular-nums">{Number(machine.current_hours ?? 0).toLocaleString()}</td><td className="p-3 tabular-nums">{Number(machine.current_odometer ?? 0).toLocaleString()} كم</td></tr>)}</tbody></table>
+                <table className="w-full min-w-[900px] text-sm"><thead><tr className="border-b bg-muted/40 text-right"><th className="p-3">الآلية</th><th className="p-3">الرقم / الكود</th><th className="p-3">المالك</th><th className="p-3">الحالة</th><th className="p-3">البيانات</th><th className="p-3">ساعات التشغيل</th><th className="p-3">العداد</th></tr></thead><tbody>{(machineryQuery.data ?? []).map((machine) => <tr key={machine.id} className="border-b"><td className="p-3 font-medium">{machine.name}<div className="text-xs text-muted-foreground">{machine.category ?? "—"} · {machine.model ?? "—"} {machine.year ?? ""}</div></td><td className="p-3">{machine.asset_number || "—"}<div className="text-xs text-muted-foreground">{machine.code}{machine.plate_no ? ` · ${machine.plate_no}` : ""}</div></td><td className="p-3">{machine.owner_name || "غير مسجل"}</td><td className="p-3"><Badge variant={machine.status === "active" ? "secondary" : "outline"}>{machine.status === "active" ? "نشطة" : machine.status === "maintenance" ? "قيد الصيانة" : "متوقفة"}</Badge></td><td className="p-3">{(!machine.name || !machine.asset_number || !machine.owner_name) ? <Badge variant="outline" className="border-amber-500/40 text-amber-700">بيانات أساسية ناقصة</Badge> : <Badge variant="secondary">مكتملة</Badge>}</td><td className="p-3 tabular-nums">{Number(machine.current_hours ?? 0).toLocaleString()}</td><td className="p-3 tabular-nums">{Number(machine.current_odometer ?? 0).toLocaleString()} كم</td></tr>)}</tbody></table>
               )}
               {!machineryQuery.isLoading && !(machineryQuery.data ?? []).length && <p className="p-8 text-center text-muted-foreground">أضف الآليات من كتالوج الصيانة.</p>}
             </CardContent>
@@ -690,7 +643,6 @@ function VehicleDetailsTab({
   const [editing, setEditing] = useState(false);
   const [attaching, setAttaching] = useState(false);
   const [attachStatus, setAttachStatus] = useState<string | null>(null);
-  const [removeBg, setRemoveBg] = useState(true);
   const selected = vehicles.find((vehicle) => vehicle.id === selectedId) ?? vehicles[0] ?? null;
 
   const driversQuery = useQuery({
@@ -762,26 +714,16 @@ function VehicleDetailsTab({
   const attachImage = async (file: File) => {
     if (!selected) return;
     setAttaching(true);
-    let prepared = file;
     try {
-      if (removeBg) {
-        setAttachStatus("جارٍ تجهيز أداة تفريغ الخلفية…");
-        try {
-          prepared = await removeImageBackground(file, setAttachStatus);
-        } catch (error) {
-          toast.error(`تعذر تفريغ الخلفية: ${formatErrorMessage(error)} — رُفعت الصورة الأصلية`);
-          prepared = file;
-        }
-      }
       setAttachStatus("جارٍ رفع الصورة…");
-      const url = await uploadVehicleImage(prepared, selected.id);
+      const url = await uploadVehicleImage(file, selected.id);
       const { error } = await (supabase as any)
         .from("vehicles")
         .update({ vehicle_image_url: url })
         .eq("id", selected.id);
       if (error) throw error;
       await client.invalidateQueries({ queryKey: ["vehicles"] });
-      toast.success(removeBg ? "تم تفريغ الخلفية وإرفاق شكل المركبة" : "تم إرفاق شكل المركبة");
+      toast.success("تم إرفاق شكل المركبة");
     } catch (error) {
       toast.error(`تعذر إرفاق الصورة: ${describeVehicleImageError(error)}`);
     } finally {
@@ -909,7 +851,6 @@ function VehicleDetailsTab({
               تعديل التفاصيل
             </Button>
           </div>
-          <RemoveBackgroundToggle value={removeBg} onChange={setRemoveBg} />
           {attaching && (
             <p className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
               <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
@@ -924,8 +865,6 @@ function VehicleDetailsTab({
           key={selected.id}
           vehicle={selected}
           drivers={drivers}
-          removeBg={removeBg}
-          onRemoveBgChange={setRemoveBg}
           onCancel={() => setEditing(false)}
           onSaved={() => setEditing(false)}
         />
@@ -953,15 +892,11 @@ function VehicleDetailsTab({
 function VehicleDetailForm({
   vehicle,
   drivers,
-  removeBg,
-  onRemoveBgChange,
   onCancel,
   onSaved,
 }: {
   vehicle: Vehicle;
   drivers: Driver[];
-  removeBg: boolean;
-  onRemoveBgChange: (value: boolean) => void;
   onCancel: () => void;
   onSaved: () => void;
 }) {
@@ -982,19 +917,9 @@ function VehicleDetailForm({
 
   const handleImageUpload = async (file: File) => {
     setUploading(true);
-    let prepared = file;
     try {
-      if (removeBg) {
-        setUploadStatus("جارٍ تجهيز أداة تفريغ الخلفية…");
-        try {
-          prepared = await removeImageBackground(file, setUploadStatus);
-        } catch (error) {
-          toast.error(`تعذر تفريغ الخلفية: ${formatErrorMessage(error)} — رُفعت الصورة الأصلية`);
-          prepared = file;
-        }
-      }
       setUploadStatus("جارٍ رفع الصورة…");
-      const url = await uploadVehicleImage(prepared, vehicle.id);
+      const url = await uploadVehicleImage(file, vehicle.id);
       setImageUrl(url);
       toast.success("تم رفع صورة المركبة، اضغط «حفظ التفاصيل» لتثبيتها");
     } catch (error) {
@@ -1164,7 +1089,6 @@ function VehicleDetailForm({
             )}
             <span className="text-xs text-muted-foreground">PNG أو JPG أو WebP — حتى 5MB</span>
           </div>
-          <RemoveBackgroundToggle value={removeBg} onChange={onRemoveBgChange} />
           {uploading && (
             <p className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
               <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />

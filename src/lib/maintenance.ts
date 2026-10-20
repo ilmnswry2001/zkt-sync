@@ -8,6 +8,8 @@ export type Machinery = {
   id: string;
   code: string;
   name: string;
+  asset_number?: string | null;
+  owner_name?: string | null;
   category: string | null;
   plate_no: string | null;
   model: string | null;

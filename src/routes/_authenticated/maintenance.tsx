@@ -60,6 +60,7 @@ import {
   Plus,
   Printer,
   Search,
+  Save,
   Settings2,
   Trash2,
   Truck,
