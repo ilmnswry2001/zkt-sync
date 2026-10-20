@@ -37,6 +37,7 @@ import {
   Bell,
   ChevronDown,
   SlidersHorizontal,
+  Network,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -86,6 +87,7 @@ const nav = [
   { to: "/files", label: "سجل الملفات", icon: FileBox },
   { to: "/settings", label: "الإعدادات", icon: Settings2, access: "admin" },
   { to: "/accounts", label: "الحسابات والصلاحيات", icon: UserCog, access: "admin" },
+  { to: "/system-map", label: "خريطة النظام", icon: Network, access: "admin" },
 ] as const;
 
 export const SECTION_OPTIONS = nav.map(({ to, label }) => ({ to, label }));
@@ -126,7 +128,7 @@ const NAV_GROUPS = [
     icon: Boxes,
     tos: ["/warehouses", "/devices", "/upload", "/files"],
   },
-  { key: "settings", label: "الإعدادات", icon: Settings2, tos: ["/settings", "/accounts"] },
+  { key: "settings", label: "الإعدادات", icon: Settings2, tos: ["/settings", "/accounts", "/system-map"] },
 ] as const;
 
 const EMPTY_NAV_CONFIG = {
