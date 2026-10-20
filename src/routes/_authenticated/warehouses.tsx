@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { todayInBaghdad } from "@/lib/date-time";
 import * as XLSX from "xlsx";
 import { FileDown, Printer } from "lucide-react";
+import { MaterialRequestWorkflow } from "@/components/material-requests/MaterialRequestWorkflow";
 
 export const Route = createFileRoute("/_authenticated/warehouses")({
   head: () => ({
@@ -56,8 +57,9 @@ const OUT_TYPES = ["issue", "transfer_out", "tool_out"];
 const sel = "h-9 w-full rounded-md border border-input bg-background px-2 text-sm";
 
 function WarehousesPage() {
-  const { user, roles, isAdmin, isHR } = useAuth();
+  const { user, roles, isAdmin, isHR, isCompanyManager } = useAuth();
   const canEdit = isAdmin || isHR || roles.some((r) => r === "data_entry" || r === "site_admin");
+  const canReceivePurchases = isAdmin || isCompanyManager || roles.includes("warehouse_keeper");
   const qc = useQueryClient();
   const today = todayInBaghdad();
 
@@ -359,6 +361,7 @@ function WarehousesPage() {
           {canEdit && <TabsTrigger value="move">تسجيل حركة</TabsTrigger>}
           <TabsTrigger value="daily">التقرير اليومي</TabsTrigger>
           <TabsTrigger value="tools">العدد والأدوات</TabsTrigger>
+          {canReceivePurchases && <TabsTrigger value="purchase-receipts">استلام المشتريات</TabsTrigger>}
           {canEdit && <TabsTrigger value="count">الجرد</TabsTrigger>}
           {canEdit && <TabsTrigger value="setup">الأصناف والمخازن</TabsTrigger>}
         </TabsList>
@@ -666,6 +669,22 @@ function WarehousesPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {canReceivePurchases && (
+          <TabsContent value="purchase-receipts" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">استلام طلبات المشتريات</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  راجع دفعات الشراء الواردة، وثبّت الكميات التي وصلت فعلياً لإضافتها إلى المخزن وتوثيق وصل الاستلام.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <MaterialRequestWorkflow stage="warehouse" />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
         {canEdit && (
           <TabsContent value="count">

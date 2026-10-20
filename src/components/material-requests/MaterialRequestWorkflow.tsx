@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { todayInBaghdad } from "@/lib/date-time";
+import { escapeHtml } from "@/lib/report-print";
 import {
   defaultStockAllocation,
   validatePurchaseQuantity,
@@ -506,7 +507,7 @@ type RequestReceipt = {
   received_by: string;
   received_at: string;
   notes: string | null;
-  items: Array<{ id: string; request_item_id: string; batch_item_id: string; received_qty: number; serial_notes: string | null; did_not_arrive: boolean; exclusion_reason: string | null }>;
+  items: Array<{ id: string; request_item_id: string; batch_item_id: string; received_qty: number; serial_notes: string | null; did_not_arrive: boolean; exclusion_reason: string | null; shortage_reason?: string | null }>;
 };
 
 function hasOutstandingReceipt(request: MaterialRequest) {
@@ -611,7 +612,14 @@ function RequestList({ stage, requests, options, actor, canCreate, canPlan, canW
               <ReceiptPanels request={request} options={options} onDone={onRefresh} />
             )}
             {request.batches.length > 0 && <BatchHistory batches={request.batches as PurchaseBatch[]} canSend={stage === "procurement" && canProcure} onDone={onRefresh} />}
-            {request.receipts.length > 0 && <ReceiptHistory receipts={request.receipts as RequestReceipt[]} />}
+            {request.receipts.length > 0 && (
+              <ReceiptHistory
+                request={request}
+                receipts={request.receipts as RequestReceipt[]}
+                batches={request.batches as PurchaseBatch[]}
+                warehouses={options?.warehouses ?? []}
+              />
+            )}
             <AuditTimeline events={request.events} />
           </CardContent>
           </details>
@@ -1013,13 +1021,49 @@ function SendBatchAction({ batch, onDone }: { batch: PurchaseBatch; onDone: () =
   return <Button size="sm" disabled={busy} onClick={() => void send()}><Send className="ml-2 h-4 w-4" /> إرسال للاستلام</Button>;
 }
 
-function ReceiptHistory({ receipts }: { receipts: RequestReceipt[] }) {
+function ReceiptHistory({
+  request,
+  receipts,
+  batches,
+  warehouses,
+}: {
+  request: MaterialRequest;
+  receipts: RequestReceipt[];
+  batches: PurchaseBatch[];
+  warehouses: MaterialRequestOptions["warehouses"];
+}) {
+  const downloadReceipt = (receipt: RequestReceipt) => {
+    const batch = batches.find((item) => item.id === receipt.batch_id);
+    const itemRows = receipt.items.map((line) => {
+      const requestItem = request.items.find((item) => item.id === line.request_item_id);
+      const batchItem = batch?.items.find((item) => item.id === line.batch_item_id);
+      const status = line.did_not_arrive
+        ? `لم يصل${line.shortage_reason ? `: ${line.shortage_reason}` : ""}`
+        : line.exclusion_reason
+          ? `مستبعد: ${line.exclusion_reason}`
+          : `تم الاستلام${line.shortage_reason ? ` · سبب النقص: ${line.shortage_reason}` : ""}`;
+      return `<tr><td>${escapeHtml(requestItem?.item_name ?? "صنف غير معروف")}</td><td>${escapeHtml(requestItem?.unit ?? "—")}</td><td>${Number(batchItem?.purchased_qty ?? 0).toLocaleString("ar-IQ")}</td><td>${Number(line.received_qty).toLocaleString("ar-IQ")}</td><td>${escapeHtml(status)}</td><td>${escapeHtml(line.serial_notes ?? "—")}</td></tr>`;
+    }).join("");
+    const warehouse = warehouses.find((item) => item.id === receipt.warehouse_id)?.name ?? "المخزن";
+    const html = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>وصل استلام ${escapeHtml(request.request_number)}</title><style>@page{size:A4;margin:14mm}*{box-sizing:border-box}body{font-family:Arial,Tahoma,sans-serif;color:#162c39;margin:0;line-height:1.6}.header{border-bottom:3px solid #087d78;padding:0 0 14px;display:flex;justify-content:space-between;align-items:center}.header h1{font-size:23px;color:#087d78;margin:0}.header p{margin:3px 0 0;color:#647782;font-size:12px}.ref{border:1px solid #c6d8dc;border-radius:8px;padding:8px 12px;font-weight:bold}.meta{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:18px 0}.box{border:1px solid #d5e1e4;border-radius:8px;padding:9px 11px}.box span{display:block;color:#6b7c84;font-size:10px}.box b{display:block;margin-top:3px;font-size:13px}table{width:100%;border-collapse:collapse;font-size:11px}th{background:#e8f3f2;color:#145a5a}th,td{padding:9px 7px;border:1px solid #cbd8dc;text-align:right}tr:nth-child(even){background:#f7fafb}.note{margin-top:14px;padding:10px;border-right:3px solid #087d78;background:#f2f8f8}.signatures{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-top:48px}.signatures div{border-top:1px solid #74858c;padding-top:8px;text-align:center;font-size:11px;color:#52636a}</style></head><body><header class="header"><div><h1>وصل استلام مخزني</h1><p>سجل استلام طلب شراء ومطابقة الكميات</p></div><div class="ref">رقم الوصل: ${escapeHtml(receipt.id)}</div></header><section class="meta"><div class="box"><span>رقم الطلب</span><b>${escapeHtml(request.request_number)}</b></div><div class="box"><span>المخزن المستلم</span><b>${escapeHtml(warehouse)}</b></div><div class="box"><span>المجهز / المورد</span><b>${escapeHtml(batch?.supplier ?? "—")}</b></div><div class="box"><span>رقم مستند الشراء</span><b>${escapeHtml(batch?.document_number || "—")}</b></div><div class="box"><span>تاريخ ووقت الاستلام</span><b>${escapeHtml(new Date(receipt.received_at).toLocaleString("ar-IQ"))}</b></div><div class="box"><span>معرّف مستلم المخزن</span><b dir="ltr">${escapeHtml(receipt.received_by)}</b></div></section><table><thead><tr><th>الصنف</th><th>الوحدة</th><th>المشتراة</th><th>المستلمة فعلياً</th><th>الحالة</th><th>الرقم التسلسلي / ملاحظات</th></tr></thead><tbody>${itemRows}</tbody></table>${receipt.notes ? `<div class="note"><b>ملاحظات الاستلام:</b> ${escapeHtml(receipt.notes)}</div>` : ""}<footer class="signatures"><div>أمين المخزن</div><div>ممثل المشتريات</div><div>المستلم / المستفيد</div></footer></body></html>`;
+    const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `وصل-استلام-${request.request_number}-${receipt.id.slice(0, 8)}.html`;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
   return (
     <details className="rounded-md border px-3 py-2">
       <summary className="cursor-pointer text-sm font-semibold">سجل الاستلامات ({receipts.length})</summary>
       <div className="mt-3 space-y-2">
         {receipts.map((receipt) => <div key={receipt.id} className="rounded-md border p-3 text-xs">
-          <p className="font-semibold">استلام {receipt.id} · {new Date(receipt.received_at).toLocaleString("ar-IQ")}</p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="font-semibold">استلام {receipt.id} · {new Date(receipt.received_at).toLocaleString("ar-IQ")}</p>
+            <Button type="button" size="sm" variant="outline" onClick={() => downloadReceipt(receipt)}>
+              <FileDown className="ml-2 h-4 w-4" /> تنزيل وصل الاستلام
+            </Button>
+          </div>
           {receipt.items.map((line) => <p key={line.id} className={line.did_not_arrive ? "mt-1 font-semibold text-destructive" : "mt-1"}>{line.did_not_arrive ? "لم يصل" : `استلم ${line.received_qty}`} {line.exclusion_reason ? `· مستبعد: ${line.exclusion_reason}` : ""} {line.serial_notes ? `· الرقم التسلسلي: ${line.serial_notes}` : ""}</p>)}
         </div>)}
       </div>
