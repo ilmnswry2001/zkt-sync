@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute, redirect } from "@tanstack/react-router";
@@ -88,7 +88,12 @@ export const Route = createFileRoute("/_authenticated/maintenance")({
   component: MaintenancePage,
 });
 
-type FormPart = { warehouse_item_id: string; part_name: string; quantity: string; unit_cost: string };
+type FormPart = {
+  warehouse_item_id: string;
+  part_name: string;
+  quantity: string;
+  unit_cost: string;
+};
 
 type FormState = {
   id: string | null;
@@ -126,6 +131,11 @@ function MaintenancePage() {
   const [formOpen, setFormOpen] = useState(false);
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [printRecord, setPrintRecord] = useState<MaintenanceRecord | null>(null);
+  useEffect(() => {
+    const clearPrintRecord = () => setPrintRecord(null);
+    window.addEventListener("afterprint", clearPrintRecord);
+    return () => window.removeEventListener("afterprint", clearPrintRecord);
+  }, []);
 
   const machineryQuery = useQuery({
     queryKey: ["maintenance-machinery"],
@@ -244,14 +254,16 @@ function MaintenancePage() {
   const entityLabel = (record: MaintenanceRecord) => {
     if (record.record_type === "machinery") {
       const match = machinery.find((item) => item.id === record.machinery_id);
-      return match ? `${match.name} · ${match.code}` : record.entity_name ?? "—";
+      return match ? `${match.name} · ${match.code}` : (record.entity_name ?? "—");
     }
     if (record.record_type === "vehicle") {
       const match = vehicles.find((item) => item.id === record.vehicle_id);
-      return match ? `${match.name} · ${match.vehicle_no}` : record.entity_name ?? "—";
+      return match ? `${match.name} · ${match.vehicle_no}` : (record.entity_name ?? "—");
     }
     const match = equipment.find((item) => item.id === record.equipment_id);
-    return match ? `${match.name}${match.code ? ` · ${match.code}` : ""}` : record.entity_name ?? "—";
+    return match
+      ? `${match.name}${match.code ? ` · ${match.code}` : ""}`
+      : (record.entity_name ?? "—");
   };
 
   const entitySnapshot = () => {
@@ -292,7 +304,10 @@ function MaintenancePage() {
       record.next_maintenance_date >= today &&
       record.next_maintenance_date <= upcomingLimitDate,
   ).length;
-  const totalCost = filteredRecords.reduce((sum, record) => sum + Number(record.total_cost ?? 0), 0);
+  const totalCost = filteredRecords.reduce(
+    (sum, record) => sum + Number(record.total_cost ?? 0),
+    0,
+  );
 
   const emptyForm = (recordNo: string, date: string): FormState => ({
     id: null,
@@ -345,7 +360,9 @@ function MaintenancePage() {
       status: record.status,
       nextDate: record.next_maintenance_date ?? "",
       notes: record.notes ?? "",
-      parts: parts.length ? parts : [{ warehouse_item_id: "", part_name: "", quantity: "1", unit_cost: "" }],
+      parts: parts.length
+        ? parts
+        : [{ warehouse_item_id: "", part_name: "", quantity: "1", unit_cost: "" }],
       newFiles: [],
       existingAttachments: record.maintenance_record_attachments ?? [],
     });
@@ -426,10 +443,13 @@ function MaintenancePage() {
           unit_cost: Number(part.unit_cost) || 0,
           line_total: (Number(part.quantity) || 0) * (Number(part.unit_cost) || 0),
         }));
-      const { error: partsError } = await (supabase as any).rpc("replace_maintenance_record_parts", {
+      const { error: partsError } = await (supabase as any).rpc(
+        "replace_maintenance_record_parts",
+        {
         _record_id: recordId,
         _parts: parts,
-      });
+        },
+      );
       if (partsError) throw partsError;
       for (const file of form.newFiles) {
         const uploaded = await uploadMaintenanceAttachment(file, form.recordNo);
@@ -466,7 +486,10 @@ function MaintenancePage() {
 
   const removeAttachment = async (attachment: MaintenanceAttachment) => {
     if (attachment.id) {
-      await (supabase as any).from("maintenance_record_attachments").delete().eq("id", attachment.id);
+      await (supabase as any)
+        .from("maintenance_record_attachments")
+        .delete()
+        .eq("id", attachment.id);
     }
     if (attachment.file_path) {
       await supabase.storage.from("maintenance-attachments").remove([attachment.file_path]);
@@ -479,7 +502,7 @@ function MaintenancePage() {
 
   const handlePrint = (record: MaintenanceRecord) => {
     setPrintRecord(record);
-    window.setTimeout(() => window.print(), 150);
+    window.setTimeout(() => window.print(), 300);
   };
 
   const exportExcel = () => {
@@ -489,19 +512,19 @@ function MaintenancePage() {
     }
     const rows = filteredRecords.map((record) => ({
       "رقم السجل": record.record_no,
-      "التاريخ": record.maintenance_date,
-      "الجهة": entityLabel(record),
+      التاريخ: record.maintenance_date,
+      الجهة: entityLabel(record),
       "نوع الصيانة": record.maintenance_type_name ?? "—",
-      "الورشة": record.workshop_name ?? "—",
-      "الفني": record.technician ?? "—",
-      "الحالة": statusLabel(record.status),
+      الورشة: record.workshop_name ?? "—",
+      الفني: record.technician ?? "—",
+      الحالة: statusLabel(record.status),
       "أجرة اليد": Number(record.labor_cost),
       "كلفة القطع": Number(record.parts_total),
-      "الإجمالي": Number(record.total_cost),
-      "العداد": record.odometer_reading ?? "",
+      الإجمالي: Number(record.total_cost),
+      العداد: record.odometer_reading ?? "",
       "ساعات التشغيل": record.hours_reading ?? "",
       "الصيانة القادمة": record.next_maintenance_date ?? "",
-      "ملاحظات": record.notes ?? "",
+      ملاحظات: record.notes ?? "",
     }));
     writeXlsx(
       rows,
@@ -511,7 +534,8 @@ function MaintenancePage() {
   };
 
   const workspaceName =
-    (typeof window !== "undefined" && window.localStorage.getItem("zkt-workspace-name")) || "منظومة زِكت";
+    (typeof window !== "undefined" && window.localStorage.getItem("zkt-workspace-name")) ||
+    "منظومة زِكت";
 
   const activeTabLabel = recordTypeLabel(activeTab);
 
@@ -528,7 +552,9 @@ function MaintenancePage() {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" asChild>
-            <a href="/warehouses"><Package className="ml-2 h-4 w-4" /> مخزن الصيانة</a>
+            <a href="/warehouses">
+              <Package className="ml-2 h-4 w-4" /> مخزن الصيانة
+            </a>
           </Button>
           <Button variant="outline" onClick={() => setCatalogOpen(true)}>
             <Settings2 className="ml-2 h-4 w-4" /> كتالوج الصيانة
@@ -571,7 +597,9 @@ function MaintenancePage() {
         </div>
         <div className="glass-card rounded-3xl p-5">
           <p className="text-xs text-muted-foreground">صيانة قادمة خلال 30 يومًا</p>
-          <p className="mt-2 text-2xl font-bold tabular-nums text-amber-600 dark:text-amber-400">{upcomingCount}</p>
+          <p className="mt-2 text-2xl font-bold tabular-nums text-amber-600 dark:text-amber-400">
+            {upcomingCount}
+          </p>
         </div>
         <div className="glass-card rounded-3xl p-5">
           <p className="text-xs text-muted-foreground">صيانة متأخرة</p>
@@ -600,7 +628,10 @@ function MaintenancePage() {
                 onChange={(event) => setSearch(event.target.value)}
               />
             </div>
-            <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as "all" | MaintenanceStatus)}>
+            <Select
+              value={statusFilter}
+              onValueChange={(value) => setStatusFilter(value as "all" | MaintenanceStatus)}
+            >
               <SelectTrigger className="w-40">
                 <SelectValue />
               </SelectTrigger>
@@ -651,10 +682,16 @@ function MaintenancePage() {
                     <td className="p-3">{record.maintenance_type_name ?? "—"}</td>
                     <td className="p-3">{record.workshop_name ?? "—"}</td>
                     <td className="p-3">
-                      <Badge className={statusClass(record.status)}>{statusLabel(record.status)}</Badge>
+                      <Badge className={statusClass(record.status)}>
+                        {statusLabel(record.status)}
+                      </Badge>
                     </td>
-                    <td className="p-3 tabular-nums">{record.maintenance_record_parts?.length ?? 0}</td>
-                    <td className="p-3 font-semibold tabular-nums">{money(record.total_cost)} د.ع</td>
+                    <td className="p-3 tabular-nums">
+                      {record.maintenance_record_parts?.length ?? 0}
+                    </td>
+                    <td className="p-3 font-semibold tabular-nums">
+                      {money(record.total_cost)} د.ع
+                    </td>
                     <td className="p-3 whitespace-nowrap">
                       {record.next_maintenance_date ? (
                         <span
@@ -673,7 +710,8 @@ function MaintenancePage() {
                     <td className="p-3">
                       {record.maintenance_record_attachments?.length ? (
                         <span className="inline-flex items-center gap-1 text-xs">
-                          <ImageIcon className="h-4 w-4" /> {record.maintenance_record_attachments.length}
+                          <ImageIcon className="h-4 w-4" />{" "}
+                          {record.maintenance_record_attachments.length}
                         </span>
                       ) : (
                         "—"
@@ -681,10 +719,20 @@ function MaintenancePage() {
                     </td>
                     <td className="p-3">
                       <div className="flex items-center gap-1">
-                        <Button size="icon" variant="ghost" aria-label={`تعديل ${record.record_no}`} onClick={() => openEdit(record)}>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          aria-label={`تعديل ${record.record_no}`}
+                          onClick={() => openEdit(record)}
+                        >
                           <PencilLine className="h-4 w-4" />
                         </Button>
-                        <Button size="icon" variant="ghost" aria-label={`طباعة ${record.record_no}`} onClick={() => handlePrint(record)}>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          aria-label={`طباعة ${record.record_no}`}
+                          onClick={() => handlePrint(record)}
+                        >
                           <Printer className="h-4 w-4" />
                         </Button>
                         <Button
@@ -692,7 +740,8 @@ function MaintenancePage() {
                           variant="ghost"
                           aria-label={`حذف ${record.record_no}`}
                           onClick={() => {
-                            if (confirm(`حذف سجل الصيانة ${record.record_no}؟`)) deleteRecord.mutate(record.id);
+                            if (confirm(`حذف سجل الصيانة ${record.record_no}؟`))
+                              deleteRecord.mutate(record.id);
                           }}
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
@@ -705,7 +754,9 @@ function MaintenancePage() {
             </table>
           )}
           {!recordsQuery.isLoading && filteredRecords.length === 0 && (
-            <p className="p-8 text-center text-muted-foreground">لا توجد سجلات صيانة لهذا التبويب بعد.</p>
+            <p className="p-8 text-center text-muted-foreground">
+              لا توجد سجلات صيانة لهذا التبويب بعد.
+            </p>
           )}
         </CardContent>
       </Card>
@@ -714,7 +765,9 @@ function MaintenancePage() {
         <DialogContent dir="rtl" className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>{form.id ? `تعديل سجل ${form.recordNo}` : "إضافة سجل صيانة"}</DialogTitle>
-            <DialogDescription>سجل {activeTabLabel} بتفاصيل القطع والكلفة والمرفقات.</DialogDescription>
+            <DialogDescription>
+              سجل {activeTabLabel} بتفاصيل القطع والكلفة والمرفقات.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -753,7 +806,10 @@ function MaintenancePage() {
             </div>
             <div className="space-y-2">
               <Label>نوع الصيانة</Label>
-              <Select value={form.typeId || "other"} onValueChange={(value) => handleTypeChange(value === "other" ? "" : value)}>
+              <Select
+                value={form.typeId || "other"}
+                onValueChange={(value) => handleTypeChange(value === "other" ? "" : value)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="اختر النوع" />
                 </SelectTrigger>
@@ -776,7 +832,12 @@ function MaintenancePage() {
             </div>
             <div className="space-y-2">
               <Label>الورشة / الفني</Label>
-              <Select value={form.workshopId || "none"} onValueChange={(value) => setForm({ ...form, workshopId: value === "none" ? "" : value })}>
+              <Select
+                value={form.workshopId || "none"}
+                onValueChange={(value) =>
+                  setForm({ ...form, workshopId: value === "none" ? "" : value })
+                }
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="اختر الورشة" />
                 </SelectTrigger>
@@ -822,7 +883,10 @@ function MaintenancePage() {
             </div>
             <div className="space-y-2">
               <Label>الحالة</Label>
-              <Select value={form.status} onValueChange={(value) => setForm({ ...form, status: value as MaintenanceStatus })}>
+              <Select
+                value={form.status}
+                onValueChange={(value) => setForm({ ...form, status: value as MaintenanceStatus })}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -865,7 +929,10 @@ function MaintenancePage() {
                 onClick={() =>
                   setForm({
                     ...form,
-                    parts: [...form.parts, { warehouse_item_id: "", part_name: "", quantity: "1", unit_cost: "" }],
+                    parts: [
+                      ...form.parts,
+                      { warehouse_item_id: "", part_name: "", quantity: "1", unit_cost: "" },
+                    ],
                   })
                 }
               >
@@ -874,7 +941,10 @@ function MaintenancePage() {
             </div>
             <div className="space-y-2">
               {form.parts.map((part, index) => (
-                <div key={index} className="grid gap-2 sm:grid-cols-[220px_1fr_100px_140px_120px_40px]">
+                <div
+                  key={index}
+                  className="grid gap-2 sm:grid-cols-[220px_1fr_100px_140px_120px_40px]"
+                >
                   <Select
                     value={part.warehouse_item_id || "manual"}
                     onValueChange={(value) => {
@@ -887,18 +957,25 @@ function MaintenancePage() {
                                 ...item,
                                 warehouse_item_id: stockItem?.id ?? "",
                                 part_name: stockItem?.name ?? item.part_name,
-                                unit_cost: stockItem ? String(stockItem.unit_cost ?? 0) : item.unit_cost,
+                                unit_cost: stockItem
+                                  ? String(stockItem.unit_cost ?? 0)
+                                  : item.unit_cost,
                               }
                             : item,
                         ),
                       });
                     }}
                   >
-                    <SelectTrigger aria-label="صنف مخزن الصيانة"><SelectValue placeholder="قطعة من المخزن" /></SelectTrigger>
+                    <SelectTrigger aria-label="صنف مخزن الصيانة">
+                      <SelectValue placeholder="قطعة من المخزن" />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="manual">قطعة خارج المخزن</SelectItem>
                       {stockItems.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>{item.name}{item.code ? ` · ${item.code}` : ""}</SelectItem>
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.name}
+                          {item.code ? ` · ${item.code}` : ""}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -955,7 +1032,12 @@ function MaintenancePage() {
                     size="icon"
                     variant="ghost"
                     aria-label="حذف القطعة"
-                    onClick={() => setForm({ ...form, parts: form.parts.filter((_, itemIndex) => itemIndex !== index) })}
+                    onClick={() =>
+                      setForm({
+                        ...form,
+                        parts: form.parts.filter((_, itemIndex) => itemIndex !== index),
+                      })
+                    }
                   >
                     <X className="h-4 w-4 text-destructive" />
                   </Button>
@@ -963,7 +1045,8 @@ function MaintenancePage() {
               ))}
             </div>
             <p className="text-xs text-muted-foreground">
-              اختيار قطعة من مخزن الصيانة يصرف كميتها تلقائياً عند حفظ سجل بحالة «مكتملة». القطعة الخارجية تبقى للتوثيق والكلفة فقط.
+              اختيار قطعة من مخزن الصيانة يصرف كميتها تلقائياً عند حفظ سجل بحالة «مكتملة». القطعة
+              الخارجية تبقى للتوثيق والكلفة فقط.
             </p>
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="space-y-2">
@@ -1018,7 +1101,11 @@ function MaintenancePage() {
                           PDF
                         </span>
                       ) : (
-                        <img src={attachment.file_url} alt="مرفق الصيانة" className="h-16 w-16 rounded-lg border object-cover" />
+                        <img
+                          src={attachment.file_url}
+                          alt="مرفق الصيانة"
+                          className="h-16 w-16 rounded-lg border object-cover"
+                        />
                       )}
                     </a>
                     <button
@@ -1040,7 +1127,10 @@ function MaintenancePage() {
                       type="button"
                       aria-label="إزالة الملف"
                       onClick={() =>
-                        setForm({ ...form, newFiles: form.newFiles.filter((_, fileIndex) => fileIndex !== index) })
+                        setForm({
+                          ...form,
+                          newFiles: form.newFiles.filter((_, fileIndex) => fileIndex !== index),
+                        })
                       }
                       className="absolute -left-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground"
                     >
@@ -1072,29 +1162,75 @@ function MaintenancePage() {
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
-              borderBottom: "2px solid #0f172a",
-              paddingBottom: 12,
+              background: "linear-gradient(125deg, #0f766e, #0f172a)",
+              color: "#fff",
+              borderRadius: 12,
+              padding: "12px 16px",
+              marginBottom: 10,
             }}
           >
             <div>
-              <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>{workspaceName}</h1>
-              <p style={{ margin: "4px 0 0", fontSize: 12 }}>تقرير صيانة — {recordTypeLabel(printRecord.record_type)}</p>
+              <p style={{ margin: 0, fontSize: 10, opacity: 0.8 }}>{workspaceName}</p>
+              <h1 style={{ margin: "3px 0 0", fontSize: 22, fontWeight: 800 }}>وصل صيانة</h1>
+              <p style={{ margin: "3px 0 0", fontSize: 11 }}>
+                صيانة {recordTypeLabel(printRecord.record_type)}
+              </p>
             </div>
-            <div style={{ textAlign: "left", fontSize: 12, lineHeight: 1.7 }}>
-              <p style={{ margin: 0 }}>رقم السجل: <b>{printRecord.record_no}</b></p>
-              <p style={{ margin: 0 }}>التاريخ: <b>{dateLabel(printRecord.maintenance_date)}</b></p>
+            <div
+              style={{
+                textAlign: "left",
+                fontSize: 12,
+                lineHeight: 1.8,
+                border: "1px solid #ffffff66",
+                borderRadius: 8,
+                padding: "6px 12px",
+              }}
+            >
+              <p style={{ margin: 0 }}>
+                رقم الوصل: <b>{printRecord.record_no}</b>
+              </p>
+              <p style={{ margin: 0 }}>
+                التاريخ: <b>{dateLabel(printRecord.maintenance_date)}</b>
+              </p>
             </div>
           </div>
 
           <table style={{ width: "100%", marginTop: 16, borderCollapse: "collapse", fontSize: 13 }}>
             <tbody>
-              <tr><td style={printCell}>الجهة</td><td style={printCell}>{entityLabel(printRecord)}</td></tr>
-              <tr><td style={printCell}>نوع الصيانة</td><td style={printCell}>{printRecord.maintenance_type_name ?? "—"}</td></tr>
-              <tr><td style={printCell}>الورشة / الفني</td><td style={printCell}>{printRecord.workshop_name ?? "—"}{printRecord.technician ? ` · ${printRecord.technician}` : ""}</td></tr>
-              <tr><td style={printCell}>الحالة</td><td style={printCell}>{statusLabel(printRecord.status)}</td></tr>
-              <tr><td style={printCell}>العداد / ساعات التشغيل</td><td style={printCell}>{printRecord.odometer_reading ?? "—"} كم{printRecord.hours_reading != null ? ` · ${printRecord.hours_reading} ساعة` : ""}</td></tr>
-              <tr><td style={printCell}>الصيانة القادمة</td><td style={printCell}>{dateLabel(printRecord.next_maintenance_date)}</td></tr>
-              <tr><td style={printCell}>وصف الأعمال</td><td style={printCell}>{printRecord.notes ?? "—"}</td></tr>
+              <tr>
+                <td style={printCell}>الجهة</td>
+                <td style={printCell}>{entityLabel(printRecord)}</td>
+              </tr>
+              <tr>
+                <td style={printCell}>نوع الصيانة</td>
+                <td style={printCell}>{printRecord.maintenance_type_name ?? "—"}</td>
+              </tr>
+              <tr>
+                <td style={printCell}>الورشة / الفني</td>
+                <td style={printCell}>
+                  {printRecord.workshop_name ?? "—"}
+                  {printRecord.technician ? ` · ${printRecord.technician}` : ""}
+                </td>
+              </tr>
+              <tr>
+                <td style={printCell}>الحالة</td>
+                <td style={printCell}>{statusLabel(printRecord.status)}</td>
+              </tr>
+              <tr>
+                <td style={printCell}>العداد / ساعات التشغيل</td>
+                <td style={printCell}>
+                  {printRecord.odometer_reading ?? "—"} كم
+                  {printRecord.hours_reading != null ? ` · ${printRecord.hours_reading} ساعة` : ""}
+                </td>
+              </tr>
+              <tr>
+                <td style={printCell}>الصيانة القادمة</td>
+                <td style={printCell}>{dateLabel(printRecord.next_maintenance_date)}</td>
+              </tr>
+              <tr>
+                <td style={printCell}>وصف الأعمال</td>
+                <td style={printCell}>{printRecord.notes ?? "—"}</td>
+              </tr>
             </tbody>
           </table>
 
@@ -1121,7 +1257,9 @@ function MaintenancePage() {
               ))}
               {(printRecord.maintenance_record_parts ?? []).length === 0 && (
                 <tr>
-                  <td style={printCell} colSpan={5}>لا توجد قطع مسجلة.</td>
+                  <td style={printCell} colSpan={5}>
+                    لا توجد قطع مسجلة.
+                  </td>
                 </tr>
               )}
             </tbody>
@@ -1129,16 +1267,31 @@ function MaintenancePage() {
 
           <table style={{ width: "100%", marginTop: 10, borderCollapse: "collapse", fontSize: 13 }}>
             <tbody>
-              <tr><td style={printCell}>أجرة اليد</td><td style={printCell}>{money(printRecord.labor_cost)} د.ع</td></tr>
-              <tr><td style={printCell}>كلفة القطع</td><td style={printCell}>{money(printRecord.parts_total)} د.ع</td></tr>
-              <tr><td style={printCell}><b>الإجمالي</b></td><td style={printCell}><b>{money(printRecord.total_cost)} د.ع</b></td></tr>
+              <tr>
+                <td style={printCell}>أجرة اليد</td>
+                <td style={printCell}>{money(printRecord.labor_cost)} د.ع</td>
+              </tr>
+              <tr>
+                <td style={printCell}>كلفة القطع</td>
+                <td style={printCell}>{money(printRecord.parts_total)} د.ع</td>
+              </tr>
+              <tr>
+                <td style={printCell}>
+                  <b>الإجمالي</b>
+                </td>
+                <td style={printCell}>
+                  <b>{money(printRecord.total_cost)} د.ع</b>
+                </td>
+              </tr>
             </tbody>
           </table>
 
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 24, marginTop: 56 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 24, marginTop: 22 }}>
             {["توقيع الفني", "توقيع المسؤول", "توقيع مدير الصيانة"].map((label) => (
               <div key={label} style={{ flex: 1, textAlign: "center" }}>
-                <div style={{ borderTop: "1px solid #0f172a", paddingTop: 8, fontSize: 12 }}>{label}</div>
+                <div style={{ borderTop: "1px solid #0f172a", paddingTop: 8, fontSize: 12 }}>
+                  {label}
+                </div>
               </div>
             ))}
           </div>

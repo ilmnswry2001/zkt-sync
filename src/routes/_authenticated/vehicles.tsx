@@ -1,7 +1,7 @@
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ import {
   CarFront,
   Check,
   Fuel,
+  Eye,
   FileUp,
   Gauge,
   ListChecks,
@@ -45,7 +46,13 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { currentMonthInBaghdad } from "@/lib/date-time";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/_authenticated/vehicles")({
   head: () => ({ meta: [{ title: "المركبات" }] }),
@@ -56,7 +63,11 @@ export const Route = createFileRoute("/_authenticated/vehicles")({
       .from("user_roles")
       .select("role")
       .eq("user_id", data.user.id);
-    if (!roles?.some((item) => ["admin", "hr", "maintenance_manager", "maintenance_admin"].includes(item.role)))
+    if (
+      !roles?.some((item) =>
+        ["admin", "hr", "maintenance_manager", "maintenance_admin"].includes(item.role),
+      )
+    )
       throw redirect({ to: "/dashboard" });
   },
   component: VehiclesPage,
@@ -105,15 +116,44 @@ type Machinery = {
   ato_status?: string | null;
   security_permit_status?: string | null;
   source_row?: number | null;
+  color?: string | null;
+  driver_name?: string | null;
+  document_days_remaining?: string | null;
+  requires_ato?: boolean;
+  ato_expiry?: string | null;
+  security_permit_no?: string | null;
+  security_permit_expiry?: string | null;
+  driver_daily_cost?: number;
+  extra_hourly_rate?: number;
+  notes?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
 type MachineryImportRow = Record<string, unknown>;
 const MACHINERY_IMPORT_COLUMNS = [
-  "#", "رقم المركبة", "كود المركبة", "نوع المركبة", "الموديل", "سنة الصنع", "اللون",
-  "حالة المركبة", "السائق", "حالة المستندات", "الأيام المتبقية للمستندات", "يتطلب ATO",
-  "حالة ATO", "تاريخ انتهاء ATO", "التصريح الأمني", "حالة التصريح الأمني",
-  "انتهاء التصريح الأمني", "سعر الإيجار اليومي", "تكلفة السائق اليومية",
-  "سعر الساعة الإضافية", "جهة الملكية", "ملاحظات",
+  "#",
+  "رقم المركبة",
+  "كود المركبة",
+  "نوع المركبة",
+  "الموديل",
+  "سنة الصنع",
+  "اللون",
+  "حالة المركبة",
+  "السائق",
+  "حالة المستندات",
+  "الأيام المتبقية للمستندات",
+  "يتطلب ATO",
+  "حالة ATO",
+  "تاريخ انتهاء ATO",
+  "التصريح الأمني",
+  "حالة التصريح الأمني",
+  "انتهاء التصريح الأمني",
+  "سعر الإيجار اليومي",
+  "تكلفة السائق اليومية",
+  "سعر الساعة الإضافية",
+  "جهة الملكية",
+  "ملاحظات",
 ];
 
 function excelValue(row: MachineryImportRow, key: string) {
@@ -307,7 +347,10 @@ function VehicleMonthlyReport({
           </div>
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <ReportStat label="إجمالي اللترات" value={`${fuel.liters.toLocaleString()} لتر`} />
-            <ReportStat label="إجمالي الكلفة" value={`${Math.round(fuel.cost).toLocaleString()} د.ع`} />
+            <ReportStat
+              label="إجمالي الكلفة"
+              value={`${Math.round(fuel.cost).toLocaleString()} د.ع`}
+            />
             <ReportStat label="عدد الوصولات" value={`${fuel.count}`} />
             <ReportStat label="آخر تعبئة" value={formatArabicDate(fuel.lastDate)} />
           </div>
@@ -335,16 +378,76 @@ function VehiclesPage() {
   const [activeVehicle, setActiveVehicle] = useState<Vehicle | null>(null);
   const [machineryImport, setMachineryImport] = useState<MachineryImportItem[] | null>(null);
   const [invalidMachineryRows, setInvalidMachineryRows] = useState(0);
+  const [machineryLimit, setMachineryLimit] = useState(20);
+  const [machineryDates, setMachineryDates] = useState<Record<string, string[]>>({});
+  const [activeMachinery, setActiveMachinery] = useState<Machinery | null>(null);
+  const [machineryDetails, setMachineryDetails] = useState<Machinery | null>(null);
   const machineryQuery = useQuery({
-    queryKey: ["maintenance-machinery"],
+    queryKey: ["maintenance-machinery", machineryLimit],
+    queryFn: async () => {
+      const { data, error, count } = await (supabase as any)
+        .from("machinery")
+        .select(
+          "id, code, name, asset_number, owner_name, category, plate_no, model, year, status, current_hours, current_odometer, daily_rent, document_status, ato_status, security_permit_status, source_row, color, driver_name, document_days_remaining, requires_ato, ato_expiry, security_permit_no, security_permit_expiry, driver_daily_cost, extra_hourly_rate, notes, created_at, updated_at",
+          { count: "exact" },
+        )
+        .order("code")
+        .range(0, machineryLimit - 1);
+      if (error) throw error;
+      return { rows: (data ?? []) as Machinery[], total: count ?? 0 };
+    },
+  });
+  const machineryOperationsQuery = useQuery({
+    queryKey: ["machinery-monthly-operations", month],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
-        .from("machinery")
-        .select("id, code, name, asset_number, owner_name, category, plate_no, model, year, status, current_hours, current_odometer, daily_rent, document_status, ato_status, security_permit_status, source_row")
-        .order("code");
+        .from("machinery_monthly_operations")
+        .select("machinery_id, operating_dates")
+        .eq("month", `${month}-01`);
       if (error) throw error;
-      return (data ?? []) as Machinery[];
+      return Object.fromEntries(
+        (data ?? []).map((row: { machinery_id: string; operating_dates: string[] }) => [
+          row.machinery_id,
+          (row.operating_dates ?? []).map((date) => date.slice(0, 10)),
+        ]),
+      ) as Record<string, string[]>;
     },
+  });
+  useEffect(() => {
+    setMachineryDates({});
+  }, [month]);
+  useEffect(() => {
+    if (machineryOperationsQuery.data) setMachineryDates(machineryOperationsQuery.data);
+  }, [machineryOperationsQuery.data]);
+  const saveMachineryAttendance = useMutation({
+    mutationFn: async ({
+      machineId,
+      dates: selectedDates,
+    }: {
+      machineId: string;
+      dates: string[];
+    }) => {
+      const normalizedDates = [...new Set(selectedDates)]
+        .filter((date) => date.startsWith(`${month}-`))
+        .sort();
+      const { error } = await (supabase as any).from("machinery_monthly_operations").upsert(
+        {
+          machinery_id: machineId,
+          month: `${month}-01`,
+          operating_days: normalizedDates.length,
+          operating_dates: normalizedDates,
+        },
+        { onConflict: "machinery_id,month" },
+      );
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      setActiveMachinery(null);
+      toast.success("تم حفظ حضور الآلية");
+      await client.invalidateQueries({ queryKey: ["machinery-monthly-operations", month] });
+      await client.invalidateQueries({ queryKey: ["monthly", "machinery-report", month] });
+    },
+    onError: (error: Error) => toast.error(`تعذر حفظ حضور الآلية: ${formatErrorMessage(error)}`),
   });
   const machineryMaintenanceQuery = useQuery({
     queryKey: ["machinery-maintenance-statistics"],
@@ -354,7 +457,12 @@ function VehiclesPage() {
         .select("id, status, total_cost, maintenance_date")
         .eq("record_type", "machinery");
       if (error) throw error;
-      return (data ?? []) as Array<{ id: string; status: string; total_cost: number; maintenance_date: string }>;
+      return (data ?? []) as Array<{
+        id: string;
+        status: string;
+        total_cost: number;
+        maintenance_date: string;
+      }>;
     },
   });
   const importMachinery = useMutation({
@@ -363,20 +471,31 @@ function VehiclesPage() {
         .from("machinery")
         .select("code, asset_number");
       if (existingError) throw existingError;
-      const seenCodes = new Set<string>((existing ?? []).map((item: { code: string }) => item.code.trim().toLowerCase()));
-      const seenNumbers = new Set<string>((existing ?? []).map((item: { asset_number: string | null }) => item.asset_number?.trim().toLowerCase()).filter(Boolean));
+      const seenCodes = new Set<string>(
+        (existing ?? []).map((item: { code: string }) => item.code.trim().toLowerCase()),
+      );
+      const seenNumbers = new Set<string>(
+        (existing ?? [])
+          .map((item: { asset_number: string | null }) => item.asset_number?.trim().toLowerCase())
+          .filter(Boolean),
+      );
       const toInsert: MachineryImportItem[] = [];
       let skipped = 0;
       for (const row of rows) {
         const codeKey = row.code.trim().toLowerCase();
         const numberKey = row.asset_number.trim().toLowerCase();
-        if (seenCodes.has(codeKey) || seenNumbers.has(numberKey)) { skipped += 1; continue; }
+        if (seenCodes.has(codeKey) || seenNumbers.has(numberKey)) {
+          skipped += 1;
+          continue;
+        }
         seenCodes.add(codeKey);
         seenNumbers.add(numberKey);
         toInsert.push(row);
       }
       for (let index = 0; index < toInsert.length; index += 50) {
-        const { error } = await (supabase as any).from("machinery").insert(toInsert.slice(index, index + 50));
+        const { error } = await (supabase as any)
+          .from("machinery")
+          .insert(toInsert.slice(index, index + 50));
         if (error) throw error;
       }
       return { imported: toInsert.length, skipped };
@@ -393,11 +512,17 @@ function VehiclesPage() {
       const workbook = XLSX.read(await file.arrayBuffer(), { cellDates: false });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       if (!sheet) throw new Error("الملف لا يحتوي على ورقة بيانات");
-      const rawRows = XLSX.utils.sheet_to_json<MachineryImportRow>(sheet, { defval: null, raw: true });
+      const rawRows = XLSX.utils.sheet_to_json<MachineryImportRow>(sheet, {
+        defval: null,
+        raw: true,
+      });
       const headers = Object.keys(rawRows[0] ?? {});
       const missingHeaders = MACHINERY_IMPORT_COLUMNS.filter((header) => !headers.includes(header));
-      if (missingHeaders.length) throw new Error(`الأعمدة غير الموجودة: ${missingHeaders.join("، ")}`);
-      const rows = rawRows.map(mapMachineryImportRow).filter((row): row is MachineryImportItem => row !== null);
+      if (missingHeaders.length)
+        throw new Error(`الأعمدة غير الموجودة: ${missingHeaders.join("، ")}`);
+      const rows = rawRows
+        .map(mapMachineryImportRow)
+        .filter((row): row is MachineryImportItem => row !== null);
       if (!rows.length) throw new Error("لم أجد أعمدة رقم المركبة وكودها ونوعها في الورقة الأولى");
       setMachineryImport(rows);
       setInvalidMachineryRows(rawRows.length - rows.length);
@@ -423,7 +548,12 @@ function VehiclesPage() {
           .eq("month", `${month}-01`),
       ]);
       vehicleError = vehiclesErr;
-      if (vehiclesErr && /last_fuel_date|security_permit_expiry|vehicle_image_url|fuel_type|current_driver_id|current_odometer|column/i.test(vehiclesErr.message)) {
+      if (
+        vehiclesErr &&
+        /last_fuel_date|security_permit_expiry|vehicle_image_url|fuel_type|current_driver_id|current_odometer|column/i.test(
+          vehiclesErr.message,
+        )
+      ) {
         const fallback = await (supabase as any)
           .from("vehicles")
           .select("id, vehicle_no, name, vehicle_class, daily_rate, currency, is_active")
@@ -443,7 +573,12 @@ function VehiclesPage() {
           .from("vehicle_monthly_operations")
           .select("vehicle_id, operating_days")
           .eq("month", `${month}-01`);
-        operations = (fallback.data ?? []).map((row: { vehicle_id: string; operating_days: number }) => ({ ...row, operating_dates: [] }));
+        operations = (fallback.data ?? []).map(
+          (row: { vehicle_id: string; operating_days: number }) => ({
+            ...row,
+            operating_dates: [],
+          }),
+        );
         operationError = fallback.error;
       }
       if (vehicleError) throw vehicleError;
@@ -451,7 +586,9 @@ function VehiclesPage() {
       const initial: Record<string, string[]> = {};
       const legacy: Record<string, number> = {};
       for (const row of operations ?? []) {
-        initial[row.vehicle_id] = (row.operating_dates ?? []).map((date: string) => date.slice(0, 10));
+        initial[row.vehicle_id] = (row.operating_dates ?? []).map((date: string) =>
+          date.slice(0, 10),
+        );
         legacy[row.vehicle_id] = Number(row.operating_days ?? 0);
       }
       setDates(initial);
@@ -461,9 +598,7 @@ function VehiclesPage() {
   });
   const createVehicle = useMutation({
     mutationFn: async () => {
-      const { error } = await (supabase as any)
-        .from("vehicles")
-        .insert({
+      const { error } = await (supabase as any).from("vehicles").insert({
           vehicle_no: vehicleNo.trim(),
           name: name.trim(),
           vehicle_class: vehicleClass,
@@ -483,20 +618,35 @@ function VehiclesPage() {
     },
     onError: (error: Error) => toast.error(`تعذر تسجيل المركبة: ${formatErrorMessage(error)}`),
   });
-  const monthDates = useMemo(() => Array.from({ length: monthDayCount }, (_, index) => {
+  const monthDates = useMemo(
+    () =>
+      Array.from({ length: monthDayCount }, (_, index) => {
     const day = String(index + 1).padStart(2, "0");
     return `${month}-${day}`;
-  }), [month, monthDayCount]);
+      }),
+    [month, monthDayCount],
+  );
   const saveDays = useMutation({
-    mutationFn: async ({ vehicleId, operatingDates }: { vehicleId: string; operatingDates: string[] }) => {
-      const normalizedDates = [...new Set(operatingDates)].filter((date) => date.startsWith(`${month}-`)).sort();
+    mutationFn: async ({
+      vehicleId,
+      operatingDates,
+    }: {
+      vehicleId: string;
+      operatingDates: string[];
+    }) => {
+      const normalizedDates = [...new Set(operatingDates)]
+        .filter((date) => date.startsWith(`${month}-`))
+        .sort();
       const operatingDays = normalizedDates.length;
       if (!Number.isInteger(operatingDays) || operatingDays < 0 || operatingDays > monthDayCount)
         throw new Error(`أدخل عدداً بين 0 و${monthDayCount}`);
-      const { error } = await (supabase as any)
-        .from("vehicle_monthly_operations")
-        .upsert(
-          { vehicle_id: vehicleId, month: `${month}-01`, operating_days: operatingDays, operating_dates: normalizedDates },
+      const { error } = await (supabase as any).from("vehicle_monthly_operations").upsert(
+        {
+          vehicle_id: vehicleId,
+          month: `${month}-01`,
+          operating_days: operatingDays,
+          operating_dates: normalizedDates,
+        },
           { onConflict: "vehicle_id,month" },
         );
       if (error) throw error;
@@ -522,22 +672,34 @@ function VehiclesPage() {
     },
     onError: (error: Error) => toast.error(`تعذر حذف المركبة: ${formatErrorMessage(error)}`),
   });
-  const machineryRows = machineryQuery.data ?? [];
+  const machineryRows = machineryQuery.data?.rows ?? [];
   const machineryMaintenanceRows = machineryMaintenanceQuery.data ?? [];
   const machineMonth = currentMonthInBaghdad();
-  const monthMaintenanceRows = machineryMaintenanceRows.filter((row) => row.maintenance_date.startsWith(machineMonth));
+  const monthMaintenanceRows = machineryMaintenanceRows.filter((row) =>
+    row.maintenance_date.startsWith(machineMonth),
+  );
   const existingMachineCodes = new Set(machineryRows.map((row) => row.code.trim().toLowerCase()));
-  const existingMachineNumbers = new Set(machineryRows.map((row) => row.asset_number?.trim().toLowerCase()).filter(Boolean));
-  const duplicateMachineryImportCount = machineryImport?.filter((row) =>
-    existingMachineCodes.has(row.code.trim().toLowerCase()) || existingMachineNumbers.has(row.asset_number.trim().toLowerCase()),
+  const existingMachineNumbers = new Set(
+    machineryRows.map((row) => row.asset_number?.trim().toLowerCase()).filter(Boolean),
+  );
+  const duplicateMachineryImportCount =
+    machineryImport?.filter(
+      (row) =>
+        existingMachineCodes.has(row.code.trim().toLowerCase()) ||
+        existingMachineNumbers.has(row.asset_number.trim().toLowerCase()),
   ).length ?? 0;
-  const incompleteMachineryCount = machineryRows.filter((row) =>
-    !meaningful(row.name) || !meaningful(row.asset_number) || !meaningful(row.owner_name),
+  const incompleteMachineryCount = machineryRows.filter(
+    (row) => !meaningful(row.name) || !meaningful(row.asset_number) || !meaningful(row.owner_name),
   ).length;
-  const machineryDailyRent = machineryRows.reduce((sum, row) => sum + Number(row.daily_rent ?? 0), 0);
+  const machineryDailyRent = machineryRows.reduce(
+    (sum, row) => sum + Number(row.daily_rent ?? 0),
+    0,
+  );
   return (
     <div dir="rtl" className="space-y-6">
-      <p className="text-sm font-medium text-muted-foreground">سجل المركبات والآليات وتشغيلها الشهري</p>
+      <p className="text-sm font-medium text-muted-foreground">
+        سجل المركبات والآليات وتشغيلها الشهري
+      </p>
       <Tabs defaultValue="list" className="space-y-6">
         <TabsList className="glass-card h-auto w-full justify-start gap-1 rounded-full p-1 sm:w-auto sm:justify-center">
           <TabsTrigger
@@ -667,12 +829,23 @@ function VehiclesPage() {
                           <b>{vehicle.name}</b>
                           <div className="text-xs text-muted-foreground">{vehicle.vehicle_no}</div>
                         </td>
-                        <td className="p-3">{vehicle.vehicle_class === "light" ? "خفيفة" : "ثقيلة"}</td>
+                        <td className="p-3">
+                          {vehicle.vehicle_class === "light" ? "خفيفة" : "ثقيلة"}
+                        </td>
                         <td className="p-3">{Number(vehicle.daily_rate).toLocaleString()} د.ع</td>
                         <td className="p-3">
-                          <span className="font-semibold tabular-nums">{(dates[vehicle.id] ?? []).length || legacyDays[vehicle.id] || 0}</span> يوم
+                          <span className="font-semibold tabular-nums">
+                            {(dates[vehicle.id] ?? []).length || legacyDays[vehicle.id] || 0}
+                          </span>{" "}
+                          يوم
                           <div className="mt-1 max-w-64 text-xs text-muted-foreground">
-                            {(dates[vehicle.id] ?? []).length ? (dates[vehicle.id] ?? []).map((date) => Number(date.slice(8))).join("، ") : legacyDays[vehicle.id] ? "العدد السابق محفوظ دون تحديد التواريخ" : "لم تُسجّل تواريخ بعد"}
+                            {(dates[vehicle.id] ?? []).length
+                              ? (dates[vehicle.id] ?? [])
+                                  .map((date) => Number(date.slice(8)))
+                                  .join("، ")
+                              : legacyDays[vehicle.id]
+                                ? "العدد السابق محفوظ دون تحديد التواريخ"
+                                : "لم تُسجّل تواريخ بعد"}
                           </div>
                         </td>
                         <td className="flex gap-2 p-3">
@@ -720,95 +893,549 @@ function VehiclesPage() {
             <CardHeader className="flex-row items-center justify-between gap-3">
               <div>
                 <CardTitle>سجل الآليات</CardTitle>
-                <p className="mt-1 text-sm text-muted-foreground">الهياب والكرين واللودر وغيرها، مع العدادات وساعات التشغيل.</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  الهياب والكرين واللودر وغيرها، مع العدادات وساعات التشغيل.
+                </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" asChild>
-                  <label className="cursor-pointer"><FileUp className="ml-2 h-4 w-4" /> استيراد Excel
-                    <input type="file" accept=".xlsx,.xls" className="hidden" onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file) void handleMachineryFile(file); event.currentTarget.value = ""; }} />
+                  <label className="cursor-pointer">
+                    <FileUp className="ml-2 h-4 w-4" /> استيراد Excel
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.currentTarget.files?.[0];
+                        if (file) void handleMachineryFile(file);
+                        event.currentTarget.value = "";
+                      }}
+                    />
                   </label>
                 </Button>
-                <Button asChild><a href="/maintenance"><Wrench className="ml-2 h-4 w-4" /> إدارة وصيانة الآليات</a></Button>
+                <Button asChild>
+                  <a href="/maintenance">
+                    <Wrench className="ml-2 h-4 w-4" /> إدارة وصيانة الآليات
+                  </a>
+                </Button>
               </div>
             </CardHeader>
             <CardContent className="border-t p-4">
-              <div className="mb-3 flex items-center gap-2 font-semibold"><BarChart3 className="h-4 w-4 text-primary" /> إحصائيات الآليات</div>
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                <div className="rounded-xl border bg-background/60 p-3"><p className="text-xs text-muted-foreground">إجمالي الآليات</p><p className="mt-1 text-xl font-bold">{machineryRows.length}</p></div>
-                <div className="rounded-xl border bg-background/60 p-3"><p className="text-xs text-muted-foreground">نشطة</p><p className="mt-1 text-xl font-bold text-emerald-600">{machineryRows.filter((row) => row.status === "active").length}</p></div>
-                <div className="rounded-xl border bg-background/60 p-3"><p className="text-xs text-muted-foreground">قيد الصيانة</p><p className="mt-1 text-xl font-bold text-amber-600">{machineryRows.filter((row) => row.status === "maintenance").length}</p></div>
-                <div className="rounded-xl border bg-background/60 p-3"><p className="text-xs text-muted-foreground">بيانات أساسية ناقصة</p><p className="mt-1 text-xl font-bold text-rose-600">{incompleteMachineryCount}</p></div>
-                <div className="rounded-xl border bg-background/60 p-3"><p className="text-xs text-muted-foreground">صيانة هذا الشهر · التكلفة</p><p className="mt-1 text-xl font-bold">{monthMaintenanceRows.length} · {Math.round(monthMaintenanceRows.reduce((sum, row) => sum + Number(row.total_cost ?? 0), 0)).toLocaleString("ar-IQ")} د.ع</p></div>
+              <div className="mb-3 flex items-center gap-2 font-semibold">
+                <BarChart3 className="h-4 w-4 text-primary" /> إحصائيات الآليات
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">مجموع الإيجار اليومي المسجل: {Math.round(machineryDailyRent).toLocaleString("ar-IQ")} د.ع</p>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                <div className="rounded-xl border bg-background/60 p-3">
+                  <p className="text-xs text-muted-foreground">إجمالي الآليات</p>
+                  <p className="mt-1 text-xl font-bold">
+                    {machineryQuery.data?.total ?? machineryRows.length}
+                  </p>
+                </div>
+                <div className="rounded-xl border bg-background/60 p-3">
+                  <p className="text-xs text-muted-foreground">نشطة ضمن المعروض</p>
+                  <p className="mt-1 text-xl font-bold text-emerald-600">
+                    {machineryRows.filter((row) => row.status === "active").length}
+                  </p>
+                </div>
+                <div className="rounded-xl border bg-background/60 p-3">
+                  <p className="text-xs text-muted-foreground">قيد الصيانة ضمن المعروض</p>
+                  <p className="mt-1 text-xl font-bold text-amber-600">
+                    {machineryRows.filter((row) => row.status === "maintenance").length}
+                  </p>
+              </div>
+                <div className="rounded-xl border bg-background/60 p-3">
+                  <p className="text-xs text-muted-foreground">بيانات ناقصة ضمن المعروض</p>
+                  <p className="mt-1 text-xl font-bold text-rose-600">{incompleteMachineryCount}</p>
+                </div>
+                <div className="rounded-xl border bg-background/60 p-3">
+                  <p className="text-xs text-muted-foreground">صيانة هذا الشهر · التكلفة</p>
+                  <p className="mt-1 text-xl font-bold">
+                    {monthMaintenanceRows.length} ·{" "}
+                    {Math.round(
+                      monthMaintenanceRows.reduce(
+                        (sum, row) => sum + Number(row.total_cost ?? 0),
+                        0,
+                      ),
+                    ).toLocaleString("ar-IQ")}{" "}
+                    د.ع
+                  </p>
+                </div>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                مجموع الإيجار اليومي للآليات المعروضة:{" "}
+                {Math.round(machineryDailyRent).toLocaleString("ar-IQ")} د.ع
+              </p>
             </CardContent>
+            {machineryOperationsQuery.isError && (
+              <p role="alert" className="border-t bg-destructive/5 p-3 text-sm text-destructive">
+                تعذر تحميل حضور الآليات. طبّق ترحيل machinery_monthly_operations في قاعدة البيانات.
+              </p>
+            )}
             <CardContent className="overflow-x-auto p-0">
-              {machineryQuery.isLoading ? <p className="p-8 text-center text-muted-foreground">جارٍ تحميل الآليات…</p> : (
-                <table className="w-full min-w-[900px] text-sm"><thead><tr className="border-b bg-muted/40 text-right"><th className="p-3">الآلية</th><th className="p-3">الرقم / الكود</th><th className="p-3">المالك</th><th className="p-3">الحالة</th><th className="p-3">البيانات</th><th className="p-3">ساعات التشغيل</th><th className="p-3">العداد</th></tr></thead><tbody>{(machineryQuery.data ?? []).map((machine) => <tr key={machine.id} className="border-b"><td className="p-3 font-medium">{machine.name}<div className="text-xs text-muted-foreground">{machine.category ?? "—"} · {machine.model ?? "—"} {machine.year ?? ""}</div></td><td className="p-3">{machine.asset_number || "—"}<div className="text-xs text-muted-foreground">{machine.code}{machine.plate_no ? ` · ${machine.plate_no}` : ""}</div></td><td className="p-3">{machine.owner_name || "غير مسجل"}</td><td className="p-3"><Badge variant={machine.status === "active" ? "secondary" : "outline"}>{machine.status === "active" ? "نشطة" : machine.status === "maintenance" ? "قيد الصيانة" : "متوقفة"}</Badge></td><td className="p-3">{(!machine.name || !machine.asset_number || !machine.owner_name) ? <Badge variant="outline" className="border-amber-500/40 text-amber-700">بيانات أساسية ناقصة</Badge> : <Badge variant="secondary">مكتملة</Badge>}</td><td className="p-3 tabular-nums">{Number(machine.current_hours ?? 0).toLocaleString()}</td><td className="p-3 tabular-nums">{Number(machine.current_odometer ?? 0).toLocaleString()} كم</td></tr>)}</tbody></table>
+              {machineryQuery.isLoading ? (
+                <p className="p-8 text-center text-muted-foreground">جارٍ تحميل الآليات…</p>
+              ) : (
+                <table className="w-full min-w-[1050px] text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/40 text-right">
+                      <th className="p-3">الآلية</th>
+                      <th className="p-3">الرقم / الكود</th>
+                      <th className="p-3">المالك</th>
+                      <th className="p-3">الحالة</th>
+                      <th className="p-3">البيانات</th>
+                      <th className="p-3">ساعات التشغيل</th>
+                      <th className="p-3">العداد</th>
+                      <th className="p-3">الإجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {machineryRows.map((machine) => (
+                      <tr key={machine.id} className="border-b">
+                        <td className="p-3 font-medium">
+                          {machine.name}
+                          <div className="text-xs text-muted-foreground">
+                            {machine.category ?? "—"} · {machine.model ?? "—"} {machine.year ?? ""}
+                          </div>
+                        </td>
+                        <td className="p-3">
+                          {machine.asset_number || "—"}
+                          <div className="text-xs text-muted-foreground">
+                            {machine.code}
+                            {machine.plate_no ? ` · ${machine.plate_no}` : ""}
+                          </div>
+                        </td>
+                        <td className="p-3">{machine.owner_name || "غير مسجل"}</td>
+                        <td className="p-3">
+                          <Badge variant={machine.status === "active" ? "secondary" : "outline"}>
+                            {machine.status === "active"
+                              ? "نشطة"
+                              : machine.status === "maintenance"
+                                ? "قيد الصيانة"
+                                : "متوقفة"}
+                          </Badge>
+                        </td>
+                        <td className="p-3">
+                          {!machine.name || !machine.asset_number || !machine.owner_name ? (
+                            <Badge variant="outline" className="border-amber-500/40 text-amber-700">
+                              بيانات أساسية ناقصة
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary">مكتملة</Badge>
+                          )}
+                        </td>
+                        <td className="p-3 tabular-nums">
+                          {Number(machine.current_hours ?? 0).toLocaleString()}
+                        </td>
+                        <td className="p-3 tabular-nums">
+                          {Number(machine.current_odometer ?? 0).toLocaleString()} كم
+                        </td>
+                        <td className="p-3">
+                          <div className="flex gap-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setActiveMachinery(machine)}
+                              disabled={
+                                machineryOperationsQuery.isLoading ||
+                                machineryOperationsQuery.isError
+                              }
+                            >
+                              <CalendarDays className="ml-1 h-4 w-4" /> حضور
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              aria-label={`عرض تفاصيل ${machine.name}`}
+                              title="عرض التفاصيل"
+                              onClick={() => setMachineryDetails(machine)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
-              {!machineryQuery.isLoading && !(machineryQuery.data ?? []).length && <p className="p-8 text-center text-muted-foreground">أضف الآليات من كتالوج الصيانة.</p>}
+              {!machineryQuery.isLoading && !machineryRows.length && (
+                <p className="p-8 text-center text-muted-foreground">
+                  أضف الآليات من كتالوج الصيانة.
+                </p>
+              )}
+              {machineryRows.length < (machineryQuery.data?.total ?? 0) && (
+                <div className="border-t p-4 text-center">
+                  <Button
+                    variant="outline"
+                    onClick={() => setMachineryLimit((limit) => limit + 20)}
+                  >
+                    عرض 20 آلية إضافية · المعروض {machineryRows.length} من{" "}
+                    {machineryQuery.data?.total}
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
-      <Dialog open={Boolean(machineryImport)} onOpenChange={(open) => { if (!open && !importMachinery.isPending) setMachineryImport(null); }}>
+      <Dialog
+        open={Boolean(machineryImport)}
+        onOpenChange={(open) => {
+          if (!open && !importMachinery.isPending) setMachineryImport(null);
+        }}
+      >
         <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>معاينة استيراد الآليات</DialogTitle>
-            <DialogDescription>سيتم استيراد بيانات الورقة الأولى وربط كل سجل بقسم الصيانة. السجلات الموجودة مسبقاً برقم أو كود مطابق ستُتجاوز دون استبدال بياناتها.</DialogDescription>
+            <DialogDescription>
+              سيتم استيراد بيانات الورقة الأولى وربط كل سجل بقسم الصيانة. السجلات الموجودة مسبقاً
+              برقم أو كود مطابق ستُتجاوز دون استبدال بياناتها.
+            </DialogDescription>
           </DialogHeader>
-          {machineryImport && <>
+          {machineryImport && (
+            <>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-xl border p-3"><p className="text-xs text-muted-foreground">جاهزة للاستيراد</p><p className="text-xl font-bold">{machineryImport.length}</p></div>
-              <div className="rounded-xl border p-3"><p className="text-xs text-muted-foreground">موجودة مسبقاً وستُتجاوز</p><p className="text-xl font-bold">{duplicateMachineryImportCount}</p></div>
-              <div className="rounded-xl border p-3"><p className="text-xs text-muted-foreground">صفوف لا تحتوي الرقم أو الكود أو النوع</p><p className="text-xl font-bold">{invalidMachineryRows}</p></div>
-              <div className="rounded-xl border p-3"><p className="text-xs text-muted-foreground">مالك غير مسجل في الملف</p><p className="text-xl font-bold">{machineryImport.filter((row) => !meaningful(row.owner_name)).length}</p></div>
+                <div className="rounded-xl border p-3">
+                  <p className="text-xs text-muted-foreground">جاهزة للاستيراد</p>
+                  <p className="text-xl font-bold">{machineryImport.length}</p>
+                </div>
+                <div className="rounded-xl border p-3">
+                  <p className="text-xs text-muted-foreground">موجودة مسبقاً وستُتجاوز</p>
+                  <p className="text-xl font-bold">{duplicateMachineryImportCount}</p>
+                </div>
+                <div className="rounded-xl border p-3">
+                  <p className="text-xs text-muted-foreground">
+                    صفوف لا تحتوي الرقم أو الكود أو النوع
+                  </p>
+                  <p className="text-xl font-bold">{invalidMachineryRows}</p>
+                </div>
+                <div className="rounded-xl border p-3">
+                  <p className="text-xs text-muted-foreground">مالك غير مسجل في الملف</p>
+                  <p className="text-xl font-bold">
+                    {machineryImport.filter((row) => !meaningful(row.owner_name)).length}
+                  </p>
+                </div>
             </div>
             <div className="max-h-64 overflow-auto rounded-xl border">
-              <table className="w-full text-sm"><thead className="sticky top-0 bg-muted"><tr><th className="p-2 text-right">الرقم</th><th className="p-2 text-right">الآلية</th><th className="p-2 text-right">المالك</th></tr></thead>
-                <tbody>{machineryImport.slice(0, 10).map((row) => <tr key={`${row.code}-${row.asset_number}`} className="border-t"><td className="p-2">{row.asset_number}</td><td className="p-2">{row.name}</td><td className="p-2">{meaningful(row.owner_name) ? row.owner_name : <span className="text-amber-600">غير مسجل</span>}</td></tr>)}</tbody>
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-muted">
+                    <tr>
+                      <th className="p-2 text-right">الرقم</th>
+                      <th className="p-2 text-right">الآلية</th>
+                      <th className="p-2 text-right">المالك</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {machineryImport.slice(0, 10).map((row) => (
+                      <tr key={`${row.code}-${row.asset_number}`} className="border-t">
+                        <td className="p-2">{row.asset_number}</td>
+                        <td className="p-2">{row.name}</td>
+                        <td className="p-2">
+                          {meaningful(row.owner_name) ? (
+                            row.owner_name
+                          ) : (
+                            <span className="text-amber-600">غير مسجل</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
               </table>
-              {machineryImport.length > 10 && <p className="p-2 text-center text-xs text-muted-foreground">معاينة 10 من {machineryImport.length} سجلاً</p>}
+                {machineryImport.length > 10 && (
+                  <p className="p-2 text-center text-xs text-muted-foreground">
+                    معاينة 10 من {machineryImport.length} سجلاً
+                  </p>
+                )}
             </div>
-            <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setMachineryImport(null)} disabled={importMachinery.isPending}>إلغاء</Button><Button onClick={() => importMachinery.mutate(machineryImport)} disabled={importMachinery.isPending}>{importMachinery.isPending ? "جارٍ الاستيراد…" : `استيراد ${machineryImport.length} سجلاً`}</Button></div>
-          </>}
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setMachineryImport(null)}
+                  disabled={importMachinery.isPending}
+                >
+                  إلغاء
+                </Button>
+                <Button
+                  onClick={() => importMachinery.mutate(machineryImport)}
+                  disabled={importMachinery.isPending}
+                >
+                  {importMachinery.isPending
+                    ? "جارٍ الاستيراد…"
+                    : `استيراد ${machineryImport.length} سجلاً`}
+                </Button>
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
-      <Dialog open={!!activeVehicle} onOpenChange={(open) => { if (!open) setActiveVehicle(null); }}>
+      <Dialog
+        open={!!activeVehicle}
+        onOpenChange={(open) => {
+          if (!open) setActiveVehicle(null);
+        }}
+      >
         <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-          {activeVehicle && <>
+          {activeVehicle && (
+            <>
             <DialogHeader>
               <DialogTitle>تسجيل أيام حضور المركبة</DialogTitle>
-              <DialogDescription>{activeVehicle.name} · {activeVehicle.vehicle_no} · شهر {month}</DialogDescription>
+                <DialogDescription>
+                  {activeVehicle.name} · {activeVehicle.vehicle_no} · شهر {month}
+                </DialogDescription>
             </DialogHeader>
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-muted/30 p-3">
-              <p className="text-sm">حدد الأيام التي عملت فيها المركبة. الأيام المحددة: <b>{(dates[activeVehicle.id] ?? []).length}</b></p>
+                <p className="text-sm">
+                  حدد الأيام التي عملت فيها المركبة. الأيام المحددة:{" "}
+                  <b>{(dates[activeVehicle.id] ?? []).length}</b>
+                </p>
               <div className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={() => setDates((state) => ({ ...state, [activeVehicle.id]: [...monthDates] }))}>تحديد الشهر كله</Button>
-                <Button size="sm" variant="ghost" onClick={() => setDates((state) => ({ ...state, [activeVehicle.id]: [] }))}>مسح التحديد</Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      setDates((state) => ({ ...state, [activeVehicle.id]: [...monthDates] }))
+                    }
+                  >
+                    تحديد الشهر كله
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setDates((state) => ({ ...state, [activeVehicle.id]: [] }))}
+                  >
+                    مسح التحديد
+                  </Button>
               </div>
             </div>
-            {!dates[activeVehicle.id]?.length && legacyDays[activeVehicle.id] > 0 && <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">السجل السابق يحفظ عدد {legacyDays[activeVehicle.id]} أيام دون تواريخ محددة. حدّد الأيام الفعلية الآن لحفظ التقرير التفصيلي.</p>}
+              {!dates[activeVehicle.id]?.length && legacyDays[activeVehicle.id] > 0 && (
+                <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                  السجل السابق يحفظ عدد {legacyDays[activeVehicle.id]} أيام دون تواريخ محددة. حدّد
+                  الأيام الفعلية الآن لحفظ التقرير التفصيلي.
+                </p>
+              )}
             <div className="grid grid-cols-4 gap-2 sm:grid-cols-7" aria-label="أيام الشهر">
               {monthDates.map((date) => {
                 const selected = (dates[activeVehicle.id] ?? []).includes(date);
                 const dayNumber = Number(date.slice(8));
-                const weekday = new Date(`${date}T12:00:00`).toLocaleDateString("ar-IQ", { weekday: "short" });
-                return <button key={date} type="button" aria-pressed={selected} onClick={() => setDates((state) => {
+                  const weekday = new Date(`${date}T12:00:00`).toLocaleDateString("ar-IQ", {
+                    weekday: "short",
+                  });
+                  return (
+                    <button
+                      key={date}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() =>
+                        setDates((state) => {
                   const current = state[activeVehicle.id] ?? [];
-                  return { ...state, [activeVehicle.id]: selected ? current.filter((value) => value !== date) : [...current, date].sort() };
-                })} className={`flex min-h-16 flex-col items-center justify-center rounded-xl border p-2 text-sm transition ${selected ? "border-primary bg-primary text-primary-foreground shadow-sm" : "bg-background hover:border-primary/50 hover:bg-primary/5"}`}>
-                  <span className="text-[11px] opacity-80">{weekday}</span><span className="font-bold">{dayNumber}</span>{selected && <Check className="h-3.5 w-3.5" />}
-                </button>;
+                          return {
+                            ...state,
+                            [activeVehicle.id]: selected
+                              ? current.filter((value) => value !== date)
+                              : [...current, date].sort(),
+                          };
+                        })
+                      }
+                      className={`flex min-h-16 flex-col items-center justify-center rounded-xl border p-2 text-sm transition ${selected ? "border-primary bg-primary text-primary-foreground shadow-sm" : "bg-background hover:border-primary/50 hover:bg-primary/5"}`}
+                    >
+                      <span className="text-[11px] opacity-80">{weekday}</span>
+                      <span className="font-bold">{dayNumber}</span>
+                      {selected && <Check className="h-3.5 w-3.5" />}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex justify-end gap-2 border-t pt-4">
+                <Button variant="outline" onClick={() => setActiveVehicle(null)}>
+                  إلغاء
+                </Button>
+                <Button
+                  onClick={() =>
+                    saveDays.mutate({
+                      vehicleId: activeVehicle.id,
+                      operatingDates: dates[activeVehicle.id] ?? [],
+                    })
+                  }
+                  disabled={saveDays.isPending}
+                >
+                  <Save className="ml-2 h-4 w-4" />{" "}
+                  {saveDays.isPending ? "جارٍ الحفظ…" : "حفظ أيام الحضور"}
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={!!activeMachinery}
+        onOpenChange={(open) => {
+          if (!open) setActiveMachinery(null);
+        }}
+      >
+        <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          {activeMachinery && (
+            <>
+              <DialogHeader>
+                <DialogTitle>تسجيل حضور الآلية</DialogTitle>
+                <DialogDescription>
+                  {activeMachinery.name} · {activeMachinery.asset_number || activeMachinery.code} ·
+                  شهر {month}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-muted/30 p-3">
+                <p className="text-sm">
+                  أيام التشغيل المحددة: <b>{(machineryDates[activeMachinery.id] ?? []).length}</b>
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      setMachineryDates((state) => ({
+                        ...state,
+                        [activeMachinery.id]: [...monthDates],
+                      }))
+                    }
+                  >
+                    تحديد كل الأيام
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      setMachineryDates((state) => ({ ...state, [activeMachinery.id]: [] }))
+                    }
+                  >
+                    مسح التحديد
+                  </Button>
+                </div>
+              </div>
+              <div className="grid grid-cols-4 gap-2 sm:grid-cols-7" aria-label="أيام الشهر">
+                {monthDates.map((date) => {
+                  const selected = (machineryDates[activeMachinery.id] ?? []).includes(date);
+                  const day = Number(date.slice(8));
+                  const dayName = new Date(`${date}T12:00:00`).toLocaleDateString("ar-IQ", {
+                    weekday: "short",
+                  });
+                  return (
+                    <button
+                      key={date}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() =>
+                        setMachineryDates((state) => {
+                          const current = state[activeMachinery.id] ?? [];
+                          return {
+                            ...state,
+                            [activeMachinery.id]: selected
+                              ? current.filter((item) => item !== date)
+                              : [...current, date].sort(),
+                          };
+                        })
+                      }
+                      className={`flex min-h-16 flex-col items-center justify-center rounded-xl border p-2 text-sm transition ${selected ? "border-primary bg-primary text-primary-foreground" : "bg-background hover:border-primary/50 hover:bg-primary/5"}`}
+                    >
+                      <span className="text-[11px] opacity-80">{dayName}</span>
+                      <span className="font-bold">{day}</span>
+                      {selected && <Check className="h-3.5 w-3.5" />}
+                    </button>
+                  );
               })}
             </div>
             <div className="flex justify-end gap-2 border-t pt-4">
-              <Button variant="outline" onClick={() => setActiveVehicle(null)}>إلغاء</Button>
-              <Button onClick={() => saveDays.mutate({ vehicleId: activeVehicle.id, operatingDates: dates[activeVehicle.id] ?? [] })} disabled={saveDays.isPending}>
-                <Save className="ml-2 h-4 w-4" /> {saveDays.isPending ? "جارٍ الحفظ…" : "حفظ أيام الحضور"}
+                <Button variant="outline" onClick={() => setActiveMachinery(null)}>
+                  إلغاء
               </Button>
+                <Button
+                  onClick={() =>
+                    saveMachineryAttendance.mutate({
+                      machineId: activeMachinery.id,
+                      dates: machineryDates[activeMachinery.id] ?? [],
+                    })
+                  }
+                  disabled={saveMachineryAttendance.isPending}
+                >
+                  <Save className="ml-2 h-4 w-4" />
+                  {saveMachineryAttendance.isPending ? "جارٍ الحفظ…" : "حفظ الحضور"}
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={!!machineryDetails}
+        onOpenChange={(open) => {
+          if (!open) setMachineryDetails(null);
+        }}
+      >
+        <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+          {machineryDetails && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{machineryDetails.name}</DialogTitle>
+                <DialogDescription>
+                  التفاصيل الكاملة للآلية · {machineryDetails.asset_number || machineryDetails.code}
+                </DialogDescription>
+              </DialogHeader>
+              <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {(
+                  [
+                    ["رقم الأصل", machineryDetails.asset_number],
+                    ["الكود", machineryDetails.code],
+                    ["المالك", machineryDetails.owner_name],
+                    ["الصنف", machineryDetails.category],
+                    ["رقم اللوحة", machineryDetails.plate_no],
+                    ["الموديل", machineryDetails.model],
+                    ["سنة الصنع", machineryDetails.year],
+                    ["اللون", machineryDetails.color],
+                    ["السائق", machineryDetails.driver_name],
+                    [
+                      "الحالة",
+                      machineryDetails.status === "active"
+                        ? "نشطة"
+                        : machineryDetails.status === "maintenance"
+                          ? "قيد الصيانة"
+                          : "متوقفة",
+                    ],
+                    ["ساعات التشغيل", machineryDetails.current_hours],
+                    ["قراءة العداد", machineryDetails.current_odometer],
+                    [
+                      "الإيجار اليومي",
+                      `${Number(machineryDetails.daily_rent ?? 0).toLocaleString("ar-IQ")} د.ع`,
+                    ],
+                    [
+                      "كلفة السائق اليومية",
+                      `${Number(machineryDetails.driver_daily_cost ?? 0).toLocaleString("ar-IQ")} د.ع`,
+                    ],
+                    [
+                      "كلفة الساعة الإضافية",
+                      `${Number(machineryDetails.extra_hourly_rate ?? 0).toLocaleString("ar-IQ")} د.ع`,
+                    ],
+                    ["حالة المستندات", machineryDetails.document_status],
+                    ["الأيام المتبقية للمستندات", machineryDetails.document_days_remaining],
+                    ["يتطلب ATO", machineryDetails.requires_ato ? "نعم" : "لا"],
+                    ["حالة ATO", machineryDetails.ato_status],
+                    ["انتهاء ATO", machineryDetails.ato_expiry],
+                    ["رقم التصريح الأمني", machineryDetails.security_permit_no],
+                    ["حالة التصريح الأمني", machineryDetails.security_permit_status],
+                    ["انتهاء التصريح الأمني", machineryDetails.security_permit_expiry],
+                    ["ملاحظات", machineryDetails.notes],
+                    ["صف المصدر", machineryDetails.source_row],
+                    ["تاريخ الإضافة", machineryDetails.created_at],
+                    ["آخر تحديث", machineryDetails.updated_at],
+                  ] as Array<[string, string | number | boolean | null | undefined]>
+                ).map(([label, value]) => (
+                  <div key={label} className="rounded-xl border bg-muted/20 p-3">
+                    <dt className="text-xs text-muted-foreground">{label}</dt>
+                    <dd className="mt-1 break-words text-sm font-medium">
+                      {value == null || value === "" ? "—" : value}
+                    </dd>
             </div>
-          </>}
+                ))}
+              </dl>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>
@@ -858,7 +1485,9 @@ function VehicleDetailsTab({
       const nextMonth = new Date(Date.UTC(year, monthNumber, 1)).toISOString().slice(0, 10);
       const { data, error } = await (supabase as any)
         .from("vehicle_fuel_vouchers")
-        .select("voucher_no, voucher_date, liters, price_per_liter, total_cost, odometer_reading, fuel_type")
+        .select(
+          "voucher_no, voucher_date, liters, price_per_liter, total_cost, odometer_reading, fuel_type",
+        )
         .eq("vehicle_id", selected.id)
         .gte("voucher_date", `${month}-01`)
         .lt("voucher_date", nextMonth)
@@ -898,7 +1527,8 @@ function VehicleDetailsTab({
       toast.success("تم اعتماد شكل المركبة");
       await client.invalidateQueries({ queryKey: ["vehicles"] });
     },
-    onError: (error: Error) => toast.error(`تعذر اعتماد الشكل: ${describeVehicleImageError(error)}`),
+    onError: (error: Error) =>
+      toast.error(`تعذر اعتماد الشكل: ${describeVehicleImageError(error)}`),
   });
 
   const attachImage = async (file: File) => {
@@ -960,7 +1590,12 @@ function VehicleDetailsTab({
             >
               <CarFront className="h-4 w-4" />
               {vehicle.name}
-              <span className={cn("text-[11px] font-normal", isSelected ? "text-white/80" : "text-muted-foreground/70")}>
+              <span
+                className={cn(
+                  "text-[11px] font-normal",
+                  isSelected ? "text-white/80" : "text-muted-foreground/70",
+                )}
+              >
                 {vehicle.vehicle_no}
               </span>
             </button>
@@ -1005,8 +1640,8 @@ function VehicleDetailsTab({
           <div>
             <h3 className="text-base font-bold">أرفق شكل المركبة</h3>
             <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-              لم تُرفق صورة لهذه المركبة بعد. أضف شكلها لعرض رقم اللوحة وآخر تعبئة وقود وتاريخ انتهاء
-              التصريح الأمني على الرسم.
+              لم تُرفق صورة لهذه المركبة بعد. أضف شكلها لعرض رقم اللوحة وآخر تعبئة وقود وتاريخ
+              انتهاء التصريح الأمني على الرسم.
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-2">
@@ -1152,7 +1787,8 @@ function VehicleDetailForm({
       await client.invalidateQueries({ queryKey: ["monthly", "vehicle-report"] });
       onSaved();
     },
-    onError: (error: Error) => toast.error(`تعذر حفظ التفاصيل: ${describeVehicleImageError(error)}`),
+    onError: (error: Error) =>
+      toast.error(`تعذر حفظ التفاصيل: ${describeVehicleImageError(error)}`),
   });
 
   return (
@@ -1168,7 +1804,10 @@ function VehicleDetailForm({
         </div>
         <div className="space-y-2">
           <Label>الفئة</Label>
-          <Select value={vehicleClass} onValueChange={(value) => setVehicleClass(value as "light" | "heavy")}>
+          <Select
+            value={vehicleClass}
+            onValueChange={(value) => setVehicleClass(value as "light" | "heavy")}
+          >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -1180,7 +1819,10 @@ function VehicleDetailForm({
         </div>
         <div className="space-y-2">
           <Label>نوع الوقود</Label>
-          <Select value={fuelType} onValueChange={(value) => setFuelType(value as "gasoline" | "diesel")}>
+          <Select
+            value={fuelType}
+            onValueChange={(value) => setFuelType(value as "gasoline" | "diesel")}
+          >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -1192,7 +1834,10 @@ function VehicleDetailForm({
         </div>
         <div className="space-y-2">
           <Label>السائق الحالي</Label>
-          <Select value={driverId || "none"} onValueChange={(value) => setDriverId(value === "none" ? "" : value)}>
+          <Select
+            value={driverId || "none"}
+            onValueChange={(value) => setDriverId(value === "none" ? "" : value)}
+          >
             <SelectTrigger>
               <SelectValue placeholder="اختر السائق" />
             </SelectTrigger>
@@ -1230,15 +1875,30 @@ function VehicleDetailForm({
         </div>
         <div className="space-y-2">
           <Label htmlFor="d-fuel">آخر تعبئة وقود</Label>
-          <Input id="d-fuel" type="date" value={lastFuelDate} onChange={(event) => setLastFuelDate(event.target.value)} />
+          <Input
+            id="d-fuel"
+            type="date"
+            value={lastFuelDate}
+            onChange={(event) => setLastFuelDate(event.target.value)}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="d-permit">انتهاء التصريح الأمني</Label>
-          <Input id="d-permit" type="date" value={permitExpiry} onChange={(event) => setPermitExpiry(event.target.value)} />
+          <Input
+            id="d-permit"
+            type="date"
+            value={permitExpiry}
+            onChange={(event) => setPermitExpiry(event.target.value)}
+          />
         </div>
         <div className="space-y-2 sm:col-span-2 lg:col-span-3">
           <Label htmlFor="d-notes">ملاحظات</Label>
-          <Textarea id="d-notes" rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} />
+          <Textarea
+            id="d-notes"
+            rows={3}
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+          />
         </div>
         <div className="space-y-2 sm:col-span-2 lg:col-span-3">
           <Label>شكل المركبة</Label>

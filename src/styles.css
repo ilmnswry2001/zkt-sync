@@ -431,7 +431,66 @@
   display: none;
 }
 
+.maintenance-print {
+  display: none;
+}
+
 @media print {
+  @page maintenance {
+    size: A4 portrait;
+    margin: 7mm;
+  }
+
+  .maintenance-print,
+  .maintenance-print * {
+    visibility: visible !important;
+  }
+  .maintenance-print {
+    display: block !important;
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 282mm !important;
+    overflow: hidden !important;
+    padding: 2mm !important;
+    background: #fff !important;
+    color: #111827 !important;
+    direction: rtl !important;
+    font-size: 9pt !important;
+    line-height: 1.2 !important;
+    page: maintenance;
+    zoom: 0.82;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .maintenance-print table,
+  .maintenance-print tr,
+  .maintenance-print td,
+  .maintenance-print th {
+    break-inside: avoid !important;
+  }
+  .maintenance-print h3 {
+    margin: 8px 0 4px !important;
+    padding-bottom: 3px !important;
+    border-bottom: 1px solid #99c8c1 !important;
+    color: #0f766e !important;
+  }
+  .maintenance-print table {
+    font-size: 9pt !important;
+  }
+  .maintenance-print table:first-of-type td:first-child {
+    width: 28% !important;
+    background: #edf7f5 !important;
+    color: #134e4a !important;
+    font-weight: 600 !important;
+  }
+  .maintenance-print table:last-of-type tr:last-child td {
+    background: #dff5ed !important;
+    color: #065f46 !important;
+    font-size: 12pt !important;
+    font-weight: 800 !important;
+  }
+
   .fuel-voucher-print,
   .fuel-voucher-print * {
     visibility: visible !important;
