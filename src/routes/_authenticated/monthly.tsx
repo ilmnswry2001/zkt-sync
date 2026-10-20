@@ -114,6 +114,11 @@ type MonthlyMachinery = {
 };
 const weekday = (date: string) =>
   new Date(`${date}T00:00:00Z`).toLocaleDateString("ar", { weekday: "short", timeZone: "UTC" });
+const datesInMonth = (month: string) => {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const count = new Date(year, monthNumber, 0).getDate();
+  return Array.from({ length: count }, (_, index) => `${month}-${String(index + 1).padStart(2, "0")}`);
+};
 const formatTime = (time: string | null) =>
   time
     ? new Date(time).toLocaleTimeString("ar", {
@@ -153,6 +158,8 @@ function MonthlyPage() {
   const [machineryPage, setMachineryPage] = useState(0);
   const [activeMachinery, setActiveMachinery] = useState<MonthlyMachinery | null>(null);
   const [machineryDatesDraft, setMachineryDatesDraft] = useState<string[]>([]);
+  const [activeVehicle, setActiveVehicle] = useState<MonthlyVehicle | null>(null);
+  const [vehicleDatesDraft, setVehicleDatesDraft] = useState<string[]>([]);
   const fetchSheet = useServerFn(getMonthlySheet);
   const { data: allEmployees = [] } = useQuery<EmployeeOption[]>({
     queryKey: ["monthly", "employee-options"],
@@ -253,6 +260,11 @@ function MonthlyPage() {
     [vehicleReport.data, vehicleSearch],
   );
   const vehicleTotal = vehicleRows.reduce((sum, vehicle) => sum + vehicle.total, 0);
+  const monthDays = useMemo(() => datesInMonth(month), [month]);
+  const vehicleDailyChart = useMemo(
+    () => monthDays.map((date) => ({ day: Number(date.slice(-2)), operating: vehicleRows.filter((vehicle) => vehicle.operatingDates.includes(date)).length })),
+    [monthDays, vehicleRows],
+  );
   const machineryReport = useQuery({
     queryKey: ["monthly", "machinery-report", month, machineryPage, machinerySearch],
     queryFn: async () => {
@@ -313,6 +325,27 @@ function MonthlyPage() {
   const machineryCount = machineryReport.data?.total ?? 0;
   const machineryPageCount = Math.max(1, Math.ceil(machineryCount / 50));
   const machineryTotal = machineryRows.reduce((sum, machine) => sum + machine.total, 0);
+  const machineryDailyChart = useMemo(
+    () => monthDays.map((date) => ({ day: Number(date.slice(-2)), operating: machineryRows.filter((machine) => machine.operatingDates.includes(date)).length })),
+    [monthDays, machineryRows],
+  );
+  const saveVehicleAttendance = useMutation({
+    mutationFn: async () => {
+      if (!activeVehicle) return;
+      const dates = [...new Set(vehicleDatesDraft)].filter((date) => date.startsWith(`${month}-`)).sort();
+      const { error } = await (supabase as any).from("vehicle_monthly_operations").upsert(
+        { vehicle_id: activeVehicle.id, month: `${month}-01`, operating_days: dates.length, operating_dates: dates },
+        { onConflict: "vehicle_id,month" },
+      );
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      toast.success("تم حفظ أيام تشغيل المركبة");
+      setActiveVehicle(null);
+      await qc.invalidateQueries({ queryKey: ["monthly", "vehicle-report"] });
+    },
+    onError: (error: Error) => toast.error(`تعذر حفظ حضور المركبة: ${formatErrorMessage(error)}`),
+  });
   const saveMachineryAttendance = useMutation({
     mutationFn: async () => {
       if (!activeMachinery) return;
@@ -863,6 +896,26 @@ function MonthlyPage() {
               </Card>
             ))}
         </section>
+        <Card className="p-4">
+          <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h2 className="font-semibold">تشغيل المركبات خلال الشهر</h2>
+              <p className="text-xs text-muted-foreground">عدد المركبات المسجّل لها تشغيل في كل يوم · النتائج حسب الفلاتر الحالية</p>
+            </div>
+            <Badge variant="secondary">{vehicleRows.filter((vehicle) => vehicle.operatingDays > 0).length.toLocaleString("ar")} مركبة مسجلة</Badge>
+          </div>
+          <div className="h-64 w-full" dir="ltr">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={vehicleDailyChart} margin={{ top: 8, right: 16, left: 0, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                <XAxis dataKey="day" tickFormatter={(value) => Number(value).toLocaleString("ar")} />
+                <YAxis allowDecimals={false} width={36} />
+                <Tooltip labelFormatter={(value) => `اليوم ${Number(value).toLocaleString("ar")}`} formatter={(value) => [`${Number(value).toLocaleString("ar")} مركبة`, "عاملة"]} />
+                <Line type="monotone" dataKey="operating" name="مركبات عاملة" stroke="#14b8a6" strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
         <Card className="overflow-hidden">
           <div className="flex flex-col justify-between gap-4 border-b bg-muted/20 p-4 sm:flex-row sm:items-center sm:p-5">
               <div>
@@ -952,6 +1005,7 @@ function MonthlyPage() {
                       <th className="p-3">تواريخ الحضور</th>
                       <th className="p-3">الأجر اليومي</th>
                       <th className="p-3">الاستحقاق</th>
+                      <th className="p-3">تسجيل الدوام</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -990,6 +1044,11 @@ function MonthlyPage() {
                         <td className="p-3 font-bold tabular-nums">
                           {vehicle.total.toLocaleString("ar-IQ")} د.ع
                         </td>
+                        <td className="p-3">
+                          <Button size="sm" variant="outline" onClick={() => { setActiveVehicle(vehicle); setVehicleDatesDraft(vehicle.operatingDates); }}>
+                            <CalendarDays className="ml-2 h-4 w-4" /> تعديل الأيام
+                          </Button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1004,6 +1063,7 @@ function MonthlyPage() {
                       <td className="p-3">—</td>
                       <td className="p-3">—</td>
                       <td className="p-3">{vehicleTotal.toLocaleString("ar-IQ")} د.ع</td>
+                      <td />
                     </tr>
                   </tfoot>
                 </table>
@@ -1019,15 +1079,48 @@ function MonthlyPage() {
           </Card>
         </TabsContent>
         <TabsContent value="machinery" className="mt-0 space-y-4">
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            { label: "إجمالي الآليات", value: machineryCount.toLocaleString("ar"), icon: Cog },
+            { label: "آليات سُجل لها تشغيل", value: machineryRows.filter((machine) => machine.operatingDays > 0).length.toLocaleString("ar"), icon: CalendarDays },
+            { label: "أيام التشغيل المسجلة", value: machineryRows.reduce((sum, machine) => sum + machine.operatingDays, 0).toLocaleString("ar"), icon: CalendarDays },
+            { label: "كلفة الآليات المعروضة", value: `${machineryTotal.toLocaleString("ar-IQ")} د.ع`, icon: Banknote },
+          ].map((stat) => (
+            <Card key={stat.label} className="rounded-2xl">
+              <div className="flex items-center justify-between p-4">
+                <div><p className="text-sm text-muted-foreground">{stat.label}</p><p className="mt-1 text-xl font-bold tabular-nums">{machineryReport.isPending ? "—" : stat.value}</p></div>
+                <span className="rounded-xl bg-primary/10 p-2.5 text-primary"><stat.icon className="h-5 w-5" /></span>
+              </div>
+            </Card>
+          ))}
+        </section>
+        <Card className="p-4">
+          <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h2 className="font-semibold">تشغيل الآليات خلال {month}</h2>
+              <p className="text-xs text-muted-foreground">عدد الآليات المسجل لها تشغيل يومياً في الصفحة الحالية</p>
+            </div>
+            <div className="flex items-center gap-2 text-xs"><span className="h-2.5 w-2.5 rounded-full bg-teal-500" /> آليات عاملة</div>
+          </div>
+          <div className="h-64 w-full" dir="ltr">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={machineryDailyChart} margin={{ top: 8, right: 16, left: 0, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                <XAxis dataKey="day" tickFormatter={(value) => Number(value).toLocaleString("ar")} />
+                <YAxis allowDecimals={false} width={36} />
+                <Tooltip labelFormatter={(value) => `اليوم ${Number(value).toLocaleString("ar")}`} formatter={(value) => [`${Number(value).toLocaleString("ar")} آلية`, "عاملة"]} />
+                <Line type="monotone" dataKey="operating" name="آليات عاملة" stroke="#14b8a6" strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
           <Card className="overflow-hidden">
             <div className="flex flex-wrap items-end justify-between gap-4 border-b p-4">
               <div>
                 <h2 className="flex items-center gap-2 text-lg font-semibold">
                   <Cog className="h-5 w-5 text-primary" /> كشف حضور الآليات
                 </h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  أيام التشغيل المسجلة لكل آلية خلال الشهر المحدد.
-                </p>
+                <p className="mt-1 text-sm text-muted-foreground">سجل شهري يومي قابل للمراجعة والتعديل · التكلفة = أيام التشغيل × الإيجار اليومي.</p>
               </div>
               <div className="grid w-full gap-3 sm:w-auto sm:grid-cols-2">
                 <div className="space-y-1.5">
@@ -1080,15 +1173,18 @@ function MonthlyPage() {
               </p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[850px] text-sm">
+                <div className="flex flex-wrap gap-4 border-b p-3 text-xs text-muted-foreground">
+                  <span><b className="ml-1 text-emerald-700">✓</b> تم تسجيل تشغيل الآلية في ذلك اليوم</span>
+                  <span><b className="ml-1">—</b> لا يوجد تشغيل مسجل</span>
+                  <span>استخدم «تعديل الأيام» لتسجيل الدوام أو تغييره</span>
+                </div>
+                <table className="w-full min-w-[1500px] text-sm">
                   <thead>
                     <tr className="border-b bg-muted/40 text-right">
-                      <th className="p-3">الآلية</th>
-                      <th className="p-3">رقم الآلية</th>
-                      <th className="p-3">التصنيف</th>
-                      <th className="p-3">الحالة</th>
-                      <th className="p-3">أيام الحضور</th>
-                      <th className="p-3">تواريخ الحضور</th>
+                      <th className="sticky right-0 z-10 min-w-48 bg-muted/40 p-3">الآلية / الرقم</th>
+                      <th className="p-3">التصنيف والحالة</th>
+                      {monthDays.map((date) => <th key={date} className="min-w-12 p-2 text-center"><span>{Number(date.slice(-2)).toLocaleString("ar")}</span><small className="block text-muted-foreground">{weekday(date)}</small></th>)}
+                      <th className="p-3">أيام التشغيل</th>
                       <th className="p-3">الإيجار اليومي</th>
                       <th className="p-3">الإجمالي</th>
                       <th className="p-3">إجراء</th>
@@ -1097,25 +1193,14 @@ function MonthlyPage() {
                   <tbody>
                     {machineryRows.map((machine) => (
                       <tr key={machine.id} className="border-b hover:bg-muted/20">
-                        <td className="p-3 font-medium">{machine.name}</td>
-                        <td className="p-3">{machine.asset_number || machine.code}</td>
-                        <td className="p-3">{machine.category || "—"}</td>
-                        <td className="p-3">
-                          {machine.status === "active"
-                            ? "نشطة"
-                            : machine.status === "maintenance"
-                              ? "قيد الصيانة"
-                              : "متوقفة"}
-                        </td>
+                        <td className="sticky right-0 z-[1] bg-background p-3 font-medium">{machine.name}<small className="block text-muted-foreground">{machine.asset_number || machine.code}</small></td>
+                        <td className="p-3">{machine.category || "—"}<small className="block text-muted-foreground">{machine.status === "active" ? "نشطة" : machine.status === "maintenance" ? "قيد الصيانة" : "متوقفة"}</small></td>
+                        {monthDays.map((date) => {
+                          const operated = machine.operatingDates.includes(date);
+                          return <td key={date} className="border-x p-1 text-center"><span className={cn("inline-flex h-8 min-w-8 items-center justify-center rounded font-bold", operated ? "bg-emerald-100 text-emerald-800" : "bg-muted/60 text-muted-foreground")}>{operated ? "✓" : "—"}</span></td>;
+                        })}
                         <td className="p-3 tabular-nums">
                           {machine.operatingDays.toLocaleString("ar")} يوم
-                        </td>
-                        <td className="max-w-72 p-3 text-xs leading-6 text-muted-foreground">
-                          {machine.operatingDates.length
-                            ? machine.operatingDates
-                                .map((date) => Number(date.slice(8)).toLocaleString("ar"))
-                                .join("، ")
-                            : "لا توجد أيام مسجلة"}
                         </td>
                         <td className="p-3 tabular-nums">
                           {Number(machine.daily_rent).toLocaleString("ar-IQ")} د.ع
@@ -1132,7 +1217,7 @@ function MonthlyPage() {
                               setMachineryDatesDraft(machine.operatingDates);
                             }}
                           >
-                            <CalendarDays className="ml-2 h-4 w-4" /> تسجيل / تعديل الدوام
+                            <CalendarDays className="ml-2 h-4 w-4" /> تعديل الأيام
                           </Button>
                         </td>
                       </tr>
@@ -1140,16 +1225,16 @@ function MonthlyPage() {
                   </tbody>
                   <tfoot>
                     <tr className="bg-muted/30 font-bold">
-                      <td className="p-3" colSpan={4}>
+                      <td className="sticky right-0 z-[1] bg-muted/30 p-3" colSpan={2}>
                         الآليات المعروضة: {machineryRows.length.toLocaleString("ar")} من أصل {machineryCount.toLocaleString("ar")}
                       </td>
+                      {monthDays.map((date) => <td key={date} className="p-1" />)}
                       <td className="p-3">
                         {machineryRows
                           .reduce((sum, machine) => sum + machine.operatingDays, 0)
                           .toLocaleString("ar")}{" "}
                         يوم
                       </td>
-                      <td className="p-3">—</td>
                       <td className="p-3">—</td>
                       <td className="p-3">{machineryTotal.toLocaleString("ar-IQ")} د.ع</td>
                       <td />
@@ -1212,48 +1297,105 @@ function MonthlyPage() {
       >
         <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           {activeMachinery && (
-            <>
-              <DialogHeader>
-                <DialogTitle>تسجيل أيام تشغيل الآلية</DialogTitle>
-                <DialogDescription>
-                  {activeMachinery.name} · {activeMachinery.asset_number || activeMachinery.code} · {month}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid grid-cols-7 gap-2">
-                {["ح", "ن", "ث", "ر", "خ", "ج", "س"].map((day) => (
-                  <div key={day} className="py-1 text-center text-xs font-medium text-muted-foreground">{day}</div>
-                ))}
-                {Array.from({ length: new Date(`${month}-01T00:00:00`).getDay() }, (_, index) => (
-                  <div key={`empty-${index}`} />
-                ))}
-                {Array.from({ length: new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate() }, (_, index) => {
-                  const day = index + 1;
-                  const date = `${month}-${String(day).padStart(2, "0")}`;
-                  const selected = machineryDatesDraft.includes(date);
-                  return (
-                    <Button
-                      key={date}
-                      type="button"
-                      variant={selected ? "default" : "outline"}
-                      className="h-10"
-                      aria-pressed={selected}
-                      onClick={() => setMachineryDatesDraft((current) => selected ? current.filter((item) => item !== date) : [...current, date].sort())}
-                    >
-                      {day.toLocaleString("ar")}
-                    </Button>
-                  );
-                })}
-              </div>
-              <div className="flex items-center justify-between gap-3 border-t pt-4">
-                <p className="text-sm">أيام التشغيل: <b>{machineryDatesDraft.length.toLocaleString("ar")}</b> · التكلفة: <b>{(machineryDatesDraft.length * Number(activeMachinery.daily_rent ?? 0)).toLocaleString("ar-IQ")} د.ع</b></p>
-                <Button onClick={() => saveMachineryAttendance.mutate()} disabled={saveMachineryAttendance.isPending}>
-                  حفظ الحضور
-                </Button>
-              </div>
-            </>
+            <MonthlyOperatingDaysForm
+              title="تسجيل أيام تشغيل الآلية"
+              subtitle={`${activeMachinery.name} · ${activeMachinery.asset_number || activeMachinery.code} · ${month}`}
+              month={month}
+              dailyRate={Number(activeMachinery.daily_rent ?? 0)}
+              dates={machineryDatesDraft}
+              setDates={setMachineryDatesDraft}
+              saving={saveMachineryAttendance.isPending}
+              onSave={() => saveMachineryAttendance.mutate()}
+            />
           )}
         </DialogContent>
       </Dialog>
+      <Dialog
+        open={!!activeVehicle}
+        onOpenChange={(open) => {
+          if (!open) setActiveVehicle(null);
+        }}
+      >
+        <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          {activeVehicle && (
+            <MonthlyOperatingDaysForm
+              title="تسجيل أيام تشغيل المركبة"
+              subtitle={`${activeVehicle.name} · ${activeVehicle.vehicle_no} · ${month}`}
+              month={month}
+              dailyRate={Number(activeVehicle.daily_rate ?? 0)}
+              dates={vehicleDatesDraft}
+              setDates={setVehicleDatesDraft}
+              saving={saveVehicleAttendance.isPending}
+              onSave={() => saveVehicleAttendance.mutate()}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function MonthlyOperatingDaysForm({
+  title,
+  subtitle,
+  month,
+  dailyRate,
+  dates,
+  setDates,
+  saving,
+  onSave,
+}: {
+  title: string;
+  subtitle: string;
+  month: string;
+  dailyRate: number;
+  dates: string[];
+  setDates: React.Dispatch<React.SetStateAction<string[]>>;
+  saving: boolean;
+  onSave: () => void;
+}) {
+  const allDates = datesInMonth(month);
+  const firstWeekday = new Date(`${month}-01T00:00:00`).getDay();
+  const daysOfWeek = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+  return (
+    <div className="space-y-4">
+      <DialogHeader>
+        <DialogTitle>{title}</DialogTitle>
+        <DialogDescription>{subtitle}</DialogDescription>
+      </DialogHeader>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-muted/20 p-3">
+        <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs">
+          <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-emerald-500" /> يوم تشغيل مسجل</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded border bg-background" /> لا يوجد تشغيل</span>
+        </div>
+        <Button type="button" variant="ghost" size="sm" onClick={() => setDates([])}>مسح أيام الشهر</Button>
+      </div>
+      <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+        {daysOfWeek.map((day) => <div key={day} className="py-2 text-center text-[10px] font-medium text-muted-foreground sm:text-xs">{day}</div>)}
+        {Array.from({ length: firstWeekday }, (_, index) => <div aria-hidden="true" key={`blank-${index}`} />)}
+        {allDates.map((date) => {
+          const selected = dates.includes(date);
+          const day = Number(date.slice(-2));
+          return (
+            <Button
+              key={date}
+              type="button"
+              variant="outline"
+              aria-pressed={selected}
+              aria-label={`${day} ${selected ? "يوم تشغيل مسجل" : "لا يوجد تشغيل"}`}
+              className={cn("h-11 flex-col gap-0 p-1 sm:h-12", selected && "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white")}
+              onClick={() => setDates((current) => selected ? current.filter((item) => item !== date) : [...current, date].sort())}
+            >
+              <span className="text-sm font-bold">{day.toLocaleString("ar")}</span>
+              <span className={cn("text-[9px]", selected ? "text-emerald-50" : "text-muted-foreground")}>{selected ? "عمل" : "—"}</span>
+            </Button>
+          );
+        })}
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+        <p className="text-sm">أيام التشغيل: <b>{dates.length.toLocaleString("ar")}</b> · الأجر اليومي: <b>{dailyRate.toLocaleString("ar-IQ")} د.ع</b> · الإجمالي: <b>{(dates.length * dailyRate).toLocaleString("ar-IQ")} د.ع</b></p>
+        <Button onClick={onSave} disabled={saving}>{saving ? "جارٍ الحفظ…" : "حفظ أيام التشغيل"}</Button>
+      </div>
     </div>
   );
 }
