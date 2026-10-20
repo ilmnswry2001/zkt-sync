@@ -150,6 +150,9 @@ function MonthlyPage() {
   const [selection, setSelection] = useState<{ employeeId: string; date: string } | null>(null);
   const [vehicleSearch, setVehicleSearch] = useState("");
   const [machinerySearch, setMachinerySearch] = useState("");
+  const [machineryPage, setMachineryPage] = useState(0);
+  const [activeMachinery, setActiveMachinery] = useState<MonthlyMachinery | null>(null);
+  const [machineryDatesDraft, setMachineryDatesDraft] = useState<string[]>([]);
   const fetchSheet = useServerFn(getMonthlySheet);
   const { data: allEmployees = [] } = useQuery<EmployeeOption[]>({
     queryKey: ["monthly", "employee-options"],
@@ -251,26 +254,34 @@ function MonthlyPage() {
   );
   const vehicleTotal = vehicleRows.reduce((sum, vehicle) => sum + vehicle.total, 0);
   const machineryReport = useQuery({
-    queryKey: ["monthly", "machinery-report", month],
+    queryKey: ["monthly", "machinery-report", month, machineryPage, machinerySearch],
     queryFn: async () => {
-      const machinery: Record<string, unknown>[] = [];
-      for (let from = 0; ; from += 1000) {
-        const { data: batch, error } = await (supabase as any)
-          .from("machinery")
-          .select("id, code, asset_number, name, category, status, daily_rent")
-          .order("code")
-          .range(from, from + 999);
-        if (error) throw error;
-        machinery.push(...(batch ?? []));
-        if (!batch || batch.length < 1000) break;
+      let machineryQuery = (supabase as any)
+        .from("machinery")
+        .select("id, code, asset_number, name, category, status, daily_rent", { count: "exact" })
+        .order("code")
+        .range(machineryPage * 50, machineryPage * 50 + 49);
+      const normalizedSearch = machinerySearch.trim().replace(/[(),]/g, " ");
+      if (normalizedSearch) {
+        machineryQuery = machineryQuery.or(
+          `code.ilike.%${normalizedSearch}%,asset_number.ilike.%${normalizedSearch}%,name.ilike.%${normalizedSearch}%`,
+        );
       }
-      const { data: operations, error } = await (supabase as any)
+      const { data: machinery, error: machineryError, count } = await machineryQuery;
+      if (machineryError) throw machineryError;
+      const machineryIds = (machinery ?? []).map((machine: { id: string }) => machine.id);
+      let operations: { machinery_id: string; operating_days: number; operating_dates: string[] }[] = [];
+      if (machineryIds.length) {
+        const result = await (supabase as any)
         .from("machinery_monthly_operations")
         .select("machinery_id, operating_days, operating_dates")
-        .eq("month", `${month}-01`);
-      if (error) throw error;
+        .eq("month", `${month}-01`)
+        .in("machinery_id", machineryIds);
+        if (result.error) throw result.error;
+        operations = result.data ?? [];
+      }
       const byMachinery = new Map<string, { days: number; dates: string[] }>(
-        (operations ?? []).map(
+        operations.map(
           (row: { machinery_id: string; operating_days: number; operating_dates: string[] }) => [
             row.machinery_id,
             {
@@ -280,8 +291,8 @@ function MonthlyPage() {
           ],
         ),
       );
-      return (
-        machinery as unknown as Omit<
+      const rows = (
+        (machinery ?? []) as Omit<
           MonthlyMachinery,
           "operatingDays" | "operatingDates" | "total"
         >[]
@@ -295,14 +306,35 @@ function MonthlyPage() {
           total: operatingDays * Number(machine.daily_rent ?? 0),
         };
       });
+      return { rows, total: count ?? 0 };
     },
   });
-  const machineryRows = (machineryReport.data ?? []).filter((machine) =>
-    `${machine.asset_number ?? ""} ${machine.code} ${machine.name}`
-      .toLocaleLowerCase("ar")
-      .includes(machinerySearch.trim().toLocaleLowerCase("ar")),
-  );
+  const machineryRows = machineryReport.data?.rows ?? [];
+  const machineryCount = machineryReport.data?.total ?? 0;
+  const machineryPageCount = Math.max(1, Math.ceil(machineryCount / 50));
   const machineryTotal = machineryRows.reduce((sum, machine) => sum + machine.total, 0);
+  const saveMachineryAttendance = useMutation({
+    mutationFn: async () => {
+      if (!activeMachinery) return;
+      const dates = [...new Set(machineryDatesDraft)].filter((date) => date.startsWith(`${month}-`)).sort();
+      const { error } = await (supabase as any).from("machinery_monthly_operations").upsert(
+        {
+          machinery_id: activeMachinery.id,
+          month: `${month}-01`,
+          operating_days: dates.length,
+          operating_dates: dates,
+        },
+        { onConflict: "machinery_id,month" },
+      );
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      toast.success("تم حفظ أيام تشغيل الآلية");
+      setActiveMachinery(null);
+      await qc.invalidateQueries({ queryKey: ["monthly", "machinery-report"] });
+    },
+    onError: (error: Error) => toast.error(`تعذر حفظ حضور الآلية: ${formatErrorMessage(error)}`),
+  });
   const exportVehicleReport = () => {
     const workbook = XLSX.utils.book_new();
     const sheet = XLSX.utils.json_to_sheet(
@@ -1005,8 +1037,10 @@ function MonthlyPage() {
                     type="month"
                     value={month}
                     onChange={(event) => {
-                      if (/^[1-9]\d{3}-(0[1-9]|1[0-2])$/.test(event.target.value))
+                      if (/^[1-9]\d{3}-(0[1-9]|1[0-2])$/.test(event.target.value)) {
                         setMonth(event.target.value);
+                        setMachineryPage(0);
+                      }
                     }}
                   />
                 </div>
@@ -1019,7 +1053,10 @@ function MonthlyPage() {
                       className="pr-9"
                       placeholder="رقم الأصل أو الكود"
                       value={machinerySearch}
-                      onChange={(event) => setMachinerySearch(event.target.value)}
+                      onChange={(event) => {
+                        setMachinerySearch(event.target.value);
+                        setMachineryPage(0);
+                      }}
                     />
                   </div>
                 </div>
@@ -1054,6 +1091,7 @@ function MonthlyPage() {
                       <th className="p-3">تواريخ الحضور</th>
                       <th className="p-3">الإيجار اليومي</th>
                       <th className="p-3">الإجمالي</th>
+                      <th className="p-3">إجراء</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1085,13 +1123,25 @@ function MonthlyPage() {
                         <td className="p-3 font-bold tabular-nums">
                           {machine.total.toLocaleString("ar-IQ")} د.ع
                         </td>
+                        <td className="p-3">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setActiveMachinery(machine);
+                              setMachineryDatesDraft(machine.operatingDates);
+                            }}
+                          >
+                            <CalendarDays className="ml-2 h-4 w-4" /> تسجيل / تعديل الدوام
+                          </Button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr className="bg-muted/30 font-bold">
                       <td className="p-3" colSpan={4}>
-                        إجمالي الآليات المعروضة: {machineryRows.length.toLocaleString("ar")}
+                        الآليات المعروضة: {machineryRows.length.toLocaleString("ar")} من أصل {machineryCount.toLocaleString("ar")}
                       </td>
                       <td className="p-3">
                         {machineryRows
@@ -1102,6 +1152,7 @@ function MonthlyPage() {
                       <td className="p-3">—</td>
                       <td className="p-3">—</td>
                       <td className="p-3">{machineryTotal.toLocaleString("ar-IQ")} د.ع</td>
+                      <td />
                     </tr>
                   </tfoot>
                 </table>
@@ -1109,6 +1160,27 @@ function MonthlyPage() {
                   <p className="p-10 text-center text-muted-foreground">
                     لا توجد آليات تطابق رقم البحث.
                   </p>
+                )}
+                {machineryCount > 50 && (
+                  <div className="flex items-center justify-between gap-3 border-t p-4">
+                    <Button
+                      variant="outline"
+                      disabled={machineryPage === 0 || machineryReport.isFetching}
+                      onClick={() => setMachineryPage((current) => Math.max(0, current - 1))}
+                    >
+                      الصفحة السابقة
+                    </Button>
+                    <span className="text-sm text-muted-foreground">
+                      صفحة {(machineryPage + 1).toLocaleString("ar")} من {machineryPageCount.toLocaleString("ar")} · 50 آلية كحد أقصى
+                    </span>
+                    <Button
+                      variant="outline"
+                      disabled={machineryPage + 1 >= machineryPageCount || machineryReport.isFetching}
+                      onClick={() => setMachineryPage((current) => current + 1)}
+                    >
+                      الصفحة التالية
+                    </Button>
+                  </div>
                 )}
               </div>
             )}
@@ -1129,6 +1201,56 @@ function MonthlyPage() {
               month={month}
               initialDate={selection.date}
             />
+          )}
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={!!activeMachinery}
+        onOpenChange={(open) => {
+          if (!open) setActiveMachinery(null);
+        }}
+      >
+        <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          {activeMachinery && (
+            <>
+              <DialogHeader>
+                <DialogTitle>تسجيل أيام تشغيل الآلية</DialogTitle>
+                <DialogDescription>
+                  {activeMachinery.name} · {activeMachinery.asset_number || activeMachinery.code} · {month}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid grid-cols-7 gap-2">
+                {["ح", "ن", "ث", "ر", "خ", "ج", "س"].map((day) => (
+                  <div key={day} className="py-1 text-center text-xs font-medium text-muted-foreground">{day}</div>
+                ))}
+                {Array.from({ length: new Date(`${month}-01T00:00:00`).getDay() }, (_, index) => (
+                  <div key={`empty-${index}`} />
+                ))}
+                {Array.from({ length: new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate() }, (_, index) => {
+                  const day = index + 1;
+                  const date = `${month}-${String(day).padStart(2, "0")}`;
+                  const selected = machineryDatesDraft.includes(date);
+                  return (
+                    <Button
+                      key={date}
+                      type="button"
+                      variant={selected ? "default" : "outline"}
+                      className="h-10"
+                      aria-pressed={selected}
+                      onClick={() => setMachineryDatesDraft((current) => selected ? current.filter((item) => item !== date) : [...current, date].sort())}
+                    >
+                      {day.toLocaleString("ar")}
+                    </Button>
+                  );
+                })}
+              </div>
+              <div className="flex items-center justify-between gap-3 border-t pt-4">
+                <p className="text-sm">أيام التشغيل: <b>{machineryDatesDraft.length.toLocaleString("ar")}</b> · التكلفة: <b>{(machineryDatesDraft.length * Number(activeMachinery.daily_rent ?? 0)).toLocaleString("ar-IQ")} د.ع</b></p>
+                <Button onClick={() => saveMachineryAttendance.mutate()} disabled={saveMachineryAttendance.isPending}>
+                  حفظ الحضور
+                </Button>
+              </div>
+            </>
           )}
         </DialogContent>
       </Dialog>
