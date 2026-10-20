@@ -18,8 +18,8 @@ import {
   FileWarning,
   Fuel,
   Settings2,
-  PanelRightClose,
-  PanelRightOpen,
+  PanelLeftClose,
+  PanelLeftOpen,
   Sparkles,
   Menu,
   X,
@@ -412,8 +412,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       />
       <aside
         className={cn(
-          "app-sidebar fixed inset-y-0 right-0 z-40 flex w-[min(19rem,88vw)] shrink-0 flex-col overflow-hidden border-l border-border bg-sidebar text-sidebar-foreground shadow-xl shadow-slate-950/10 transition-[width,transform] duration-200 ease-out md:sticky md:top-0 md:h-screen md:translate-x-0 md:shadow-none",
-          mobileSidebarOpen ? "translate-x-0" : "translate-x-full",
+          "app-sidebar fixed bottom-3 left-3 right-auto top-3 z-40 flex w-[min(19rem,calc(100vw-1.5rem))] shrink-0 flex-col overflow-hidden rounded-2xl border border-border bg-sidebar text-sidebar-foreground shadow-xl shadow-slate-950/15 transition-[width,transform] duration-200 ease-out md:bottom-4 md:left-4 md:right-auto md:top-4 md:h-[calc(100vh-2rem)] md:translate-x-0",
+          mobileSidebarOpen ? "translate-x-0" : "-translate-x-[calc(100%+0.75rem)]",
           sidebarCollapsed ? "md:w-[4.5rem]" : "md:w-64",
         )}
       >
@@ -469,7 +469,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               aria-label="إخفاء اللوحة الجانبية"
             >
               <X className="w-4 h-4 md:hidden" />
-              <PanelRightClose className="hidden w-4 h-4 md:block" />
+              <PanelLeftClose className="hidden w-4 h-4 md:block" />
             </Button>
           </div>
         </div>
@@ -514,7 +514,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         <GroupIcon className="h-4 w-4 shrink-0" />
                       </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent side="left" align="start" className="w-56">
+                    <DropdownMenuContent side="right" align="start" className="w-56">
                       <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
                       <DropdownMenuSeparator />
                       {group.items.map((item) => {
@@ -640,7 +640,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </aside>
-      <main className="app-main min-w-0 flex-1 overflow-auto">
+      <main
+        className={cn(
+          "app-main min-w-0 flex-1 overflow-auto transition-[margin] duration-200 ease-out",
+          sidebarCollapsed ? "md:ml-[6.5rem]" : "md:ml-[18rem]",
+        )}
+      >
         <div className="mx-auto max-w-[1500px] p-4 sm:p-6 xl:p-8">
           <header className="mb-7 flex items-center justify-between gap-4 rounded-2xl border border-white/70 bg-white/75 px-4 py-3 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70">
             <div className="flex min-w-0 items-center gap-3">
@@ -662,9 +667,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 title={sidebarCollapsed ? "توسيع القائمة" : "طي القائمة"}
               >
                 {sidebarCollapsed ? (
-                  <PanelRightOpen className="h-4 w-4" />
+                  <PanelLeftOpen className="h-4 w-4" />
                 ) : (
-                  <PanelRightClose className="h-4 w-4" />
+                  <PanelLeftClose className="h-4 w-4" />
                 )}
               </Button>
               <div className="min-w-0">
