@@ -463,13 +463,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 rounded-lg text-sidebar-foreground/65 hover:bg-black/[0.05] hover:text-sidebar-foreground dark:hover:bg-white/10"
+              className="h-8 w-8 rounded-lg text-sidebar-foreground/65 hover:bg-black/[0.05] hover:text-sidebar-foreground dark:hover:bg-white/10 md:hidden"
               onClick={() => setMobileSidebarOpen(false)}
               title="إخفاء اللوحة الجانبية"
               aria-label="إخفاء اللوحة الجانبية"
             >
-              <X className="w-4 h-4 md:hidden" />
-              <PanelLeftClose className="hidden w-4 h-4 md:block" />
+              <X className="w-4 h-4" />
             </Button>
           </div>
         </div>
@@ -640,12 +639,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </aside>
-      <main
-        className={cn(
-          "app-main min-w-0 flex-1 overflow-auto transition-[margin] duration-200 ease-out",
-          sidebarCollapsed ? "md:ml-[6.5rem]" : "md:ml-[18rem]",
-        )}
-      >
+      <main className="app-main min-w-0 flex-1 overflow-auto">
         <div className="mx-auto max-w-[1500px] p-4 sm:p-6 xl:p-8">
           <header className="mb-7 flex items-center justify-between gap-4 rounded-2xl border border-white/70 bg-white/75 px-4 py-3 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70">
             <div className="flex min-w-0 items-center gap-3">
