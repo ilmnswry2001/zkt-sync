@@ -1882,6 +1882,317 @@ export type Database = {
         }
         Relationships: []
       }
+      machinery: {
+        Row: {
+          category: string | null
+          code: string
+          created_at: string
+          current_hours: number
+          current_odometer: number
+          id: string
+          model: string | null
+          name: string
+          notes: string | null
+          plate_no: string | null
+          status: string
+          updated_at: string
+          year: number | null
+        }
+        Insert: {
+          category?: string | null
+          code: string
+          created_at?: string
+          current_hours?: number
+          current_odometer?: number
+          id?: string
+          model?: string | null
+          name: string
+          notes?: string | null
+          plate_no?: string | null
+          status?: string
+          updated_at?: string
+          year?: number | null
+        }
+        Update: {
+          category?: string | null
+          code?: string
+          created_at?: string
+          current_hours?: number
+          current_odometer?: number
+          id?: string
+          model?: string | null
+          name?: string
+          notes?: string | null
+          plate_no?: string | null
+          status?: string
+          updated_at?: string
+          year?: number | null
+        }
+        Relationships: []
+      }
+      maintenance_record_attachments: {
+        Row: {
+          created_at: string
+          file_path: string | null
+          file_type: string | null
+          file_url: string
+          id: string
+          record_id: string
+        }
+        Insert: {
+          created_at?: string
+          file_path?: string | null
+          file_type?: string | null
+          file_url: string
+          id?: string
+          record_id: string
+        }
+        Update: {
+          created_at?: string
+          file_path?: string | null
+          file_type?: string | null
+          file_url?: string
+          id?: string
+          record_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "maintenance_record_attachments_record_id_fkey"
+            columns: ["record_id"]
+            isOneToOne: false
+            referencedRelation: "maintenance_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      maintenance_record_parts: {
+        Row: {
+          created_at: string
+          id: string
+          line_total: number
+          notes: string | null
+          part_name: string
+          quantity: number
+          record_id: string
+          unit_cost: number
+          warehouse_item_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          line_total?: number
+          notes?: string | null
+          part_name: string
+          quantity?: number
+          record_id: string
+          unit_cost?: number
+          warehouse_item_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          line_total?: number
+          notes?: string | null
+          part_name?: string
+          quantity?: number
+          record_id?: string
+          unit_cost?: number
+          warehouse_item_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "maintenance_record_parts_record_id_fkey"
+            columns: ["record_id"]
+            isOneToOne: false
+            referencedRelation: "maintenance_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_record_parts_warehouse_item_id_fkey"
+            columns: ["warehouse_item_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      maintenance_records: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          entity_name: string | null
+          equipment_id: string | null
+          hours_reading: number | null
+          id: string
+          labor_cost: number
+          machinery_id: string | null
+          maintenance_date: string
+          maintenance_type_id: string | null
+          maintenance_type_name: string | null
+          next_maintenance_date: string | null
+          notes: string | null
+          odometer_reading: number | null
+          parts_total: number
+          record_no: string
+          record_type: string
+          status: string
+          technician: string | null
+          total_cost: number
+          updated_at: string
+          vehicle_id: string | null
+          workshop_id: string | null
+          workshop_name: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          entity_name?: string | null
+          equipment_id?: string | null
+          hours_reading?: number | null
+          id?: string
+          labor_cost?: number
+          machinery_id?: string | null
+          maintenance_date?: string
+          maintenance_type_id?: string | null
+          maintenance_type_name?: string | null
+          next_maintenance_date?: string | null
+          notes?: string | null
+          odometer_reading?: number | null
+          parts_total?: number
+          record_no: string
+          record_type: string
+          status?: string
+          technician?: string | null
+          total_cost?: number
+          updated_at?: string
+          vehicle_id?: string | null
+          workshop_id?: string | null
+          workshop_name?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          entity_name?: string | null
+          equipment_id?: string | null
+          hours_reading?: number | null
+          id?: string
+          labor_cost?: number
+          machinery_id?: string | null
+          maintenance_date?: string
+          maintenance_type_id?: string | null
+          maintenance_type_name?: string | null
+          next_maintenance_date?: string | null
+          notes?: string | null
+          odometer_reading?: number | null
+          parts_total?: number
+          record_no?: string
+          record_type?: string
+          status?: string
+          technician?: string | null
+          total_cost?: number
+          updated_at?: string
+          vehicle_id?: string | null
+          workshop_id?: string | null
+          workshop_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "maintenance_records_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_records_machinery_id_fkey"
+            columns: ["machinery_id"]
+            isOneToOne: false
+            referencedRelation: "machinery"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_records_maintenance_type_id_fkey"
+            columns: ["maintenance_type_id"]
+            isOneToOne: false
+            referencedRelation: "maintenance_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_records_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_records_workshop_id_fkey"
+            columns: ["workshop_id"]
+            isOneToOne: false
+            referencedRelation: "maintenance_workshops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      maintenance_types: {
+        Row: {
+          category: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+        }
+        Relationships: []
+      }
+      maintenance_workshops: {
+        Row: {
+          address: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          kind: string
+          name: string
+          notes: string | null
+          phone: string | null
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          kind?: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          kind?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+        }
+        Relationships: []
+      }
       material_procurement_batch_items: {
         Row: {
           batch_id: string
@@ -2335,6 +2646,30 @@ export type Database = {
           },
         ]
       }
+      navigation_settings: {
+        Row: {
+          assignments: Json
+          id: string
+          labels: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          assignments?: Json
+          id: string
+          labels?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          assignments?: Json
+          id?: string
+          labels?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           allowed_sections: string[] | null
@@ -2755,6 +3090,7 @@ export type Database = {
           employee_id: string | null
           id: string
           item_id: string
+          maintenance_record_id: string | null
           material_request_id: string | null
           material_request_item_id: string | null
           material_request_receipt_id: string | null
@@ -2773,6 +3109,7 @@ export type Database = {
           employee_id?: string | null
           id?: string
           item_id: string
+          maintenance_record_id?: string | null
           material_request_id?: string | null
           material_request_item_id?: string | null
           material_request_receipt_id?: string | null
@@ -2791,6 +3128,7 @@ export type Database = {
           employee_id?: string | null
           id?: string
           item_id?: string
+          maintenance_record_id?: string | null
           material_request_id?: string | null
           material_request_item_id?: string | null
           material_request_receipt_id?: string | null
@@ -2815,6 +3153,13 @@ export type Database = {
             columns: ["item_id"]
             isOneToOne: false
             referencedRelation: "warehouse_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_maintenance_record_id_fkey"
+            columns: ["maintenance_record_id"]
+            isOneToOne: false
+            referencedRelation: "maintenance_records"
             referencedColumns: ["id"]
           },
           {
@@ -3227,6 +3572,78 @@ export type Database = {
         }
         Relationships: []
       }
+      vehicle_fuel_vouchers: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          driver_id: string | null
+          fuel_station: string | null
+          fuel_type: string
+          id: string
+          liters: number
+          notes: string | null
+          odometer_reading: number | null
+          price_per_liter: number
+          receipt_image_url: string | null
+          total_cost: number
+          updated_at: string | null
+          vehicle_id: string
+          voucher_date: string
+          voucher_no: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          driver_id?: string | null
+          fuel_station?: string | null
+          fuel_type: string
+          id?: string
+          liters: number
+          notes?: string | null
+          odometer_reading?: number | null
+          price_per_liter?: number
+          receipt_image_url?: string | null
+          total_cost?: number
+          updated_at?: string | null
+          vehicle_id: string
+          voucher_date?: string
+          voucher_no: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          driver_id?: string | null
+          fuel_station?: string | null
+          fuel_type?: string
+          id?: string
+          liters?: number
+          notes?: string | null
+          odometer_reading?: number | null
+          price_per_liter?: number
+          receipt_image_url?: string | null
+          total_cost?: number
+          updated_at?: string | null
+          vehicle_id?: string
+          voucher_date?: string
+          voucher_no?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_fuel_vouchers_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_fuel_vouchers_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vehicle_monthly_operations: {
         Row: {
           created_at: string
@@ -3272,7 +3689,10 @@ export type Database = {
         Row: {
           created_at: string
           currency: string
+          current_driver_id: string | null
+          current_odometer: number
           daily_rate: number
+          fuel_type: string
           id: string
           is_active: boolean
           last_fuel_date: string | null
@@ -3287,7 +3707,10 @@ export type Database = {
         Insert: {
           created_at?: string
           currency?: string
+          current_driver_id?: string | null
+          current_odometer?: number
           daily_rate?: number
+          fuel_type?: string
           id?: string
           is_active?: boolean
           last_fuel_date?: string | null
@@ -3302,7 +3725,10 @@ export type Database = {
         Update: {
           created_at?: string
           currency?: string
+          current_driver_id?: string | null
+          current_odometer?: number
           daily_rate?: number
+          fuel_type?: string
           id?: string
           is_active?: boolean
           last_fuel_date?: string | null
@@ -3314,7 +3740,15 @@ export type Database = {
           vehicle_image_url?: string | null
           vehicle_no?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "vehicles_current_driver_id_fkey"
+            columns: ["current_driver_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       wage_rates: {
         Row: {
@@ -3394,6 +3828,7 @@ export type Database = {
           id: string
           is_active: boolean
           is_main: boolean
+          is_maintenance: boolean
           name: string
           notes: string | null
           site_id: string | null
@@ -3403,6 +3838,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_main?: boolean
+          is_maintenance?: boolean
           name: string
           notes?: string | null
           site_id?: string | null
@@ -3412,6 +3848,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_main?: boolean
+          is_maintenance?: boolean
           name?: string
           notes?: string | null
           site_id?: string | null
@@ -3555,6 +3992,7 @@ export type Database = {
         }[]
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_maintenance_staff: { Args: { _user_id: string }; Returns: boolean }
       issue_employee_clearance: {
         Args: { _employee_id: string; _notes?: string }
         Returns: string
@@ -3720,6 +4158,10 @@ export type Database = {
           site_name: string
         }[]
       }
+      replace_maintenance_record_parts: {
+        Args: { _parts: Json; _record_id: string }
+        Returns: undefined
+      }
       return_employee_custody: {
         Args: {
           _employee_id: string
@@ -3775,6 +4217,8 @@ export type Database = {
         | "planning_officer"
         | "warehouse_keeper"
         | "procurement_officer"
+        | "maintenance_manager"
+        | "maintenance_admin"
       day_status: "present" | "absent" | "leave" | "holiday" | "rest"
       device_status: "active" | "inactive" | "maintenance"
       employee_status: "active" | "inactive" | "terminated"
@@ -3925,6 +4369,8 @@ export const Constants = {
         "planning_officer",
         "warehouse_keeper",
         "procurement_officer",
+        "maintenance_manager",
+        "maintenance_admin",
       ],
       day_status: ["present", "absent", "leave", "holiday", "rest"],
       device_status: ["active", "inactive", "maintenance"],
