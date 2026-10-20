@@ -14,7 +14,9 @@ type Role =
   | "engineer"
   | "planning_officer"
   | "warehouse_keeper"
-  | "procurement_officer";
+  | "procurement_officer"
+  | "maintenance_manager"
+  | "maintenance_admin";
 
 const roleSchema = z.enum([
   "admin",
@@ -27,6 +29,8 @@ const roleSchema = z.enum([
   "planning_officer",
   "warehouse_keeper",
   "procurement_officer",
+  "maintenance_manager",
+  "maintenance_admin",
 ] satisfies [Role, ...Role[]]);
 const passwordSchema = z.string().min(8, "كلمة المرور يجب أن تكون 8 أحرف على الأقل").max(72);
 
@@ -135,6 +139,8 @@ export const createAccount = createServerFn({ method: "POST" })
       planning_officer: "/planning",
       warehouse_keeper: "/warehouses",
       procurement_officer: "/procurement",
+      maintenance_manager: "/maintenance",
+      maintenance_admin: "/maintenance",
     };
     const sections = roleSection[data.role]
       ? [roleSection[data.role]!]

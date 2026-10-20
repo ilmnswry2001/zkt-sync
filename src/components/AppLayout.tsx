@@ -13,6 +13,7 @@ import {
   MapPinned,
   Wallet,
   Truck,
+  Wrench,
   FileSignature,
   FileWarning,
   Fuel,
@@ -78,6 +79,7 @@ const nav = [
   { to: "/payroll", label: "الرواتب", icon: Wallet, access: "hr" },
   { to: "/vehicles", label: "المركبات", icon: Truck, access: "hr" },
   { to: "/fuel", label: "إدارة الوقود", icon: Fuel, access: "hr" },
+  { to: "/maintenance", label: "الصيانة", icon: Wrench, access: "maintenance" },
   { to: "/warehouses", label: "المخازن", icon: Boxes },
   { to: "/devices", label: "الأجهزة", icon: Fingerprint },
   { to: "/upload", label: "رفع ملفات البصمة", icon: Upload },
@@ -111,6 +113,7 @@ const NAV_GROUPS = [
     tos: ["/employees", "/departments", "/leaves", "/penalties", "/wages", "/payroll"],
   },
   { key: "vehicles", label: "المركبات والوقود", icon: Truck, tos: ["/vehicles", "/fuel"] },
+  { key: "maintenance", label: "الصيانة", icon: Wrench, tos: ["/maintenance"] },
   {
     key: "projects",
     label: "المشاريع والخطط",
@@ -140,6 +143,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     isAdmin,
     isHR,
     isCompanyManager,
+    isMaintenanceStaff,
     signOut,
     canAccessSection,
     allowedSections,
@@ -296,6 +300,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       )
     )
       return false;
+    if ("access" in item && item.access === "maintenance" && !isMaintenanceStaff) return false;
     if (
       "access" in item &&
       item.access === "project_plans" &&

@@ -12,7 +12,9 @@ export type AppRole =
   | "engineer"
   | "planning_officer"
   | "warehouse_keeper"
-  | "procurement_officer";
+  | "procurement_officer"
+  | "maintenance_manager"
+  | "maintenance_admin";
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -81,6 +83,7 @@ export function useAuth() {
       ? ["/planning"]
       : []),
     ...(roles.includes("warehouse_keeper") || isCompanyManager ? ["/warehouses"] : []),
+    ...(roles.includes("maintenance_manager") || roles.includes("maintenance_admin") ? ["/maintenance"] : []),
     ...(roles.some((role) => ["engineer", "supervisor", "department_manager", "site_admin", "planning_officer", "warehouse_keeper", "procurement_officer"].includes(role)) || isCompanyManager
       ? ["/requests"]
       : []),
@@ -122,6 +125,8 @@ export function useAuth() {
     canManageEmployees: roles.some((r) => ["admin", "hr", "data_entry", "department_manager", "site_admin"].includes(r)),
     isDepartmentManager: roles.includes("department_manager"),
     isSiteAdmin: roles.includes("site_admin"),
+    isMaintenanceStaff:
+      isAdmin || roles.includes("maintenance_manager") || roles.includes("maintenance_admin"),
     profileName,
     canCreateTasks: roles.some((r) => ["admin", "hr", "data_entry", "site_admin"].includes(r)) && !roles.includes("department_manager"),
     signOut: () => supabase.auth.signOut(),

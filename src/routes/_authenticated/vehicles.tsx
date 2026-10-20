@@ -39,6 +39,7 @@ import {
   Truck,
   Upload,
   UserRound,
+  Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
 import { currentMonthInBaghdad } from "@/lib/date-time";
@@ -53,7 +54,7 @@ export const Route = createFileRoute("/_authenticated/vehicles")({
       .from("user_roles")
       .select("role")
       .eq("user_id", data.user.id);
-    if (!roles?.some((item) => item.role === "admin" || item.role === "hr"))
+    if (!roles?.some((item) => ["admin", "hr", "maintenance_manager", "maintenance_admin"].includes(item.role)))
       throw redirect({ to: "/dashboard" });
   },
   component: VehiclesPage,
@@ -83,6 +84,16 @@ type Driver = {
   phone1: string | null;
   department_id: string | null;
   departments?: { name: string } | null;
+};
+type Machinery = {
+  id: string;
+  code: string;
+  name: string;
+  category: string | null;
+  plate_no: string | null;
+  status: "active" | "maintenance" | "inactive";
+  current_hours: number;
+  current_odometer: number;
 };
 
 const EMPTY_VEHICLE_COLUMNS = {
@@ -294,6 +305,17 @@ function VehiclesPage() {
   const [dates, setDates] = useState<Record<string, string[]>>({});
   const [legacyDays, setLegacyDays] = useState<Record<string, number>>({});
   const [activeVehicle, setActiveVehicle] = useState<Vehicle | null>(null);
+  const machineryQuery = useQuery({
+    queryKey: ["maintenance-machinery"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("machinery")
+        .select("id, code, name, category, plate_no, status, current_hours, current_odometer")
+        .order("code");
+      if (error) throw error;
+      return (data ?? []) as Machinery[];
+    },
+  });
   const query = useQuery({
     queryKey: ["vehicles", month],
     queryFn: async () => {
@@ -413,17 +435,7 @@ function VehiclesPage() {
   });
   return (
     <div dir="rtl" className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="rounded-2xl bg-primary/10 p-3">
-          <Truck className="h-6 w-6 text-primary" />
-        </div>
-        <div>
-          <h1 className="text-3xl font-bold">إدارة المركبات</h1>
-          <p className="text-muted-foreground">
-            سجل المركبات وأجورها اليومية وأيام تشغيلها الشهرية.
-          </p>
-        </div>
-      </div>
+      <p className="text-sm font-medium text-muted-foreground">سجل المركبات والآليات وتشغيلها الشهري</p>
       <Tabs defaultValue="list" className="space-y-6">
         <TabsList className="glass-card h-auto w-full justify-start gap-1 rounded-full p-1 sm:w-auto sm:justify-center">
           <TabsTrigger
@@ -437,6 +449,12 @@ function VehiclesPage() {
             className="gap-2 rounded-full px-4 py-2 text-sm font-semibold text-muted-foreground data-[state=active]:bg-white/70 data-[state=active]:text-teal-800 data-[state=active]:shadow-sm dark:data-[state=active]:bg-white/10 dark:data-[state=active]:text-white"
           >
             <CarFront className="h-4 w-4" /> تفاصيل المركبة
+          </TabsTrigger>
+          <TabsTrigger
+            value="machinery"
+            className="gap-2 rounded-full px-4 py-2 text-sm font-semibold text-muted-foreground data-[state=active]:bg-white/70 data-[state=active]:text-teal-800 data-[state=active]:shadow-sm dark:data-[state=active]:bg-white/10 dark:data-[state=active]:text-white"
+          >
+            <Wrench className="h-4 w-4" /> الآليات
           </TabsTrigger>
         </TabsList>
         <TabsContent value="list" className="space-y-6">
@@ -594,6 +612,23 @@ function VehiclesPage() {
             dates={dates}
             legacyDays={legacyDays}
           />
+        </TabsContent>
+        <TabsContent value="machinery" className="space-y-4">
+          <Card>
+            <CardHeader className="flex-row items-center justify-between gap-3">
+              <div>
+                <CardTitle>سجل الآليات</CardTitle>
+                <p className="mt-1 text-sm text-muted-foreground">الهياب والكرين واللودر وغيرها، مع العدادات وساعات التشغيل.</p>
+              </div>
+              <Button asChild><a href="/maintenance"><Wrench className="ml-2 h-4 w-4" /> إدارة وصيانة الآليات</a></Button>
+            </CardHeader>
+            <CardContent className="overflow-x-auto p-0">
+              {machineryQuery.isLoading ? <p className="p-8 text-center text-muted-foreground">جارٍ تحميل الآليات…</p> : (
+                <table className="w-full min-w-[760px] text-sm"><thead><tr className="border-b bg-muted/40 text-right"><th className="p-3">الآلية</th><th className="p-3">الكود / اللوحة</th><th className="p-3">الحالة</th><th className="p-3">ساعات التشغيل</th><th className="p-3">العداد</th></tr></thead><tbody>{(machineryQuery.data ?? []).map((machine) => <tr key={machine.id} className="border-b"><td className="p-3 font-medium">{machine.name}<div className="text-xs text-muted-foreground">{machine.category ?? "—"}</div></td><td className="p-3">{machine.code}{machine.plate_no ? ` · ${machine.plate_no}` : ""}</td><td className="p-3"><Badge variant={machine.status === "active" ? "secondary" : "outline"}>{machine.status === "active" ? "نشطة" : machine.status === "maintenance" ? "قيد الصيانة" : "متوقفة"}</Badge></td><td className="p-3 tabular-nums">{Number(machine.current_hours ?? 0).toLocaleString()}</td><td className="p-3 tabular-nums">{Number(machine.current_odometer ?? 0).toLocaleString()} كم</td></tr>)}</tbody></table>
+              )}
+              {!machineryQuery.isLoading && !(machineryQuery.data ?? []).length && <p className="p-8 text-center text-muted-foreground">أضف الآليات من كتالوج الصيانة.</p>}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
       <Dialog open={!!activeVehicle} onOpenChange={(open) => { if (!open) setActiveVehicle(null); }}>

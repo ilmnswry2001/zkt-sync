@@ -53,7 +53,9 @@ type Role =
   | "engineer"
   | "planning_officer"
   | "warehouse_keeper"
-  | "procurement_officer";
+  | "procurement_officer"
+  | "maintenance_manager"
+  | "maintenance_admin";
 type Profile = { id: string; full_name: string | null; email: string | null; created_at: string; allowed_sections: string[] | null };
 type UserRole = { id: string; user_id: string; role: Role };
 type Department = { id: string; name: string };
@@ -74,6 +76,16 @@ const roles: { key: Role; label: string; description: string }[] = [
   { key: "planning_officer", label: "مسؤول تخطيط", description: "مراجعة واعتماد طلبات المواد والمعدات" },
   { key: "warehouse_keeper", label: "مسؤول مخازن", description: "مراجعة الصرف واستلام المشتريات فعلياً" },
   { key: "procurement_officer", label: "مسؤول مشتريات", description: "تسجيل دفعات الشراء وإرسالها للاستلام" },
+  {
+    key: "maintenance_manager",
+    label: "مدير قسم الصيانة",
+    description: "إدارة كل أعمال الصيانة والكتالوج والتقارير",
+  },
+  {
+    key: "maintenance_admin",
+    label: "إداري / منسق الصيانة",
+    description: "تسجيل ومتابعة سجلات الصيانة",
+  },
 ];
 
 function AccountsPage() {
