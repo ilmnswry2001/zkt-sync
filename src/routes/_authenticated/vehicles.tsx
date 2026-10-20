@@ -2,6 +2,7 @@ import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,11 +23,13 @@ import { VehicleDiagram, DEFAULT_VEHICLE_IMAGE } from "@/components/vehicles/Veh
 import { cn } from "@/lib/utils";
 import {
   Building2,
+  BarChart3,
   CalendarDays,
   CalendarRange,
   CarFront,
   Check,
   Fuel,
+  FileUp,
   Gauge,
   ListChecks,
   Loader2,
@@ -97,7 +100,79 @@ type Machinery = {
   status: "active" | "maintenance" | "inactive";
   current_hours: number;
   current_odometer: number;
+  daily_rent?: number;
+  document_status?: string | null;
+  ato_status?: string | null;
+  security_permit_status?: string | null;
+  source_row?: number | null;
 };
+
+type MachineryImportRow = Record<string, unknown>;
+const MACHINERY_IMPORT_COLUMNS = [
+  "#", "رقم المركبة", "كود المركبة", "نوع المركبة", "الموديل", "سنة الصنع", "اللون",
+  "حالة المركبة", "السائق", "حالة المستندات", "الأيام المتبقية للمستندات", "يتطلب ATO",
+  "حالة ATO", "تاريخ انتهاء ATO", "التصريح الأمني", "حالة التصريح الأمني",
+  "انتهاء التصريح الأمني", "سعر الإيجار اليومي", "تكلفة السائق اليومية",
+  "سعر الساعة الإضافية", "جهة الملكية", "ملاحظات",
+];
+
+function excelValue(row: MachineryImportRow, key: string) {
+  const value = row[key];
+  if (value == null) return null;
+  const text = String(value).trim();
+  return text || null;
+}
+
+function excelDate(value: unknown) {
+  if (typeof value === "number") {
+    const date = XLSX.SSF.parse_date_code(value);
+    if (!date) return null;
+    return `${date.y}-${String(date.m).padStart(2, "0")}-${String(date.d).padStart(2, "0")}`;
+  }
+  const text = String(value ?? "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : null;
+}
+
+function meaningful(value: string | null | undefined) {
+  return Boolean(value?.trim() && value.trim() !== "-");
+}
+
+function mapMachineryImportRow(row: MachineryImportRow) {
+  const code = excelValue(row, "كود المركبة");
+  const name = excelValue(row, "نوع المركبة");
+  const assetNumber = excelValue(row, "رقم المركبة");
+  if (!code || !name || !assetNumber) return null;
+  const state = excelValue(row, "حالة المركبة") ?? "";
+  const modelYear = Number(row["سنة الصنع"]);
+  const amount = (key: string) => Number(row[key] ?? 0) || 0;
+  return {
+    source_row: Number(row["#"]) || null,
+    code,
+    name,
+    asset_number: assetNumber,
+    owner_name: excelValue(row, "جهة الملكية"),
+    category: name,
+    model: excelValue(row, "الموديل"),
+    year: Number.isInteger(modelYear) && modelYear > 0 ? modelYear : null,
+    color: excelValue(row, "اللون"),
+    status: /صيانة/.test(state) ? "maintenance" : /نشط/.test(state) ? "active" : "inactive",
+    driver_name: excelValue(row, "السائق"),
+    document_status: excelValue(row, "حالة المستندات"),
+    document_days_remaining: excelValue(row, "الأيام المتبقية للمستندات"),
+    requires_ato: /نعم|yes|true/i.test(String(row["يتطلب ATO"] ?? "")),
+    ato_status: excelValue(row, "حالة ATO"),
+    ato_expiry: excelDate(row["تاريخ انتهاء ATO"]),
+    security_permit_no: excelValue(row, "التصريح الأمني"),
+    security_permit_status: excelValue(row, "حالة التصريح الأمني"),
+    security_permit_expiry: excelDate(row["انتهاء التصريح الأمني"]),
+    daily_rent: amount("سعر الإيجار اليومي"),
+    driver_daily_cost: amount("تكلفة السائق اليومية"),
+    extra_hourly_rate: amount("سعر الساعة الإضافية"),
+    notes: excelValue(row, "ملاحظات"),
+  };
+}
+
+type MachineryImportItem = NonNullable<ReturnType<typeof mapMachineryImportRow>>;
 
 const EMPTY_VEHICLE_COLUMNS = {
   notes: null,
@@ -258,17 +333,78 @@ function VehiclesPage() {
   const [dates, setDates] = useState<Record<string, string[]>>({});
   const [legacyDays, setLegacyDays] = useState<Record<string, number>>({});
   const [activeVehicle, setActiveVehicle] = useState<Vehicle | null>(null);
+  const [machineryImport, setMachineryImport] = useState<MachineryImportItem[] | null>(null);
+  const [invalidMachineryRows, setInvalidMachineryRows] = useState(0);
   const machineryQuery = useQuery({
     queryKey: ["maintenance-machinery"],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("machinery")
-        .select("id, code, name, asset_number, owner_name, category, plate_no, model, year, status, current_hours, current_odometer")
+        .select("id, code, name, asset_number, owner_name, category, plate_no, model, year, status, current_hours, current_odometer, daily_rent, document_status, ato_status, security_permit_status, source_row")
         .order("code");
       if (error) throw error;
       return (data ?? []) as Machinery[];
     },
   });
+  const machineryMaintenanceQuery = useQuery({
+    queryKey: ["machinery-maintenance-statistics"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("maintenance_records")
+        .select("id, status, total_cost, maintenance_date")
+        .eq("record_type", "machinery");
+      if (error) throw error;
+      return (data ?? []) as Array<{ id: string; status: string; total_cost: number; maintenance_date: string }>;
+    },
+  });
+  const importMachinery = useMutation({
+    mutationFn: async (rows: MachineryImportItem[]) => {
+      const { data: existing, error: existingError } = await (supabase as any)
+        .from("machinery")
+        .select("code, asset_number");
+      if (existingError) throw existingError;
+      const seenCodes = new Set<string>((existing ?? []).map((item: { code: string }) => item.code.trim().toLowerCase()));
+      const seenNumbers = new Set<string>((existing ?? []).map((item: { asset_number: string | null }) => item.asset_number?.trim().toLowerCase()).filter(Boolean));
+      const toInsert: MachineryImportItem[] = [];
+      let skipped = 0;
+      for (const row of rows) {
+        const codeKey = row.code.trim().toLowerCase();
+        const numberKey = row.asset_number.trim().toLowerCase();
+        if (seenCodes.has(codeKey) || seenNumbers.has(numberKey)) { skipped += 1; continue; }
+        seenCodes.add(codeKey);
+        seenNumbers.add(numberKey);
+        toInsert.push(row);
+      }
+      for (let index = 0; index < toInsert.length; index += 50) {
+        const { error } = await (supabase as any).from("machinery").insert(toInsert.slice(index, index + 50));
+        if (error) throw error;
+      }
+      return { imported: toInsert.length, skipped };
+    },
+    onSuccess: async ({ imported, skipped }) => {
+      toast.success(`تم استيراد ${imported} آلية${skipped ? `، وتجاوز ${skipped} سجل مكرر` : ""}`);
+      setMachineryImport(null);
+      await client.invalidateQueries({ queryKey: ["maintenance-machinery"] });
+    },
+    onError: (error: Error) => toast.error(`تعذر استيراد الآليات: ${formatErrorMessage(error)}`),
+  });
+  const handleMachineryFile = async (file: File) => {
+    try {
+      const workbook = XLSX.read(await file.arrayBuffer(), { cellDates: false });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      if (!sheet) throw new Error("الملف لا يحتوي على ورقة بيانات");
+      const rawRows = XLSX.utils.sheet_to_json<MachineryImportRow>(sheet, { defval: null, raw: true });
+      const headers = Object.keys(rawRows[0] ?? {});
+      const missingHeaders = MACHINERY_IMPORT_COLUMNS.filter((header) => !headers.includes(header));
+      if (missingHeaders.length) throw new Error(`الأعمدة غير الموجودة: ${missingHeaders.join("، ")}`);
+      const rows = rawRows.map(mapMachineryImportRow).filter((row): row is MachineryImportItem => row !== null);
+      if (!rows.length) throw new Error("لم أجد أعمدة رقم المركبة وكودها ونوعها في الورقة الأولى");
+      setMachineryImport(rows);
+      setInvalidMachineryRows(rawRows.length - rows.length);
+    } catch (error) {
+      toast.error(`تعذر قراءة ملف Excel: ${formatErrorMessage(error)}`);
+    }
+  };
   const query = useQuery({
     queryKey: ["vehicles", month],
     queryFn: async () => {
@@ -386,6 +522,19 @@ function VehiclesPage() {
     },
     onError: (error: Error) => toast.error(`تعذر حذف المركبة: ${formatErrorMessage(error)}`),
   });
+  const machineryRows = machineryQuery.data ?? [];
+  const machineryMaintenanceRows = machineryMaintenanceQuery.data ?? [];
+  const machineMonth = currentMonthInBaghdad();
+  const monthMaintenanceRows = machineryMaintenanceRows.filter((row) => row.maintenance_date.startsWith(machineMonth));
+  const existingMachineCodes = new Set(machineryRows.map((row) => row.code.trim().toLowerCase()));
+  const existingMachineNumbers = new Set(machineryRows.map((row) => row.asset_number?.trim().toLowerCase()).filter(Boolean));
+  const duplicateMachineryImportCount = machineryImport?.filter((row) =>
+    existingMachineCodes.has(row.code.trim().toLowerCase()) || existingMachineNumbers.has(row.asset_number.trim().toLowerCase()),
+  ).length ?? 0;
+  const incompleteMachineryCount = machineryRows.filter((row) =>
+    !meaningful(row.name) || !meaningful(row.asset_number) || !meaningful(row.owner_name),
+  ).length;
+  const machineryDailyRent = machineryRows.reduce((sum, row) => sum + Number(row.daily_rent ?? 0), 0);
   return (
     <div dir="rtl" className="space-y-6">
       <p className="text-sm font-medium text-muted-foreground">سجل المركبات والآليات وتشغيلها الشهري</p>
@@ -573,8 +722,26 @@ function VehiclesPage() {
                 <CardTitle>سجل الآليات</CardTitle>
                 <p className="mt-1 text-sm text-muted-foreground">الهياب والكرين واللودر وغيرها، مع العدادات وساعات التشغيل.</p>
               </div>
-              <Button asChild><a href="/maintenance"><Wrench className="ml-2 h-4 w-4" /> إدارة وصيانة الآليات</a></Button>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" asChild>
+                  <label className="cursor-pointer"><FileUp className="ml-2 h-4 w-4" /> استيراد Excel
+                    <input type="file" accept=".xlsx,.xls" className="hidden" onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file) void handleMachineryFile(file); event.currentTarget.value = ""; }} />
+                  </label>
+                </Button>
+                <Button asChild><a href="/maintenance"><Wrench className="ml-2 h-4 w-4" /> إدارة وصيانة الآليات</a></Button>
+              </div>
             </CardHeader>
+            <CardContent className="border-t p-4">
+              <div className="mb-3 flex items-center gap-2 font-semibold"><BarChart3 className="h-4 w-4 text-primary" /> إحصائيات الآليات</div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                <div className="rounded-xl border bg-background/60 p-3"><p className="text-xs text-muted-foreground">إجمالي الآليات</p><p className="mt-1 text-xl font-bold">{machineryRows.length}</p></div>
+                <div className="rounded-xl border bg-background/60 p-3"><p className="text-xs text-muted-foreground">نشطة</p><p className="mt-1 text-xl font-bold text-emerald-600">{machineryRows.filter((row) => row.status === "active").length}</p></div>
+                <div className="rounded-xl border bg-background/60 p-3"><p className="text-xs text-muted-foreground">قيد الصيانة</p><p className="mt-1 text-xl font-bold text-amber-600">{machineryRows.filter((row) => row.status === "maintenance").length}</p></div>
+                <div className="rounded-xl border bg-background/60 p-3"><p className="text-xs text-muted-foreground">بيانات أساسية ناقصة</p><p className="mt-1 text-xl font-bold text-rose-600">{incompleteMachineryCount}</p></div>
+                <div className="rounded-xl border bg-background/60 p-3"><p className="text-xs text-muted-foreground">صيانة هذا الشهر · التكلفة</p><p className="mt-1 text-xl font-bold">{monthMaintenanceRows.length} · {Math.round(monthMaintenanceRows.reduce((sum, row) => sum + Number(row.total_cost ?? 0), 0)).toLocaleString("ar-IQ")} د.ع</p></div>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">مجموع الإيجار اليومي المسجل: {Math.round(machineryDailyRent).toLocaleString("ar-IQ")} د.ع</p>
+            </CardContent>
             <CardContent className="overflow-x-auto p-0">
               {machineryQuery.isLoading ? <p className="p-8 text-center text-muted-foreground">جارٍ تحميل الآليات…</p> : (
                 <table className="w-full min-w-[900px] text-sm"><thead><tr className="border-b bg-muted/40 text-right"><th className="p-3">الآلية</th><th className="p-3">الرقم / الكود</th><th className="p-3">المالك</th><th className="p-3">الحالة</th><th className="p-3">البيانات</th><th className="p-3">ساعات التشغيل</th><th className="p-3">العداد</th></tr></thead><tbody>{(machineryQuery.data ?? []).map((machine) => <tr key={machine.id} className="border-b"><td className="p-3 font-medium">{machine.name}<div className="text-xs text-muted-foreground">{machine.category ?? "—"} · {machine.model ?? "—"} {machine.year ?? ""}</div></td><td className="p-3">{machine.asset_number || "—"}<div className="text-xs text-muted-foreground">{machine.code}{machine.plate_no ? ` · ${machine.plate_no}` : ""}</div></td><td className="p-3">{machine.owner_name || "غير مسجل"}</td><td className="p-3"><Badge variant={machine.status === "active" ? "secondary" : "outline"}>{machine.status === "active" ? "نشطة" : machine.status === "maintenance" ? "قيد الصيانة" : "متوقفة"}</Badge></td><td className="p-3">{(!machine.name || !machine.asset_number || !machine.owner_name) ? <Badge variant="outline" className="border-amber-500/40 text-amber-700">بيانات أساسية ناقصة</Badge> : <Badge variant="secondary">مكتملة</Badge>}</td><td className="p-3 tabular-nums">{Number(machine.current_hours ?? 0).toLocaleString()}</td><td className="p-3 tabular-nums">{Number(machine.current_odometer ?? 0).toLocaleString()} كم</td></tr>)}</tbody></table>
@@ -584,6 +751,29 @@ function VehiclesPage() {
           </Card>
         </TabsContent>
       </Tabs>
+      <Dialog open={Boolean(machineryImport)} onOpenChange={(open) => { if (!open && !importMachinery.isPending) setMachineryImport(null); }}>
+        <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>معاينة استيراد الآليات</DialogTitle>
+            <DialogDescription>سيتم استيراد بيانات الورقة الأولى وربط كل سجل بقسم الصيانة. السجلات الموجودة مسبقاً برقم أو كود مطابق ستُتجاوز دون استبدال بياناتها.</DialogDescription>
+          </DialogHeader>
+          {machineryImport && <>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-xl border p-3"><p className="text-xs text-muted-foreground">جاهزة للاستيراد</p><p className="text-xl font-bold">{machineryImport.length}</p></div>
+              <div className="rounded-xl border p-3"><p className="text-xs text-muted-foreground">موجودة مسبقاً وستُتجاوز</p><p className="text-xl font-bold">{duplicateMachineryImportCount}</p></div>
+              <div className="rounded-xl border p-3"><p className="text-xs text-muted-foreground">صفوف لا تحتوي الرقم أو الكود أو النوع</p><p className="text-xl font-bold">{invalidMachineryRows}</p></div>
+              <div className="rounded-xl border p-3"><p className="text-xs text-muted-foreground">مالك غير مسجل في الملف</p><p className="text-xl font-bold">{machineryImport.filter((row) => !meaningful(row.owner_name)).length}</p></div>
+            </div>
+            <div className="max-h-64 overflow-auto rounded-xl border">
+              <table className="w-full text-sm"><thead className="sticky top-0 bg-muted"><tr><th className="p-2 text-right">الرقم</th><th className="p-2 text-right">الآلية</th><th className="p-2 text-right">المالك</th></tr></thead>
+                <tbody>{machineryImport.slice(0, 10).map((row) => <tr key={`${row.code}-${row.asset_number}`} className="border-t"><td className="p-2">{row.asset_number}</td><td className="p-2">{row.name}</td><td className="p-2">{meaningful(row.owner_name) ? row.owner_name : <span className="text-amber-600">غير مسجل</span>}</td></tr>)}</tbody>
+              </table>
+              {machineryImport.length > 10 && <p className="p-2 text-center text-xs text-muted-foreground">معاينة 10 من {machineryImport.length} سجلاً</p>}
+            </div>
+            <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setMachineryImport(null)} disabled={importMachinery.isPending}>إلغاء</Button><Button onClick={() => importMachinery.mutate(machineryImport)} disabled={importMachinery.isPending}>{importMachinery.isPending ? "جارٍ الاستيراد…" : `استيراد ${machineryImport.length} سجلاً`}</Button></div>
+          </>}
+        </DialogContent>
+      </Dialog>
       <Dialog open={!!activeVehicle} onOpenChange={(open) => { if (!open) setActiveVehicle(null); }}>
         <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           {activeVehicle && <>
