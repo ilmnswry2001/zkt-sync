@@ -31,12 +31,18 @@ DECLARE
   v_employee public.employees%ROWTYPE;
   v_site public.sites%ROWTYPE;
   v_distance numeric;
-  v_now timestamptz := now();
+  v_now timestamptz;
+  v_recorded_at timestamptz;
   v_id uuid;
   v_previous record;
   v_speed numeric;
   v_existing record;
 BEGIN
+  v_now := clock_timestamp();
+  v_recorded_at := CASE
+    WHEN coalesce(p_submitted_offline, false) AND p_client_recorded_at IS NOT NULL THEN p_client_recorded_at
+    ELSE v_now
+  END;
   IF p_event_type NOT IN ('check_in', 'check_out') THEN RAISE EXCEPTION 'نوع حركة الحضور غير صالح'; END IF;
   IF p_accuracy_meters IS NULL OR p_accuracy_meters < 0 OR p_accuracy_meters > 100 THEN
     RAISE EXCEPTION 'دقة GPS أضعف من 100 متر';
@@ -86,18 +92,19 @@ BEGIN
     RAISE EXCEPTION 'يجب الانتظار 5 دقائق بين حركتي الحضور والانصراف';
   END IF;
   IF p_event_type = 'check_out' AND NOT EXISTS (SELECT 1 FROM public.attendance_logs l WHERE l.employee_id = v_employee.id
-    AND l.verify_time::date = (v_now AT TIME ZONE 'Asia/Baghdad')::date AND (l.self_event_type = 'check_in' OR l.verify_type = 0)) THEN
+    AND (l.verify_time AT TIME ZONE 'Asia/Baghdad')::date = (v_recorded_at AT TIME ZONE 'Asia/Baghdad')::date
+    AND (l.self_event_type = 'check_in' OR l.verify_type = 0)) THEN
     RAISE EXCEPTION 'لا يمكن تسجيل الانصراف قبل تسجيل الحضور';
   END IF;
   INSERT INTO public.attendance_logs(employee_no, employee_id, device_id, upload_id, verify_time, verify_type,
     source, latitude, longitude, distance_meters, gps_accuracy_meters, device_info, self_event_type,
     selfie_path, client_recorded_at, submitted_offline, client_event_id, face_match_score, is_liveness_verified)
-  VALUES(v_employee.employee_no, v_employee.id, NULL, NULL, v_now, CASE WHEN p_event_type='check_in' THEN 0 ELSE 1 END,
+  VALUES(v_employee.employee_no, v_employee.id, NULL, NULL, v_recorded_at, CASE WHEN p_event_type='check_in' THEN 0 ELSE 1 END,
     'mobile_self', p_latitude, p_longitude, round(v_distance, 2), p_accuracy_meters, p_device_info, p_event_type,
     p_selfie_path, p_client_recorded_at, p_submitted_offline, p_client_event_id,
     CASE WHEN p_face_score IS NULL THEN NULL ELSE round(p_face_score::numeric, 2) END, coalesce(p_liveness_verified, false))
   RETURNING attendance_logs.id INTO v_id;
-  RETURN QUERY SELECT v_id, v_employee.id, v_now, p_event_type, round(v_distance, 2), v_site.name;
+  RETURN QUERY SELECT v_id, v_employee.id, v_recorded_at, p_event_type, round(v_distance, 2), v_site.name;
 END $$;
 
 REVOKE ALL ON FUNCTION public.record_mobile_self_attendance(text, numeric, numeric, jsonb, numeric, timestamptz, text, boolean, uuid, double precision, boolean) FROM PUBLIC, anon;

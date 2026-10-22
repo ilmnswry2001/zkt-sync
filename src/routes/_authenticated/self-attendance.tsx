@@ -303,6 +303,30 @@ function SelfAttendancePage() {
     );
   };
 
+  useEffect(() => {
+    if (!employee?.id || !navigator.geolocation) return;
+    setLocationLoading(true);
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        setCoordinates({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+        });
+        setLocationLoading(false);
+      },
+      (error) => {
+        setLocationLoading(false);
+        if (error.code === error.PERMISSION_DENIED) {
+          setCoordinates(null);
+          toast.error("اسمح للمتصفح بالوصول إلى موقعك لتسجيل الحضور تلقائياً");
+        }
+      },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 },
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [employee?.id]);
+
   const recordAttendance = async (eventType: "check_in" | "check_out") => {
     if (!employee || !site) return toast.error("لا يوجد موقع عمل مخصص لهذا الموظف");
     if (!coordinates) return toast.error("حدّث موقعك قبل تسجيل الحركة");
@@ -617,7 +641,7 @@ function SelfAttendancePage() {
                           })}
                         </span>
                         <span className="text-xs text-muted-foreground">
-                          {log.source === "mobile_self" ? "من الهاتف" : "جهاز بصمة"}
+                          {log.source === "mobile_self" ? "تسجيل من الهاتف" : "جهاز بصمة"}
                         </span>
                       </div>
                     ))
