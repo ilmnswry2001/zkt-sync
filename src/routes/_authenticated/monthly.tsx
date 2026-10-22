@@ -25,7 +25,7 @@ import {
 } from "recharts";
 import { getEmployeeMonthly, getMonthlySheet, setDayStatus } from "@/lib/reports.functions";
 import { dailyTotals, type DayStatus } from "@/lib/monthly-report";
-import { currentMonthInBaghdad } from "@/lib/date-time";
+import { COMPANY_TIME_ZONE, currentMonthInBaghdad } from "@/lib/date-time";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -124,7 +124,7 @@ const formatTime = (time: string | null) =>
     ? new Date(time).toLocaleTimeString("ar", {
         hour: "2-digit",
         minute: "2-digit",
-        timeZone: "UTC",
+        timeZone: COMPANY_TIME_ZONE,
       })
     : "—";
 

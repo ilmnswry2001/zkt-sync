@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getDailyReport } from "@/lib/attendance.functions";
-import { todayInBaghdad } from "@/lib/date-time";
+import { COMPANY_TIME_ZONE, todayInBaghdad } from "@/lib/date-time";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -601,7 +601,13 @@ function AttendancePage() {
   };
   const attendanceRows = (attendance.data?.rows ?? []) as AttendanceRow[];
   const fmtTime = (value: string | null) =>
-    value ? new Date(value).toLocaleTimeString("ar", { hour: "2-digit", minute: "2-digit" }) : "—";
+    value
+      ? new Date(value).toLocaleTimeString("ar", {
+          hour: "2-digit",
+          minute: "2-digit",
+          timeZone: COMPANY_TIME_ZONE,
+        })
+      : "—";
   const renderRows = (kind: CatalogKind) =>
     rows
       .filter((row) => row.kind === kind)
