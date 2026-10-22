@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { FaceCameraDialog } from "@/components/FaceCameraDialog";
 import { currentMonthInBaghdad } from "@/lib/date-time";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +39,7 @@ import {
   ClipboardList,
   Clock3,
   FileWarning,
+  ScanFace,
   Loader2,
   Mail,
   MapPin,
@@ -78,6 +80,8 @@ type Employee = {
   ctr_code: string | null;
   notes: string | null;
   employee_import_data?: Record<string, string | number | boolean | null> | null;
+  face_descriptor?: number[] | null;
+  face_enrolled_at?: string | null;
   departments?: { name: string } | null;
   sites?: { name: string; ctr_code: string | null } | null;
   wage_rates?: {
@@ -241,7 +245,8 @@ export function EmployeeProfileContent({
   embedded?: boolean;
 }) {
   const queryClient = useQueryClient();
-  const { roles, isAdmin, isHR } = useAuth();
+  const { roles, isAdmin, isHR, user } = useAuth();
+  const canEnrollFace = isAdmin || isHR || roles.includes("data_entry");
   const canReturnCustody = roles.some((role) =>
     ["admin", "hr", "data_entry", "site_admin"].includes(role),
   );
@@ -251,6 +256,8 @@ export function EmployeeProfileContent({
   const [selectedCustody, setSelectedCustody] = useState("");
   const [returnQuantity, setReturnQuantity] = useState("");
   const [returnNotes, setReturnNotes] = useState("");
+  const [faceDialogOpen, setFaceDialogOpen] = useState(false);
+  const [savingFace, setSavingFace] = useState(false);
   const custodyQuery = useQuery({
     queryKey: ["employee-custody", employeeId],
     queryFn: async () => {
@@ -383,6 +390,22 @@ export function EmployeeProfileContent({
   const latestApprovedClearance = clearances.find(
     (clearance) => clearance.clearance_status === "approved",
   );
+  const saveFaceEnrollment = async (descriptor: number[]) => {
+    if (!user) return toast.error("انتهت جلسة الدخول؛ أعد تسجيل الدخول");
+    setSavingFace(true);
+    const { error: saveError } = await (supabase as any)
+      .from("employees")
+      .update({
+        face_descriptor: descriptor,
+        face_enrolled_at: new Date().toISOString(),
+        face_enrolled_by: user.id,
+      })
+      .eq("id", employeeId);
+    setSavingFace(false);
+    if (saveError) return toast.error(`تعذر حفظ بصمة الوجه: ${formatErrorMessage(saveError)}`);
+    await queryClient.invalidateQueries({ queryKey: ["employee-profile", employeeId] });
+    toast.success("تم تسجيل بصمة الوجه للموظف");
+  };
   const returnCustodyMutation = useMutation({
     mutationFn: async () => {
       if (!selectedReturnChoice) throw new Error("اختر العهدة المراد إرجاعها");
@@ -496,7 +519,10 @@ export function EmployeeProfileContent({
                 </Badge>
                 <span className="text-sm text-white/60">#{employee.employee_no}</span>
               </div>
-              <h1 className="text-3xl font-bold md:text-4xl">{employee.full_name}</h1>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-3xl font-bold md:text-4xl">{employee.full_name}</h1>
+                {employee.face_descriptor && <Badge className="bg-emerald-600 text-white"><ScanFace className="ml-1 h-3.5 w-3.5" /> بصمة الوجه مفعلة</Badge>}
+              </div>
               <p className="mt-1 text-white/70">
                 {employee.position || "المسمى الوظيفي غير محدد"} ·{" "}
                 {employee.departments?.name || "بدون قسم"}
@@ -558,7 +584,7 @@ export function EmployeeProfileContent({
         />
       </div>
       <Tabs defaultValue="overview" className="space-y-5">
-        <TabsList className="grid h-auto w-full grid-cols-2 gap-2 bg-transparent sm:grid-cols-4 lg:grid-cols-7">
+        <TabsList className={`grid h-auto w-full grid-cols-2 gap-2 bg-transparent sm:grid-cols-4 ${canEnrollFace ? "lg:grid-cols-8" : "lg:grid-cols-7"}`}>
           <TabsTrigger value="overview" className="min-h-11 rounded-xl border">
             نظرة عامة
           </TabsTrigger>
@@ -580,6 +606,7 @@ export function EmployeeProfileContent({
           <TabsTrigger value="custody" className="min-h-11 rounded-xl border">
             عِهدة العِدد والأدوات
           </TabsTrigger>
+          {canEnrollFace && <TabsTrigger value="face" className="min-h-11 rounded-xl border"><ScanFace className="ml-2 h-4 w-4" /> بصمة الوجه</TabsTrigger>}
         </TabsList>
         <TabsContent value="overview" className="grid gap-4 lg:grid-cols-3">
           <Card className="lg:col-span-2">
@@ -784,6 +811,20 @@ export function EmployeeProfileContent({
             </Card>
           )}
         </TabsContent>
+        {canEnrollFace && (
+          <TabsContent value="face" className="space-y-4">
+            <Card>
+              <CardHeader><CardTitle className="flex items-center gap-2"><ScanFace className="h-5 w-5 text-primary" /> تسجيل بصمة الوجه</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">تُحفظ بصمة رقمية للوجه داخل سجل الموظف لاستخدامها في مطابقة الحضور الذاتي. لا تُرفع صورة التسجيل المرجعية.</p>
+                {employee.face_enrolled_at && <p className="text-sm text-emerald-700">آخر تسجيل: {new Date(employee.face_enrolled_at).toLocaleString("ar-IQ", { timeZone: "Asia/Baghdad" })}</p>}
+                <Button onClick={() => setFaceDialogOpen(true)} disabled={savingFace}>
+                  <ScanFace className="ml-2 h-4 w-4" /> {savingFace ? "جارٍ حفظ البصمة..." : employee.face_descriptor ? "إعادة تسجيل بصمة الوجه" : "تسجيل بصمة الوجه"}
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
         <TabsContent value="custody" className="space-y-4">
           <Card>
             <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
@@ -1037,6 +1078,7 @@ export function EmployeeProfileContent({
           </Dialog>
         </TabsContent>
       </Tabs>
+      {canEnrollFace && <FaceCameraDialog open={faceDialogOpen} onOpenChange={setFaceDialogOpen} mode="enroll" onComplete={({ descriptor }) => void saveFaceEnrollment(descriptor)} />}
     </div>
   );
 }

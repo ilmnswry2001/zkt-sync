@@ -69,8 +69,10 @@ export type Database = {
           employee_id: string | null
           employee_no: string
           external_log_id: number | null
+          face_match_score: number | null
           gps_accuracy_meters: number | null
           id: string
+          is_liveness_verified: boolean
           is_suspicious: boolean
           latitude: number | null
           longitude: number | null
@@ -93,8 +95,10 @@ export type Database = {
           employee_id?: string | null
           employee_no: string
           external_log_id?: number | null
+          face_match_score?: number | null
           gps_accuracy_meters?: number | null
           id?: string
+          is_liveness_verified?: boolean
           is_suspicious?: boolean
           latitude?: number | null
           longitude?: number | null
@@ -117,8 +121,10 @@ export type Database = {
           employee_id?: string | null
           employee_no?: string
           external_log_id?: number | null
+          face_match_score?: number | null
           gps_accuracy_meters?: number | null
           id?: string
+          is_liveness_verified?: boolean
           is_suspicious?: boolean
           latitude?: number | null
           longitude?: number | null
@@ -1335,6 +1341,9 @@ export type Database = {
           employee_contract_nomination: string | null
           employee_import_data: Json
           employee_no: string
+          face_descriptor: Json | null
+          face_enrolled_at: string | null
+          face_enrolled_by: string | null
           employment_form: string | null
           erp_no: string | null
           executive_guidance_follow_up: string | null
@@ -1421,6 +1430,9 @@ export type Database = {
           employee_contract_nomination?: string | null
           employee_import_data?: Json
           employee_no: string
+          face_descriptor?: Json | null
+          face_enrolled_at?: string | null
+          face_enrolled_by?: string | null
           employment_form?: string | null
           erp_no?: string | null
           executive_guidance_follow_up?: string | null
@@ -1507,6 +1519,9 @@ export type Database = {
           employee_contract_nomination?: string | null
           employee_import_data?: Json
           employee_no?: string
+          face_descriptor?: Json | null
+          face_enrolled_at?: string | null
+          face_enrolled_by?: string | null
           employment_form?: string | null
           erp_no?: string | null
           executive_guidance_follow_up?: string | null
@@ -4144,6 +4159,8 @@ export type Database = {
           p_client_recorded_at?: string
           p_device_info?: Json
           p_event_type: string
+          p_face_score?: number
+          p_liveness_verified?: boolean
           p_latitude: number
           p_longitude: number
           p_selfie_path?: string

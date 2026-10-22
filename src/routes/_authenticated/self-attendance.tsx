@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { enqueueSelfAttendance, readSelfAttendanceQueue, removeQueuedSelfAttendance, type QueuedSelfAttendance } from "@/lib/self-attendance-queue";
+import { FaceCameraDialog } from "@/components/FaceCameraDialog";
 import { getAttendancePushKey, saveAttendancePushSubscription } from "@/lib/push.functions";
 import {
   CheckCircle2,
@@ -63,6 +64,7 @@ type Employee = {
   position: string | null;
   site_id: string | null;
   sites: Site | null;
+  face_descriptor: number[] | null;
 };
 type AttendanceLog = {
   id: string;
@@ -126,6 +128,8 @@ function SelfAttendancePage() {
   const [loading, setLoading] = useState(true);
   const [locationLoading, setLocationLoading] = useState(false);
   const [recording, setRecording] = useState<"check_in" | "check_out" | null>(null);
+  const [faceCameraOpen, setFaceCameraOpen] = useState(false);
+  const [pendingEventType, setPendingEventType] = useState<"check_in" | "check_out" | null>(null);
   const [coordinates, setCoordinates] = useState<{
     latitude: number;
     longitude: number;
@@ -163,7 +167,7 @@ function SelfAttendancePage() {
     const employeeResult = await client
       .from("employees")
       .select(
-        "id, employee_no, full_name, position, site_id, sites!site_id(id, name, latitude, longitude, geofence_radius_meters)",
+        "id, employee_no, full_name, position, site_id, face_descriptor, sites!site_id(id, name, latitude, longitude, geofence_radius_meters)",
       )
       .eq("email", user.email ?? "")
       .eq("status", "active")
@@ -198,6 +202,9 @@ function SelfAttendancePage() {
     return () => window.clearInterval(timer);
   }, []);
   useEffect(() => {
+    if ("serviceWorker" in navigator) void navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+  }, []);
+  useEffect(() => {
     void loadAttendance();
     // loadAttendance يعتمد على اليوم والحساب الحاليين، ويُعاد تشغيله عند تغيّرهما فقط.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -215,6 +222,8 @@ function SelfAttendancePage() {
         p_event_type: item.eventType, p_latitude: item.latitude, p_longitude: item.longitude,
         p_accuracy_meters: item.accuracy, p_client_recorded_at: item.clientRecordedAt,
         p_selfie_path: path, p_submitted_offline: true,
+        p_face_score: item.faceScore,
+        p_liveness_verified: item.livenessVerified,
         p_client_event_id: item.id,
         p_device_info: { user_agent: navigator.userAgent, platform: navigator.platform, offline_queue_id: item.id },
       });
@@ -307,31 +316,31 @@ function SelfAttendancePage() {
       return toast.error(
         checkedOut ? "تم تسجيل انصرافك لهذا اليوم بالفعل" : "لا يمكن الانصراف قبل تسجيل الحضور",
       );
-    setRecording(eventType);
-    let selfie: Blob;
-    let stream: MediaStream | null = null;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
-      const video = document.createElement("video");
-      video.srcObject = stream;
-      await video.play();
-      await new Promise((resolve) => window.setTimeout(resolve, 400));
-      const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 480;
-      const context = canvas.getContext("2d");
-      if (!context) throw new Error("تعذر تجهيز صورة التحقق");
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      selfie = await new Promise<Blob>((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("تعذر التقاط الصورة")), "image/jpeg", 0.82));
-    } catch (error) {
-      setRecording(null);
-      return toast.error(error instanceof Error && error.name === "NotAllowedError" ? "اسمح باستخدام الكاميرا لتسجيل الحضور" : "تعذر التقاط صورة التحقق");
-    } finally {
-      stream?.getTracks().forEach((track) => track.stop());
+    if (!employee.face_descriptor || employee.face_descriptor.length !== 128) {
+      return toast.error("بصمة الوجه غير مسجلة لهذا الموظف. راجع الموارد البشرية لتسجيلها أولاً");
     }
+    setPendingEventType(eventType);
+    setFaceCameraOpen(true);
+  };
+
+  const submitVerifiedAttendance = async (
+    eventType: "check_in" | "check_out",
+    selfie: Blob,
+    faceScore: number,
+    livenessVerified: boolean,
+  ) => {
+    if (faceScore < 75 || !livenessVerified) {
+      setRecording(null);
+      return toast.error("لم يكتمل التحقق من مطابقة الوجه والحيوية");
+    }
+    if (!coordinates) {
+      setRecording(null);
+      return toast.error("حدّث موقعك قبل تسجيل الحركة");
+    }
+    setRecording(eventType);
     const queueItem: QueuedSelfAttendance = {
       id: crypto.randomUUID(), eventType, latitude: coordinates.latitude, longitude: coordinates.longitude,
-      accuracy: coordinates.accuracy, clientRecordedAt: new Date().toISOString(), selfie,
+      accuracy: coordinates.accuracy, clientRecordedAt: new Date().toISOString(), selfie, faceScore, livenessVerified,
     };
     const saveForLater = async () => {
       await enqueueSelfAttendance(queueItem);
@@ -362,6 +371,8 @@ function SelfAttendancePage() {
       p_selfie_path: selfiePath,
       p_submitted_offline: false,
       p_client_event_id: queueItem.id,
+      p_face_score: faceScore,
+      p_liveness_verified: livenessVerified,
       p_device_info: {
         user_agent: navigator.userAgent,
         platform: navigator.platform,
@@ -565,19 +576,19 @@ function SelfAttendancePage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <Button
                   className="h-20 bg-emerald-600 text-lg hover:bg-emerald-700"
-                  disabled={!insideGeofence || (coordinates?.accuracy ?? 999) > 100 || checkedIn || recording !== null}
+                  disabled={!insideGeofence || (coordinates?.accuracy ?? 999) > 100 || checkedIn || recording !== null || faceCameraOpen}
                   onClick={() => void recordAttendance("check_in")}
                 >
                   <LogIn className="ml-3 h-7 w-7" />
-                  {recording === "check_in" ? "جارٍ التسجيل..." : "تسجيل حضور (دخول)"}
+                  {recording === "check_in" ? "جارٍ التسجيل..." : faceCameraOpen && pendingEventType === "check_in" ? "جارٍ التحقق من الوجه..." : "تسجيل حضور (دخول)"}
                 </Button>
                 <Button
                   className="h-20 bg-orange-600 text-lg hover:bg-orange-700"
-                  disabled={!insideGeofence || (coordinates?.accuracy ?? 999) > 100 || !checkedIn || checkedOut || recording !== null}
+                  disabled={!insideGeofence || (coordinates?.accuracy ?? 999) > 100 || !checkedIn || checkedOut || recording !== null || faceCameraOpen}
                   onClick={() => void recordAttendance("check_out")}
                 >
                   <LogOut className="ml-3 h-7 w-7" />
-                  {recording === "check_out" ? "جارٍ التسجيل..." : "تسجيل انصراف (خروج)"}
+                  {recording === "check_out" ? "جارٍ التسجيل..." : faceCameraOpen && pendingEventType === "check_out" ? "جارٍ التحقق من الوجه..." : "تسجيل انصراف (خروج)"}
                 </Button>
               </div>
               <Card>
@@ -714,6 +725,18 @@ function SelfAttendancePage() {
           </TabsContent>
         )}
       </Tabs>
+      {employee?.face_descriptor && <FaceCameraDialog
+        open={faceCameraOpen}
+        onOpenChange={(open) => {
+          setFaceCameraOpen(open);
+          if (!open) setPendingEventType(null);
+        }}
+        mode="verify"
+        storedDescriptor={employee.face_descriptor}
+        onComplete={({ score, livenessVerified, selfie }) => {
+          if (pendingEventType && score != null) void submitVerifiedAttendance(pendingEventType, selfie, score, livenessVerified);
+        }}
+      />}
     </div>
   );
 }

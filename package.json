@@ -48,6 +48,7 @@
     "@tanstack/react-start": "1.168.60",
     "@tanstack/router-plugin": "1.168.42",
     "@types/web-push": "^3.6.4",
+    "@vladmandic/face-api": "^1.7.15",
     "@zxing/browser": "^0.2.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

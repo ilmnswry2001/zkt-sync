@@ -6,6 +6,8 @@ export type QueuedSelfAttendance = {
   accuracy: number;
   clientRecordedAt: string;
   selfie: Blob;
+  faceScore: number;
+  livenessVerified: boolean;
 };
 
 function database() {
