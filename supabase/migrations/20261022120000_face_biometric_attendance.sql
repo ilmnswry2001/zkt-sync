@@ -11,6 +11,7 @@ ALTER TABLE public.attendance_logs
 
 -- Replace the existing RPC and require the new biometric checks before insert.
 DROP FUNCTION IF EXISTS public.record_mobile_self_attendance(text, numeric, numeric, jsonb, numeric, timestamptz, text, boolean, uuid);
+DROP FUNCTION IF EXISTS public.record_mobile_self_attendance(text, numeric, numeric, jsonb, numeric, timestamptz, text, boolean, uuid, double precision, boolean);
 CREATE FUNCTION public.record_mobile_self_attendance(
   p_event_type text,
   p_latitude numeric,
@@ -52,8 +53,8 @@ BEGIN
   IF v_employee.id IS NULL THEN RAISE EXCEPTION 'لا يوجد سجل موظف نشط مرتبط بهذا الحساب'; END IF;
   IF v_employee.face_descriptor IS NULL THEN RAISE EXCEPTION 'بصمة الوجه غير مسجلة لهذا الموظف'; END IF;
   IF p_client_event_id IS NOT NULL THEN
-    SELECT id, verify_time, self_event_type, distance_meters INTO v_existing
-      FROM public.attendance_logs WHERE client_event_id = p_client_event_id LIMIT 1;
+    SELECT l.id, l.verify_time, l.self_event_type, l.distance_meters INTO v_existing
+      FROM public.attendance_logs AS l WHERE l.client_event_id = p_client_event_id LIMIT 1;
     IF v_existing.id IS NOT NULL THEN
       RETURN QUERY SELECT v_existing.id, v_employee.id, v_existing.verify_time,
         coalesce(v_existing.self_event_type, p_event_type), v_existing.distance_meters, NULL::text;
@@ -66,8 +67,8 @@ BEGIN
   v_distance := 6371000 * 2 * asin(sqrt(power(sin(radians(p_latitude - v_site.latitude) / 2), 2)
     + cos(radians(v_site.latitude)) * cos(radians(p_latitude)) * power(sin(radians(p_longitude - v_site.longitude) / 2), 2)));
   IF v_distance > v_site.geofence_radius_meters THEN RAISE EXCEPTION 'خارج نطاق موقع العمل: تبعد % متراً', round(v_distance); END IF;
-  SELECT latitude, longitude, verify_time INTO v_previous FROM public.attendance_logs
-    WHERE employee_id = v_employee.id AND latitude IS NOT NULL AND longitude IS NOT NULL ORDER BY verify_time DESC LIMIT 1;
+  SELECT l.latitude, l.longitude, l.verify_time INTO v_previous FROM public.attendance_logs AS l
+    WHERE l.employee_id = v_employee.id AND l.latitude IS NOT NULL AND l.longitude IS NOT NULL ORDER BY l.verify_time DESC LIMIT 1;
   IF v_previous.verify_time IS NOT NULL THEN
     IF v_now <= v_previous.verify_time THEN RAISE EXCEPTION 'وقت الحركة غير صالح'; END IF;
     v_speed := (6371000 * 2 * asin(sqrt(power(sin(radians(p_latitude - v_previous.latitude) / 2), 2)
