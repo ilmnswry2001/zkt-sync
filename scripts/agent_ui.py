@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import configparser
+import csv
+import getpass
+import ipaddress
 import sqlite3
 import subprocess
 import sys
@@ -14,6 +17,7 @@ ROOT = Path(__file__).resolve().parent
 AGENT = ROOT / "agent.py"
 CONFIG = ROOT / "agent_config.ini"
 LOG = ROOT / "agent.log"
+DEFAULT_DEVICE_IP = "192.168.1.111"
 
 
 def read_config() -> configparser.SectionProxy | None:
@@ -57,37 +61,79 @@ def run_agent(*args: str) -> int:
     return subprocess.call([sys.executable, str(AGENT), str(CONFIG), *args], cwd=ROOT)
 
 
-def preview_device() -> None:
+def pull_from_ip() -> None:
+    """Connect directly by LAN IP, identify the device, and optionally export its logs."""
     cfg = read_config()
-    if not cfg:
-        print("لم يُعثر على إعدادات الربط. اختر (1) لإعدادها أولاً.")
-        return
+    default_ip = cfg.get("device_ip", DEFAULT_DEVICE_IP) if cfg else DEFAULT_DEVICE_IP
+    default_port = cfg.get("device_port", "4370") if cfg else "4370"
+    try:
+        ip = input(f"عنوان IP للجهاز [{default_ip}]: ").strip() or default_ip
+        ipaddress.ip_address(ip)
+        port = int(input(f"منفذ الجهاز [{default_port}]: ").strip() or default_port)
+        if not 1 <= port <= 65535:
+            raise ValueError("رقم المنفذ يجب أن يكون بين 1 و65535")
+        password_text = getpass.getpass("كلمة مرور الجهاز الرقمية [0]: ").strip() or "0"
+        password = int(password_text)
+        if password < 0:
+            raise ValueError("كلمة مرور الجهاز يجب أن تكون رقماً غير سالب")
+    except (ValueError, EOFError) as error:
+        raise ValueError(f"تحقق من بيانات الاتصال: {error}") from error
 
     from zk import ZK
 
     connection = None
     try:
-        print(f"\nجارٍ الاتصال بـ {cfg['device_ip']}:{cfg.get('device_port', '4370')} ...")
+        print(f"\nجارٍ الاتصال بـ {ip}:{port} ...")
         device = ZK(
-            cfg["device_ip"].strip(),
-            port=cfg.getint("device_port", 4370),
-            timeout=cfg.getint("timeout_seconds", 10),
-            password=cfg.getint("device_password", 0),
+            ip,
+            port=port,
+            timeout=cfg.getint("timeout_seconds", 10) if cfg else 10,
+            password=password,
             force_udp=False,
             ommit_ping=True,
         )
         connection = device.connect()
         records = connection.get_attendance() or []
-        times = [r.timestamp for r in records if isinstance(getattr(r, "timestamp", None), datetime)]
-        print("\nملخص الجهاز والسجلات (لا تُعرض أرقام الموظفين):")
-        print(f"اسم الجهاز: {connection.get_device_name() or 'غير متاح'}")
-        print(f"الرقم التسلسلي المقروء: {connection.get_serialnumber() or 'غير متاح'}")
+        times = [
+            r.timestamp for r in records
+            if isinstance(getattr(r, "timestamp", None), datetime)
+        ]
+        serial = str(connection.get_serialnumber() or "").strip()
+        device_name = str(connection.get_device_name() or "غير متاح")
+        print("\nتم التعرف على جهاز البصمة:")
+        print(f"اسم الجهاز: {device_name}")
+        print(f"الرقم التسلسلي: {serial or 'غير متاح'}")
         print(f"إصدار البرنامج: {connection.get_firmware_version() or 'غير متاح'}")
         print(f"عدد سجلات البصمة على الجهاز: {len(records)}")
         if times:
             print(f"أقدم سجل: {min(times).strftime('%Y-%m-%d %H:%M:%S')}")
             print(f"أحدث سجل: {max(times).strftime('%Y-%m-%d %H:%M:%S')}")
-        print("لم تُعدّل أو تُحذف أي بيانات من الجهاز.")
+        print("لم تُعرض أرقام البصمات ولم تُعدّل أو تُحذف سجلات الجهاز.")
+        if records:
+            save = input("حفظ نسخة CSV في مجلد المستندات؟ [نعم/لا، الافتراضي نعم]: ").strip()
+            if save not in ("لا", "ل", "n", "no", "N"):
+                export_dir = Path.home() / "Documents" / "ZKTecoAttendance"
+                export_dir.mkdir(parents=True, exist_ok=True)
+                safe_serial = "".join(c for c in serial if c.isalnum() or c in "-_")[:40] or "device"
+                stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                export_path = export_dir / f"attendance_{safe_serial}_{stamp}.csv"
+                fields = ["رقم الجهاز", "رقم البصمة", "وقت الجهاز", "طريقة التحقق", "الحالة", "المعرف الخارجي"]
+                with export_path.open("w", encoding="utf-8-sig", newline="") as stream:
+                    writer = csv.DictWriter(stream, fieldnames=fields)
+                    writer.writeheader()
+                    for record in records:
+                        when = getattr(record, "timestamp", None)
+                        writer.writerow({
+                            "رقم الجهاز": serial,
+                            "رقم البصمة": str(getattr(record, "user_id", "") or ""),
+                            "وقت الجهاز": when.isoformat(sep=" ") if isinstance(when, datetime) else "",
+                            "طريقة التحقق": getattr(record, "verify_mode", ""),
+                            "الحالة": getattr(record, "status", ""),
+                            "المعرف الخارجي": getattr(record, "uid", ""),
+                        })
+                print(f"\nتم حفظ {len(records)} سجلاً محلياً في:\n{export_path}")
+        else:
+            print("لا توجد سجلات حضور لحفظها.")
     finally:
         if connection is not None:
             connection.disconnect()
@@ -117,9 +163,9 @@ def show_recent_logs() -> None:
 def main() -> int:
     while True:
         show_header()
-        print("1) إعداد الجهاز وخادم النظام")
-        print("2) اختبار اتصال الجهاز والخادم")
-        print("3) عرض ملخص الجهاز وسجلات البصمة")
+        print("1) الاتصال بعنوان IP والتعرف على الجهاز وسحب الحضور")
+        print("2) إعداد الربط السحابي مع النظام")
+        print("3) اختبار اتصال الجهاز والخادم")
         print("4) مزامنة واحدة الآن")
         print("5) تشغيل المزامنة المستمرة")
         print("6) عرض سجل التشغيل الأخير")
@@ -129,15 +175,15 @@ def main() -> int:
             if choice == "0":
                 return 0
             if choice == "1":
+                pull_from_ip()
+            elif choice == "2":
                 result = run_agent("--setup")
                 if result:
                     print(f"فشل الإعداد (رمز الخروج {result}).")
-            elif choice == "2":
+            elif choice == "3":
                 result = run_agent("--check")
                 if result:
                     print(f"تعذر إكمال الاختبار (رمز الخروج {result}). راجع سجل التشغيل.")
-            elif choice == "3":
-                preview_device()
             elif choice == "4":
                 if confirm_upload():
                     result = run_agent("--once")
