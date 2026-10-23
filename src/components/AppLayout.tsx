@@ -407,9 +407,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       />
       <aside
         className={cn(
-          "app-sidebar fixed bottom-3 left-3 right-auto top-3 z-40 flex w-[min(19rem,calc(100vw-1.5rem))] shrink-0 flex-col overflow-hidden rounded-2xl border border-border bg-sidebar text-sidebar-foreground shadow-xl shadow-slate-950/15 transition-[width,transform] duration-200 ease-out md:bottom-4 md:left-4 md:right-auto md:top-4 md:h-[calc(100vh-2rem)] md:translate-x-0",
+          "app-sidebar fixed bottom-3 left-3 right-auto top-3 z-40 flex w-[min(19rem,calc(100vw-1.5rem))] shrink-0 flex-col overflow-hidden rounded-2xl border border-border bg-sidebar text-sidebar-foreground shadow-xl shadow-slate-950/15 transition-[width,height,transform] duration-300 ease-out md:left-4 md:right-auto md:top-4 md:translate-x-0",
           mobileSidebarOpen ? "translate-x-0" : "-translate-x-[calc(100%+0.75rem)]",
-          sidebarCollapsed ? "md:w-[4.5rem]" : "md:w-64",
+          sidebarCollapsed
+            ? "md:bottom-auto md:h-[4.625rem] md:w-[4.5rem]"
+            : "md:bottom-4 md:h-[calc(100vh-2rem)] md:w-64",
         )}
       >
         <div
