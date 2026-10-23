@@ -24,7 +24,7 @@ import {
   YAxis,
 } from "recharts";
 import { getEmployeeMonthly, getMonthlySheet, setDayStatus } from "@/lib/reports.functions";
-import { dailyTotals, type DayStatus } from "@/lib/monthly-report";
+import { dailyTotals, type DayStatus, type ComputedStatus } from "@/lib/monthly-report";
 import { COMPANY_TIME_ZONE, currentMonthInBaghdad } from "@/lib/date-time";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -64,6 +64,14 @@ const statuses: { value: DayStatus; label: string; code: string; className: stri
   { value: "holiday", label: "عطلة", code: "H", className: "text-amber-700 bg-amber-50" },
   { value: "rest", label: "راحة أسبوعية", code: "WO", className: "text-slate-600 bg-slate-100" },
 ];
+const computedStatusLabels: Record<ComputedStatus, { label: string; code: string; className: string }> = {
+  present: { label: "حاضر", code: "P", className: "text-emerald-700 bg-emerald-50" },
+  absent: { label: "غائب", code: "A", className: "text-red-600 bg-red-50" },
+  leave: { label: "إجازة", code: "L", className: "text-blue-600 bg-blue-50" },
+  holiday: { label: "عطلة", code: "H", className: "text-amber-700 bg-amber-50" },
+  rest: { label: "راحة أسبوعية", code: "WO", className: "text-slate-600 bg-slate-100" },
+  incomplete: { label: "بصمة غير مكتملة", code: "…", className: "text-amber-800 bg-amber-100" },
+};
 const selectClass =
   "h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const summaryColumns = [
@@ -771,7 +779,7 @@ function MonthlyPage() {
                       </td>
                       {!summarized &&
                         row.days.map((day) => {
-                          const status = statuses.find((s) => s.value === day.status);
+                          const status = day.status ? computedStatusLabels[day.status] : undefined;
                           const description = `${row.employee.full_name}، ${day.date}، ${status?.label ?? "لم يحن موعده"}${day.overtime_hours > 0 ? `، وقت إضافي ${day.overtime_hours} ساعة` : ""}${day.manual ? "، تعديل يدوي" : ""}`;
                           return (
                             <td key={day.date} className="text-center">
@@ -1434,7 +1442,7 @@ function EmployeeDetails({
     onError: (e: Error) => toast.error(formatErrorMessage(e)),
   });
   const day = data?.days.find((d) => d.date === date);
-  const status = statuses.find((s) => s.value === day?.status);
+  const status = day?.status ? computedStatusLabels[day.status] : undefined;
   return (
     <>
       <DialogHeader className="pt-3 sm:text-right">
@@ -1489,7 +1497,7 @@ function EmployeeDetails({
             <Label>أيام الشهر — اختر يوماً</Label>
             <div className="grid grid-cols-7 gap-1.5">
               {data.days.map((d) => {
-                const s = statuses.find((x) => x.value === d.status);
+                const s = d.status ? computedStatusLabels[d.status] : undefined;
                 return (
                   <button
                     key={d.date}

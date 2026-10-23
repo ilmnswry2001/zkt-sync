@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { summarizeAttendancePunches } from "./monthly-report";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
@@ -144,29 +145,43 @@ export const getDashboardStats = createServerFn({ method: "GET" })
       supabase.from("devices").select("id", { count: "exact", head: true }),
       supabase.from("attendance_logs").select("id", { count: "exact", head: true }),
       supabase.from("attendance_logs")
-        .select("employee_no, verify_time")
+        .select("employee_no, verify_time, status, source, self_event_type")
         .gte("verify_time", today.toISOString())
         .lt("verify_time", tomorrow.toISOString()),
     ]);
 
-    const presentToday = new Set((todayLogs.data ?? []).map((r: any) => r.employee_no)).size;
+    const presentByEmployee = new Map<string, any[]>();
+    for (const row of todayLogs.data ?? []) {
+      const punches = presentByEmployee.get(row.employee_no) ?? [];
+      punches.push(row);
+      presentByEmployee.set(row.employee_no, punches);
+    }
+    const presentToday = [...presentByEmployee.values()].filter((punches) => summarizeAttendancePunches(punches).complete).length;
     const totalEmployees = emps.count ?? 0;
 
     // last 7 days chart
     const since = new Date(today.getTime() - 6 * 86400000);
     const { data: weekLogs } = await supabase.from("attendance_logs")
-      .select("employee_no, verify_time")
+      .select("employee_no, verify_time, status, source, self_event_type")
       .gte("verify_time", since.toISOString());
-    const dayMap = new Map<string, Set<string>>();
+    const groupedWeek = new Map<string, any[]>();
     (weekLogs ?? []).forEach((l: any) => {
       const day = l.verify_time.slice(0, 10);
-      if (!dayMap.has(day)) dayMap.set(day, new Set());
-      dayMap.get(day)!.add(l.employee_no);
+      const key = `${day}:${l.employee_no}`;
+      const punches = groupedWeek.get(key) ?? [];
+      punches.push(l);
+      groupedWeek.set(key, punches);
     });
+    const dayMap = new Map<string, number>();
+    for (const [key, punches] of groupedWeek) {
+      if (!summarizeAttendancePunches(punches).complete) continue;
+      const day = key.slice(0, 10);
+      dayMap.set(day, (dayMap.get(day) ?? 0) + 1);
+    }
     const chart: { day: string; present: number }[] = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date(today.getTime() - i * 86400000).toISOString().slice(0, 10);
-      chart.push({ day: d, present: dayMap.get(d)?.size ?? 0 });
+      chart.push({ day: d, present: dayMap.get(d) ?? 0 });
     }
 
     return {
@@ -188,7 +203,7 @@ export const getDailyReport = createServerFn({ method: "GET" })
     const start = new Date(data.date + "T00:00:00+03:00");
     const end = new Date(start.getTime() + 86400000);
     const { data: logs, error: logsError } = await (supabase as any).from("attendance_logs")
-      .select("employee_no, employee_id, verify_time, device_id, source, is_suspicious, selfie_path")
+      .select("employee_no, employee_id, verify_time, device_id, source, status, self_event_type, is_suspicious, selfie_path")
       .gte("verify_time", start.toISOString())
       .lt("verify_time", end.toISOString())
       .order("verify_time", { ascending: true });
@@ -208,11 +223,11 @@ export const getDailyReport = createServerFn({ method: "GET" })
     if (scheduleError) throw new Error(scheduleError.message);
     const scheduleByEmployee = new Map((schedules ?? []).map((schedule: any) => [schedule.employee_id, schedule]));
 
-    const byPin = new Map<string, { first: string; last: string; devices: Set<string>; sources: Set<string>; suspicious: boolean }>();
+    const byPin = new Map<string, { logs: any[]; devices: Set<string>; sources: Set<string>; suspicious: boolean }>();
     (logs ?? []).forEach((l: any) => {
       const cur = byPin.get(l.employee_no);
-      if (!cur) byPin.set(l.employee_no, { first: l.verify_time, last: l.verify_time, devices: new Set(l.device_id ? [l.device_id] : []), sources: new Set(l.source ? [l.source] : []), suspicious: !!l.is_suspicious });
-      else { cur.last = l.verify_time; if (l.device_id) cur.devices.add(l.device_id); if (l.source) cur.sources.add(l.source); cur.suspicious ||= !!l.is_suspicious; }
+      if (!cur) byPin.set(l.employee_no, { logs: [l], devices: new Set(l.device_id ? [l.device_id] : []), sources: new Set(l.source ? [l.source] : []), suspicious: !!l.is_suspicious });
+      else { cur.logs.push(l); if (l.device_id) cur.devices.add(l.device_id); if (l.source) cur.sources.add(l.source); cur.suspicious ||= !!l.is_suspicious; }
     });
 
     const rows = await Promise.all((emps ?? []).map(async (e: any) => {
@@ -221,19 +236,21 @@ export const getDailyReport = createServerFn({ method: "GET" })
       const photoLog = (logs ?? []).find((log: any) => log.employee_no === e.employee_no && log.selfie_path);
       const photoPath = photoLog?.selfie_path ?? attempt?.selfie_path;
       const selfieUrl = photoPath ? (await supabase.storage.from("attendance-selfies").createSignedUrl(photoPath, 3600)).data?.signedUrl ?? null : null;
-      const hours = rec ? (new Date(rec.last).getTime() - new Date(rec.first).getTime()) / 3600000 : 0;
       const shift: any = scheduleByEmployee.get(e.id) ?? e.shifts;
-      const late = rec && shift?.start_time
-        ? isLateArrival(data.date, rec.first, shift.start_time, shift.end_time, shift.grace_minutes ?? 0)
+      const attendance = summarizeAttendancePunches(rec?.logs ?? [], shift?.end_time, shift?.grace_minutes ?? 0);
+      const late = attendance.check_in && shift?.start_time
+        ? isLateArrival(data.date, attendance.check_in, shift.start_time, shift.end_time, shift.grace_minutes ?? 0)
         : false;
       return {
         employee_no: e.employee_no,
         full_name: e.full_name,
         active: e.status === "active",
         department: e.departments?.name ?? null,
-        check_in: rec?.first ?? null,
-        check_out: rec?.last !== rec?.first ? rec?.last ?? null : null,
-        hours: rec ? Math.max(0, Math.round(hours * 100) / 100) : 0,
+        check_in: attendance.check_in,
+        check_out: attendance.check_out,
+        hours: Math.round(attendance.hours * 100) / 100,
+        overtime_hours: Math.round(attendance.overtime_hours * 100) / 100,
+        event_details: attendance.event_details,
         devices: rec?.devices.size ?? 0,
         mobile_self: rec?.sources.has("mobile_self") ?? false,
         sources: [...(rec?.sources ?? [])],
@@ -241,7 +258,7 @@ export const getDailyReport = createServerFn({ method: "GET" })
         suspicious_reason: attempt?.reason ?? null,
         selfie_url: selfieUrl,
         late,
-        status: rec ? "present" : "absent",
+        status: attendance.complete ? "present" : attendance.has_punch ? "incomplete" : "absent",
       };
     }));
     const sourceCounts = { device: 0, mobile_self: 0, zk_agent: 0, manual: 0 };

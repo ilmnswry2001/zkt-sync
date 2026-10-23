@@ -70,7 +70,7 @@ type Penalty = {
   penalty_date: string;
   notes: string | null;
 };
-type AttendanceLog = { employee_no: string; verify_time: string };
+type AttendanceLog = { employee_no: string; verify_time: string; status: number | null; source: string | null; self_event_type: string | null };
 type ApprovedLeaveCalendarDay = { employee_id: string; work_date: string; is_paid: boolean; status: string };
 type AttendanceOverride = {
   employee_id: string;
@@ -135,7 +135,7 @@ function PayrollPage() {
           loadAllRows((from, to) =>
             supabase
               .from("attendance_logs")
-              .select("employee_no, verify_time")
+              .select("employee_no, verify_time, status, source, self_event_type")
               .gte("verify_time", attendanceRange.start)
               .lt("verify_time", attendanceRange.end)
               .order("verify_time")

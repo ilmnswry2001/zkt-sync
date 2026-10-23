@@ -6,6 +6,78 @@ export type PayType = "daily" | "monthly";
 
 export const FRIDAY_OVERTIME_HOURS = 10;
 
+export type AttendancePunch = {
+  verify_time: string;
+  status?: number | null;
+  source?: string | null;
+  self_event_type?: string | null;
+};
+
+export function summarizeAttendancePunches(
+  punches: AttendancePunch[],
+  shiftEnd?: string | null,
+  graceMinutes = 0,
+) {
+  const ordered = [...punches].sort((a, b) => Date.parse(a.verify_time) - Date.parse(b.verify_time));
+  const events = ordered.map((punch) => {
+    if (punch.self_event_type === "check_in") return { punch, type: "in" as const };
+    if (punch.self_event_type === "check_out") return { punch, type: "out" as const };
+    switch (punch.status) {
+      case 0: return { punch, type: "in" as const };
+      case 1: return { punch, type: "out" as const };
+      case 2: return { punch, type: "break_out" as const };
+      case 3: return { punch, type: "break_in" as const };
+      case 4: return { punch, type: "overtime_in" as const };
+      case 5: return { punch, type: "overtime_out" as const };
+      default: return { punch, type: null };
+    }
+  });
+  const hasStructuredEvents = events.some(({ punch }) => punch.status != null || punch.self_event_type != null);
+  const pairs = (inType: string, outType: string) => {
+    const pending: string[] = [];
+    const result: [string, string][] = [];
+    for (const { punch, type } of events) {
+      if (type === inType) pending.push(punch.verify_time);
+      else if (type === outType && pending.length) result.push([pending.shift()!, punch.verify_time]);
+    }
+    return result;
+  };
+
+  // Legacy/manual records without a punch state can only use first/last when both exist.
+  const attendancePairs = hasStructuredEvents
+    ? pairs("in", "out")
+    : ordered.length >= 2 ? [[ordered[0].verify_time, ordered.at(-1)!.verify_time] as [string, string]] : [];
+  const breakPairs = hasStructuredEvents ? pairs("break_out", "break_in") : [];
+  const overtimePairs = hasStructuredEvents ? pairs("overtime_in", "overtime_out") : [];
+  const checkIn = attendancePairs[0]?.[0] ?? null;
+  const checkOut = attendancePairs.at(-1)?.[1] ?? null;
+  const overlapHours = (start: string, end: string, intervalStart: string, intervalEnd: string) =>
+    Math.max(0, Math.min(Date.parse(end), Date.parse(intervalEnd)) - Math.max(Date.parse(start), Date.parse(intervalStart))) / 3600000;
+  let hours = attendancePairs.reduce((sum, [start, end]) => sum + (Date.parse(end) - Date.parse(start)) / 3600000, 0);
+  for (const [breakStart, breakEnd] of breakPairs) {
+    hours -= attendancePairs.reduce((sum, [start, end]) => sum + overlapHours(start, end, breakStart, breakEnd), 0);
+  }
+
+  const shiftEndAt = shiftEnd && checkOut ? `${dateKeyInTimeZone(checkOut)}T${shiftEnd}Z` : null;
+  let overtime = overtimePairs.reduce((sum, [start, end]) => {
+    const billableStart = shiftEndAt ? Math.max(Date.parse(start), Date.parse(shiftEndAt)) : Date.parse(start);
+    return sum + Math.max(0, Date.parse(end) - billableStart) / 3600000;
+  }, 0);
+  if (!overtimePairs.length && checkOut && shiftEndAt) {
+    overtime = Math.max(0, (Date.parse(checkOut) - Date.parse(shiftEndAt)) / 3600000 - Math.max(0, graceMinutes) / 60);
+  }
+  return {
+    check_in: checkIn,
+    check_out: checkOut,
+    hours: Math.max(0, hours),
+    overtime_hours: Math.max(0, overtime),
+    complete: attendancePairs.length > 0,
+    has_punch: ordered.length > 0,
+    punches: ordered.length,
+    event_details: events.map(({ punch, type }) => ({ verify_time: punch.verify_time, type })),
+  };
+}
+
 export type AttendanceDay = {
   date: string;
   check_in: string | null;
@@ -42,7 +114,7 @@ export function monthDates(month: string) {
 
 export function buildAttendanceDays(
   dates: string[],
-  logs: { verify_time: string }[],
+  logs: AttendancePunch[],
   overrides: {
     work_date: string;
     status: DayStatus;
@@ -55,42 +127,32 @@ export function buildAttendanceDays(
   payType: PayType = "monthly",
   graceMinutes = 0,
 ): AttendanceDay[] {
-  const byDay = new Map<string, string[]>();
+  const byDay = new Map<string, AttendancePunch[]>();
   for (const log of logs) {
     // UTC string slicing shifted Baghdad after-midnight punches into the previous wage day;
     // assign a punch to the company's civil date before attendance and payroll are counted.
     const date = dateKeyInTimeZone(log.verify_time);
-    const times = byDay.get(date) ?? [];
-    times.push(log.verify_time);
-    byDay.set(date, times);
+    const dayPunches = byDay.get(date) ?? [];
+    dayPunches.push(log);
+    byDay.set(date, dayPunches);
   }
   const manualDays = new Map(overrides.map((day) => [day.work_date, day]));
   return dates.map((date) => {
-    const times = (byDay.get(date) ?? []).sort();
-    const first = times[0] ?? null;
-    const last = times.length > 1 ? times[times.length - 1] : null;
-    // بصمة واحدة فقط (دخول أو خروج) = يوم غير مكتمل ولا يُحتسب حضوراً
-    const complete = times.length > 1;
+    const times = byDay.get(date) ?? [];
+    const attendance = summarizeAttendancePunches(times, shiftEnd, graceMinutes);
+    const complete = attendance.complete;
     const friday = isFriday(date);
     const override = manualDays.get(date);
-    const hours = complete && first && last ? (Date.parse(last) - Date.parse(first)) / 3600000 : 0;
     const manualOvertime = Number(override?.overtime_hours ?? 0);
-    let overtime =
-      manualOvertime > 0
-        ? manualOvertime
-        : complete && last && shiftEnd
-          ? (Date.parse(last) - Date.parse(`${date}T${shiftEnd}Z`)) / 3600000 -
-            Math.max(0, graceMinutes) / 60
-          : 0;
-    if (!Number.isFinite(overtime)) overtime = 0;
+    let overtime = manualOvertime > 0 ? manualOvertime : complete ? attendance.overtime_hours : 0;
     // دوام فعلي يوم الجمعة يُمنح 10 ساعات وقت إضافي لأي موظف
     if (friday && complete && manualOvertime <= 0) overtime = FRIDAY_OVERTIME_HOURS;
-    const hasAnyPunch = times.length > 0;
+    const hasAnyPunch = attendance.has_punch;
     const auto: ComputedStatus | null =
       date > today
         ? null
         : hasAnyPunch
-          ? "present"
+          ? complete ? "present" : "incomplete"
           : friday && payType === "monthly"
             ? "rest" // WO: راحة أسبوعية للشهري فقط؛ اليومي يُعامل الجمعة كيوم عادي
             : date <= today
@@ -98,14 +160,14 @@ export function buildAttendanceDays(
               : null;
     return {
       date,
-      check_in: first,
-      check_out: complete ? last : null,
-      hours: Math.max(0, Math.round(hours * 100) / 100),
+      check_in: attendance.check_in,
+      check_out: attendance.check_out,
+      hours: Math.round(attendance.hours * 100) / 100,
       overtime_hours: Math.max(0, Math.round(overtime * 100) / 100),
       status: override?.status ?? auto,
       manual: !!override,
       notes: override?.notes ?? null,
-      punches: times.length,
+      punches: attendance.punches,
       is_paid_leave: override?.status === "leave" ? override.is_paid !== false : undefined,
     };
   });

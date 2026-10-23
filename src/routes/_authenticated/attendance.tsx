@@ -94,6 +94,8 @@ type AttendanceRow = {
   check_in: string | null;
   check_out: string | null;
   hours: number;
+  overtime_hours?: number;
+  event_details?: { verify_time: string; type: "in" | "out" | "break_out" | "break_in" | "overtime_in" | "overtime_out" | null }[];
   devices?: number | string | null;
   mobile_self?: boolean;
   sources?: string[];
@@ -1237,8 +1239,10 @@ function AttendancePage() {
                 </Badge>
                 <Badge variant="destructive">
                   غائب:{" "}
-                  {attendanceRows.length -
-                    attendanceRows.filter((row) => row.status === "present").length}
+                  {attendanceRows.filter((row) => row.status === "absent").length}
+                </Badge>
+                <Badge className="border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
+                  غير مكتمل: {attendanceRows.filter((row) => row.status === "incomplete").length}
                 </Badge>
                 <Badge className="border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
                   متأخر: {attendanceRows.filter((row) => row.late).length}
@@ -1263,6 +1267,8 @@ function AttendancePage() {
                       <TableHead>أول دخول</TableHead>
                       <TableHead>آخر خروج</TableHead>
                       <TableHead>الساعات</TableHead>
+                      <TableHead>إضافي</TableHead>
+                      <TableHead>تفاصيل الحركات</TableHead>
                       <TableHead>أجهزة</TableHead>
                       <TableHead>مصدر الحركة</TableHead>
                       <TableHead>التحقق</TableHead>
@@ -1278,16 +1284,27 @@ function AttendancePage() {
                         <TableCell>{fmtTime(row.check_in)}</TableCell>
                         <TableCell>{fmtTime(row.check_out)}</TableCell>
                         <TableCell>{row.hours > 0 ? row.hours.toFixed(2) : "—"}</TableCell>
+                        <TableCell>{row.overtime_hours ? `${row.overtime_hours.toFixed(2)} س` : "—"}</TableCell>
+                        <TableCell className="min-w-52">
+                          <div className="flex flex-wrap gap-1">
+                            {(row.event_details ?? []).map((event, index) => {
+                              const labels = { in: "دخول", out: "خروج", break_out: "استراحة خارج", break_in: "استراحة عودة", overtime_in: "إضافي دخول", overtime_out: "إضافي خروج" };
+                              const label = event.type ? labels[event.type] : "حركة غير محددة";
+                              return <Badge key={`${event.verify_time}-${index}`} variant="outline" className="gap-1 text-xs">{label} · {fmtTime(event.verify_time)}</Badge>;
+                            })}
+                            {!row.event_details?.length && "—"}
+                          </div>
+                        </TableCell>
                         <TableCell><span className="inline-flex items-center gap-1">{row.devices || "—"}{row.mobile_self && <Smartphone className="h-4 w-4 text-cyan-600" aria-label="حضور ذاتي من الهاتف" />}</span></TableCell>
                         <TableCell className="text-xs">{(row.sources ?? []).map((source) => source === "mobile_self" ? "الهاتف" : source === "zk_agent" || source === "zkteco_auto_agent" ? "البرنامج المحلي" : source === "manual" ? "يدوي" : "جهاز البصمة").join("، ") || "—"}</TableCell>
                         <TableCell>{row.suspicious && <div><Badge variant="destructive">مشبوه</Badge>{row.suspicious_reason && <p className="mt-1 max-w-40 text-xs text-destructive">{row.suspicious_reason}</p>}</div>}{row.selfie_url && <a className="mr-1 text-primary underline" href={row.selfie_url} target="_blank" rel="noreferrer">عرض الصورة</a>}</TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
                             <Badge
-                              variant={row.status === "present" ? "default" : "destructive"}
-                              className={row.status === "present" ? "bg-success" : ""}
+                              variant={row.status === "present" ? "default" : row.status === "incomplete" ? "outline" : "destructive"}
+                              className={row.status === "present" ? "bg-success" : row.status === "incomplete" ? "border-amber-500 text-amber-700" : ""}
                             >
-                              {row.status === "present" ? "حاضر" : "غائب"}
+                              {row.status === "present" ? "حاضر" : row.status === "incomplete" ? "غير مكتمل" : "غائب"}
                             </Badge>
                             {row.late && <Badge className="bg-amber-500 text-white">متأخر</Badge>}
                           </div>
@@ -1296,7 +1313,7 @@ function AttendancePage() {
                     ))}
                     {!attendanceRows.length && (
                       <TableRow>
-                        <TableCell colSpan={10} className="py-8 text-center text-muted-foreground">
+                        <TableCell colSpan={12} className="py-8 text-center text-muted-foreground">
                           لا توجد بيانات لهذا التاريخ
                         </TableCell>
                       </TableRow>
