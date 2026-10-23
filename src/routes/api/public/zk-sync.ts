@@ -52,6 +52,8 @@ export const Route = createFileRoute("/api/public/zk-sync")({
     let payload: z.infer<typeof schema>;
     try { payload = schema.parse(JSON.parse(raw)); } catch { return json({ error: "Invalid payload" }, 400); }
     let batchDeviceId: string | null = null;
+    let syncBatchId: string | null = null;
+    let syncRecordIds: string[] = [];
     try {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       const admin = supabaseAdmin as any;
@@ -64,6 +66,22 @@ export const Route = createFileRoute("/api/public/zk-sync")({
       if (deviceError) throw deviceError;
       if (!device || device.serial_number !== payload.serial || device.status !== "active") return json({ error: "Unauthorized" }, 401);
       batchDeviceId = device.id;
+
+      const { data: batch, error: batchError } = await admin.from("sync_batches")
+        .insert({ device_id: device.id, record_count: payload.logs.length, inserted_count: 0, duplicate_count: 0, unmatched_count: 0, error_count: 0, error_details: [] })
+        .select("id").single();
+      if (batchError) throw batchError;
+      syncBatchId = batch.id;
+      const rawRecords = payload.logs.map((log) => ({
+        id: crypto.randomUUID(), sync_batch_id: syncBatchId, device_id: device.id, user_pin: log.user_pin,
+        verify_time: new Date(log.verify_time).toISOString(), verify_type: log.verify_type, status: log.status,
+        external_log_id: log.external_id ?? null, processing_status: "pending",
+      }));
+      syncRecordIds = rawRecords.map((record) => record.id);
+      for (let i = 0; i < rawRecords.length; i += 500) {
+        const { error } = await admin.from("device_sync_records").insert(rawRecords.slice(i, i + 500));
+        if (error) throw error;
+      }
 
       const pins = [...new Set(payload.logs.map((log) => log.user_pin))];
       const byEmployeeNo = new Map<string, { id: string; employee_no: string; attendance_device_id: string | null }>();
@@ -102,31 +120,74 @@ export const Route = createFileRoute("/api/public/zk-sync")({
         if (employee) employeeByPin.set(pin, employee);
       }
       const unmatched = payload.logs.filter((log) => !employeeByPin.has(log.user_pin)).length;
-      const logRows = payload.logs.filter((log) => employeeByPin.has(log.user_pin)).map((log) => ({
-        employee_no: employeeByPin.get(log.user_pin)!.employee_no, employee_id: employeeByPin.get(log.user_pin)!.id, device_id: device.id, upload_id: null,
-        verify_time: new Date(log.verify_time).toISOString(), verify_type: log.verify_type, status: log.status,
-        external_log_id: log.external_id ?? null, source: "zk_agent",
-      }));
+      const logRows = payload.logs.flatMap((log, index) => {
+        const employee = employeeByPin.get(log.user_pin);
+        return employee ? [{ sync_record_id: syncRecordIds[index], employee_no: employee.employee_no, employee_id: employee.id, device_id: device.id, upload_id: null,
+          verify_time: new Date(log.verify_time).toISOString(), verify_type: log.verify_type, status: log.status,
+          external_log_id: log.external_id ?? null, source: "zk_agent" }] : [];
+      });
+      const logKey = (row: { employee_no: string; verify_time: string; device_id: string }) => `${row.employee_no}|${Date.parse(row.verify_time)}|${row.device_id}`;
+      const uniqueLogRows: typeof logRows = [];
+      const duplicateInputIds = new Set<string>();
+      const seenLogKeys = new Set<string>();
+      for (const row of logRows) {
+        const key = logKey(row);
+        if (seenLogKeys.has(key)) duplicateInputIds.add(row.sync_record_id);
+        else { seenLogKeys.add(key); uniqueLogRows.push(row); }
+      }
       let inserted = 0;
-      for (let i = 0; i < logRows.length; i += 500) {
+      const insertedLogKeys = new Set<string>();
+      for (let i = 0; i < uniqueLogRows.length; i += 500) {
         const { data, error } = await admin.from("attendance_logs")
-          .upsert(logRows.slice(i, i + 500), { onConflict: "employee_no,verify_time,device_id", ignoreDuplicates: true }).select("id");
+          .upsert(uniqueLogRows.slice(i, i + 500).map(({ sync_record_id: _syncRecordId, ...row }) => row), { onConflict: "employee_no,verify_time,device_id", ignoreDuplicates: true })
+          .select("employee_no, verify_time, device_id");
         if (error) throw error;
         inserted += data?.length ?? 0;
+        for (const row of data ?? []) insertedLogKeys.add(logKey(row));
       }
       const duplicates = logRows.length - inserted;
+      const logRowByRecordId = new Map(logRows.map((row) => [row.sync_record_id, row]));
+      const updates = payload.logs.map((log, index) => {
+        const employee = employeeByPin.get(log.user_pin);
+        const rawRecord = rawRecords[index];
+        if (!employee) return { ...rawRecord, processing_status: "unmatched", error_message: "رقم المستخدم في الجهاز غير مرتبط بموظف" };
+        const row = logRowByRecordId.get(syncRecordIds[index])!;
+        const isInserted = !duplicateInputIds.has(syncRecordIds[index]) && insertedLogKeys.has(logKey(row));
+        return { ...rawRecord, employee_no: employee.employee_no, employee_id: employee.id, processing_status: isInserted ? "inserted" : "duplicate", error_message: null };
+      });
+      for (let i = 0; i < updates.length; i += 500) {
+        const { error } = await admin.from("device_sync_records").upsert(updates.slice(i, i + 500), { onConflict: "id" });
+        if (error) throw error;
+      }
       const { error: syncError } = await admin.from("devices").update({ last_sync_at: new Date().toISOString(), auto_last_sync_at: new Date().toISOString(), auto_synced_logs_total: Number(device.auto_synced_logs_total ?? 0) + inserted }).eq("id", device.id);
       if (syncError) throw syncError;
-      const { error: batchError } = await admin.from("sync_batches").insert({
-        device_id: device.id, record_count: payload.logs.length, inserted_count: inserted,
-        duplicate_count: duplicates, unmatched_count: unmatched, error_count: 0, error_details: [],
-      });
-      if (batchError) throw batchError;
+      const { error: batchUpdateError } = await admin.from("sync_batches").update({
+        inserted_count: inserted, duplicate_count: duplicates, unmatched_count: unmatched, error_count: 0, error_details: [],
+      }).eq("id", syncBatchId);
+      if (batchUpdateError) throw batchUpdateError;
       return json({ inserted, duplicates, unmatched });
     } catch (error) {
       const requestId = crypto.randomUUID();
       console.error(`[ZKTeco sync v2] failed (request ${requestId})`, error);
-      if (batchDeviceId) {
+      if (syncRecordIds.length) {
+        try {
+          const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+          const admin = supabaseAdmin as any;
+          for (let i = 0; i < syncRecordIds.length; i += 500) {
+            const { error: recordError } = await admin.from("device_sync_records").update({ processing_status: "error", error_message: describeIngestionError(error) })
+              .in("id", syncRecordIds.slice(i, i + 500)).eq("processing_status", "pending");
+            if (recordError) console.error(`[ZKTeco sync v2] failed to annotate records (request ${requestId})`, recordError);
+          }
+        } catch { /* preserve the original response */ }
+      }
+      if (syncBatchId) {
+        try {
+          const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+          const { error: batchError } = await (supabaseAdmin as any).from("sync_batches").update({ error_count: payload.logs.length,
+            error_details: [{ message: describeIngestionError(error), request_id: requestId }] }).eq("id", syncBatchId);
+          if (batchError) console.error(`[ZKTeco sync v2] failed to annotate batch (request ${requestId})`, batchError);
+        } catch { /* preserve the original response */ }
+      } else if (batchDeviceId) {
         try {
           const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
           await (supabaseAdmin as any).from("sync_batches").insert({ device_id: batchDeviceId, record_count: payload.logs.length,

@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Trash2, Plus, Pencil, KeyRound, Copy, Download, RefreshCw, Ban } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import agentScript from "../../../scripts/agent.py?raw";
 import agentRequirements from "../../../scripts/requirements.txt?raw";
@@ -29,7 +30,7 @@ type SyncStatus = { device_id: string; auto_last_sync_at: string | null; auto_sy
 
 function DevicesPage() {
   const qc = useQueryClient();
-  const { isAdmin } = useAuth();
+  const { isAdmin, isHR } = useAuth();
   const [createdKey, setCreatedKey] = useState<{ deviceId: string; key: string; serial: string } | null>(null);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Device | null>(null);
@@ -151,6 +152,12 @@ function DevicesPage() {
   };
 
   return (
+    <Tabs defaultValue="devices" dir="rtl" className="space-y-5">
+      <TabsList className="h-auto flex-wrap bg-transparent p-0">
+        <TabsTrigger value="devices" className="min-h-10 rounded-xl border bg-card">الأجهزة والمزامنة</TabsTrigger>
+        <TabsTrigger value="verification" className="min-h-10 rounded-xl border bg-card">سجلات التحقق</TabsTrigger>
+      </TabsList>
+      <TabsContent value="devices" className="mt-0">
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
@@ -311,5 +318,101 @@ function DevicesPage() {
         </Table></CardContent>
       </Card>
     </div>
+      </TabsContent>
+      <TabsContent value="verification" className="mt-0">
+        <DeviceSyncRecords devices={devices} canView={isAdmin || isHR} />
+      </TabsContent>
+    </Tabs>
   );
+}
+
+type SyncRecordStatus = "all" | "inserted" | "duplicate" | "unmatched" | "unprocessed";
+function DeviceSyncRecords({ devices, canView }: { devices: Device[]; canView: boolean }) {
+  const [status, setStatus] = useState<SyncRecordStatus>("all");
+  const [deviceId, setDeviceId] = useState("all");
+  const [search, setSearch] = useState("");
+  const [externalId, setExternalId] = useState("");
+  const [verifyType, setVerifyType] = useState("");
+  const [deviceStatus, setDeviceStatus] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [page, setPage] = useState(0);
+  const pageSize = 50;
+  const query = useQuery({
+    queryKey: ["device-sync-records", status, deviceId, search, externalId, verifyType, deviceStatus, dateFrom, dateTo, page],
+    enabled: canView,
+    refetchInterval: 15_000,
+    queryFn: async () => {
+      const db = supabase as any;
+      let request = db.from("device_sync_records")
+        .select("id, device_id, user_pin, employee_no, employee_id, verify_time, verify_type, status, external_log_id, processing_status, error_message, sync_batch_id, employee:employees(full_name), device:devices(name), batch:sync_batches(received_at)", { count: "exact" })
+        .order("verify_time", { ascending: false });
+      if (deviceId !== "all") request = request.eq("device_id", deviceId);
+      if (status === "unprocessed") request = request.in("processing_status", ["pending", "error"]);
+      else if (status !== "all") request = request.eq("processing_status", status);
+      const term = search.trim().replace(/[,()%\\]/g, " ");
+      if (term) request = request.or(`user_pin.ilike.%${term}%,employee_no.ilike.%${term}%`);
+      if (externalId.trim()) request = request.eq("external_log_id", Number(externalId));
+      if (verifyType.trim()) request = request.eq("verify_type", Number(verifyType));
+      if (deviceStatus.trim()) request = request.eq("status", Number(deviceStatus));
+      if (dateFrom) request = request.gte("verify_time", new Date(`${dateFrom}T00:00:00`).toISOString());
+      if (dateTo) {
+        const until = new Date(`${dateTo}T00:00:00`);
+        until.setDate(until.getDate() + 1);
+        request = request.lt("verify_time", until.toISOString());
+      }
+      const { data, error, count } = await request.range(page * pageSize, (page + 1) * pageSize - 1);
+      if (error) throw error;
+      return { rows: data ?? [], count: count ?? 0 };
+    },
+  });
+  const rows = query.data?.rows ?? [];
+  const totalPages = Math.max(1, Math.ceil((query.data?.count ?? 0) / pageSize));
+  const resetFilters = () => { setStatus("all"); setDeviceId("all"); setSearch(""); setExternalId(""); setVerifyType(""); setDeviceStatus(""); setDateFrom(""); setDateTo(""); setPage(0); };
+  const statusLabel = (value: string) => ({ inserted: "مسجلة", duplicate: "مكررة", unmatched: "رقم غير معرف", pending: "قيد المعالجة", error: "خطأ" }[value] ?? value);
+
+  return <Card>
+    <CardHeader><CardTitle>سجلات التحقق من حركات الأجهزة</CardTitle><p className="text-sm text-muted-foreground">تفاصيل كل حركة مرفوعة، ونتيجة مطابقتها بالموظف وسجل الحضور.</p></CardHeader>
+    <CardContent className="space-y-4">
+      {!canView ? <p className="text-sm text-muted-foreground">هذا السجل متاح لمدير النظام والموارد البشرية فقط.</p> : <>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Input placeholder="رقم الجهاز أو الرقم الوظيفي" value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} />
+          <Input aria-label="معرف الحركة في الجهاز" placeholder="معرف الحركة بالجهاز" inputMode="numeric" value={externalId} onChange={(event) => { setExternalId(event.target.value.replace(/\D/g, "")); setPage(0); }} />
+          <Select value={deviceId} onValueChange={(value) => { setDeviceId(value); setPage(0); }}>
+            <SelectTrigger><SelectValue placeholder="كل الأجهزة" /></SelectTrigger><SelectContent><SelectItem value="all">كل الأجهزة</SelectItem>{devices.map((device) => <SelectItem key={device.id} value={device.id}>{device.name}</SelectItem>)}</SelectContent>
+          </Select>
+          <Select value={status} onValueChange={(value) => { setStatus(value as SyncRecordStatus); setPage(0); }}>
+            <SelectTrigger><SelectValue placeholder="كل الحالات" /></SelectTrigger><SelectContent>
+              <SelectItem value="all">كل الحالات</SelectItem><SelectItem value="inserted">تم تسجيلها</SelectItem><SelectItem value="duplicate">مكررة</SelectItem>
+              <SelectItem value="unmatched">رقم غير معرف بالنظام</SelectItem><SelectItem value="unprocessed">لم تعالج أو بها خطأ</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input aria-label="نوع التحقق" placeholder="نوع التحقق (رقم)" inputMode="numeric" value={verifyType} onChange={(event) => { setVerifyType(event.target.value.replace(/\D/g, "")); setPage(0); }} />
+          <Input aria-label="حالة الحركة بالجهاز" placeholder="حالة الحركة بالجهاز" inputMode="numeric" value={deviceStatus} onChange={(event) => { setDeviceStatus(event.target.value.replace(/\D/g, "")); setPage(0); }} />
+          <Input aria-label="من تاريخ الحركة" type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setPage(0); }} />
+          <div className="flex gap-2"><Input aria-label="إلى تاريخ الحركة" type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setPage(0); }} /><Button variant="outline" onClick={resetFilters}>مسح</Button></div>
+        </div>
+        {query.error && <p role="alert" className="text-sm text-destructive">تعذر تحميل السجلات. تحقق من تطبيق ترحيل سجلات التحقق.</p>}
+        <div className="overflow-x-auto rounded-md border">
+          <Table><TableHeader><TableRow><TableHead>وقت الحركة</TableHead><TableHead>وقت الرفع</TableHead><TableHead>الجهاز</TableHead><TableHead>معرف الجهاز</TableHead><TableHead>الموظف المطابق</TableHead><TableHead>التحقق / الحالة</TableHead><TableHead>معرف الحركة</TableHead><TableHead>حالة المعالجة</TableHead><TableHead>الخطأ</TableHead><TableHead>معرف الدفعة</TableHead></TableRow></TableHeader>
+            <TableBody>{rows.map((row: any) => <TableRow key={row.id}>
+              <TableCell className="whitespace-nowrap">{new Date(row.verify_time).toLocaleString("ar-IQ")}</TableCell>
+              <TableCell className="whitespace-nowrap">{row.batch?.received_at ? new Date(row.batch.received_at).toLocaleString("ar-IQ") : "—"}</TableCell>
+              <TableCell>{row.device?.name ?? devices.find((device) => device.id === row.device_id)?.name ?? "—"}</TableCell>
+              <TableCell className="font-mono">{row.user_pin}</TableCell>
+              <TableCell>{row.employee_id ? <div>{row.employee?.full_name ?? "موظف مرتبط"}<div className="text-xs text-muted-foreground">{row.employee_no ?? ""}</div></div> : <span className="text-amber-600">غير مرتبط</span>}</TableCell>
+              <TableCell>{row.verify_type ?? "—"} / {row.status ?? "—"}</TableCell>
+              <TableCell>{row.external_log_id ?? "—"}</TableCell>
+              <TableCell><Badge variant={row.processing_status === "inserted" ? "default" : row.processing_status === "unmatched" || row.processing_status === "error" ? "destructive" : "secondary"}>{statusLabel(row.processing_status)}</Badge></TableCell>
+              <TableCell className="max-w-64 whitespace-normal break-words text-xs text-muted-foreground">{row.error_message ?? "—"}</TableCell>
+              <TableCell className="font-mono text-xs">{row.sync_batch_id.slice(0, 8)}</TableCell>
+            </TableRow>)}
+              {!rows.length && <TableRow><TableCell colSpan={10} className="py-8 text-center text-muted-foreground">{query.isLoading ? "جارٍ تحميل السجلات…" : "لا توجد حركات مطابقة للفلاتر"}</TableCell></TableRow>}
+            </TableBody>
+          </Table>
+        </div>
+        <div className="flex items-center justify-between text-sm"><span>عدد النتائج: {(query.data?.count ?? 0).toLocaleString("ar-IQ")}</span><div className="flex items-center gap-2"><Button variant="outline" size="sm" disabled={page <= 0} onClick={() => setPage((value) => value - 1)}>السابق</Button><span>صفحة {(page + 1).toLocaleString("ar-IQ")} من {totalPages.toLocaleString("ar-IQ")}</span><Button variant="outline" size="sm" disabled={page + 1 >= totalPages} onClick={() => setPage((value) => value + 1)}>التالي</Button></div></div>
+      </>}
+    </CardContent>
+  </Card>;
 }
