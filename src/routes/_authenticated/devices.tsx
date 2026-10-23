@@ -299,7 +299,15 @@ function DevicesPage() {
       <Card>
         <CardHeader><CardTitle>آخر دفعات المزامنة</CardTitle></CardHeader>
         <CardContent><Table><TableHeader><TableRow><TableHead>الجهاز</TableHead><TableHead>الوقت</TableHead><TableHead>الواردة</TableHead><TableHead>أُدرجت</TableHead><TableHead>مكررة</TableHead><TableHead>غير مطابقة</TableHead><TableHead>أخطاء</TableHead></TableRow></TableHeader>
-          <TableBody>{(syncStatuses as SyncStatus[]).flatMap((sync) => sync.batches.map((batch) => <TableRow key={batch.id}><TableCell>{devices.find((device) => device.id === sync.device_id)?.name ?? "—"}</TableCell><TableCell>{new Date(batch.received_at).toLocaleString("ar-IQ")}</TableCell><TableCell>{batch.record_count}</TableCell><TableCell>{batch.inserted_count}</TableCell><TableCell>{batch.duplicate_count}</TableCell><TableCell>{batch.unmatched_count}</TableCell><TableCell title={batch.error_details?.map((item) => item.message).filter(Boolean).join(" | ")}>{batch.error_count}</TableCell></TableRow>))}{!(syncStatuses as SyncStatus[]).some((sync) => sync.batches.length) && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">لا توجد دفعات بعد</TableCell></TableRow>}</TableBody>
+          <TableBody>{(syncStatuses as SyncStatus[]).flatMap((sync) => sync.batches.map((batch) => <TableRow key={batch.id}><TableCell>{devices.find((device) => device.id === sync.device_id)?.name ?? "—"}</TableCell><TableCell>{new Date(batch.received_at).toLocaleString("ar-IQ")}</TableCell><TableCell>{batch.record_count}</TableCell><TableCell>{batch.inserted_count}</TableCell><TableCell>{batch.duplicate_count}</TableCell><TableCell>{batch.unmatched_count}</TableCell><TableCell>
+            <span>{batch.error_count}</span>
+            {!!batch.error_details?.length && <details className="mt-1 min-w-48 text-xs">
+              <summary className="cursor-pointer text-primary underline">عرض سبب الخطأ</summary>
+              <div dir="auto" className="mt-1 max-w-sm whitespace-normal break-words rounded border bg-background p-2 text-destructive">
+                {batch.error_details.map((detail, index) => <p key={index}>{detail.message ?? "خطأ غير محدد"}</p>)}
+              </div>
+            </details>}
+          </TableCell></TableRow>))}{!(syncStatuses as SyncStatus[]).some((sync) => sync.batches.length) && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">لا توجد دفعات بعد</TableCell></TableRow>}</TableBody>
         </Table></CardContent>
       </Card>
     </div>
