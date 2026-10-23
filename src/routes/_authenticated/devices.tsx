@@ -372,7 +372,7 @@ function DeviceSyncRecords({ devices, canView }: { devices: Device[]; canView: b
   const statusLabel = (value: string) => ({ inserted: "مسجلة", duplicate: "مكررة", unmatched: "رقم غير معرف", pending: "قيد المعالجة", error: "خطأ" }[value] ?? value);
 
   return <Card>
-    <CardHeader><CardTitle>سجلات التحقق من حركات الأجهزة</CardTitle><p className="text-sm text-muted-foreground">تفاصيل كل حركة مرفوعة، ونتيجة مطابقتها بالموظف وسجل الحضور.</p></CardHeader>
+    <CardHeader><CardTitle>سجلات التحقق من حركات الأجهزة</CardTitle><p className="text-sm text-muted-foreground">تفاصيل كل حركة مرفوعة، ونتيجة مطابقتها بالموظف وسجل الحضور. تبدأ التفاصيل من أول مزامنة بعد تطبيق تحديث النظام وترحيل قاعدة البيانات؛ الدفعات السابقة تحتفظ بإجمالياتها فقط.</p></CardHeader>
     <CardContent className="space-y-4">
       {!canView ? <p className="text-sm text-muted-foreground">هذا السجل متاح لمدير النظام والموارد البشرية فقط.</p> : <>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -407,7 +407,7 @@ function DeviceSyncRecords({ devices, canView }: { devices: Device[]; canView: b
               <TableCell className="max-w-64 whitespace-normal break-words text-xs text-muted-foreground">{row.error_message ?? "—"}</TableCell>
               <TableCell className="font-mono text-xs">{row.sync_batch_id.slice(0, 8)}</TableCell>
             </TableRow>)}
-              {!rows.length && <TableRow><TableCell colSpan={10} className="py-8 text-center text-muted-foreground">{query.isLoading ? "جارٍ تحميل السجلات…" : "لا توجد حركات مطابقة للفلاتر"}</TableCell></TableRow>}
+              {!rows.length && <TableRow><TableCell colSpan={10} className="py-8 text-center text-muted-foreground">{query.isLoading ? "جارٍ تحميل السجلات…" : query.error ? "تعذر جلب السجلات؛ راجع صلاحية الحساب وترحيل قاعدة البيانات." : query.data?.count === 0 && status === "all" && deviceId === "all" && !search && !externalId && !verifyType && !deviceStatus && !dateFrom && !dateTo ? "لا توجد تفاصيل مسجلة بعد. انتقل إلى تبويب الأجهزة والمزامنة واضغط «سحب الآن» لتسجيل تفاصيل الحركات الجديدة." : "لا توجد حركات مطابقة للفلاتر الحالية؛ امسح الفلاتر لعرض جميع السجلات."}</TableCell></TableRow>}
             </TableBody>
           </Table>
         </div>
