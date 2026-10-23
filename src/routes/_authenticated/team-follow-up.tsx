@@ -3,6 +3,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { dateKeyInTimeZone } from "@/lib/date-time";
+import { summarizeAttendancePunches, type AttendancePunch } from "@/lib/monthly-report";
 import { permissionsDb } from "@/lib/permissions-client";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -460,13 +462,13 @@ function TeamFollowUpPage() {
     enabled: employeeIds.length > 0,
     queryFn: async () => {
       // تحميل كل السجلات على دفعات (الحد الافتراضي 1000 صف كان يُسقط بيانات)
-      const rows: { employee_id: string | null; verify_time: string }[] = [];
+      const rows: ({ employee_id: string | null } & AttendancePunch)[] = [];
       for (let i = 0; i < employeeIds.length; i += 100) {
         const ids = employeeIds.slice(i, i + 100);
         for (let from = 0; ; from += 1000) {
           const { data, error } = await supabase
             .from("attendance_logs")
-            .select("employee_id, verify_time")
+            .select("employee_id, verify_time, status, source, self_event_type")
             .in("employee_id", ids)
             .gte("verify_time", `${monthStart}T00:00:00`)
             .lte("verify_time", `${monthEnd}T23:59:59`)
@@ -493,18 +495,20 @@ function TeamFollowUpPage() {
       return (data ?? []) as Evaluation[];
     },
   });
-  // يوم الحضور = بصمتان على الأقل (دخول وخروج) كما في التقرير الشهري
-  const punchesByEmployeeDay = new Map<string, Map<string, number>>();
+  // يحتسب الحضور من دخول وخروج متوافقين، لا من مجرد عدد الحركات.
+  const punchesByEmployeeDay = new Map<string, Map<string, AttendancePunch[]>>();
   (attendanceMonthQuery.data ?? []).forEach((row) => {
     if (!row.employee_id) return;
-    const m = punchesByEmployeeDay.get(row.employee_id) ?? new Map<string, number>();
-    const d = row.verify_time.slice(0, 10);
-    m.set(d, (m.get(d) ?? 0) + 1);
+    const m = punchesByEmployeeDay.get(row.employee_id) ?? new Map<string, AttendancePunch[]>();
+    const d = dateKeyInTimeZone(row.verify_time);
+    const punches = m.get(d) ?? [];
+    punches.push(row);
+    m.set(d, punches);
     punchesByEmployeeDay.set(row.employee_id, m);
   });
   const attendanceByEmployee = new Map<string, Set<string>>();
   punchesByEmployeeDay.forEach((m, id) =>
-    attendanceByEmployee.set(id, new Set([...m].filter(([, n]) => n > 1).map(([d]) => d))),
+    attendanceByEmployee.set(id, new Set([...m].filter(([, punches]) => summarizeAttendancePunches(punches).complete).map(([d]) => d))),
   );
   const evaluationByEmployee = new Map(
     (evaluationsQuery.data ?? []).map((evaluation) => [evaluation.employee_id, evaluation]),

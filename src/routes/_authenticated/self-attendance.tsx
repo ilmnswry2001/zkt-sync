@@ -71,6 +71,7 @@ type AttendanceLog = {
   verify_time: string;
   self_event_type: "check_in" | "check_out" | null;
   verify_type: number | null;
+  status: number | null;
   distance_meters: number | null;
   source: string | null;
 };
@@ -155,9 +156,9 @@ function SelfAttendancePage() {
       : null;
   const insideGeofence =
     distance != null && site != null && distance <= site.geofence_radius_meters;
-  const checkedIn = logs.some((log) => log.self_event_type === "check_in" || log.verify_type === 0);
+  const checkedIn = logs.some((log) => log.self_event_type === "check_in" || log.status === 0);
   const checkedOut = logs.some(
-    (log) => log.self_event_type === "check_out" || log.verify_type === 1,
+    (log) => log.self_event_type === "check_out" || log.status === 1,
   );
 
   const loadAttendance = async () => {
@@ -187,7 +188,7 @@ function SelfAttendancePage() {
     const end = `${today}T23:59:59+03:00`;
     const logsResult = await client
       .from("attendance_logs")
-      .select("id, verify_time, self_event_type, verify_type, distance_meters, source")
+      .select("id, verify_time, self_event_type, verify_type, status, distance_meters, source")
       .eq("employee_id", nextEmployee.id)
       .gte("verify_time", start)
       .lt("verify_time", end)
@@ -629,7 +630,7 @@ function SelfAttendancePage() {
                         className="flex items-center justify-between rounded-lg border p-3 text-sm"
                       >
                         <span>
-                          {log.self_event_type === "check_out" || log.verify_type === 1
+                          {log.self_event_type === "check_out" || log.status === 1
                             ? "انصراف"
                             : "حضور"}
                         </span>

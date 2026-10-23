@@ -117,7 +117,7 @@ def pull_from_ip() -> None:
                 safe_serial = "".join(c for c in serial if c.isalnum() or c in "-_")[:40] or "device"
                 stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 export_path = export_dir / f"attendance_{safe_serial}_{stamp}.csv"
-                fields = ["رقم الجهاز", "رقم البصمة", "وقت الجهاز", "طريقة التحقق", "الحالة", "المعرف الخارجي"]
+                fields = ["رقم الجهاز", "رقم البصمة", "وقت الجهاز", "حالة التحقق", "نوع الحركة", "المعرف الخارجي"]
                 with export_path.open("w", encoding="utf-8-sig", newline="") as stream:
                     writer = csv.DictWriter(stream, fieldnames=fields)
                     writer.writeheader()
@@ -127,8 +127,8 @@ def pull_from_ip() -> None:
                             "رقم الجهاز": serial,
                             "رقم البصمة": str(getattr(record, "user_id", "") or ""),
                             "وقت الجهاز": when.isoformat(sep=" ") if isinstance(when, datetime) else "",
-                            "طريقة التحقق": getattr(record, "verify_mode", ""),
-                            "الحالة": getattr(record, "status", ""),
+                            "حالة التحقق": getattr(record, "verify_mode", getattr(record, "status", "")),
+                            "نوع الحركة": getattr(record, "punch", ""),
                             "المعرف الخارجي": getattr(record, "uid", ""),
                         })
                 print(f"\nتم حفظ {len(records)} سجلاً محلياً في:\n{export_path}")

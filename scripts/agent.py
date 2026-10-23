@@ -18,6 +18,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 LOG = logging.getLogger("zkt-agent")
+RECORD_FORMAT_VERSION = 2
 
 def timestamp(value: datetime) -> str:
     if value.tzinfo is None:
@@ -32,8 +33,10 @@ def record_payload(record) -> dict | None:
     return {
         "user_pin": pin,
         "verify_time": timestamp(when),
-        "verify_type": int(getattr(record, "verify_mode", 0) or 0),
-        "status": int(getattr(record, "status", 0) or 0),
+        # PyZK exposes the verification mode as `status` and the user's
+        # attendance action as `punch`; persist each in its matching API field.
+        "verify_type": int(getattr(record, "verify_mode", getattr(record, "status", 0)) or 0),
+        "status": int(record.punch) if getattr(record, "punch", None) is not None else None,
         "external_id": getattr(record, "uid", None),
     }
 
@@ -167,6 +170,11 @@ def main() -> int:
     state_path = Path(cfg.get("state_file", str(root / "state.json"))).expanduser()
     state = json.loads(state_path.read_text(encoding="utf-8")) if state_path.exists() else {"cursor": "", "cursor_signatures": []}
     state.setdefault("cursor_signatures", [])
+    if state.get("record_format_version") != RECORD_FORMAT_VERSION:
+        # Re-read device history once after changing the PyZK punch-field mapping.
+        state["cursor"] = ""
+        state["cursor_signatures"] = []
+        state["record_format_version"] = RECORD_FORMAT_VERSION
     state_path.parent.mkdir(parents=True, exist_ok=True)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(db_path)

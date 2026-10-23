@@ -56,7 +56,7 @@ export const Route = createFileRoute("/api/public/attendance-reminders")({
         if (kind === "missing_checkout") {
           const { data: checkout } = await admin.from("attendance_logs").select("id").eq("employee_id", employeeId)
             .gte("verify_time", `${local.date}T00:00:00+03:00`).lt("verify_time", `${local.date}T23:59:59+03:00`)
-            .or("self_event_type.eq.check_out,verify_type.eq.1").limit(1);
+            .or("self_event_type.eq.check_out,status.eq.1").limit(1);
           if (checkout?.length) continue;
         }
         const { data: alreadySent } = await admin.from("attendance_push_reminders").select("id").eq("employee_id", employeeId)

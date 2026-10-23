@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { summarizeAttendancePunches, type AttendancePunch } from "@/lib/monthly-report";
 import { useAuth } from "@/hooks/use-auth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -297,7 +298,7 @@ function WorkCenterPage() {
           .in("employee_id", employeeIds),
         supabase
           .from("attendance_logs")
-          .select("employee_id")
+          .select("employee_id, verify_time, status, source, self_event_type")
           .gte("verify_time", startAt)
           .lt("verify_time", endAt)
           .in("employee_id", employeeIds),
@@ -305,14 +306,21 @@ function WorkCenterPage() {
       if (statuses.error) throw statuses.error;
       if (logs.error) throw logs.error;
       const result = new Map<string, AttendanceState>();
-      const hasDeviceLog = new Set(
-        (logs.data ?? []).map((row) => row.employee_id).filter((id): id is string => !!id),
+      const punchesByEmployee = new Map<string, AttendancePunch[]>();
+      for (const row of logs.data ?? []) {
+        if (!row.employee_id) continue;
+        const punches = punchesByEmployee.get(row.employee_id) ?? [];
+        punches.push(row);
+        punchesByEmployee.set(row.employee_id, punches);
+      }
+      const hasAttendance = new Set(
+        [...punchesByEmployee].filter(([, punches]) => summarizeAttendancePunches(punches).complete).map(([id]) => id),
       );
       for (const employee of emps) {
         const recorded = statuses.data?.find((row) => row.employee_id === employee.id)?.status;
         result.set(
           employee.id,
-          recorded ?? (hasDeviceLog.has(employee.id) ? "present" : "unknown"),
+          recorded ?? (hasAttendance.has(employee.id) ? "present" : "unknown"),
         );
       }
       return result;

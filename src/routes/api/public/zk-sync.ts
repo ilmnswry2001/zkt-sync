@@ -7,7 +7,7 @@ const schema = z.object({
     user_pin: z.string().trim().min(1).max(48),
     verify_time: z.string().datetime({ offset: true }),
     verify_type: z.number().int().optional().default(0),
-    status: z.number().int().optional().default(0),
+    status: z.number().int().nullable().optional(),
     external_id: z.number().int().optional().nullable(),
   }).strict()).max(5000),
 }).strict();
@@ -74,7 +74,7 @@ export const Route = createFileRoute("/api/public/zk-sync")({
       syncBatchId = batch.id;
       const rawRecords = payload.logs.map((log) => ({
         id: crypto.randomUUID(), sync_batch_id: syncBatchId, device_id: device.id, user_pin: log.user_pin,
-        verify_time: new Date(log.verify_time).toISOString(), verify_type: log.verify_type, status: log.status,
+        verify_time: new Date(log.verify_time).toISOString(), verify_type: log.verify_type, status: log.status ?? null,
         external_log_id: log.external_id ?? null, processing_status: "pending",
       }));
       syncRecordIds = rawRecords.map((record) => record.id);
@@ -123,27 +123,45 @@ export const Route = createFileRoute("/api/public/zk-sync")({
       const logRows = payload.logs.flatMap((log, index) => {
         const employee = employeeByPin.get(log.user_pin);
         return employee ? [{ sync_record_id: syncRecordIds[index], employee_no: employee.employee_no, employee_id: employee.id, device_id: device.id, upload_id: null,
-          verify_time: new Date(log.verify_time).toISOString(), verify_type: log.verify_type, status: log.status,
+          verify_time: new Date(log.verify_time).toISOString(), verify_type: log.verify_type, status: log.status ?? null,
           external_log_id: log.external_id ?? null, source: "zk_agent" }] : [];
       });
       const logKey = (row: { employee_no: string; verify_time: string; device_id: string }) => `${row.employee_no}|${Date.parse(row.verify_time)}|${row.device_id}`;
       const uniqueLogRows: typeof logRows = [];
       const duplicateInputIds = new Set<string>();
-      const seenLogKeys = new Set<string>();
+      const logIndexByKey = new Map<string, number>();
       for (const row of logRows) {
         const key = logKey(row);
-        if (seenLogKeys.has(key)) duplicateInputIds.add(row.sync_record_id);
-        else { seenLogKeys.add(key); uniqueLogRows.push(row); }
+        const existingIndex = logIndexByKey.get(key);
+        if (existingIndex === undefined) {
+          logIndexByKey.set(key, uniqueLogRows.length);
+          uniqueLogRows.push(row);
+        } else {
+          duplicateInputIds.add(uniqueLogRows[existingIndex].sync_record_id);
+          uniqueLogRows[existingIndex] = row;
+        }
       }
       let inserted = 0;
       const insertedLogKeys = new Set<string>();
       for (let i = 0; i < uniqueLogRows.length; i += 500) {
+        const chunk = uniqueLogRows.slice(i, i + 500);
+        const { data: existing, error: existingError } = await admin.from("attendance_logs")
+          .select("employee_no, verify_time, device_id")
+          .eq("device_id", device.id)
+          .in("verify_time", [...new Set(chunk.map((row) => row.verify_time))]);
+        if (existingError) throw existingError;
+        const existingKeys = new Set((existing ?? []).map(logKey));
         const { data, error } = await admin.from("attendance_logs")
-          .upsert(uniqueLogRows.slice(i, i + 500).map(({ sync_record_id: _syncRecordId, ...row }) => row), { onConflict: "employee_no,verify_time,device_id", ignoreDuplicates: true })
+          .upsert(chunk.map(({ sync_record_id: _syncRecordId, ...row }) => row), { onConflict: "employee_no,verify_time,device_id" })
           .select("employee_no, verify_time, device_id");
         if (error) throw error;
-        inserted += data?.length ?? 0;
-        for (const row of data ?? []) insertedLogKeys.add(logKey(row));
+        for (const row of data ?? []) {
+          const key = logKey(row);
+          if (!existingKeys.has(key)) {
+            inserted++;
+            insertedLogKeys.add(key);
+          }
+        }
       }
       const duplicates = logRows.length - inserted;
       const logRowByRecordId = new Map(logRows.map((row) => [row.sync_record_id, row]));
