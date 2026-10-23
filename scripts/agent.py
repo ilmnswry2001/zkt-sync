@@ -53,26 +53,26 @@ def prompt(label: str, current: str = "") -> str:
     return value or current
 
 def setup_config(path: Path) -> None:
-    print("\nإعداد وكيل مزامنة أجهزة ZKTeco")
-    print("يجب تشغيل هذا البرنامج على حاسوب يصل إلى الجهاز عبر الشبكة المحلية.\n")
-    host = prompt("عنوان IP للجهاز", "192.168.1.201")
-    port = prompt("منفذ الجهاز", "4370")
-    serial = prompt("الرقم التسلسلي المطابق في النظام")
-    base_url = prompt("رابط النظام المنشور (مثال https://example.com)").rstrip("/")
-    device_key = getpass.getpass("مفتاح الربط الذي أنشأه المدير في صفحة الأجهزة: ").strip()
-    password = prompt("كلمة مرور الجهاز الرقمية (0 إن لم توجد)", "0")
-    interval = prompt("الفاصل بين المزامنات بالثواني", "300")
+    print("\nZKTeco Attendance Sync Agent Setup")
+    print("Run this program on a computer that can reach the device over the local network.\n")
+    host = prompt("Device IP address", "192.168.1.111")
+    port = prompt("Device port", "4370")
+    serial = prompt("Device serial number registered in the system")
+    base_url = prompt("Published system base URL (for example https://example.com)").rstrip("/")
+    device_key = getpass.getpass("Device sync key generated on the system Devices page: ").strip()
+    password = prompt("Numeric device password (enter 0 if none)", "0")
+    interval = prompt("Sync interval in seconds", "300")
     parsed_url = urlsplit(base_url)
     if parsed_url.scheme != "https" or not parsed_url.netloc:
-        raise ValueError("يجب إدخال رابط نظام صحيح يبدأ بـ https://")
+        raise ValueError("Enter a valid system URL starting with https://")
     if not serial or not device_key:
-        raise ValueError("الرقم التسلسلي ومفتاح الربط مطلوبان")
+        raise ValueError("The device serial number and sync key are required")
     try:
         port_number, password_number, interval_number = int(port), int(password), int(interval)
     except ValueError as error:
-        raise ValueError("المنفذ وكلمة المرور والفاصل يجب أن تكون أرقاماً") from error
+        raise ValueError("Port, device password, and sync interval must be numbers") from error
     if not 1 <= port_number <= 65535 or password_number < 0 or interval_number < 30:
-        raise ValueError("تحقق من المنفذ وكلمة المرور؛ أقل فاصل مسموح به 30 ثانية")
+        raise ValueError("Check the port and password; the minimum sync interval is 30 seconds")
 
     parser = configparser.ConfigParser()
     parser["agent"] = {
@@ -94,8 +94,8 @@ def setup_config(path: Path) -> None:
         path.chmod(0o600)
     except OSError:
         pass
-    print(f"\nتم حفظ الإعدادات في: {path}")
-    print("احتفظ بالملف سرياً؛ فهو يحتوي مفتاح الجهاز.\n")
+    print(f"\nSettings saved to: {path}")
+    print("Keep this file private; it contains the device sync key.\n")
 
 def check_connections(cfg) -> None:
     import requests
@@ -121,6 +121,26 @@ def check_connections(cfg) -> None:
     if response.status_code not in (404, 405):
         response.raise_for_status()
     print("الخادم متاح عبر HTTPS. سيجري التحقق من المفتاح عند أول رفع فعلي.")
+
+def signed_post(session, url: str, cfg, payload: dict):
+    import requests
+
+    body = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    stamp = str(int(time.time()))
+    signature = hmac.new(cfg["device_key"].strip().encode(), f"{stamp}.{body}".encode(), hashlib.sha256).hexdigest()
+    response = session.post(url, data=body.encode(), headers={
+        "Content-Type": "application/json", "X-Device-Key": cfg["device_key"].strip(),
+        "X-Timestamp": stamp, "X-Signature": signature,
+    }, timeout=30)
+    response.raise_for_status()
+    return response.json()
+
+def log_http_failure(error: Exception) -> None:
+    response = getattr(error, "response", None)
+    if response is not None:
+        detail = (response.text or "").strip().replace("\n", " ")[:500]
+        LOG.error("Cloud request returned HTTP %s: %s", response.status_code, detail or "No response details")
+    LOG.exception("Sync attempt failed; local queue is retained")
 
 def main() -> int:
     root = Path(__file__).resolve().parent
@@ -153,12 +173,21 @@ def main() -> int:
     db.execute("CREATE TABLE IF NOT EXISTS queue (fingerprint TEXT PRIMARY KEY, payload TEXT NOT NULL, created_at TEXT NOT NULL)")
     db.commit()
     session = requests.Session()
-    delay = interval
+    next_sync_at = 0.0
+    command_url = cfg["sync_url"].strip().rsplit("/zk-sync", 1)[0] + "/zk-sync-command"
     LOG.info("Starting ZKTeco sync for serial %s", cfg["serial"])
     while True:
         connection = None
         sync_ok = False
+        command = None
         try:
+            if not args.once:
+                poll_result = signed_post(session, command_url, cfg, {"action": "poll", "serial": cfg["serial"].strip()})
+                command = poll_result.get("command")
+            if not command and time.monotonic() < next_sync_at:
+                time.sleep(min(10, max(1, next_sync_at - time.monotonic())))
+                continue
+
             zkt = ZK(cfg["device_ip"].strip(), port=cfg.getint("device_port", 4370),
                      timeout=cfg.getint("timeout_seconds", 10), password=cfg.getint("device_password", 0),
                      force_udp=False, ommit_ping=True)
@@ -178,16 +207,9 @@ def main() -> int:
                 db.execute("INSERT OR IGNORE INTO queue VALUES (?, ?, ?)", (fingerprint, canonical, datetime.now(timezone.utc).isoformat()))
             db.commit()
             rows = db.execute("SELECT fingerprint, payload FROM queue ORDER BY created_at LIMIT 5000").fetchall()
+            ack = {"inserted": 0, "duplicates": 0, "unmatched": 0}
             if rows:
-                body = json.dumps({"serial": cfg["serial"].strip(), "logs": [json.loads(r[1]) for r in rows]}, ensure_ascii=False, separators=(",", ":"))
-                stamp = str(int(time.time()))
-                signature = hmac.new(cfg["device_key"].strip().encode(), f"{stamp}.{body}".encode(), hashlib.sha256).hexdigest()
-                response = session.post(cfg["sync_url"].strip(), data=body.encode(), headers={
-                    "Content-Type": "application/json", "X-Device-Key": cfg["device_key"].strip(),
-                    "X-Timestamp": stamp, "X-Signature": signature,
-                }, timeout=30)
-                response.raise_for_status()
-                ack = response.json()
+                ack = signed_post(session, cfg["sync_url"].strip(), cfg, {"serial": cfg["serial"].strip(), "logs": [json.loads(r[1]) for r in rows]})
                 if not all(k in ack for k in ("inserted", "duplicates", "unmatched")):
                     raise RuntimeError("Cloud acknowledgement is incomplete")
                 newest = max(json.loads(r[1])["verify_time"] for r in rows)
@@ -203,11 +225,24 @@ def main() -> int:
                          ack["inserted"], ack["duplicates"], ack["unmatched"], db.execute("SELECT count(*) FROM queue").fetchone()[0])
             else:
                 LOG.info("No new attendance records; device and cloud connection are healthy")
+            if command:
+                signed_post(session, command_url, cfg, {
+                    "action": "complete", "serial": cfg["serial"].strip(), "command_id": command["id"],
+                    "status": "succeeded", "result": {k: ack[k] for k in ("inserted", "duplicates", "unmatched")},
+                })
             sync_ok = True
-            delay = interval
-        except Exception:
-            LOG.exception("Sync attempt failed; local queue is retained")
-            delay = min(max(interval, delay * 2), 3600)
+            next_sync_at = time.monotonic() + interval
+        except Exception as error:
+            log_http_failure(error)
+            if command:
+                try:
+                    signed_post(session, command_url, cfg, {
+                        "action": "complete", "serial": cfg["serial"].strip(), "command_id": command["id"],
+                        "status": "failed", "error": str(error)[:300],
+                    })
+                except Exception as completion_error:
+                    log_http_failure(completion_error)
+            next_sync_at = time.monotonic() + min(interval, 60)
         finally:
             if connection is not None:
                 try:
@@ -216,7 +251,7 @@ def main() -> int:
                     pass
         if args.once:
             return 0 if sync_ok else 1
-        time.sleep(delay)
+        time.sleep(1)
 
 if __name__ == "__main__":
     if hasattr(sys.stdout, "reconfigure"):

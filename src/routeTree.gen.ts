@@ -48,6 +48,7 @@ import { Route as AuthenticatedWorkCenterRouteImport } from './routes/_authentic
 import { Route as AuthenticatedEmployeesEmployeeIdRouteImport } from './routes/_authenticated/employees.$employeeId'
 import { Route as ApiPublicAttendanceRemindersRouteImport } from './routes/api/public/attendance-reminders'
 import { Route as ApiPublicZkSyncRouteImport } from './routes/api/public/zk-sync'
+import { Route as ApiPublicZkSyncCommandRouteImport } from './routes/api/public/zk-sync-command'
 import { Route as ApiPublicZktecoSyncRouteImport } from './routes/api/public/zkteco-sync'
 
 const IndexRoute = IndexRouteImport.update({
@@ -253,6 +254,11 @@ const ApiPublicZkSyncRoute = ApiPublicZkSyncRouteImport.update({
   path: '/api/public/zk-sync',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicZkSyncCommandRoute = ApiPublicZkSyncCommandRouteImport.update({
+  id: '/api/public/zk-sync-command',
+  path: '/api/public/zk-sync-command',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicZktecoSyncRoute = ApiPublicZktecoSyncRouteImport.update({
   id: '/api/public/zkteco-sync',
   path: '/api/public/zkteco-sync',
@@ -298,6 +304,7 @@ export interface FileRoutesByFullPath {
   '/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
   '/api/public/attendance-reminders': typeof ApiPublicAttendanceRemindersRoute
   '/api/public/zk-sync': typeof ApiPublicZkSyncRoute
+  '/api/public/zk-sync-command': typeof ApiPublicZkSyncCommandRoute
   '/api/public/zkteco-sync': typeof ApiPublicZktecoSyncRoute
 }
 export interface FileRoutesByTo {
@@ -339,6 +346,7 @@ export interface FileRoutesByTo {
   '/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
   '/api/public/attendance-reminders': typeof ApiPublicAttendanceRemindersRoute
   '/api/public/zk-sync': typeof ApiPublicZkSyncRoute
+  '/api/public/zk-sync-command': typeof ApiPublicZkSyncCommandRoute
   '/api/public/zkteco-sync': typeof ApiPublicZktecoSyncRoute
 }
 export interface FileRoutesById {
@@ -382,6 +390,7 @@ export interface FileRoutesById {
   '/_authenticated/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
   '/api/public/attendance-reminders': typeof ApiPublicAttendanceRemindersRoute
   '/api/public/zk-sync': typeof ApiPublicZkSyncRoute
+  '/api/public/zk-sync-command': typeof ApiPublicZkSyncCommandRoute
   '/api/public/zkteco-sync': typeof ApiPublicZktecoSyncRoute
 }
 export interface FileRouteTypes {
@@ -425,6 +434,7 @@ export interface FileRouteTypes {
     | '/employees/$employeeId'
     | '/api/public/attendance-reminders'
     | '/api/public/zk-sync'
+    | '/api/public/zk-sync-command'
     | '/api/public/zkteco-sync'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -466,6 +476,7 @@ export interface FileRouteTypes {
     | '/employees/$employeeId'
     | '/api/public/attendance-reminders'
     | '/api/public/zk-sync'
+    | '/api/public/zk-sync-command'
     | '/api/public/zkteco-sync'
   id:
     | '__root__'
@@ -508,6 +519,7 @@ export interface FileRouteTypes {
     | '/_authenticated/employees/$employeeId'
     | '/api/public/attendance-reminders'
     | '/api/public/zk-sync'
+    | '/api/public/zk-sync-command'
     | '/api/public/zkteco-sync'
   fileRoutesById: FileRoutesById
 }
@@ -517,6 +529,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   ApiPublicAttendanceRemindersRoute: typeof ApiPublicAttendanceRemindersRoute
   ApiPublicZkSyncRoute: typeof ApiPublicZkSyncRoute
+  ApiPublicZkSyncCommandRoute: typeof ApiPublicZkSyncCommandRoute
   ApiPublicZktecoSyncRoute: typeof ApiPublicZktecoSyncRoute
 }
 
@@ -795,6 +808,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicZkSyncRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/zk-sync-command': {
+      id: '/api/public/zk-sync-command'
+      path: '/api/public/zk-sync-command'
+      fullPath: '/api/public/zk-sync-command'
+      preLoaderRoute: typeof ApiPublicZkSyncCommandRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/zkteco-sync': {
       id: '/api/public/zkteco-sync'
       path: '/api/public/zkteco-sync'
@@ -901,6 +921,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   ApiPublicAttendanceRemindersRoute: ApiPublicAttendanceRemindersRoute,
   ApiPublicZkSyncRoute: ApiPublicZkSyncRoute,
+  ApiPublicZkSyncCommandRoute: ApiPublicZkSyncCommandRoute,
   ApiPublicZktecoSyncRoute: ApiPublicZktecoSyncRoute,
 }
 export const routeTree = rootRouteImport

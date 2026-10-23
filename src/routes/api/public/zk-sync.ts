@@ -61,20 +61,30 @@ export const Route = createFileRoute("/api/public/zk-sync")({
       const byEmployeeNo = new Map<string, { id: string; employee_no: string; attendance_device_id: string | null }>();
       const byDeviceId = new Map<string, { id: string; employee_no: string; attendance_device_id: string | null }>();
       const ambiguousDeviceIds = new Set<string>();
+      let hasAttendanceDeviceId = true;
       for (let i = 0; i < pins.length; i += 500) {
         const chunk = pins.slice(i, i + 500);
         const { data: numberMatches, error: numberError } = await admin.from("employees")
-          .select("id, employee_no, attendance_device_id").in("employee_no", chunk);
+          .select("id, employee_no").in("employee_no", chunk);
         if (numberError) throw numberError;
-        const { data: deviceMatches, error: deviceError } = await admin.from("employees")
-          .select("id, employee_no, attendance_device_id").in("attendance_device_id", chunk);
-        if (deviceError) throw deviceError;
-        for (const row of numberMatches ?? []) byEmployeeNo.set(row.employee_no, row);
-        for (const row of deviceMatches ?? []) {
-          const pin = String(row.attendance_device_id ?? "").trim();
-          const previous = byDeviceId.get(pin);
-          if (previous && previous.id !== row.id) ambiguousDeviceIds.add(pin);
-          else byDeviceId.set(pin, row);
+        for (const row of numberMatches ?? []) byEmployeeNo.set(row.employee_no, { ...row, attendance_device_id: null });
+        if (hasAttendanceDeviceId) {
+          const { data: deviceMatches, error: deviceError } = await admin.from("employees")
+            .select("id, employee_no, attendance_device_id").in("attendance_device_id", chunk);
+          if (deviceError) {
+            const missingOptionalColumn = deviceError.code === "PGRST204" || deviceError.code === "42703" ||
+              /attendance_device_id.*(schema cache|does not exist|not found)|column .*attendance_device_id/i.test(deviceError.message ?? "");
+            if (!missingOptionalColumn) throw deviceError;
+            hasAttendanceDeviceId = false;
+            console.warn("[ZKTeco sync] employees.attendance_device_id is not available; matching attendance by employee_no only.");
+            continue;
+          }
+          for (const row of deviceMatches ?? []) {
+            const pin = String(row.attendance_device_id ?? "").trim();
+            const previous = byDeviceId.get(pin);
+            if (previous && previous.id !== row.id) ambiguousDeviceIds.add(pin);
+            else byDeviceId.set(pin, row);
+          }
         }
       }
       const employeeByPin = new Map<string, { id: string; employee_no: string }>();
@@ -106,7 +116,8 @@ export const Route = createFileRoute("/api/public/zk-sync")({
       if (batchError) throw batchError;
       return json({ inserted, duplicates, unmatched });
     } catch (error) {
-      console.error("[ZKTeco sync v2] failed", error);
+      const requestId = crypto.randomUUID();
+      console.error(`[ZKTeco sync v2] failed (request ${requestId})`, error);
       if (batchDeviceId) {
         try {
           const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -115,7 +126,7 @@ export const Route = createFileRoute("/api/public/zk-sync")({
             error_details: [{ message: error instanceof Error ? error.message.slice(0, 300) : "ingestion error" }] });
         } catch { /* keep the original API error response */ }
       }
-      return json({ error: "Sync service unavailable" }, 503);
+      return json({ error: "Sync service unavailable", request_id: requestId }, 503);
     }
   } } },
 });
