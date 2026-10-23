@@ -27,6 +27,14 @@ function safeEqual(a: string, b: string) {
   return diff === 0;
 }
 const json = (body: Record<string, unknown>, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
+function describeIngestionError(error: unknown): string {
+  const value = error && typeof error === "object" ? error as Record<string, unknown> : {};
+  const message = typeof value.message === "string" ? value.message : error instanceof Error ? error.message : String(error);
+  const code = typeof value.code === "string" ? `[${value.code}] ` : "";
+  const details = typeof value.details === "string" ? ` — ${value.details}` : "";
+  const hint = typeof value.hint === "string" ? ` — Hint: ${value.hint}` : "";
+  return `${code}${message}${details}${hint}`.replace(/\s+/g, " ").slice(0, 700) || "Unknown ingestion error";
+}
 
 export const Route = createFileRoute("/api/public/zk-sync")({
   server: { handlers: { POST: async ({ request }) => {
@@ -123,7 +131,7 @@ export const Route = createFileRoute("/api/public/zk-sync")({
           const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
           await (supabaseAdmin as any).from("sync_batches").insert({ device_id: batchDeviceId, record_count: payload.logs.length,
             inserted_count: 0, duplicate_count: 0, unmatched_count: 0, error_count: payload.logs.length,
-            error_details: [{ message: error instanceof Error ? error.message.slice(0, 300) : "ingestion error" }] });
+            error_details: [{ message: describeIngestionError(error), request_id: requestId }] });
         } catch { /* keep the original API error response */ }
       }
       return json({ error: "Sync service unavailable", request_id: requestId }, 503);
