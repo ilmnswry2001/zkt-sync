@@ -18,8 +18,6 @@ import {
   FileWarning,
   Fuel,
   Settings2,
-  PanelLeftClose,
-  PanelLeftOpen,
   Sparkles,
   Menu,
   X,
@@ -207,18 +205,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (blocked && allowedSections?.[0]) navigate({ to: allowedSections[0] as any });
   }, [blocked, allowedSections, navigate]);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return (
-      window.localStorage.getItem("zkt-sidebar-collapsed") === "true" ||
-      window.localStorage.getItem("zkt-sidebar-hidden") === "true"
-    );
-  });
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
   const [workspaceName, setWorkspaceName] = useState("منظومة زِكت");
   const [isEditingWorkspaceName, setIsEditingWorkspaceName] = useState(false);
   useEffect(() => {
+    const savedSidebar = window.localStorage.getItem("zkt-sidebar-collapsed-v2");
+    setSidebarCollapsed(savedSidebar === null ? true : savedSidebar === "true");
     const savedWorkspaceName = window.localStorage.getItem("zkt-workspace-name");
     if (savedWorkspaceName?.trim()) setWorkspaceName(savedWorkspaceName.trim());
     const savedTheme = window.localStorage.getItem("zkt-theme");
@@ -241,7 +235,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const toggleSidebar = () => {
     setSidebarCollapsed((collapsed) => {
       const next = !collapsed;
-      window.localStorage.setItem("zkt-sidebar-collapsed", String(next));
+      window.localStorage.setItem("zkt-sidebar-collapsed-v2", String(next));
       window.localStorage.removeItem("zkt-sidebar-hidden");
       return next;
     });
@@ -362,6 +356,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       return [];
     }
   });
+  const [hoveredGroup, setHoveredGroup] = useState<string | null>(null);
   useEffect(() => {
     const activeItem = nav.find(
       (item) => pathname === item.to || pathname.startsWith(item.to + "/"),
@@ -424,10 +419,19 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           )}
         >
           <div className="flex items-center gap-3">
-            <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-300 to-cyan-500 shadow-lg shadow-teal-950/25 ring-1 ring-white/20">
+            <button
+              type="button"
+              onClick={() => {
+                if (window.innerWidth < 768) setMobileSidebarOpen(false);
+                else toggleSidebar();
+              }}
+              aria-label={sidebarCollapsed ? "فتح القائمة" : "طي القائمة"}
+              title={sidebarCollapsed ? "فتح القائمة" : "طي القائمة"}
+              className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-300 to-cyan-500 shadow-lg shadow-teal-950/25 ring-1 ring-white/20 transition-transform duration-300 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            >
               <Fingerprint className="h-6 w-6 text-slate-950" />
               <span className="absolute -bottom-1 -left-1 h-3 w-3 rounded-full border-2 border-sidebar bg-emerald-400" />
-            </div>
+            </button>
             <div className={cn("min-w-0", sidebarCollapsed && "md:hidden")}>
               {isEditingWorkspaceName ? (
                 <input
@@ -473,11 +477,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         <nav
-          key={sidebarCollapsed ? "sidebar-collapsed" : "sidebar-expanded"}
           aria-label="التنقل الرئيسي"
           className={cn(
-            "app-sidebar-nav flex-1 space-y-1.5 overflow-y-auto p-3",
+            "app-sidebar-nav flex-1 space-y-1.5 overflow-y-auto p-3 transition-opacity duration-200",
             sidebarCollapsed && "md:px-2",
+            sidebarCollapsed && "md:hidden",
           )}
         >
           <p
@@ -489,52 +493,19 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             القائمة الرئيسية
           </p>
           {mergedGroups.map((group) => {
-            const isOpen = openGroups.includes(group.key);
+            const isOpen = openGroups.includes(group.key) || hoveredGroup === group.key;
             const isGroupActive = group.items.some(
               (item) => pathname === item.to || pathname.startsWith(item.to + "/"),
             );
             const GroupIcon = group.icon;
             return (
-              <div key={group.key} dir="rtl" className="space-y-1">
-                <div className={cn("hidden", sidebarCollapsed && "md:block")}>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        type="button"
-                        aria-label={group.label}
-                        title={group.label}
-                        className={cn(
-                          "flex w-full items-center justify-center rounded-lg px-2 py-2.5 transition-colors",
-                          isGroupActive
-                            ? "bg-primary/10 text-primary"
-                            : "text-sidebar-foreground/65 hover:bg-muted hover:text-sidebar-foreground",
-                        )}
-                      >
-                        <GroupIcon className="h-4 w-4 shrink-0" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent side="right" align="start" className="w-56">
-                      <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      {group.items.map((item) => {
-                        const Icon = item.icon;
-                        return (
-                          <DropdownMenuItem key={item.to} asChild>
-                            <Link
-                              to={item.to as any}
-                              onClick={() => setMobileSidebarOpen(false)}
-                              className="cursor-pointer"
-                            >
-                              <Icon className="ml-2 h-4 w-4" />
-                              {item.label}
-                            </Link>
-                          </DropdownMenuItem>
-                        );
-                      })}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-                <div className={cn(sidebarCollapsed && "md:hidden")}>
+              <div
+                key={group.key}
+                dir="rtl"
+                className="space-y-1"
+                onMouseEnter={() => setHoveredGroup(group.key)}
+                onMouseLeave={() => setHoveredGroup((current) => current === group.key ? null : current)}
+              >
                   <button
                     type="button"
                     onClick={() => toggleGroup(group.key)}
@@ -557,7 +528,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       )}
                     />
                   </button>
-                </div>
                 <div
                   className={cn(
                     "grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
@@ -606,6 +576,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           className={cn(
             "border-t border-sidebar-border/80 px-4 py-3",
             sidebarCollapsed && "md:px-2",
+            sidebarCollapsed && "md:hidden",
           )}
         >
           <div
@@ -651,20 +622,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 aria-label="فتح القائمة"
               >
                 <Menu className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="hidden md:inline-flex"
-                onClick={toggleSidebar}
-                aria-label={sidebarCollapsed ? "توسيع القائمة" : "طي القائمة"}
-                title={sidebarCollapsed ? "توسيع القائمة" : "طي القائمة"}
-              >
-                {sidebarCollapsed ? (
-                  <PanelLeftOpen className="h-4 w-4" />
-                ) : (
-                  <PanelLeftClose className="h-4 w-4" />
-                )}
               </Button>
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold text-muted-foreground">
