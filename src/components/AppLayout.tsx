@@ -359,7 +359,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       return [];
     }
   });
-  const [hoveredGroup, setHoveredGroup] = useState<string | null>(null);
   useEffect(() => {
     const activeItem = nav.find(
       (item) => pathname === item.to || pathname.startsWith(item.to + "/"),
@@ -498,7 +497,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             القائمة الرئيسية
           </p>
           {mergedGroups.map((group) => {
-            const isOpen = openGroups.includes(group.key) || hoveredGroup === group.key;
+            const isOpen = openGroups.includes(group.key);
             const isGroupActive = group.items.some(
               (item) => pathname === item.to || pathname.startsWith(item.to + "/"),
             );
@@ -508,8 +507,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 key={group.key}
                 dir="rtl"
                 className="space-y-1"
-                onMouseEnter={() => setHoveredGroup(group.key)}
-                onMouseLeave={() => setHoveredGroup((current) => current === group.key ? null : current)}
               >
                   <button
                     type="button"
