@@ -36,6 +36,7 @@ import {
   ChevronDown,
   SlidersHorizontal,
   Network,
+  ShieldAlert,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -84,6 +85,7 @@ const nav = [
   { to: "/devices", label: "الأجهزة", icon: Fingerprint },
   { to: "/upload", label: "رفع ملفات البصمة", icon: Upload },
   { to: "/files", label: "سجل الملفات", icon: FileBox },
+  { to: "/safety", label: "السلامة والبلاغات", icon: ShieldAlert },
   { to: "/settings", label: "الإعدادات", icon: Settings2, access: "admin" },
   { to: "/accounts", label: "الحسابات والصلاحيات", icon: UserCog, access: "admin" },
   { to: "/system-map", label: "خريطة النظام", icon: Network, access: "admin" },
@@ -115,6 +117,7 @@ const NAV_GROUPS = [
   },
   { key: "vehicles", label: "المركبات والوقود", icon: Truck, tos: ["/vehicles", "/fuel"] },
   { key: "maintenance", label: "الصيانة", icon: Wrench, tos: ["/maintenance"] },
+  { key: "safety", label: "السلامة والبلاغات", icon: ShieldAlert, tos: ["/safety"] },
   {
     key: "projects",
     label: "المشاريع والخطط",

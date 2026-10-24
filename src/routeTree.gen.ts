@@ -32,6 +32,7 @@ import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedProjectPlansRouteImport } from './routes/_authenticated/project-plans'
 import { Route as AuthenticatedProjectsRouteImport } from './routes/_authenticated/projects'
 import { Route as AuthenticatedRequestsRouteImport } from './routes/_authenticated/requests'
+import { Route as AuthenticatedSafetyRouteImport } from './routes/_authenticated/safety'
 import { Route as AuthenticatedSelfAttendanceRouteImport } from './routes/_authenticated/self-attendance'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedShiftSchedulesRouteImport } from './routes/_authenticated/shift-schedules'
@@ -169,6 +170,11 @@ const AuthenticatedRequestsRoute = AuthenticatedRequestsRouteImport.update({
   path: '/requests',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedSafetyRoute = AuthenticatedSafetyRouteImport.update({
+  id: '/safety',
+  path: '/safety',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedSelfAttendanceRoute =
   AuthenticatedSelfAttendanceRouteImport.update({
     id: '/self-attendance',
@@ -288,6 +294,7 @@ export interface FileRoutesByFullPath {
   '/project-plans': typeof AuthenticatedProjectPlansRoute
   '/projects': typeof AuthenticatedProjectsRoute
   '/requests': typeof AuthenticatedRequestsRoute
+  '/safety': typeof AuthenticatedSafetyRoute
   '/self-attendance': typeof AuthenticatedSelfAttendanceRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/shift-schedules': typeof AuthenticatedShiftSchedulesRoute
@@ -330,6 +337,7 @@ export interface FileRoutesByTo {
   '/project-plans': typeof AuthenticatedProjectPlansRoute
   '/projects': typeof AuthenticatedProjectsRoute
   '/requests': typeof AuthenticatedRequestsRoute
+  '/safety': typeof AuthenticatedSafetyRoute
   '/self-attendance': typeof AuthenticatedSelfAttendanceRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/shift-schedules': typeof AuthenticatedShiftSchedulesRoute
@@ -374,6 +382,7 @@ export interface FileRoutesById {
   '/_authenticated/project-plans': typeof AuthenticatedProjectPlansRoute
   '/_authenticated/projects': typeof AuthenticatedProjectsRoute
   '/_authenticated/requests': typeof AuthenticatedRequestsRoute
+  '/_authenticated/safety': typeof AuthenticatedSafetyRoute
   '/_authenticated/self-attendance': typeof AuthenticatedSelfAttendanceRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/shift-schedules': typeof AuthenticatedShiftSchedulesRoute
@@ -418,6 +427,7 @@ export interface FileRouteTypes {
     | '/project-plans'
     | '/projects'
     | '/requests'
+    | '/safety'
     | '/self-attendance'
     | '/settings'
     | '/shift-schedules'
@@ -460,6 +470,7 @@ export interface FileRouteTypes {
     | '/project-plans'
     | '/projects'
     | '/requests'
+    | '/safety'
     | '/self-attendance'
     | '/settings'
     | '/shift-schedules'
@@ -503,6 +514,7 @@ export interface FileRouteTypes {
     | '/_authenticated/project-plans'
     | '/_authenticated/projects'
     | '/_authenticated/requests'
+    | '/_authenticated/safety'
     | '/_authenticated/self-attendance'
     | '/_authenticated/settings'
     | '/_authenticated/shift-schedules'
@@ -696,6 +708,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRequestsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/safety': {
+      id: '/_authenticated/safety'
+      path: '/safety'
+      fullPath: '/safety'
+      preLoaderRoute: typeof AuthenticatedSafetyRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/self-attendance': {
       id: '/_authenticated/self-attendance'
       path: '/self-attendance'
@@ -861,6 +880,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedProjectPlansRoute: typeof AuthenticatedProjectPlansRoute
   AuthenticatedProjectsRoute: typeof AuthenticatedProjectsRoute
   AuthenticatedRequestsRoute: typeof AuthenticatedRequestsRoute
+  AuthenticatedSafetyRoute: typeof AuthenticatedSafetyRoute
   AuthenticatedSelfAttendanceRoute: typeof AuthenticatedSelfAttendanceRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedShiftSchedulesRoute: typeof AuthenticatedShiftSchedulesRoute
@@ -897,6 +917,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedProjectPlansRoute: AuthenticatedProjectPlansRoute,
   AuthenticatedProjectsRoute: AuthenticatedProjectsRoute,
   AuthenticatedRequestsRoute: AuthenticatedRequestsRoute,
+  AuthenticatedSafetyRoute: AuthenticatedSafetyRoute,
   AuthenticatedSelfAttendanceRoute: AuthenticatedSelfAttendanceRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedShiftSchedulesRoute: AuthenticatedShiftSchedulesRoute,
