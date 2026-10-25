@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { matchZktecoPins, unmatchedZktecoPinMessage } from "@/lib/zkteco-employee-matching";
 
 async function requireAdmin(supabase: any, userId: string) {
   const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", userId).eq("role", "admin").maybeSingle();
@@ -116,4 +117,135 @@ export const revokeZktecoSyncKey = createServerFn({ method: "POST" })
       .update({ revoked_at: new Date().toISOString() }).eq("device_id", data.device_id).is("revoked_at", null);
     if (error) throw new Error(error.message);
     return { success: true };
+  });
+
+export const reprocessZktecoSyncRecords = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => z.object({ device_id: z.string().uuid().optional() }).strict().parse(data))
+  .handler(async ({ data, context }) => {
+    const { data: role, error: roleError } = await context.supabase.from("user_roles").select("role")
+      .eq("user_id", context.userId).in("role", ["admin", "hr"]).limit(1).maybeSingle();
+    if (roleError) throw new Error(roleError.message);
+    if (!role) throw new Error("غير مصرح: إعادة المعالجة متاحة لمدير النظام والموارد البشرية فقط");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin = supabaseAdmin as any;
+    const records: any[] = [];
+    for (let offset = 0; ; offset += 500) {
+      let query = admin.from("device_sync_records")
+        .select("id, sync_batch_id, device_id, user_pin, employee_no, employee_id, verify_time, verify_type, status, external_log_id, processing_status")
+        .in("processing_status", ["pending", "error", "unmatched"])
+        .order("created_at", { ascending: true }).order("id", { ascending: true })
+        .range(offset, offset + 499);
+      if (data.device_id) query = query.eq("device_id", data.device_id);
+      const { data: page, error } = await query;
+      if (error) throw new Error(error.message);
+      records.push(...(page ?? []));
+      if ((page ?? []).length < 500) break;
+      if (records.length >= 10_000) throw new Error("تجاوزت السجلات غير المعالجة 10,000 حركة؛ اختر جهازاً محدداً ثم أعد المحاولة");
+    }
+    if (!records.length) return { processed: 0, inserted: 0, duplicates: 0, unmatched: 0 };
+
+    const pins = [...new Set(records.map((record) => String(record.user_pin ?? "").trim()).filter(Boolean))];
+    const employeeByPin = await matchZktecoPins(admin, pins);
+    const candidates = new Map<string, { record: any; employee: { id: string; employee_no: string } }>();
+    const recordKey = (employeeNo: string, verifyTime: string) => `${employeeNo}|${Date.parse(verifyTime)}`;
+    for (const record of records) {
+      const employee = employeeByPin.get(String(record.user_pin ?? "").trim());
+      if (!employee) continue;
+      const key = recordKey(employee.employee_no, record.verify_time);
+      if (!candidates.has(key)) candidates.set(key, { record, employee });
+    }
+
+    const insertedKeys = new Set<string>();
+    const candidateEntries = [...candidates.entries()];
+    for (let offset = 0; offset < candidateEntries.length; offset += 500) {
+      const items = candidateEntries.slice(offset, offset + 500);
+      const { data: insertedRows, error } = await admin.from("attendance_logs").upsert(items.map(([_, item]) => ({
+        employee_no: item.employee.employee_no,
+        employee_id: item.employee.id,
+        device_id: item.record.device_id,
+        upload_id: null,
+        verify_time: new Date(item.record.verify_time).toISOString(),
+        verify_type: item.record.verify_type ?? 0,
+        status: item.record.status ?? null,
+        external_log_id: item.record.external_log_id ?? null,
+        source: "zk_agent",
+      })), { onConflict: "employee_no,verify_time", ignoreDuplicates: true })
+        .select("employee_no, verify_time");
+      if (error) throw new Error(error.message);
+      for (const row of insertedRows ?? []) insertedKeys.add(recordKey(row.employee_no, row.verify_time));
+    }
+
+    const updates = records.map((record) => {
+      const employee = employeeByPin.get(String(record.user_pin ?? "").trim());
+      if (!employee) return { ...record, processing_status: "unmatched", error_message: unmatchedZktecoPinMessage(String(record.user_pin ?? "")) };
+      const key = recordKey(employee.employee_no, record.verify_time);
+      const candidate = candidates.get(key);
+      const inserted = candidate?.record.id === record.id && insertedKeys.has(key);
+      return { ...record, employee_no: employee.employee_no, employee_id: employee.id,
+        processing_status: inserted ? "inserted" : "duplicate", error_message: null };
+    });
+    for (let offset = 0; offset < updates.length; offset += 500) {
+      const { error } = await admin.from("device_sync_records").upsert(updates.slice(offset, offset + 500), { onConflict: "id" });
+      if (error) throw new Error(error.message);
+    }
+
+    const batchDeltas = new Map<string, { inserted: number; duplicate: number; unmatched: number; error: number }>();
+    const deviceInserts = new Map<string, number>();
+    const previousStatusById = new Map(records.map((record) => [record.id, record.processing_status]));
+    for (const update of updates) {
+      const delta = batchDeltas.get(update.sync_batch_id) ?? { inserted: 0, duplicate: 0, unmatched: 0, error: 0 };
+      if (update.processing_status === "inserted") delta.inserted++;
+      else if (update.processing_status === "duplicate") delta.duplicate++;
+      else delta.unmatched++;
+      const previous = previousStatusById.get(update.id);
+      if (previous === "error") delta.error--;
+      if (previous === "unmatched" && update.processing_status !== "unmatched") delta.unmatched--;
+      batchDeltas.set(update.sync_batch_id, delta);
+      if (update.processing_status === "inserted") deviceInserts.set(update.device_id, (deviceInserts.get(update.device_id) ?? 0) + 1);
+    }
+
+    const batchIds = [...batchDeltas.keys()];
+    for (let offset = 0; offset < batchIds.length; offset += 500) {
+      const ids = batchIds.slice(offset, offset + 500);
+      const { data: batches, error } = await admin.from("sync_batches")
+        .select("id, inserted_count, duplicate_count, unmatched_count, error_count")
+        .in("id", ids);
+      if (error) throw new Error(error.message);
+      for (const batch of batches ?? []) {
+        const delta = batchDeltas.get(batch.id)!;
+        const errorCount = Math.max(0, Number(batch.error_count ?? 0) + delta.error);
+        const { error: updateError } = await admin.from("sync_batches").update({
+          inserted_count: Number(batch.inserted_count ?? 0) + delta.inserted,
+          duplicate_count: Number(batch.duplicate_count ?? 0) + delta.duplicate,
+          unmatched_count: Math.max(0, Number(batch.unmatched_count ?? 0) + delta.unmatched),
+          error_count: errorCount,
+          ...(errorCount === 0 ? { error_details: [] } : {}),
+        }).eq("id", batch.id);
+        if (updateError) throw new Error(updateError.message);
+      }
+    }
+
+    const deviceIds = [...deviceInserts.keys()];
+    if (deviceIds.length) {
+      const { data: deviceRows, error } = await admin.from("devices").select("id, auto_synced_logs_total").in("id", deviceIds);
+      if (error) throw new Error(error.message);
+      for (const device of deviceRows ?? []) {
+        const now = new Date().toISOString();
+        const { error: updateError } = await admin.from("devices").update({
+          auto_synced_logs_total: Number(device.auto_synced_logs_total ?? 0) + (deviceInserts.get(device.id) ?? 0),
+          last_sync_at: now,
+          auto_last_sync_at: now,
+        }).eq("id", device.id);
+        if (updateError) throw new Error(updateError.message);
+      }
+    }
+
+    return {
+      processed: records.length,
+      inserted: updates.filter((record) => record.processing_status === "inserted").length,
+      duplicates: updates.filter((record) => record.processing_status === "duplicate").length,
+      unmatched: updates.filter((record) => record.processing_status === "unmatched").length,
+    };
   });

@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
+import { matchZktecoPins, unmatchedZktecoPinMessage } from "@/lib/zkteco-employee-matching";
 
 const schema = z.object({
   serial: z.string().trim().min(1).max(64),
@@ -35,7 +36,6 @@ function describeIngestionError(error: unknown): string {
   const hint = typeof value.hint === "string" ? ` — Hint: ${value.hint}` : "";
   return `${code}${message}${details}${hint}`.replace(/\s+/g, " ").slice(0, 700) || "Unknown ingestion error";
 }
-
 export const Route = createFileRoute("/api/public/zk-sync")({
   server: { handlers: { POST: async ({ request }) => {
     const secret = request.headers.get("X-Device-Key") ?? "";
@@ -84,41 +84,7 @@ export const Route = createFileRoute("/api/public/zk-sync")({
       }
 
       const pins = [...new Set(payload.logs.map((log) => log.user_pin))];
-      const byEmployeeNo = new Map<string, { id: string; employee_no: string; attendance_device_id: string | null }>();
-      const byDeviceId = new Map<string, { id: string; employee_no: string; attendance_device_id: string | null }>();
-      const ambiguousDeviceIds = new Set<string>();
-      let hasAttendanceDeviceId = true;
-      for (let i = 0; i < pins.length; i += 500) {
-        const chunk = pins.slice(i, i + 500);
-        const { data: numberMatches, error: numberError } = await admin.from("employees")
-          .select("id, employee_no").in("employee_no", chunk);
-        if (numberError) throw numberError;
-        for (const row of numberMatches ?? []) byEmployeeNo.set(row.employee_no, { ...row, attendance_device_id: null });
-        if (hasAttendanceDeviceId) {
-          const { data: deviceMatches, error: deviceError } = await admin.from("employees")
-            .select("id, employee_no, attendance_device_id").in("attendance_device_id", chunk);
-          if (deviceError) {
-            const missingOptionalColumn = deviceError.code === "PGRST204" || deviceError.code === "42703" ||
-              /attendance_device_id.*(schema cache|does not exist|not found)|column .*attendance_device_id/i.test(deviceError.message ?? "");
-            if (!missingOptionalColumn) throw deviceError;
-            hasAttendanceDeviceId = false;
-            console.warn("[ZKTeco sync] employees.attendance_device_id is not available; matching attendance by employee_no only.");
-            continue;
-          }
-          for (const row of deviceMatches ?? []) {
-            const pin = String(row.attendance_device_id ?? "").trim();
-            const previous = byDeviceId.get(pin);
-            if (previous && previous.id !== row.id) ambiguousDeviceIds.add(pin);
-            else byDeviceId.set(pin, row);
-          }
-        }
-      }
-      const employeeByPin = new Map<string, { id: string; employee_no: string }>();
-      for (const pin of pins) {
-        if (ambiguousDeviceIds.has(pin)) continue;
-        const employee = byDeviceId.get(pin) ?? byEmployeeNo.get(pin);
-        if (employee) employeeByPin.set(pin, employee);
-      }
+      const employeeByPin = await matchZktecoPins(admin, pins);
       const unmatched = payload.logs.filter((log) => !employeeByPin.has(log.user_pin)).length;
       const logRows = payload.logs.flatMap((log, index) => {
         const employee = employeeByPin.get(log.user_pin);
@@ -163,7 +129,7 @@ export const Route = createFileRoute("/api/public/zk-sync")({
       const updates = payload.logs.map((log, index) => {
         const employee = employeeByPin.get(log.user_pin);
         const rawRecord = rawRecords[index];
-        if (!employee) return { ...rawRecord, processing_status: "unmatched", error_message: "رقم المستخدم في الجهاز غير مرتبط بموظف" };
+        if (!employee) return { ...rawRecord, processing_status: "unmatched", error_message: unmatchedZktecoPinMessage(log.user_pin) };
         const row = logRowByRecordId.get(syncRecordIds[index])!;
         const isInserted = !duplicateInputIds.has(syncRecordIds[index]) && insertedLogKeys.has(logKey(row));
         return { ...rawRecord, employee_no: employee.employee_no, employee_id: employee.id, processing_status: isInserted ? "inserted" : "duplicate", error_message: null };

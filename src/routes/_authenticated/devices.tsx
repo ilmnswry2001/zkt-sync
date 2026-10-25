@@ -2,7 +2,7 @@ import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { createZktecoSyncKey, getZktecoSyncStatus, requestZktecoSync, revokeZktecoSyncKey } from "@/lib/zkteco-sync.functions";
+import { createZktecoSyncKey, getZktecoSyncStatus, requestZktecoSync, revokeZktecoSyncKey, reprocessZktecoSyncRecords } from "@/lib/zkteco-sync.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -387,6 +387,7 @@ function DevicesPage() {
 
 type SyncRecordStatus = "all" | "inserted" | "duplicate" | "unmatched" | "unprocessed";
 function DeviceSyncRecords({ devices, canView }: { devices: Device[]; canView: boolean }) {
+  const qc = useQueryClient();
   const [status, setStatus] = useState<SyncRecordStatus>("all");
   const [deviceId, setDeviceId] = useState("all");
   const [search, setSearch] = useState("");
@@ -397,6 +398,14 @@ function DeviceSyncRecords({ devices, canView }: { devices: Device[]; canView: b
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(0);
   const pageSize = 50;
+  const reprocess = useMutation({
+    mutationFn: () => reprocessZktecoSyncRecords({ data: deviceId === "all" ? {} : { device_id: deviceId } }),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ["device-sync-records"] });
+      toast.success(`اكتملت إعادة المعالجة: ${result.inserted} مسجلة، ${result.duplicates} مكررة، ${result.unmatched} غير مطابقة`);
+    },
+    onError: (error: Error) => toast.error(formatErrorMessage(error)),
+  });
   const query = useQuery({
     queryKey: ["device-sync-records", status, deviceId, search, externalId, verifyType, deviceStatus, dateFrom, dateTo, page],
     enabled: canView,
@@ -407,7 +416,7 @@ function DeviceSyncRecords({ devices, canView }: { devices: Device[]; canView: b
         .select("id, device_id, user_pin, employee_no, employee_id, verify_time, verify_type, status, external_log_id, processing_status, error_message, sync_batch_id, employee:employees(full_name), device:devices(name), batch:sync_batches(received_at)", { count: "exact" })
         .order("verify_time", { ascending: false });
       if (deviceId !== "all") request = request.eq("device_id", deviceId);
-      if (status === "unprocessed") request = request.in("processing_status", ["pending", "error"]);
+      if (status === "unprocessed") request = request.in("processing_status", ["pending", "error", "unmatched"]);
       else if (status !== "all") request = request.eq("processing_status", status);
       const term = search.trim().replace(/[,()%\\]/g, " ");
       if (term) request = request.or(`user_pin.ilike.%${term}%,employee_no.ilike.%${term}%`);
@@ -431,7 +440,14 @@ function DeviceSyncRecords({ devices, canView }: { devices: Device[]; canView: b
   const statusLabel = (value: string) => ({ inserted: "مسجلة", duplicate: "مكررة", unmatched: "رقم غير معرف", pending: "قيد المعالجة", error: "خطأ" }[value] ?? value);
 
   return <Card>
-    <CardHeader><CardTitle>سجلات التحقق من حركات الأجهزة</CardTitle><p className="text-sm text-muted-foreground">تفاصيل كل حركة مرفوعة، ونتيجة مطابقتها بالموظف وسجل الحضور. تبدأ التفاصيل من أول مزامنة بعد تطبيق تحديث النظام وترحيل قاعدة البيانات؛ الدفعات السابقة تحتفظ بإجمالياتها فقط.</p></CardHeader>
+    <CardHeader className="flex flex-row items-start justify-between gap-4">
+      <div className="space-y-1"><CardTitle>سجلات التحقق من حركات الأجهزة</CardTitle><p className="text-sm text-muted-foreground">تفاصيل كل حركة مرفوعة، ونتيجة مطابقتها بالموظف وسجل الحضور. تبدأ التفاصيل من أول مزامنة بعد تطبيق تحديث النظام وترحيل قاعدة البيانات؛ الدفعات السابقة تحتفظ بإجمالياتها فقط.</p></div>
+      {canView && <Button type="button" variant="outline" disabled={reprocess.isPending} onClick={() => {
+        if (confirm("ستعاد مطابقة الحركات غير المعالجة والأخطاء والأرقام غير المعرفة باستخدام أرقام أجهزة البصمة والرقم الوظيفي الحالية. سيتم تجاهل الحركات المكررة. متابعة؟")) reprocess.mutate();
+      }}>
+        <RefreshCw className={`ml-2 h-4 w-4 ${reprocess.isPending ? "animate-spin" : ""}`} /> {reprocess.isPending ? "جارٍ إعادة المعالجة…" : "إعادة معالجة الحركات"}
+      </Button>}
+    </CardHeader>
     <CardContent className="space-y-4">
       {!canView ? <p className="text-sm text-muted-foreground">هذا السجل متاح لمدير النظام والموارد البشرية فقط.</p> : <>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
