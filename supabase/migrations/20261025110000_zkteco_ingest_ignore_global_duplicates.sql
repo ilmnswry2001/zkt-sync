@@ -1,0 +1,52 @@
+-- Attendance logs have a global employee/time uniqueness constraint, so this
+-- ingestion path must ignore conflicts from every source, not only ZKTeco rows.
+CREATE OR REPLACE FUNCTION public.ingest_zkteco_sync(p_device_id uuid, p_site_id uuid, p_logs jsonb)
+RETURNS TABLE(inserted_count bigint, unmatched_count bigint)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE
+  v_inserted bigint := 0;
+  v_unmatched bigint := 0;
+BEGIN
+  IF jsonb_typeof(p_logs) <> 'array' THEN
+    RAISE EXCEPTION 'logs must be a JSON array';
+  END IF;
+
+  SELECT count(*) INTO v_unmatched
+  FROM (SELECT DISTINCT value->>'employee_no' AS employee_no FROM jsonb_array_elements(p_logs)) incoming
+  LEFT JOIN public.employees e ON e.employee_no = incoming.employee_no
+  WHERE e.id IS NULL;
+
+  INSERT INTO public.attendance_logs (
+    employee_no, employee_id, device_id, upload_id, verify_time, verify_type, status, source, self_event_type, device_info
+  )
+  SELECT
+    incoming_log.value->>'employee_no', e.id, p_device_id, NULL,
+    (incoming_log.value->>'timestamp')::timestamptz,
+    coalesce((incoming_log.value->>'verify_type')::integer, 0),
+    coalesce((incoming_log.value->>'status')::integer, 0),
+    'zkteco_auto_agent', incoming_log.value->>'punch_type',
+    CASE WHEN p_site_id IS NULL THEN NULL ELSE jsonb_build_object('site_id', p_site_id) END
+  FROM jsonb_array_elements(p_logs) AS incoming_log(value)
+  LEFT JOIN public.employees e ON e.employee_no = incoming_log.value->>'employee_no'
+  WHERE NOT EXISTS (
+    SELECT 1
+    FROM public.attendance_logs existing
+    WHERE existing.employee_no = incoming_log.value->>'employee_no'
+      AND date_trunc('second', existing.verify_time) = date_trunc('second', (incoming_log.value->>'timestamp')::timestamptz)
+  )
+  ON CONFLICT DO NOTHING;
+  GET DIAGNOSTICS v_inserted = ROW_COUNT;
+
+  UPDATE public.devices
+  SET auto_last_sync_at = now(),
+      last_sync_at = now(),
+      auto_synced_logs_total = auto_synced_logs_total + v_inserted
+  WHERE id = p_device_id;
+
+  RETURN QUERY SELECT v_inserted, v_unmatched;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.ingest_zkteco_sync(uuid, uuid, jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.ingest_zkteco_sync(uuid, uuid, jsonb) TO service_role;

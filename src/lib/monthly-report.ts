@@ -49,8 +49,12 @@ export function summarizeAttendancePunches(
     : ordered.length >= 2 ? [[ordered[0].verify_time, ordered.at(-1)!.verify_time] as [string, string]] : [];
   const breakPairs = hasStructuredEvents ? pairs("break_out", "break_in") : [];
   const overtimePairs = hasStructuredEvents ? pairs("overtime_in", "overtime_out") : [];
-  const checkIn = attendancePairs[0]?.[0] ?? null;
-  const checkOut = attendancePairs.at(-1)?.[1] ?? null;
+  const checkIn = hasStructuredEvents
+    ? events.find(({ type }) => type === "in")?.punch.verify_time ?? null
+    : ordered[0]?.verify_time ?? null;
+  const checkOut = hasStructuredEvents
+    ? [...events].reverse().find(({ type }) => type === "out")?.punch.verify_time ?? null
+    : ordered.length > 1 ? ordered.at(-1)!.verify_time : null;
   const overlapHours = (start: string, end: string, intervalStart: string, intervalEnd: string) =>
     Math.max(0, Math.min(Date.parse(end), Date.parse(intervalEnd)) - Math.max(Date.parse(start), Date.parse(intervalStart))) / 3600000;
   let hours = attendancePairs.reduce((sum, [start, end]) => sum + (Date.parse(end) - Date.parse(start)) / 3600000, 0);
@@ -63,7 +67,7 @@ export function summarizeAttendancePunches(
     const billableStart = shiftEndAt ? Math.max(Date.parse(start), Date.parse(shiftEndAt)) : Date.parse(start);
     return sum + Math.max(0, Date.parse(end) - billableStart) / 3600000;
   }, 0);
-  if (!overtimePairs.length && checkOut && shiftEndAt) {
+  if (attendancePairs.length && !overtimePairs.length && checkOut && shiftEndAt) {
     overtime = Math.max(0, (Date.parse(checkOut) - Date.parse(shiftEndAt)) / 3600000 - Math.max(0, graceMinutes) / 60);
   }
   return {

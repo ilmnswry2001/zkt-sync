@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
+import { matchZktecoPins } from "@/lib/zkteco-employee-matching";
 
 const payloadSchema = z.object({
   device_sn: z.string().trim().min(1).max(64),
@@ -62,17 +63,22 @@ export const Route = createFileRoute("/api/public/zkteco-sync")({
             if (!site) return json({ error: "Unknown site_id" }, 422);
           }
 
-          const logs = payload.logs.map((log) => {
+          const pins = [...new Set(payload.logs.map((log) => log.employee_no))];
+          const employeeByPin = await matchZktecoPins(supabaseAdmin as any, pins);
+          const unmatchedPins = payload.logs.filter((log) => !employeeByPin.has(log.employee_no)).length;
+          const logs = payload.logs.flatMap((log) => {
+            const employee = employeeByPin.get(log.employee_no);
+            if (!employee) return [];
             const date = new Date(log.timestamp);
             date.setUTCMilliseconds(0);
             const verifyTypes: Record<string, number> = { fingerprint: 1, face: 15, card: 2, pin: 0, password: 0, unknown: 0 };
-            return {
-              employee_no: log.employee_no,
+            return [{
+              employee_no: employee.employee_no,
               timestamp: date.toISOString(),
               punch_type: log.punch_type,
               verify_type: verifyTypes[log.verify_mode ?? "unknown"],
               status: log.status ?? 0,
-            };
+            }];
           });
           const { data, error } = await (supabaseAdmin as any).rpc("ingest_zkteco_sync", {
             p_device_id: device.id, p_site_id: payload.site_id ?? null, p_logs: logs,
@@ -81,9 +87,9 @@ export const Route = createFileRoute("/api/public/zkteco-sync")({
           const result = Array.isArray(data) ? data[0] : data;
           return json({
             success: true,
-            received: logs.length,
+            received: payload.logs.length,
             inserted: Number(result?.inserted_count ?? 0),
-            unmatched: Number(result?.unmatched_count ?? 0),
+            unmatched: unmatchedPins + Number(result?.unmatched_count ?? 0),
             synced_at: new Date().toISOString(),
           });
         } catch (error) {

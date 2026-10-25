@@ -57,19 +57,43 @@ test("merged punches use first entry and last exit, and manual status takes prec
   assert.equal(days[0].status, "leave");
   assert.equal(days[0].manual, true);
   assert.equal(days[0].notes, "إجازة معتمدة");
-  assert.equal(days[1].status, "present");
+  assert.equal(days[1].status, "incomplete");
+  assert.equal(days[1].check_in, "2026-09-02T09:00:00Z");
   assert.equal(days[1].check_out, null);
   assert.equal(days[1].hours, 0);
   assert.equal(days[2].status, "absent");
   assert.deepEqual(summarizeDays(days), {
-    presentDays: 1,
+    presentDays: 0,
     absentDays: 1,
     leaveDays: 1,
+    unpaidLeaveDays: 0,
     holidayDays: 0,
     totalHours: 9.5,
     totalOvertimeHours: 1.5,
     workDays: 3,
   });
+});
+
+test("a single device punch shows its recorded time but remains incomplete", () => {
+  const days = buildAttendanceDays(
+    ["2026-09-01", "2026-09-02"],
+    [
+      { verify_time: "2026-09-01T08:17:00Z", status: 0, source: "zk_agent" },
+      { verify_time: "2026-09-02T16:42:00Z", status: 1, source: "zk_agent" },
+    ],
+    [],
+    "16:00:00",
+    "2026-09-02",
+  );
+
+  assert.equal(days[0].check_in, "2026-09-01T08:17:00Z");
+  assert.equal(days[0].check_out, null);
+  assert.equal(days[0].hours, 0);
+  assert.equal(days[0].status, "incomplete");
+  assert.equal(days[1].check_in, null);
+  assert.equal(days[1].check_out, "2026-09-02T16:42:00Z");
+  assert.equal(days[1].hours, 0);
+  assert.equal(days[1].status, "incomplete");
 });
 
 test("future days remain blank, while planned leave and rest remain visible", () => {
@@ -106,7 +130,8 @@ test("removing a manual override restores the punch-derived status", () => {
   );
   const automatic = buildAttendanceDays(dates, logs, [], null, dates[0]);
   assert.equal(manual[0].status, "absent");
-  assert.equal(automatic[0].status, "present");
+  assert.equal(automatic[0].status, "incomplete");
+  assert.equal(automatic[0].check_in, "2026-09-01T08:00:00Z");
   assert.equal(automatic[0].manual, false);
 });
 
@@ -117,7 +142,7 @@ test("chart counts the supplied filtered employees, including employees with no 
   };
   const absent = { days: buildAttendanceDays(dates, [], [], null, dates[1]) };
   assert.deepEqual(dailyTotals(dates, [present, absent], dates[1]), [
-    { date: dates[0], present: 1, absent: 1, leave: 0 },
+    { date: dates[0], present: 0, absent: 1, leave: 0 },
     { date: dates[1], present: 0, absent: 2, leave: 0 },
   ]);
   assert.equal(dailyTotals(dates, [present], dates[1])[0].absent, 0);

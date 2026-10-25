@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { summarizeAttendancePunches } from "./monthly-report";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { matchZktecoPins } from "@/lib/zkteco-employee-matching";
 import { z } from "zod";
 
 const ingestSchema = z.object({
@@ -47,52 +48,25 @@ export const ingestZkData = createServerFn({ method: "POST" })
       .eq("id", data.upload_id);
 
     try {
-      // ملفات البصمة تُستخدم للحضور فقط: لا يتم إنشاء أو تعديل بيانات الموظفين أو الأقسام.
-      // ربط رقم جهاز البصمة أولاً، ثم الرقم الوظيفي كتوافق مع السجلات القديمة.
+      // Attendance Device ID is the only supported mapping for device punches.
       const pins = [...new Set(data.logs.map((l) => l.user_pin))];
-      const empByNo = new Map<string, { id: string; employee_no: string; attendance_device_id: string | null }>();
-      const empByDevicePin = new Map<string, { id: string; employee_no: string; attendance_device_id: string | null }>();
-      const ambiguousDevicePins = new Set<string>();
-      for (let i = 0; i < pins.length; i += 500) {
-        const chunk = pins.slice(i, i + 500);
-        const { data: numberRows, error: numberError } = await supabase
-          .from("employees")
-          .select("id, employee_no, attendance_device_id")
-          .in("employee_no", chunk);
-        if (numberError) throw numberError;
-        const { data: deviceRows, error: deviceError } = await supabase
-          .from("employees")
-          .select("id, employee_no, attendance_device_id")
-          .in("attendance_device_id", chunk);
-        if (deviceError) throw deviceError;
-        numberRows?.forEach((row) => empByNo.set(row.employee_no, row));
-        deviceRows?.forEach((row) => {
-          const pin = String(row.attendance_device_id ?? "").trim();
-          const previous = empByDevicePin.get(pin);
-          if (previous && previous.id !== row.id) ambiguousDevicePins.add(pin);
-          else empByDevicePin.set(pin, row);
-        });
-      }
-      const empByPin = new Map<string, { id: string; employee_no: string }>();
-      for (const pin of pins) {
-        if (ambiguousDevicePins.has(pin)) continue;
-        const employee = empByDevicePin.get(pin) ?? empByNo.get(pin);
-        if (employee) empByPin.set(pin, employee);
-      }
+      const empByPin = await matchZktecoPins(supabase, pins);
       const unmatched = pins.filter((pin) => !empByPin.has(pin)).length;
 
       // إدراج سجلات البصمة (تجاهل المكرر)
-      const logRows = data.logs.map((l) => {
-        return {
-          employee_no: empByPin.get(l.user_pin)?.employee_no ?? l.user_pin,
-          employee_id: empByPin.get(l.user_pin)?.id ?? null,
+      const logRows = data.logs.flatMap((l) => {
+        const employee = empByPin.get(l.user_pin);
+        if (!employee) return [];
+        return [{
+          employee_no: employee.employee_no,
+          employee_id: employee.id,
           device_id: data.device_id,
           upload_id: data.upload_id,
           verify_time: normalizeVerifyTime(l.verify_time),
           verify_type: l.verify_type,
           status: l.status,
           external_log_id: l.external_id,
-        };
+        }];
       });
 
       let inserted = 0;
