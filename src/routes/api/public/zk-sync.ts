@@ -145,22 +145,17 @@ export const Route = createFileRoute("/api/public/zk-sync")({
       const insertedLogKeys = new Set<string>();
       for (let i = 0; i < uniqueLogRows.length; i += 500) {
         const chunk = uniqueLogRows.slice(i, i + 500);
-        const { data: existing, error: existingError } = await admin.from("attendance_logs")
-          .select("employee_no, verify_time, device_id")
-          .eq("device_id", device.id)
-          .in("verify_time", [...new Set(chunk.map((row) => row.verify_time))]);
-        if (existingError) throw existingError;
-        const existingKeys = new Set((existing ?? []).map(logKey));
         const { data, error } = await admin.from("attendance_logs")
-          .upsert(chunk.map(({ sync_record_id: _syncRecordId, ...row }) => row), { onConflict: "employee_no,verify_time,device_id" })
+          .upsert(chunk.map(({ sync_record_id: _syncRecordId, ...row }) => row), {
+            onConflict: "employee_no,verify_time",
+            ignoreDuplicates: true,
+          })
           .select("employee_no, verify_time, device_id");
         if (error) throw error;
         for (const row of data ?? []) {
           const key = logKey(row);
-          if (!existingKeys.has(key)) {
-            inserted++;
-            insertedLogKeys.add(key);
-          }
+          inserted++;
+          insertedLogKeys.add(key);
         }
       }
       const duplicates = logRows.length - inserted;
