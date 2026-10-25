@@ -86,10 +86,13 @@ function DevicesPage() {
   };
 
   const downloadMultiDeviceAgent = (agents: { id: string; name: string; ip_address: string; serial: string; device_key: string }[]) => {
+    const syncOrigin = window.location.hostname.startsWith("id-preview--")
+      ? "https://zkt-sync.lovable.app"
+      : window.location.origin;
     const configs = agents.map((device) => ({
       ...device,
       device_ip: device.ip_address,
-      sync_url: `${window.location.origin}/api/public/zk-sync`,
+      sync_url: `${syncOrigin}/api/public/zk-sync`,
       device_port: 4370,
       device_password: 0,
     }));
