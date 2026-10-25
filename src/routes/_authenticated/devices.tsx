@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import agentScript from "../../../scripts/agent.py?raw";
 import agentRequirements from "../../../scripts/requirements.txt?raw";
 import agentInstaller from "../../../scripts/install_agent_background.ps1?raw";
+import multiAgentTemplate from "../../../scripts/multi_agent_bundle.py?raw";
 
 export const Route = createFileRoute("/_authenticated/devices")({
   head: () => ({ meta: [{ title: "الأجهزة" }] }),
@@ -71,6 +72,56 @@ function DevicesPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["zkteco-sync-status"] });
       toast.success("أرسلنا طلب السحب إلى الوكيل. ستظهر النتيجة هنا عند اكتماله.");
+    },
+    onError: (error: Error) => toast.error(formatErrorMessage(error)),
+  });
+
+  const encodeBase64 = (value: string) => {
+    const bytes = new TextEncoder().encode(value);
+    let binary = "";
+    for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+    }
+    return btoa(binary);
+  };
+
+  const downloadMultiDeviceAgent = (agents: { id: string; name: string; ip_address: string; serial: string; device_key: string }[]) => {
+    const configs = agents.map((device) => ({
+      ...device,
+      device_ip: device.ip_address,
+      sync_url: `${window.location.origin}/api/public/zk-sync`,
+      device_port: 4370,
+      device_password: 0,
+    }));
+    const source = multiAgentTemplate
+      .replace("__DEVICE_CONFIGS_B64__", encodeBase64(JSON.stringify(configs)))
+      .replace("__AGENT_SOURCE_B64__", encodeBase64(agentScript));
+    downloadTextFile("zkteco_multi_agent.py", source, "text/x-python;charset=utf-8");
+  };
+
+  const downloadAllAgents = useMutation({
+    mutationFn: async () => {
+      const eligible = devices.filter((device) => device.status === "active" && device.serial_number && device.ip_address);
+      if (!eligible.length) throw new Error("لا توجد أجهزة نشطة مكتملة الاسم التسلسلي وعنوان IP");
+      const agents: { id: string; name: string; ip_address: string; serial: string; device_key: string }[] = [];
+      const failed: string[] = [];
+      for (const device of eligible) {
+        try {
+          const result = await createZktecoSyncKey({ data: { device_id: device.id } });
+          agents.push({ id: device.id, name: device.name, ip_address: device.ip_address!, serial: result.device_sn, device_key: result.key });
+        } catch {
+          failed.push(device.name);
+        }
+      }
+      if (!agents.length) throw new Error("تعذر إنشاء مفاتيح ربط الأجهزة");
+      return { agents, failed, excluded: devices.length - eligible.length };
+    },
+    onSuccess: ({ agents, failed, excluded }) => {
+      downloadMultiDeviceAgent(agents);
+      setCreatedKey(null);
+      qc.invalidateQueries({ queryKey: ["zkteco-sync-status"] });
+      const skipped = failed.length + excluded;
+      toast.success(`تم تنزيل الوكيل لـ ${agents.length} جهاز${skipped ? `؛ تم تجاوز ${skipped} جهاز` : ""}`);
     },
     onError: (error: Error) => toast.error(formatErrorMessage(error)),
   });
@@ -199,6 +250,11 @@ function DevicesPage() {
         <CardContent className="space-y-3 text-sm">
           <p>ضع ملفات الوكيل والإعدادات في مجلد ثابت على حاسوب متصل بشبكة جهاز البصمة والإنترنت، ثم شغّل مثبت الخلفية مرة واحدة. بعد تشغيل الوكيل، استخدم «سحب الآن» بجانب الجهاز لطلب قراءة السجلات دون أوامر يدوية.</p>
           <div className="flex flex-wrap gap-x-5 gap-y-2">
+            {isAdmin && <Button type="button" variant="outline" disabled={downloadAllAgents.isPending || createKey.isPending || !devices.some((device) => device.status === "active" && device.serial_number && device.ip_address)} onClick={() => {
+              if (confirm("سيتم تدوير مفاتيح ربط الأجهزة النشطة المكتملة، وستتوقف ملفات الوكلاء القديمة عن العمل. سيحتوي الملف المنزّل على المفاتيح الجديدة؛ احتفظ به سرياً. متابعة؟")) downloadAllAgents.mutate();
+            }}>
+              <Download className="ml-2 h-4 w-4" /> {downloadAllAgents.isPending ? "جارٍ تجهيز الوكيل…" : "تنزيل وكيل جميع الأجهزة"}
+            </Button>}
             <button type="button" className="inline-flex items-center gap-2 font-semibold text-primary underline" onClick={() => downloadTextFile("agent.py", agentScript, "text/x-python;charset=utf-8")}>
               <Download className="h-4 w-4" /> تنزيل وكيل المزامنة
             </button>
@@ -209,7 +265,7 @@ function DevicesPage() {
               <Download className="h-4 w-4" /> تنزيل مثبت التشغيل التلقائي
             </button>
           </div>
-          <p className="text-muted-foreground">نزّل ملفات الوكيل والإعدادات إلى مجلد ثابت على حاسوب الشبكة، ثم شغّل مثبت التشغيل التلقائي مرة واحدة. بعد ذلك استخدم زر «سحب الآن» من هذه الصفحة.</p>
+          <p className="text-muted-foreground">وكيل جميع الأجهزة ملف واحد يتضمن إعدادات الربط. شغّله على حاسوب الشبكة؛ سيبدأ بالأجهزة المتاحة ويتجاوز غير المتاح مع إعادة المحاولة تلقائياً. بعد ذلك استخدم زر «سحب الآن» بجانب الجهاز من هذه الصفحة.</p>
           {syncStatusError && isAdmin && <p role="alert" className="text-destructive">تعذر تحميل حالة المزامنة. تحقق من تطبيق migration الخاصة بالمزامنة.</p>}
           {createdKey && (
             <div className="space-y-2 rounded-lg border bg-background p-3">
@@ -282,7 +338,7 @@ function DevicesPage() {
                   <TableCell>{(syncByDevice.get(d.id)?.auto_synced_logs_total ?? 0).toLocaleString("ar-IQ")}</TableCell>
                   <TableCell>
                     {isAdmin && <div className="flex min-w-40 flex-col gap-1">
-                      <Button size="sm" variant="outline" disabled={!d.serial_number || createKey.isPending} onClick={() => createKey.mutate(d.id)}>
+                      <Button size="sm" variant="outline" disabled={!d.serial_number || createKey.isPending || downloadAllAgents.isPending} onClick={() => createKey.mutate(d.id)}>
                         <KeyRound className="ml-2 h-4 w-4" /> {syncByDevice.get(d.id)?.has_active_key ? "تدوير المفتاح" : "إنشاء مفتاح"}
                       </Button>
                       {createdKey?.deviceId === d.id && <Button size="sm" variant="ghost" onClick={() => downloadAgentConfig(d)}><Download className="ml-2 h-4 w-4" /> تنزيل agent_config.ini</Button>}
