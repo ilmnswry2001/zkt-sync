@@ -5,7 +5,12 @@ import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { FaceCameraDialog } from "@/components/FaceCameraDialog";
+import { Textarea } from "@/components/ui/textarea";
 import { currentMonthInBaghdad } from "@/lib/date-time";
+import { monthInstantRangeInBaghdad, dateKeyInTimeZone } from "@/lib/date-time";
+import { buildAttendanceDays, monthDates } from "@/lib/monthly-report";
+import { getEmployeePayType } from "@/lib/employee-pay-type";
+import { EMPLOYEE_EXTRA_SOURCE_FIELDS } from "@/lib/excel-employees";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,6 +44,7 @@ import {
   ClipboardList,
   Clock3,
   FileWarning,
+  Pencil,
   ScanFace,
   Loader2,
   Mail,
@@ -60,6 +66,8 @@ type Employee = {
   status: string;
   department_id: string | null;
   site_id: string | null;
+  wage_rate_id?: string | null;
+  attendance_device_id?: string | null;
   email: string | null;
   phone1: string | null;
   phone2: string | null;
@@ -70,7 +78,6 @@ type Employee = {
   marital_status: string | null;
   education: string | null;
   address: string | null;
-  base_salary: number | null;
   pay_type: string | null;
   salary_type: string | null;
   contract_type: string | null;
@@ -78,6 +85,24 @@ type Employee = {
   id_no: string | null;
   erp_no: string | null;
   ctr_code: string | null;
+  project?: string | null;
+  base_salary: number | null;
+  last_working_day?: string | null;
+  passport_no?: string | null;
+  passport_expiry?: string | null;
+  residency_no?: string | null;
+  residency_expiry?: string | null;
+  safety_passport_no?: string | null;
+  safety_passport_expiry?: string | null;
+  salary_structure?: string | null;
+  bank_name?: string | null;
+  bank_account?: string | null;
+  iban?: string | null;
+  emergency_contact_name?: string | null;
+  emergency_contact_phone?: string | null;
+  blood_type?: string | null;
+  shifts?: { end_time: string | null; grace_minutes: number | null } | null;
+  [key: string]: unknown;
   notes: string | null;
   employee_import_data?: Record<string, string | number | boolean | null> | null;
   face_descriptor?: number[] | null;
@@ -99,6 +124,7 @@ type Attendance = {
   notes: string | null;
 };
 type Punch = { id: string; verify_time: string; verify_type: number | null };
+type PerformancePunch = { verify_time: string; status: number | null; self_event_type: string | null };
 type Form = {
   id: string;
   work_date: string;
@@ -156,7 +182,11 @@ type Clearance = {
 const EMPTY_CUSTODY: CustodyRow[] = [];
 const EMPTY_CLEARANCES: Clearance[] = [];
 
-const monthBounds = (month: string) => ({ start: `${month}-01`, end: `${month}-31` });
+const monthBounds = (month: string) => {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const end = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+  return { start: `${month}-01`, end: `${month}-${String(end).padStart(2, "0")}` };
+};
 const fmtDate = (value: string | null | undefined) =>
   value
     ? new Date(`${value}T00:00:00`).toLocaleDateString("ar-IQ", {
@@ -203,6 +233,11 @@ const statusText: Record<string, string> = {
   overtime: "وقت إضافي",
 };
 
+function Field({ label, name, value, type = "text", required = false }: { label: string; name: string; value: unknown; type?: string; required?: boolean }) {
+  const normalized = value == null ? "" : String(value);
+  return <label className="space-y-1"><Label htmlFor={`employee-${name}`}>{label}</Label><Input id={`employee-${name}`} name={name} type={type} defaultValue={normalized} required={required}/></label>;
+}
+
 function Metric({
   label,
   value,
@@ -247,6 +282,7 @@ export function EmployeeProfileContent({
   const queryClient = useQueryClient();
   const { roles, isAdmin, isHR, user } = useAuth();
   const canEnrollFace = isAdmin || isHR || roles.includes("data_entry");
+  const canEditEmployee = isAdmin || isHR;
   const canReturnCustody = roles.some((role) =>
     ["admin", "hr", "data_entry", "site_admin"].includes(role),
   );
@@ -258,6 +294,8 @@ export function EmployeeProfileContent({
   const [returnNotes, setReturnNotes] = useState("");
   const [faceDialogOpen, setFaceDialogOpen] = useState(false);
   const [savingFace, setSavingFace] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [savingEmployee, setSavingEmployee] = useState(false);
   const custodyQuery = useQuery({
     queryKey: ["employee-custody", employeeId],
     queryFn: async () => {
@@ -286,10 +324,11 @@ export function EmployeeProfileContent({
     queryKey: ["employee-profile", employeeId, month],
     queryFn: async () => {
       const bounds = monthBounds(month);
+      const punchRange = monthInstantRangeInBaghdad(month);
       const { data: employee, error: employeeError } = await (supabase as any)
         .from("employees")
         .select(
-          "*, departments(name), sites!site_id(name, ctr_code), wage_rates(title, monthly_rate, daily_rate, overtime_hour_rate)",
+          "*, departments(name), sites!site_id(name, ctr_code), wage_rates(title, monthly_rate, daily_rate, overtime_hour_rate), shifts(end_time, grace_minutes)",
         )
         .eq("id", employeeId)
         .single();
@@ -300,7 +339,7 @@ export function EmployeeProfileContent({
         const result = await request;
         return result.error ? ([] as T[]) : ((result.data ?? []) as T[]);
       };
-      const [attendance, punches, forms, penalties, tasks, additions] = await Promise.all([
+      const [attendance, punches, performancePunches, forms, penalties, tasks, additions] = await Promise.all([
         safe<Attendance>(
           (supabase as any)
             .from("attendance_day_status")
@@ -319,6 +358,15 @@ export function EmployeeProfileContent({
             .lte("verify_time", `${bounds.end}T23:59:59`)
             .order("verify_time", { ascending: false })
             .limit(200),
+        ),
+        safe<PerformancePunch>(
+          (supabase as any)
+            .from("attendance_logs")
+            .select("verify_time, status, self_event_type")
+            .eq("employee_no", employee.employee_no)
+            .gte("verify_time", punchRange.start)
+            .lt("verify_time", punchRange.end)
+            .order("verify_time"),
         ),
         safe<Form>(
           (supabase as any)
@@ -359,6 +407,7 @@ export function EmployeeProfileContent({
         employee: employee as Employee,
         attendance,
         punches,
+        performancePunches,
         forms,
         penalties,
         tasks,
@@ -455,7 +504,20 @@ export function EmployeeProfileContent({
       toast.error(formatErrorMessage(clearanceError, "تعذر إصدار براءة الذمة")),
   });
   const stats = useMemo(() => {
-    const attendance = data?.attendance ?? [];
+    const attendanceByDate = new Map((data?.attendance ?? []).map((row) => [row.work_date, row]));
+    const computedDays = buildAttendanceDays(
+      monthDates(month),
+      data?.performancePunches ?? [],
+      (data?.attendance ?? []).map((row) => ({ ...row, status: row.status as "present" | "absent" | "leave" | "holiday" | "rest", is_paid: true })),
+      data?.employee?.shifts?.end_time,
+      dateKeyInTimeZone(new Date()),
+      getEmployeePayType(data?.employee ?? {}),
+      data?.employee?.shifts?.grace_minutes ?? 0,
+    );
+    const attendance = computedDays.map((day) => ({
+      status: attendanceByDate.get(day.date)?.status ?? day.status,
+      overtime_hours: attendanceByDate.get(day.date)?.overtime_hours ?? day.overtime_hours,
+    }));
     const forms = data?.forms ?? [];
     const tasks = data?.tasks ?? [];
     const penalties = data?.penalties ?? [];
@@ -479,7 +541,64 @@ export function EmployeeProfileContent({
       deductions: penalties.reduce((sum, row) => sum + Number(row.deduction_amount || 0), 0),
       additions: additions.reduce((sum, row) => sum + Number(row.amount || 0), 0),
     };
-  }, [data]);
+  }, [data, month]);
+  const attendanceRows = useMemo(() => {
+    const manualRows = new Map((data?.attendance ?? []).map((row) => [row.work_date, row]));
+    return buildAttendanceDays(
+      monthDates(month),
+      data?.performancePunches ?? [],
+      (data?.attendance ?? []).map((row) => ({ ...row, status: row.status as "present" | "absent" | "leave" | "holiday" | "rest", is_paid: true })),
+      data?.employee?.shifts?.end_time,
+      dateKeyInTimeZone(new Date()),
+      getEmployeePayType(data?.employee ?? {}),
+      data?.employee?.shifts?.grace_minutes ?? 0,
+    ).filter((day) => day.status !== null).map((day) => {
+      const manual = manualRows.get(day.date);
+      return { work_date: day.date, status: manual?.status ?? day.status ?? "—", overtime_hours: manual?.overtime_hours ?? day.overtime_hours, notes: manual?.notes ?? day.notes };
+    });
+  }, [data, month]);
+
+  async function saveEmployeeProfile(formData: FormData) {
+    if (!employee || !canEditEmployee) return;
+    setSavingEmployee(true);
+    const value = (name: string) => {
+      const raw = String(formData.get(name) ?? "").trim();
+      return raw === "" || raw === "none" ? null : raw;
+    };
+    const numeric = (name: string) => {
+      const raw = value(name);
+      return raw === null ? null : Number(raw);
+    };
+    const sourceFields = Object.fromEntries(EMPLOYEE_EXTRA_SOURCE_FIELDS.map(({ header, column }) => [column, value(`source_${header}`)]));
+    const sourceHeaders = Object.fromEntries(EMPLOYEE_EXTRA_SOURCE_FIELDS.map(({ header }) => [header, value(`source_${header}`)]));
+    const extraImportValues = Object.fromEntries(Object.entries(employee.employee_import_data ?? {}).map(([header]) => [header, value(`import_${header}`)]));
+    const payload = {
+      employee_no: String(value("employee_no") ?? ""),
+      full_name: String(value("full_name") ?? ""),
+      department_id: value("department_id"), site_id: value("site_id"), wage_rate_id: value("wage_rate_id"),
+      position: value("position"), status: value("status") ?? "active", base_salary: numeric("base_salary"),
+      pay_type: value("pay_type") ?? "monthly", erp_no: value("erp_no"), attendance_device_id: value("attendance_device_id"),
+      id_no: value("id_no"), ctr_code: value("ctr_code"), nationality: value("nationality"), gender: value("gender"),
+      marital_status: value("marital_status"), blood_type: value("blood_type"), education: value("education"),
+      birth_date: value("birth_date"), hire_date: value("hire_date"), last_working_day: value("last_working_day"),
+      contract_type: value("contract_type"), contract_end_date: value("contract_end_date"), email: value("email"),
+      phone1: value("phone1"), phone2: value("phone2"), address: value("address"), salary_type: value("salary_type"),
+      salary_structure: value("salary_structure"), project: value("project"), passport_no: value("passport_no"),
+      passport_expiry: value("passport_expiry"), residency_no: value("residency_no"), residency_expiry: value("residency_expiry"),
+      safety_passport_no: value("safety_passport_no"), safety_passport_expiry: value("safety_passport_expiry"),
+      bank_name: value("bank_name"), bank_account: value("bank_account"), iban: value("iban"),
+      emergency_contact_name: value("emergency_contact_name"), emergency_contact_phone: value("emergency_contact_phone"),
+      notes: value("notes"), employee_import_data: { ...extraImportValues, ...sourceHeaders }, ...sourceFields,
+    };
+    const { error: saveError } = await (supabase as any).from("employees").update(payload).eq("id", employeeId);
+    setSavingEmployee(false);
+    if (saveError) return toast.error(`تعذر حفظ بيانات الموظف: ${formatErrorMessage(saveError)}`);
+    setEditOpen(false);
+    await queryClient.invalidateQueries({ queryKey: ["employee-profile", employeeId] });
+    await queryClient.invalidateQueries({ queryKey: ["employee-profile-search"] });
+    await queryClient.invalidateQueries({ queryKey: ["employees"] });
+    toast.success("تم حفظ بيانات الموظف");
+  }
 
   if (isLoading)
     return (
@@ -505,6 +624,26 @@ export function EmployeeProfileContent({
           <ArrowRight className="h-4 w-4" /> العودة إلى الموظفين
         </Link>
       )}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent dir="rtl" className="max-h-[92vh] max-w-5xl overflow-y-auto">
+          <DialogHeader><DialogTitle>تعديل بيانات الموظف — جميع الحقول</DialogTitle></DialogHeader>
+          <form key={employee.id} onSubmit={(event) => { event.preventDefault(); void saveEmployeeProfile(new FormData(event.currentTarget)); }} className="space-y-5">
+            <section className="space-y-3 rounded-xl border p-4"><h3 className="font-semibold">البيانات الأساسية والوظيفية</h3><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <Field label="الرقم الوظيفي *" name="employee_no" value={employee.employee_no} required/><Field label="الاسم الكامل *" name="full_name" value={employee.full_name} required/><Field label="رقم جهاز البصمة" name="attendance_device_id" value={employee.attendance_device_id}/><Field label="المسمى الوظيفي" name="position" value={employee.position}/><Field label="القسم" name="department_id" value={employee.department_id}/><Field label="الحالة" name="status" value={employee.status}/><Field label="رقم ERP" name="erp_no" value={employee.erp_no}/><Field label="رقم الهوية" name="id_no" value={employee.id_no}/><Field label="المشروع" name="project" value={employee.project}/><Field label="الموقع" name="site_id" value={employee.site_id}/><Field label="كود التكلفة CTR" name="ctr_code" value={employee.ctr_code}/><Field label="أجر التخصص" name="wage_rate_id" value={employee.wage_rate_id}/><Field label="تصنيف الأجر" name="pay_type" value={employee.pay_type}/><Field label="الراتب الأساسي" name="base_salary" value={employee.base_salary} type="number"/><Field label="نوع الراتب" name="salary_type" value={employee.salary_type}/><Field label="هيكل الراتب" name="salary_structure" value={employee.salary_structure}/>
+            </div></section>
+            <section className="space-y-3 rounded-xl border p-4"><h3 className="font-semibold">البيانات الشخصية والتواصل</h3><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <Field label="الجنسية" name="nationality" value={employee.nationality}/><Field label="الجنس" name="gender" value={employee.gender}/><Field label="الحالة الاجتماعية" name="marital_status" value={employee.marital_status}/><Field label="فصيلة الدم" name="blood_type" value={employee.blood_type}/><Field label="التعليم" name="education" value={employee.education}/><Field label="تاريخ الميلاد" name="birth_date" value={employee.birth_date} type="date"/><Field label="البريد الإلكتروني" name="email" value={employee.email} type="email"/><Field label="الهاتف الأول" name="phone1" value={employee.phone1}/><Field label="الهاتف الثاني" name="phone2" value={employee.phone2}/><Field label="العنوان" name="address" value={employee.address}/><Field label="اسم جهة الطوارئ" name="emergency_contact_name" value={employee.emergency_contact_name}/><Field label="هاتف الطوارئ" name="emergency_contact_phone" value={employee.emergency_contact_phone}/>
+            </div></section>
+            <section className="space-y-3 rounded-xl border p-4"><h3 className="font-semibold">التعاقد والوثائق</h3><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <Field label="تاريخ المباشرة" name="hire_date" value={employee.hire_date} type="date"/><Field label="آخر يوم عمل" name="last_working_day" value={employee.last_working_day} type="date"/><Field label="نوع العقد" name="contract_type" value={employee.contract_type}/><Field label="انتهاء العقد" name="contract_end_date" value={employee.contract_end_date} type="date"/><Field label="رقم الجواز" name="passport_no" value={employee.passport_no}/><Field label="انتهاء الجواز" name="passport_expiry" value={employee.passport_expiry} type="date"/><Field label="رقم الإقامة" name="residency_no" value={employee.residency_no}/><Field label="انتهاء الإقامة" name="residency_expiry" value={employee.residency_expiry} type="date"/><Field label="رقم جواز السلامة" name="safety_passport_no" value={employee.safety_passport_no}/><Field label="انتهاء جواز السلامة" name="safety_passport_expiry" value={employee.safety_passport_expiry} type="date"/>
+            </div></section>
+            <section className="space-y-3 rounded-xl border p-4"><h3 className="font-semibold">المعلومات البنكية والملاحظات</h3><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><Field label="اسم البنك" name="bank_name" value={employee.bank_name}/><Field label="رقم الحساب" name="bank_account" value={employee.bank_account}/><Field label="IBAN" name="iban" value={employee.iban}/><label className="space-y-1 sm:col-span-2 lg:col-span-3"><Label>ملاحظات</Label><Textarea name="notes" defaultValue={employee.notes ?? ""}/></label></div></section>
+            <section className="space-y-3 rounded-xl border p-4"><h3 className="font-semibold">الحقول الإضافية والبيانات المستوردة</h3><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{EMPLOYEE_EXTRA_SOURCE_FIELDS.map(({ header, column }) => <Field key={column} label={header} name={`source_${header}`} value={employee[column] ?? employee.employee_import_data?.[header]}/>)}</div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{Object.entries(employee.employee_import_data ?? {}).filter(([header]) => !EMPLOYEE_EXTRA_SOURCE_FIELDS.some((field) => field.header === header)).map(([header, value]) => <Field key={header} label={header} name={`import_${header}`} value={value}/>)}</div></section>
+            <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setEditOpen(false)}>إلغاء</Button><Button type="submit" disabled={savingEmployee}>{savingEmployee ? "جارٍ الحفظ..." : "حفظ جميع التعديلات"}</Button></div>
+          </form>
+        </DialogContent>
+      </Dialog>
+      {canEditEmployee && <div className="flex justify-end"><Button variant="outline" onClick={() => setEditOpen(true)}><Pencil className="ml-2 h-4 w-4"/>تعديل جميع بيانات الموظف</Button></div>}
       <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-primary p-6 text-white shadow-xl md:p-8">
         <div className="absolute -left-10 -top-16 h-48 w-48 rounded-full bg-white/10 blur-2xl" />
         <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
@@ -669,7 +808,7 @@ export function EmployeeProfileContent({
           <DataCard
             title={`سجل الحضور — ${month}`}
             headers={["التاريخ", "الحالة", "الساعات الإضافية", "ملاحظات"]}
-            rows={(data?.attendance ?? []).map((row) => [
+            rows={attendanceRows.map((row) => [
               fmtDate(row.work_date),
               statusText[row.status] || row.status,
               `${Number(row.overtime_hours || 0)} ساعة`,

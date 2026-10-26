@@ -144,7 +144,6 @@ function EmployeesPage() {
     },
   });
   const activeProfileId = selectedProfileId || (profileMatches.length === 1 ? profileMatches[0].id : "");
-  const activeProfileEmployee = profileMatches.find((employee) => employee.id === activeProfileId);
   const openPersonalReport = (employee: Emp) => {
     setProfileSearch(employee.full_name);
     setSelectedProfileId(employee.id);
@@ -637,7 +636,7 @@ function EmployeesPage() {
               {profileSearch.trim().length >= 2 && !profileSearching && !profileMatches.length && <p className="mt-4 rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">لم يتم العثور على موظف مطابق للبحث.</p>}
             </CardContent>
           </Card>
-          {activeProfileId ? <><div className="flex justify-end"><Button variant="outline" onClick={() => { if (activeProfileEmployee) { setEditing(activeProfileEmployee); setOpen(true); } }} disabled={!activeProfileEmployee}><Pencil className="ml-2 h-4 w-4" />تعديل بيانات الموظف</Button></div><EmployeeProfileContent employeeId={activeProfileId} embedded /></> : <Card><CardContent className="p-10 text-center text-muted-foreground">اختر موظفاً من نتائج البحث لعرض التقرير الشخصي الكامل.</CardContent></Card>}
+          {activeProfileId ? <EmployeeProfileContent employeeId={activeProfileId} embedded /> : <Card><CardContent className="p-10 text-center text-muted-foreground">اختر موظفاً من نتائج البحث لعرض التقرير الشخصي الكامل.</CardContent></Card>}
         </TabsContent>
       </Tabs>
     </div>
