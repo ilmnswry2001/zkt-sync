@@ -1,5 +1,5 @@
 import { formatErrorMessage } from "@/lib/error-message";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -37,13 +37,13 @@ export const Route = createFileRoute("/_authenticated/employees")({
 
 type Emp = { id: string; employee_no: string; attendance_device_id?: string | null; id_no?: string | null; employee_import_data?: Record<string, string | number | boolean | null> | null; full_name: string; email?: string | null; department_id: string | null; position: string | null; status: string; departments?: { name: string } | null };
 function EmployeesPage() {
-  const navigate = useNavigate();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Emp | null>(null);
   const [search, setSearch] = useState("");
   const [profileSearch, setProfileSearch] = useState("");
   const [selectedProfileId, setSelectedProfileId] = useState("");
+  const [activeTab, setActiveTab] = useState("directory");
   const doImport = useServerFn(importEmployees);
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -144,6 +144,12 @@ function EmployeesPage() {
     },
   });
   const activeProfileId = selectedProfileId || (profileMatches.length === 1 ? profileMatches[0].id : "");
+  const activeProfileEmployee = profileMatches.find((employee) => employee.id === activeProfileId);
+  const openPersonalReport = (employee: Emp) => {
+    setProfileSearch(employee.full_name);
+    setSelectedProfileId(employee.id);
+    setActiveTab("personal");
+  };
   const { data: totalCount = 0 } = useQuery({
     queryKey: ["employees_count"],
     queryFn: async () => (await supabase.from("employees").select("id", { count: "exact", head: true })).count ?? 0,
@@ -243,7 +249,7 @@ function EmployeesPage() {
     onError: (e: any) => toast.error(formatErrorMessage(e)),
   });
   const updateStatus = useMutation({
-    mutationFn: async ({ employeeId, status }: { employeeId: string; status: string }) => {
+    mutationFn: async ({ employeeId, status }: { employeeId: string; status: "active" | "inactive" | "terminated" }) => {
       const { error } = await supabase.from("employees").update({ status }).eq("id", employeeId);
       if (error) throw error;
     },
@@ -258,7 +264,7 @@ function EmployeesPage() {
 
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="directory" className="space-y-5">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
         <TabsList className="grid h-auto w-full grid-cols-2 gap-2 bg-transparent sm:w-fit">
           <TabsTrigger value="directory" className="min-h-11 rounded-xl border">دليل الموظفين</TabsTrigger>
           <TabsTrigger value="personal" className="min-h-11 rounded-xl border">التقرير الشخصي</TabsTrigger>
@@ -582,14 +588,14 @@ function EmployeesPage() {
               {filtered.map((e) => (
                 <TableRow key={e.id}>
                   <TableCell className="font-mono">{e.employee_no}</TableCell>
-                  <TableCell className="font-medium"><a href={`/employees/${encodeURIComponent(e.id)}`} onClick={(event) => { event.preventDefault(); navigate({ to: "/employees/$employeeId", params: { employeeId: e.id } }); }} className="inline-flex min-h-10 items-center text-primary underline-offset-4 hover:underline" aria-label={`فتح ملف ${e.full_name}`}>{e.full_name}</a></TableCell>
+                  <TableCell className="font-medium"><button type="button" onClick={() => openPersonalReport(e)} className="inline-flex min-h-10 items-center text-primary underline-offset-4 hover:underline" aria-label={`فتح التقرير الشخصي لـ ${e.full_name}`}>{e.full_name}</button></TableCell>
                   <TableCell>{e.departments?.name ?? "-"}</TableCell>
                   <TableCell className="font-mono">{e.id_no || "-"}</TableCell>
                   <TableCell>{e.position ?? "-"}</TableCell>
                   <TableCell className="font-mono">{e.attendance_device_id || "-"}</TableCell>
                   <TableCell>{(e as any).pay_type === "daily" ? "يومي" : "شهري"}</TableCell>
                   <TableCell>
-                    <Select value={e.status} onValueChange={(status) => updateStatus.mutate({ employeeId: e.id, status })}>
+                    <Select value={e.status} onValueChange={(status: "active" | "inactive" | "terminated") => updateStatus.mutate({ employeeId: e.id, status })}>
                       <SelectTrigger className="h-9 min-w-28" aria-label={`حالة ${e.full_name}`}><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="active">نشط</SelectItem>
@@ -600,7 +606,7 @@ function EmployeesPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      <Button size="icon" variant="ghost" title="فتح ملف الموظف" aria-label="فتح ملف الموظف" onClick={() => navigate({ to: "/employees/$employeeId", params: { employeeId: e.id } })}><UserRound className="w-4 h-4" /></Button>
+                      <Button size="icon" variant="ghost" title="فتح التقرير الشخصي" aria-label="فتح التقرير الشخصي" onClick={() => openPersonalReport(e)}><UserRound className="w-4 h-4" /></Button>
                       <Button size="icon" variant="ghost" title="تعديل الموظف" aria-label="تعديل الموظف" onClick={() => { setEditing(e); setOpen(true); }}><Pencil className="w-4 h-4" /></Button>
                       <Button size="icon" variant="ghost" onClick={() => { if (confirm("حذف؟")) del.mutate(e.id); }}><Trash2 className="w-4 h-4 text-destructive" /></Button>
                     </div>
@@ -631,7 +637,7 @@ function EmployeesPage() {
               {profileSearch.trim().length >= 2 && !profileSearching && !profileMatches.length && <p className="mt-4 rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">لم يتم العثور على موظف مطابق للبحث.</p>}
             </CardContent>
           </Card>
-          {activeProfileId ? <EmployeeProfileContent employeeId={activeProfileId} embedded /> : <Card><CardContent className="p-10 text-center text-muted-foreground">اختر موظفاً من نتائج البحث لعرض التقرير الشخصي الكامل.</CardContent></Card>}
+          {activeProfileId ? <><div className="flex justify-end"><Button variant="outline" onClick={() => { if (activeProfileEmployee) { setEditing(activeProfileEmployee); setOpen(true); } }} disabled={!activeProfileEmployee}><Pencil className="ml-2 h-4 w-4" />تعديل بيانات الموظف</Button></div><EmployeeProfileContent employeeId={activeProfileId} embedded /></> : <Card><CardContent className="p-10 text-center text-muted-foreground">اختر موظفاً من نتائج البحث لعرض التقرير الشخصي الكامل.</CardContent></Card>}
         </TabsContent>
       </Tabs>
     </div>
