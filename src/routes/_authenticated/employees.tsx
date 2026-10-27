@@ -1,7 +1,7 @@
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Trash2, Plus, Pencil, Search, Upload, Loader2, UserRound } from "lucide-react";
 import { toast } from "sonner";
@@ -19,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmployeeProfileContent } from "@/components/EmployeeProfileContent";
 import { useServerFn } from "@tanstack/react-start";
 import { importEmployees } from "@/lib/employees.functions";
+import { useAuth } from "@/hooks/use-auth";
 import {
   EMPLOYEE_EXTRA_SOURCE_FIELDS,
   EMPLOYEE_IMPORT_FIELDS,
@@ -38,8 +40,11 @@ export const Route = createFileRoute("/_authenticated/employees")({
 type Emp = { id: string; employee_no: string; attendance_device_id?: string | null; id_no?: string | null; employee_import_data?: Record<string, string | number | boolean | null> | null; full_name: string; email?: string | null; department_id: string | null; position: string | null; status: string; departments?: { name: string } | null };
 function EmployeesPage() {
   const qc = useQueryClient();
+  const { isAdmin } = useAuth();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Emp | null>(null);
+  const [allowAllAttendanceSites, setAllowAllAttendanceSites] = useState(false);
+  const [attendanceSiteIds, setAttendanceSiteIds] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [profileSearch, setProfileSearch] = useState("");
   const [selectedProfileId, setSelectedProfileId] = useState("");
@@ -166,6 +171,33 @@ function EmployeesPage() {
     queryKey: ["sites"],
     queryFn: async () => (await supabase.from("sites").select("id, name, ctr_code").order("name")).data ?? [],
   });
+  const employeeSiteAccessQuery = useQuery({
+    queryKey: ["employee-self-attendance-site-access", editing?.id],
+    enabled: isAdmin && open && !!editing?.id,
+    queryFn: async () => {
+      const client = supabase as any;
+      const [accessResult, sitesResult] = await Promise.all([
+        client.from("employee_self_attendance_access").select("allow_all_sites").eq("employee_id", editing!.id).maybeSingle(),
+        client.from("employee_self_attendance_sites").select("site_id").eq("employee_id", editing!.id),
+      ]);
+      if (accessResult.error) throw accessResult.error;
+      if (sitesResult.error) throw sitesResult.error;
+      return {
+        allowAll: Boolean(accessResult.data?.allow_all_sites),
+        siteIds: (sitesResult.data ?? []).map((row: { site_id: string }) => row.site_id),
+      };
+    },
+  });
+  useEffect(() => {
+    if (!open) return;
+    setAllowAllAttendanceSites(false);
+    setAttendanceSiteIds([]);
+  }, [open, editing?.id]);
+  useEffect(() => {
+    if (!employeeSiteAccessQuery.data) return;
+    setAllowAllAttendanceSites(employeeSiteAccessQuery.data.allowAll);
+    setAttendanceSiteIds(employeeSiteAccessQuery.data.siteIds);
+  }, [employeeSiteAccessQuery.data]);
   const { data: wages = [] } = useQuery({
     queryKey: ["wage_rates"],
     queryFn: async () => (await supabase.from("wage_rates").select("id, title").order("title")).data ?? [],
@@ -236,10 +268,26 @@ function EmployeesPage() {
   const save = useMutation({
     mutationFn: async (d: any) => {
       const payload = sanitizeEmployeePayload(d);
-      if (editing) { const { error } = await supabase.from("employees").update(payload).eq("id", editing.id); if (error) throw error; }
-      else { const { error } = await supabase.from("employees").insert(payload); if (error) throw error; }
+      const client = supabase as any;
+      let employeeId = editing?.id;
+      if (employeeId) {
+        const { error } = await client.from("employees").update(payload).eq("id", employeeId);
+        if (error) throw error;
+      } else {
+        const { data, error } = await client.from("employees").insert(payload).select("id").single();
+        if (error) throw error;
+        employeeId = data.id;
+      }
+      if (isAdmin) {
+        const { error: accessError } = await client.rpc("set_employee_self_attendance_site_access", {
+          p_employee_id: employeeId,
+          p_allow_all_sites: d.allowAllAttendanceSites,
+          p_site_ids: d.allowAllAttendanceSites ? [] : d.attendanceSiteIds,
+        });
+        if (accessError) throw accessError;
+      }
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); qc.invalidateQueries({ queryKey: ["employees_count"] }); setOpen(false); setEditing(null); toast.success("تم الحفظ"); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); qc.invalidateQueries({ queryKey: ["employees_count"] }); qc.invalidateQueries({ queryKey: ["employee-self-attendance-site-access"] }); setOpen(false); setEditing(null); toast.success("تم الحفظ"); },
     onError: (e: any) => toast.error(formatErrorMessage(e)),
   });
   const del = useMutation({
@@ -362,7 +410,13 @@ function EmployeesPage() {
               <DialogTitle className="text-xl text-white">{editing ? "تحديث بيانات الموظف" : "إضافة موظف جديد"}</DialogTitle>
               <p className="text-sm text-teal-50/80">ابدأ بالبيانات الأساسية والتكليف؛ بقية التفاصيل اختيارية ويمكن إضافتها لاحقاً.</p>
             </DialogHeader>
-            <form onSubmit={(e) => { e.preventDefault(); const f = new FormData(e.currentTarget);
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (isAdmin && editing && (employeeSiteAccessQuery.isLoading || employeeSiteAccessQuery.isError)) {
+                toast.error("تعذر تحميل صلاحيات المواقع؛ أعد فتح ملف الموظف قبل الحفظ");
+                return;
+              }
+              const f = new FormData(e.currentTarget);
               const g = (k: string) => { const v = (f.get(k) as string ?? "").trim(); return v === "" || v === "none" ? null : v; };
               const n = (k: string) => { const v = g(k); return v === null ? null : Number(v); };
               const selectedDepartment = depts.find((department: any) => department.id === g("department_id"));
@@ -394,6 +448,8 @@ function EmployeesPage() {
                 birth_date: g("birth_date"), hire_date: g("hire_date"), last_working_day: g("last_working_day"),
                 contract_type: g("contract_type"), contract_end_date: g("contract_end_date"),
                 email: g("email"), phone1: g("phone1"), phone2: g("phone2"), address: g("address"),
+                allowAllAttendanceSites,
+                attendanceSiteIds,
                 salary_type: g("salary_type"), salary_structure: g("salary_structure"), project: g("project"),
                 passport_no: g("passport_no"), passport_expiry: g("passport_expiry"),
                 residency_no: g("residency_no"), residency_expiry: g("residency_expiry"),
@@ -479,6 +535,48 @@ function EmployeesPage() {
                 </div>
               </section>
 
+              {isAdmin && (
+                <section className="space-y-3 rounded-xl border border-cyan-900/10 bg-cyan-50/40 p-4 shadow-sm dark:bg-cyan-950/10">
+                  <div>
+                    <h3 className="font-semibold">مواقع الحضور الذاتي</h3>
+                    <p className="text-xs text-muted-foreground">اختر المواقع التي يسمح للموظف بتسجيل الحضور منها. عند عدم اختيار مواقع إضافية، يبقى موقع العمل الرئيسي هو المسموح.</p>
+                  </div>
+                  <label className="flex cursor-pointer items-center gap-3 rounded-lg border bg-background p-3">
+                    <Checkbox
+                      checked={allowAllAttendanceSites}
+                      onCheckedChange={(checked) => setAllowAllAttendanceSites(checked === true)}
+                    />
+                    <span>
+                      <span className="block text-sm font-medium">السماح بالتسجيل من كل المواقع</span>
+                      <span className="block text-xs text-muted-foreground">يُحدد الموقع تلقائياً من GPS ضمن نطاقه الجغرافي.</span>
+                    </span>
+                  </label>
+                  {!allowAllAttendanceSites && (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {sites.map((site: any) => (
+                        <label key={site.id} className="flex cursor-pointer items-center gap-2 rounded-lg border bg-background p-2 text-sm">
+                          <Checkbox
+                            checked={attendanceSiteIds.includes(site.id)}
+                            onCheckedChange={(checked) => setAttendanceSiteIds((current) =>
+                              checked === true
+                                ? [...new Set([...current, site.id])]
+                                : current.filter((id) => id !== site.id),
+                            )}
+                          />
+                          <span>{site.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  {employeeSiteAccessQuery.isLoading && editing && (
+                    <p className="text-xs text-muted-foreground">جارٍ تحميل سماح المواقع...</p>
+                  )}
+                  {employeeSiteAccessQuery.isError && editing && (
+                    <p role="alert" className="text-xs text-destructive">تعذر تحميل سماح المواقع: {formatErrorMessage(employeeSiteAccessQuery.error)}</p>
+                  )}
+                </section>
+              )}
+
               <details className="group rounded-xl border bg-card p-4 shadow-sm">
                 <summary className="cursor-pointer list-none font-semibold marker:hidden"><span className="flex items-center justify-between">البيانات الإضافية <span className="text-xs font-normal text-muted-foreground group-open:hidden">الجنسية، التواصل، العقد والحساب البنكي</span><span className="hidden text-xs font-normal text-muted-foreground group-open:inline">إخفاء التفاصيل</span></span></summary>
                 <div className="mt-4 space-y-5 border-t pt-4">
@@ -557,7 +655,7 @@ function EmployeesPage() {
               </details>
               <div className="sticky bottom-0 -mx-6 -mb-6 flex flex-col-reverse gap-2 border-t bg-background/95 p-4 backdrop-blur sm:flex-row sm:justify-end">
                 <Button type="button" variant="outline" onClick={() => { setOpen(false); setEditing(null); }}>إلغاء</Button>
-                <Button type="submit" className="min-w-36 bg-gradient-to-l from-teal-800 to-emerald-600 shadow-md" disabled={save.isPending}>{save.isPending ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : null}{save.isPending ? "جارٍ الحفظ..." : editing ? "حفظ التعديلات" : "حفظ بيانات الموظف"}</Button>
+                <Button type="submit" className="min-w-36 bg-gradient-to-l from-teal-800 to-emerald-600 shadow-md" disabled={save.isPending || (isAdmin && !!editing && (employeeSiteAccessQuery.isLoading || employeeSiteAccessQuery.isError))}>{save.isPending ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : null}{save.isPending ? "جارٍ الحفظ..." : editing ? "حفظ التعديلات" : "حفظ بيانات الموظف"}</Button>
               </div>
             </form>
           </DialogContent>

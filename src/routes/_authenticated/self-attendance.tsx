@@ -139,21 +139,34 @@ function SelfAttendancePage() {
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isIos, setIsIos] = useState(false);
   const [sites, setSites] = useState<Site[]>([]);
+  const [allowedSites, setAllowedSites] = useState<Site[]>([]);
   const [selectedSiteId, setSelectedSiteId] = useState("");
   const [siteLatitude, setSiteLatitude] = useState("");
   const [siteLongitude, setSiteLongitude] = useState("");
   const [siteRadius, setSiteRadius] = useState("200");
   const [siteSaving, setSiteSaving] = useState(false);
+  const [latestCheckInTime, setLatestCheckInTime] = useState("");
+  const [latestCheckOutTime, setLatestCheckOutTime] = useState("");
+  const [attendanceSettingsSaving, setAttendanceSettingsSaving] = useState(false);
   const [queuedCount, setQueuedCount] = useState(0);
   const getPushKey = useServerFn(getAttendancePushKey);
   const savePushSubscription = useServerFn(saveAttendancePushSubscription);
 
   const today = baghdadDate(now);
-  const site = employee?.sites ?? null;
-  const distance =
-    coordinates && site?.latitude != null && site.longitude != null
-      ? haversineMeters(coordinates.latitude, coordinates.longitude, site.latitude, site.longitude)
-      : null;
+  const measuredSites = coordinates
+    ? allowedSites
+        .filter((item) => item.latitude != null && item.longitude != null)
+        .map((item) => ({
+          site: item,
+          distance: haversineMeters(coordinates.latitude, coordinates.longitude, item.latitude!, item.longitude!),
+        }))
+        .sort((a, b) => a.distance - b.distance)
+    : [];
+  const closestSite = measuredSites.find(({ site: item, distance: meters }) => meters <= item.geofence_radius_meters)
+    ?? measuredSites[0]
+    ?? null;
+  const site = closestSite?.site ?? allowedSites.find((item) => item.id === employee?.site_id) ?? allowedSites[0] ?? null;
+  const distance = closestSite?.distance ?? null;
   const insideGeofence =
     distance != null && site != null && distance <= site.geofence_radius_meters;
   const checkedIn = logs.some((log) => log.self_event_type === "check_in" || log.status === 0);
@@ -180,9 +193,35 @@ function SelfAttendancePage() {
     }
     const nextEmployee = employeeResult.data as Employee | null;
     setEmployee(nextEmployee);
+    setAllowedSites([]);
     if (!nextEmployee) {
       setLoading(false);
       return;
+    }
+    const accessClient = supabase as any;
+    const [accessResult, assignedSitesResult] = await Promise.all([
+      accessClient.from("employee_self_attendance_access").select("allow_all_sites").eq("employee_id", nextEmployee.id).maybeSingle(),
+      accessClient.from("employee_self_attendance_sites").select("site_id").eq("employee_id", nextEmployee.id),
+    ]);
+    if (accessResult.error || assignedSitesResult.error) {
+      toast.error(`تعذر قراءة مواقع الحضور المسموحة: ${formatErrorMessage(accessResult.error ?? assignedSitesResult.error)}`);
+      setLoading(false);
+      return;
+    }
+    const allowAllSites = Boolean(accessResult.data?.allow_all_sites);
+    const assignedSiteIds = (assignedSitesResult.data ?? []).map((row: { site_id: string }) => row.site_id);
+    if (allowAllSites || assignedSiteIds.length) {
+      let sitesQuery = accessClient.from("sites").select("id, name, latitude, longitude, geofence_radius_meters").order("name");
+      if (!allowAllSites) sitesQuery = sitesQuery.in("id", assignedSiteIds);
+      const { data: permittedSites, error: permittedSitesError } = await sitesQuery;
+      if (permittedSitesError) {
+        toast.error(`تعذر تحميل المواقع المسموحة: ${formatErrorMessage(permittedSitesError)}`);
+        setLoading(false);
+        return;
+      }
+      setAllowedSites((permittedSites ?? []) as Site[]);
+    } else {
+      setAllowedSites(nextEmployee.sites ? [nextEmployee.sites] : []);
     }
     const start = `${today}T00:00:00+03:00`;
     const end = `${today}T23:59:59+03:00`;
@@ -268,6 +307,19 @@ function SelfAttendancePage() {
       if (nextSites.length && !selectedSiteId) setSelectedSiteId(nextSites[0].id);
     })();
   }, [isAdmin, selectedSiteId]);
+  useEffect(() => {
+    if (!isAdmin) return;
+    void (async () => {
+      const { data, error } = await (supabase as any)
+        .from("self_attendance_settings")
+        .select("latest_check_in_time, latest_check_out_time")
+        .eq("id", true)
+        .maybeSingle();
+      if (error) return toast.error(`تعذر تحميل أوقات الحضور الذاتي: ${formatErrorMessage(error)}`);
+      setLatestCheckInTime(data?.latest_check_in_time?.slice(0, 5) ?? "");
+      setLatestCheckOutTime(data?.latest_check_out_time?.slice(0, 5) ?? "");
+    })();
+  }, [isAdmin]);
   const selectedSite = sites.find((item) => item.id === selectedSiteId) ?? null;
   const sitesWithoutCoordinates = sites.filter(
     (item) => item.latitude == null || item.longitude == null,
@@ -464,6 +516,20 @@ function SelfAttendancePage() {
     );
     toast.success("تم حفظ إعدادات موقع العمل");
   };
+
+  const saveAttendanceSettings = async () => {
+    setAttendanceSettingsSaving(true);
+    const { error } = await (supabase as any).from("self_attendance_settings").upsert({
+      id: true,
+      latest_check_in_time: latestCheckInTime || null,
+      latest_check_out_time: latestCheckOutTime || null,
+      updated_at: new Date().toISOString(),
+      updated_by: user?.id ?? null,
+    });
+    setAttendanceSettingsSaving(false);
+    if (error) return toast.error(`تعذر حفظ أوقات الحضور: ${formatErrorMessage(error)}`);
+    toast.success("تم حفظ حدود وقت تسجيل الحضور والانصراف");
+  };
   const pinCurrentSite = () => {
     if (!navigator.geolocation) return toast.error("المتصفح لا يدعم تحديد الموقع");
     setSiteSaving(true);
@@ -523,8 +589,8 @@ function SelfAttendancePage() {
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="attendance">تسجيل الحضور</TabsTrigger>
           {isAdmin && (
-            <TabsTrigger value="site-settings">
-              <Settings2 className="ml-2 h-4 w-4" /> إعدادات موقع العمل
+            <TabsTrigger value="settings">
+              <Settings2 className="ml-2 h-4 w-4" /> الإعدادات
             </TabsTrigger>
           )}
         </TabsList>
@@ -655,7 +721,28 @@ function SelfAttendancePage() {
           )}
         </TabsContent>
         {isAdmin && (
-          <TabsContent value="site-settings" className="space-y-4">
+          <TabsContent value="settings" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>حدود وقت الحضور والانصراف</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">لن تُقبل الحركة بعد الوقت المحدد. اترك الحقل فارغاً إذا لم ترد وضع حد. تُطبق الأوقات حسب توقيت بغداد.</p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="latest-check-in-time">آخر وقت مسموح لتسجيل الدخول</Label>
+                    <Input id="latest-check-in-time" type="time" value={latestCheckInTime} onChange={(event) => setLatestCheckInTime(event.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="latest-check-out-time">آخر وقت مسموح لتسجيل الخروج</Label>
+                    <Input id="latest-check-out-time" type="time" value={latestCheckOutTime} onChange={(event) => setLatestCheckOutTime(event.target.value)} />
+                  </div>
+                </div>
+                <Button onClick={() => void saveAttendanceSettings()} disabled={attendanceSettingsSaving}>
+                  {attendanceSettingsSaving ? "جارٍ الحفظ..." : "حفظ إعدادات الوقت"}
+                </Button>
+              </CardContent>
+            </Card>
             {sitesWithoutCoordinates > 0 && (
               <Card className="border-rose-300 bg-rose-50/70 text-rose-900">
                 <CardContent className="p-4">
