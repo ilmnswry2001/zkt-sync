@@ -1,5 +1,5 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
@@ -111,10 +111,11 @@ function buildPayrollSlipHtml(row: PayrollSlipRow, month: string) {
     .join("");
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>قصاصة راتب — ${escapeHtml(row.employee.full_name)}</title><style>
     @page{size:100mm 150mm;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;width:100mm;height:150mm;font-family:Arial,Tahoma,sans-serif;color:#17202a;background:#fff}body{direction:rtl;-webkit-print-color-adjust:exact;print-color-adjust:exact}.slip{width:100mm;height:150mm;padding:5mm;overflow:hidden;border:1px solid #dce5eb;display:flex;flex-direction:column}.hero{height:25mm;flex:none;border-radius:3mm;padding:3mm 4mm;background:linear-gradient(120deg,#07858a,#144b67);color:#fff;display:flex;align-items:center;justify-content:space-between}.hero-label{font-size:8pt}.hero-amount{font-size:18pt;font-weight:700;direction:ltr;text-align:right;margin-top:1mm}.hero-month{text-align:left;font-size:8pt;align-self:flex-end;padding-bottom:1mm}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5mm;margin-top:2mm}.stat{height:16mm;background:#f0f6f6;border-radius:2mm;padding:2mm;text-align:right}.stat span{display:block;color:#718096;font-size:7pt}.stat b{display:block;font-size:9pt;margin-top:1mm;white-space:nowrap}.identity{height:28mm;flex:none;display:grid;grid-template-columns:1fr 1fr;gap:1.5mm;margin-top:3mm;padding:2.5mm;border:1px solid #e0e7ed;border-radius:2mm}.identity span{display:block;color:#718096;font-size:7pt}.identity b{display:block;font-size:8pt;margin-top:.5mm;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.heading{height:9mm;flex:none;display:flex;align-items:center;justify-content:space-between;margin-top:3mm;padding:0 2mm;background:#f0f2f4;font-weight:bold;font-size:8pt}.table-wrap{flex:1;min-height:0;overflow:hidden}.slip table{width:100%;border-collapse:collapse;font-size:7.5pt}.slip td{height:8mm;padding:1.5mm 2mm;border-bottom:1px solid #e6eaee}.amount{direction:ltr;text-align:left;font-weight:bold;white-space:nowrap}.net{height:13mm;flex:none;margin-top:2mm;background:#edf5f4;border-radius:2mm;padding:2mm 3mm;display:flex;align-items:center;justify-content:space-between;font-weight:bold;font-size:8pt}.net b{font-size:12pt;direction:ltr}.footer{height:7mm;flex:none;margin-top:2mm;padding-top:1.5mm;border-top:1px solid #e6eaee;color:#758195;display:flex;justify-content:space-between;font-size:6.5pt}.screen-print{display:none}@media screen{body{width:100mm;height:150mm;margin:0}.slip{box-shadow:0 2px 18px #2030402b}.screen-print{display:block;position:fixed;top:5px;right:calc(50% - 50mm);transform:translateY(-100%);background:#173d58;color:#fff;border:0;border-radius:5px;padding:7px 12px;cursor:pointer;font-size:13px}}@media print{.screen-print{display:none}}
-    </style></head><body><button class="screen-print" onclick="window.print()">طباعة القصاصة</button><main class="slip"><section class="hero"><div><div class="hero-label">صافي الراتب</div><div class="hero-amount">${money(row.total)}</div></div><div class="hero-month">د.ع<br>${escapeHtml(month)}</div></section><section class="stats"><div class="stat"><span>الأساسي</span><b>${money(row.payroll.basePay)}</b></div><div class="stat"><span>الإضافي</span><b>${money(row.payroll.overtimePay + row.additions)}</b></div><div class="stat"><span>الاستقطاع</span><b>${money(row.deductions)}</b></div></section><section class="identity"><div><span>الموظف</span><b>${escapeHtml(row.employee.full_name)}</b></div><div><span>الرقم</span><b>${escapeHtml(row.employee.employee_no)}</b></div><div><span>القسم</span><b>${escapeHtml(row.employee.departments?.name || "—")}</b></div><div><span>أيام العمل</span><b>${row.summary.presentDays} يوم</b></div></section><div class="heading"><span>تفاصيل الراتب</span><span>د.ع</span></div><div class="table-wrap"><table><tbody><tr><td>الراتب الأساسي</td><td class="amount">${money(row.payroll.basePay)}</td></tr><tr><td>بدل الساعات الإضافية (${roundMoney(row.payroll.overtimeHours)} ساعة)</td><td class="amount">${money(row.payroll.overtimePay)}</td></tr><tr><td>الإضافات والمكافآت</td><td class="amount">${money(row.additions)}</td></tr>${deductionRows}<tr><td>إجمالي الاستقطاعات</td><td class="amount">−${money(row.deductions)}</td></tr></tbody></table></div><section class="net"><span>صافي الراتب</span><b>${money(row.total)}</b></section><footer class="footer"><span>صادرة إلكترونيًا من نظام الموارد البشرية</span><span>١ من ١</span></footer></main></body></html>`;
+    </style></head><body><main class="slip"><section class="hero"><div><div class="hero-label">صافي الراتب</div><div class="hero-amount">${money(row.total)}</div></div><div class="hero-month">د.ع<br>${escapeHtml(month)}</div></section><section class="stats"><div class="stat"><span>الأساسي</span><b>${money(row.payroll.basePay)}</b></div><div class="stat"><span>الإضافي</span><b>${money(row.payroll.overtimePay + row.additions)}</b></div><div class="stat"><span>الاستقطاع</span><b>${money(row.deductions)}</b></div></section><section class="identity"><div><span>الموظف</span><b>${escapeHtml(row.employee.full_name)}</b></div><div><span>الرقم</span><b>${escapeHtml(row.employee.employee_no)}</b></div><div><span>القسم</span><b>${escapeHtml(row.employee.departments?.name || "—")}</b></div><div><span>أيام العمل</span><b>${row.summary.presentDays} يوم</b></div></section><div class="heading"><span>تفاصيل الراتب</span><span>د.ع</span></div><div class="table-wrap"><table><tbody><tr><td>الراتب الأساسي</td><td class="amount">${money(row.payroll.basePay)}</td></tr><tr><td>بدل الساعات الإضافية (${roundMoney(row.payroll.overtimeHours)} ساعة)</td><td class="amount">${money(row.payroll.overtimePay)}</td></tr><tr><td>الإضافات والمكافآت</td><td class="amount">${money(row.additions)}</td></tr>${deductionRows}<tr><td>إجمالي الاستقطاعات</td><td class="amount">−${money(row.deductions)}</td></tr></tbody></table></div><section class="net"><span>صافي الراتب</span><b>${money(row.total)}</b></section><footer class="footer"><span>صادرة إلكترونيًا من نظام الموارد البشرية</span><span>١ من ١</span></footer></main></body></html>`;
 }
 
 function PayrollPage() {
+  const queryClient = useQueryClient();
   const [previewRow, setPreviewRow] = useState<PayrollSlipRow | null>(null);
   const [month, setMonth] = useState(currentMonthInBaghdad);
   const [search, setSearch] = useState("");
@@ -125,6 +126,7 @@ function PayrollPage() {
   }, [month]);
   const query = useQuery({
     queryKey: ["payroll", month],
+    staleTime: 60_000,
     queryFn: async () => {
       const attendanceRange = monthInstantRangeInBaghdad(month);
       const [employees, additions, penalties, logs, overrides, weeklySchedules, storedOvertime, vehicles, vehicleOperations, leaveCalendar] =
@@ -243,20 +245,41 @@ function PayrollPage() {
       };
     },
   });
+  const dataByEmployee = useMemo(() => {
+    const groupBy = <T,>(items: T[], key: (item: T) => string) => {
+      const groups = new Map<string, T[]>();
+      for (const item of items) {
+        const groupKey = key(item);
+        const group = groups.get(groupKey);
+        if (group) group.push(item);
+        else groups.set(groupKey, [item]);
+      }
+      return groups;
+    };
+    const data = query.data;
+    return {
+      logs: groupBy(data?.logs ?? [], (item) => item.employee_no),
+      overrides: groupBy(data?.overrides ?? [], (item) => item.employee_id),
+      schedules: groupBy(data?.weeklySchedules ?? [], (item) => item.employee_id),
+      overtime: groupBy(data?.storedOvertime ?? [], (item) => item.employee_id),
+      additions: groupBy(data?.additions ?? [], (item) => item.employee_id),
+      penalties: groupBy(data?.penalties ?? [], (item) => item.employee_id ?? ""),
+    };
+  }, [query.data]);
   const rows = useMemo(
     () =>
       (query.data?.employees ?? []).map((employee) => {
         const payType = getEmployeePayType(employee);
         const days = buildAttendanceDays(
           monthDates(month),
-          (query.data?.logs ?? []).filter((log) => log.employee_no === employee.employee_no),
-          (query.data?.overrides ?? []).filter((item) => item.employee_id === employee.id),
+          dataByEmployee.logs.get(employee.employee_no) ?? [],
+          dataByEmployee.overrides.get(employee.id) ?? [],
           employee.shifts?.end_time,
           todayInBaghdad(),
           payType,
           employee.shifts?.grace_minutes ?? 0,
-          (query.data?.weeklySchedules ?? []).filter((schedule) => schedule.employee_id === employee.id),
-          (query.data?.storedOvertime ?? []).filter((item) => item.employee_id === employee.id),
+          dataByEmployee.schedules.get(employee.id) ?? [],
+          dataByEmployee.overtime.get(employee.id) ?? [],
         );
         const summary = summarizeDays(days);
         const monthlySalary = Number(
@@ -265,11 +288,9 @@ function PayrollPage() {
         const dailyRate = Number(
           employee.wage_rates?.daily_rate ?? (monthlySalary ? monthlySalary / 26 : 0),
         );
-        const additions = (query.data?.additions ?? [])
-          .filter((item) => item.employee_id === employee.id)
+        const additions = (dataByEmployee.additions.get(employee.id) ?? [])
           .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-        const employeePenalties = (query.data?.penalties ?? [])
-          .filter((item) => item.employee_id === employee.id);
+        const employeePenalties = dataByEmployee.penalties.get(employee.id) ?? [];
         const deductions = employeePenalties
           .reduce((sum, item) => sum + Number(item.deduction_amount || 0), 0);
         const payroll = calculatePayroll({
@@ -286,7 +307,7 @@ function PayrollPage() {
         const total = payroll.netPay;
         return { employee, payType, payroll, summary, additions, deductions, penalties: employeePenalties, total };
       }),
-    [query.data, month],
+    [query.data?.employees, dataByEmployee, month],
   );
   const filteredRows = rows.filter((row) =>
     `${row.employee.full_name} ${row.employee.employee_no}`
@@ -445,13 +466,8 @@ function PayrollPage() {
   };
   const printSlip = (row: (typeof rows)[number]) => {
     const html = buildPayrollSlipHtml(row, month);
-    const printWindow = window.open("about:blank", "_blank", "width=440,height=680");
-    if (!printWindow) {
-      toast.error("اسمح بالنوافذ المنبثقة للطباعة");
-      return;
-    }
-    printWindow.document.write(html);
-    printWindow.document.close();
+    setPreviewRow(row);
+    window.setTimeout(() => window.print(), 0);
   };
   return (
     <div dir="rtl" className="space-y-6">
@@ -720,6 +736,11 @@ function PayrollPage() {
           )}
         </DialogContent>
       </Dialog>
+      {previewRow && (
+        <section className="payroll-slip-print" aria-hidden="true">
+          <iframe title="قصاصة الراتب للطباعة" srcDoc={buildPayrollSlipHtml(previewRow, month)} />
+        </section>
+      )}
     </div>
   );
 }
