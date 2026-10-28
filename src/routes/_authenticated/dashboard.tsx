@@ -123,6 +123,7 @@ function Dashboard() {
   const dailyFn = useServerFn(getDailyReport);
   const monthlyFn = useServerFn(getMonthlySheet);
   const [now, setNow] = useState(() => new Date());
+  const [showDesignProposals, setShowDesignProposals] = useState(false);
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 60_000);
     return () => window.clearInterval(timer);
@@ -369,6 +370,34 @@ function Dashboard() {
 
   return (
     <div dir="rtl" className="space-y-6 pb-6">
+      {showDesignProposals && (
+        <section className="fixed inset-0 z-50 overflow-y-auto bg-background p-4 sm:p-8">
+          <div className="mx-auto max-w-7xl space-y-5">
+            <div className="flex items-center justify-between">
+              <div><h1 className="text-2xl font-bold">مقترحات لوحة التحكم</h1><p className="text-sm text-muted-foreground">كل النماذج تعرض مؤشرات المشروع الحالية نفسها.</p></div>
+              <Button variant="outline" onClick={() => setShowDesignProposals(false)}>العودة للوحة الحالية</Button>
+            </div>
+            {["مؤسسي هادئ", "تنفيذي فاخر", "تشغيلي حديث"].map((design, index) => (
+              <Card key={design} className={index === 1 ? "border-amber-700/30 bg-amber-50/30" : index === 2 ? "border-sky-700/30 bg-sky-50/30" : ""}>
+                <CardHeader><CardTitle>{index + 1}. {design}</CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <StatCard title="الموظفون النشطون" value={formatCount(activeEmployeesQuery.data?.total ?? 0)} icon={Users} loading={activeEmployeesQuery.isLoading} detail={<span>شهري: {formatCount(activeEmployeesQuery.data?.monthly ?? 0)} · يومي: {formatCount(activeEmployeesQuery.data?.daily ?? 0)}</span>} />
+                    <StatCard title="حضور اليوم" value={formatCount(presentToday)} icon={UserCheck} loading={dailyQuery.isLoading} detail={<span>غائب: {formatCount(absentToday)} · متأخر: {formatCount(lateToday)}</span>} />
+                    <StatCard title="المواقع النشطة" value={formatCount(sitesQuery.data?.active ?? 0)} icon={MapPinned} loading={sitesQuery.isLoading} detail={<span>تقارير مرفوعة: {formatCount(sitesQuery.data?.reported ?? 0)} · ناقصة: {formatCount(sitesQuery.data?.missing ?? 0)}</span>} />
+                    <StatCard title="التكلفة الشهرية التقديرية" value={formatIQD(activeEmployeesQuery.data?.monthlySiteCost ?? 0)} icon={CircleDollarSign} loading={activeEmployeesQuery.isLoading} />
+                  </div>
+                  <div className="grid gap-3 lg:grid-cols-3">
+                    <Card><CardHeader><CardTitle className="text-base">اتجاه الحضور · آخر 7 أيام</CardTitle></CardHeader><CardContent className="h-48">{trendHasData ? <ResponsiveContainer width="100%" height="100%"><LineChart data={trend}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="day" /><YAxis domain={[0,100]} tickFormatter={(value) => `${value}%`} /><Tooltip formatter={(value) => [`${value}%`, "الحضور"]} /><Line dataKey="rate" stroke="var(--primary)" strokeWidth={2} /></LineChart></ResponsiveContainer> : <p className="text-sm text-muted-foreground">{trendIsLoading ? "جارٍ تحميل الحضور" : "لا توجد بيانات حضور للفترة"}</p>}</CardContent></Card>
+                    <Card><CardHeader><CardTitle className="text-base">التشغيل اليوم</CardTitle></CardHeader><CardContent className="space-y-2 text-sm"><p>الوقت الإضافي هذا الشهر: {overtimeThisMonth.toLocaleString("ar-IQ")} ساعة</p><p>المهام: {formatCount(tasksQuery.data?.total ?? 0)} · المنجز: {formatCount(tasksQuery.data?.completed ?? 0)}</p><p>استمارات بانتظار التنفيذ: {formatCount(formsQuery.data ?? 0)}</p></CardContent></Card>
+                    <Card><CardHeader><CardTitle className="text-base">الأجهزة والعقوبات</CardTitle></CardHeader><CardContent className="space-y-2 text-sm"><p>أجهزة متصلة: {formatCount(connectedDevices)}</p><p>تحتاج مزامنة: {formatCount(staleDevices.length)}</p><p>عقوبات الشهر: {formatCount(penaltiesQuery.data?.total ?? 0)} · غير منفذة: {formatCount(penaltiesQuery.data?.pending ?? 0)}</p></CardContent></Card>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+      )}
       <header className="relative isolate overflow-hidden rounded-3xl bg-gradient-to-l from-[#102b46] via-[#12465a] to-[#087d78] px-5 py-6 text-white shadow-xl shadow-teal-950/10 sm:px-8 sm:py-8">
         <div
           aria-hidden="true"
@@ -388,6 +417,7 @@ function Dashboard() {
             <RefreshCw className="h-4 w-4 text-teal-200" /> آخر تحديث:{" "}
             {updatedAt ? formatDateTime(new Date(updatedAt).toISOString()) : "جارٍ التحميل"}
           </div>
+          <Button variant="secondary" onClick={() => setShowDesignProposals(true)}>معاينة 3 تصاميم</Button>
         </div>
       </header>
 
