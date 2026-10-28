@@ -373,11 +373,6 @@
 
 @media print {
   @page {
-    size: 100mm 150mm;
-    margin: 0;
-  }
-
-  @page {
     margin: 12mm;
   }
 

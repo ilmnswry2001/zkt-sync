@@ -473,10 +473,8 @@ function PayrollPage() {
     printWindow.document.open();
     printWindow.document.write(html);
     printWindow.document.close();
-    printWindow.onload = () => {
-      printWindow.focus();
-      printWindow.print();
-    };
+    printWindow.focus();
+    printWindow.setTimeout(() => printWindow.print(), 300);
   };
   return (
     <div dir="rtl" className="space-y-6">
