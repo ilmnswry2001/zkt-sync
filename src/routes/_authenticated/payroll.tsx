@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { Banknote, Download, Eye, Printer, RefreshCw, Search, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { printReport, escapeHtml } from "@/lib/report-print";
@@ -118,6 +119,7 @@ function PayrollPage() {
   const [previewRow, setPreviewRow] = useState<PayrollSlipRow | null>(null);
   const [month, setMonth] = useState(currentMonthInBaghdad);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const nextMonth = useMemo(() => {
     const date = new Date(`${month}-01T00:00:00Z`);
     date.setUTCMonth(date.getUTCMonth() + 1);
@@ -313,6 +315,9 @@ function PayrollPage() {
       .toLocaleLowerCase("ar")
       .includes(search.trim().toLocaleLowerCase("ar")),
   );
+  const pageSize = 20;
+  const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const visibleRows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
   const bankRows = rows.filter(
     (row) => row.employee.bank_account?.trim() || row.employee.iban?.trim(),
   );
@@ -544,7 +549,7 @@ function PayrollPage() {
                   id="payroll-month"
                   type="month"
                   value={month}
-                  onChange={(e) => setMonth(e.target.value)}
+                  onChange={(e) => { setMonth(e.target.value); setPage(1); }}
                   className="mt-2 max-w-xs"
                 />
               </CardContent>
@@ -574,7 +579,7 @@ function PayrollPage() {
                 <Search className="absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                   placeholder="ابحث بالاسم أو الرقم"
                   className="pr-9"
                 />
@@ -606,7 +611,7 @@ function PayrollPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredRows.map((row) => (
+                  {visibleRows.map((row) => (
                         <tr
                           key={row.employee.id}
                           className="border-b transition-colors hover:bg-muted/20"
@@ -651,6 +656,38 @@ function PayrollPage() {
                     <p className="py-10 text-center text-muted-foreground">
                       لا توجد بيانات مطابقة.
                     </p>
+                  )}
+                  {filteredRows.length > pageSize && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-t p-4">
+                      <p className="text-sm text-muted-foreground">
+                        عرض {((page - 1) * pageSize) + 1}–{Math.min(page * pageSize, filteredRows.length)} من {filteredRows.length} موظفًا
+                      </p>
+                      <Pagination className="mx-0 w-auto">
+                        <PaginationContent>
+                          <PaginationItem>
+                            <PaginationPrevious
+                              href="#"
+                              aria-disabled={page === 1}
+                              className={page === 1 ? "pointer-events-none opacity-50" : ""}
+                              onClick={(event) => { event.preventDefault(); setPage((current) => Math.max(1, current - 1)); }}
+                            />
+                          </PaginationItem>
+                          <PaginationItem>
+                            <PaginationLink href="#" isActive onClick={(event) => event.preventDefault()}>
+                              {page} / {pageCount}
+                            </PaginationLink>
+                          </PaginationItem>
+                          <PaginationItem>
+                            <PaginationNext
+                              href="#"
+                              aria-disabled={page >= pageCount}
+                              className={page >= pageCount ? "pointer-events-none opacity-50" : ""}
+                              onClick={(event) => { event.preventDefault(); setPage((current) => Math.min(pageCount, current + 1)); }}
+                            />
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
+                    </div>
                   )}
                 </div>
               )}
