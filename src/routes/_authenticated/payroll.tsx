@@ -1,5 +1,5 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
@@ -115,7 +115,6 @@ function buildPayrollSlipHtml(row: PayrollSlipRow, month: string) {
 }
 
 function PayrollPage() {
-  const queryClient = useQueryClient();
   const [previewRow, setPreviewRow] = useState<PayrollSlipRow | null>(null);
   const [month, setMonth] = useState(currentMonthInBaghdad);
   const [search, setSearch] = useState("");
@@ -466,8 +465,18 @@ function PayrollPage() {
   };
   const printSlip = (row: (typeof rows)[number]) => {
     const html = buildPayrollSlipHtml(row, month);
-    setPreviewRow(row);
-    window.setTimeout(() => window.print(), 0);
+    const printWindow = window.open("about:blank", "_blank", "width=520,height=760");
+    if (!printWindow) {
+      toast.error("اسمح بالنوافذ المنبثقة لطباعة القصاصة");
+      return;
+    }
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.onload = () => {
+      printWindow.focus();
+      printWindow.print();
+    };
   };
   return (
     <div dir="rtl" className="space-y-6">
@@ -736,11 +745,6 @@ function PayrollPage() {
           )}
         </DialogContent>
       </Dialog>
-      {previewRow && (
-        <section className="payroll-slip-print" aria-hidden="true">
-          <iframe title="قصاصة الراتب للطباعة" srcDoc={buildPayrollSlipHtml(previewRow, month)} />
-        </section>
-      )}
     </div>
   );
 }
