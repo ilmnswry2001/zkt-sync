@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Banknote, Download, Printer, RefreshCw, Search, Truck } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Banknote, Download, Eye, Printer, RefreshCw, Search, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { printReport, escapeHtml } from "@/lib/report-print";
 import { amountInArabicIqd } from "@/lib/arabic-currency";
@@ -93,7 +94,28 @@ type Vehicle = {
 };
 type VehicleOperation = { vehicle_id: string; operating_days: number };
 
+type PayrollSlipRow = {
+  employee: { full_name: string; employee_no: string; departments?: { name: string } | null };
+  payroll: { basePay: number; overtimeHours: number; overtimePay: number };
+  additions: number;
+  deductions: number;
+  total: number;
+  summary: { presentDays: number };
+  penalties: Array<{ deduction_amount: number | null; notes: string | null }>;
+};
+
+function buildPayrollSlipHtml(row: PayrollSlipRow, month: string) {
+  const deductionRows = row.penalties
+    .filter((penalty) => Number(penalty.deduction_amount) > 0)
+    .map((penalty) => `<tr><td>${escapeHtml(penalty.notes || "استقطاع")}</td><td class="amount">−${money(Number(penalty.deduction_amount))}</td></tr>`)
+    .join("");
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>قصاصة راتب — ${escapeHtml(row.employee.full_name)}</title><style>
+    @page{size:100mm 150mm;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;width:100mm;height:150mm;font-family:Arial,Tahoma,sans-serif;color:#17202a;background:#fff}body{direction:rtl;-webkit-print-color-adjust:exact;print-color-adjust:exact}.slip{width:100mm;height:150mm;padding:5mm;overflow:hidden;border:1px solid #dce5eb;display:flex;flex-direction:column}.hero{height:25mm;flex:none;border-radius:3mm;padding:3mm 4mm;background:linear-gradient(120deg,#07858a,#144b67);color:#fff;display:flex;align-items:center;justify-content:space-between}.hero-label{font-size:8pt}.hero-amount{font-size:18pt;font-weight:700;direction:ltr;text-align:right;margin-top:1mm}.hero-month{text-align:left;font-size:8pt;align-self:flex-end;padding-bottom:1mm}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5mm;margin-top:2mm}.stat{height:16mm;background:#f0f6f6;border-radius:2mm;padding:2mm;text-align:right}.stat span{display:block;color:#718096;font-size:7pt}.stat b{display:block;font-size:9pt;margin-top:1mm;white-space:nowrap}.identity{height:28mm;flex:none;display:grid;grid-template-columns:1fr 1fr;gap:1.5mm;margin-top:3mm;padding:2.5mm;border:1px solid #e0e7ed;border-radius:2mm}.identity span{display:block;color:#718096;font-size:7pt}.identity b{display:block;font-size:8pt;margin-top:.5mm;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.heading{height:9mm;flex:none;display:flex;align-items:center;justify-content:space-between;margin-top:3mm;padding:0 2mm;background:#f0f2f4;font-weight:bold;font-size:8pt}.table-wrap{flex:1;min-height:0;overflow:hidden}.slip table{width:100%;border-collapse:collapse;font-size:7.5pt}.slip td{height:8mm;padding:1.5mm 2mm;border-bottom:1px solid #e6eaee}.amount{direction:ltr;text-align:left;font-weight:bold;white-space:nowrap}.net{height:13mm;flex:none;margin-top:2mm;background:#edf5f4;border-radius:2mm;padding:2mm 3mm;display:flex;align-items:center;justify-content:space-between;font-weight:bold;font-size:8pt}.net b{font-size:12pt;direction:ltr}.footer{height:7mm;flex:none;margin-top:2mm;padding-top:1.5mm;border-top:1px solid #e6eaee;color:#758195;display:flex;justify-content:space-between;font-size:6.5pt}.screen-print{display:none}@media screen{body{width:100mm;height:150mm;margin:0}.slip{box-shadow:0 2px 18px #2030402b}.screen-print{display:block;position:fixed;top:5px;right:calc(50% - 50mm);transform:translateY(-100%);background:#173d58;color:#fff;border:0;border-radius:5px;padding:7px 12px;cursor:pointer;font-size:13px}}@media print{.screen-print{display:none}}
+    </style></head><body><button class="screen-print" onclick="window.print()">طباعة القصاصة</button><main class="slip"><section class="hero"><div><div class="hero-label">صافي الراتب</div><div class="hero-amount">${money(row.total)}</div></div><div class="hero-month">د.ع<br>${escapeHtml(month)}</div></section><section class="stats"><div class="stat"><span>الأساسي</span><b>${money(row.payroll.basePay)}</b></div><div class="stat"><span>الإضافي</span><b>${money(row.payroll.overtimePay + row.additions)}</b></div><div class="stat"><span>الاستقطاع</span><b>${money(row.deductions)}</b></div></section><section class="identity"><div><span>الموظف</span><b>${escapeHtml(row.employee.full_name)}</b></div><div><span>الرقم</span><b>${escapeHtml(row.employee.employee_no)}</b></div><div><span>القسم</span><b>${escapeHtml(row.employee.departments?.name || "—")}</b></div><div><span>أيام العمل</span><b>${row.summary.presentDays} يوم</b></div></section><div class="heading"><span>تفاصيل الراتب</span><span>د.ع</span></div><div class="table-wrap"><table><tbody><tr><td>الراتب الأساسي</td><td class="amount">${money(row.payroll.basePay)}</td></tr><tr><td>بدل الساعات الإضافية (${roundMoney(row.payroll.overtimeHours)} ساعة)</td><td class="amount">${money(row.payroll.overtimePay)}</td></tr><tr><td>الإضافات والمكافآت</td><td class="amount">${money(row.additions)}</td></tr>${deductionRows}<tr><td>إجمالي الاستقطاعات</td><td class="amount">−${money(row.deductions)}</td></tr></tbody></table></div><section class="net"><span>صافي الراتب</span><b>${money(row.total)}</b></section><footer class="footer"><span>صادرة إلكترونيًا من نظام الموارد البشرية</span><span>١ من ١</span></footer></main></body></html>`;
+}
+
 function PayrollPage() {
+  const [previewRow, setPreviewRow] = useState<PayrollSlipRow | null>(null);
   const [month, setMonth] = useState(currentMonthInBaghdad);
   const [search, setSearch] = useState("");
   const nextMonth = useMemo(() => {
@@ -422,11 +444,7 @@ function PayrollPage() {
     printWindow.document.close();
   };
   const printSlip = (row: (typeof rows)[number]) => {
-    const deductions = row.penalties.filter((penalty) => Number(penalty.deduction_amount) > 0);
-    const deductionRows = deductions.map((penalty) => `<tr><td>${escapeHtml(penalty.notes || "استقطاع")}</td><td class="amount">−${money(Number(penalty.deduction_amount))}</td></tr>`).join("");
-    const html = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>قصاصة راتب — ${escapeHtml(row.employee.full_name)}</title><style>
-      @page{size:100mm 150mm;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;width:100mm;height:150mm;font-family:Arial,Tahoma,sans-serif;color:#17202a;background:#fff}body{direction:rtl;-webkit-print-color-adjust:exact;print-color-adjust:exact}.slip{width:100mm;height:150mm;padding:5mm;overflow:hidden;border:1px solid #dce5eb;display:flex;flex-direction:column}.hero{height:25mm;flex:none;border-radius:3mm;padding:3mm 4mm;background:linear-gradient(120deg,#07858a,#144b67);color:#fff;display:flex;align-items:center;justify-content:space-between}.hero-label{font-size:8pt}.hero-amount{font-size:18pt;font-weight:700;direction:ltr;text-align:right;margin-top:1mm}.hero-month{text-align:left;font-size:8pt;align-self:flex-end;padding-bottom:1mm}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5mm;margin-top:2mm}.stat{height:16mm;background:#f0f6f6;border-radius:2mm;padding:2mm;text-align:right}.stat span{display:block;color:#718096;font-size:7pt}.stat b{display:block;font-size:9pt;margin-top:1mm;white-space:nowrap}.identity{height:28mm;flex:none;display:grid;grid-template-columns:1fr 1fr;gap:1.5mm;margin-top:3mm;padding:2.5mm;border:1px solid #e0e7ed;border-radius:2mm}.identity span{display:block;color:#718096;font-size:7pt}.identity b{display:block;font-size:8pt;margin-top:.5mm;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.heading{height:9mm;flex:none;display:flex;align-items:center;justify-content:space-between;margin-top:3mm;padding:0 2mm;background:#f0f2f4;font-weight:bold;font-size:8pt}.table-wrap{flex:1;min-height:0;overflow:hidden}.slip table{width:100%;border-collapse:collapse;font-size:7.5pt}.slip td{height:8mm;padding:1.5mm 2mm;border-bottom:1px solid #e6eaee}.amount{direction:ltr;text-align:left;font-weight:bold;white-space:nowrap}.net{height:13mm;flex:none;margin-top:2mm;background:#edf5f4;border-radius:2mm;padding:2mm 3mm;display:flex;align-items:center;justify-content:space-between;font-weight:bold;font-size:8pt}.net b{font-size:12pt;direction:ltr}.footer{height:7mm;flex:none;margin-top:2mm;padding-top:1.5mm;border-top:1px solid #e6eaee;color:#758195;display:flex;justify-content:space-between;font-size:6.5pt}.screen-print{display:none}@media screen{body{width:100mm;height:150mm;margin:12px auto;box-shadow:0 2px 18px #2030402b}.screen-print{display:block;position:fixed;top:5px;right:calc(50% - 50mm);transform:translateY(-100%);background:#173d58;color:#fff;border:0;border-radius:5px;padding:7px 12px;cursor:pointer;font-size:13px}}@media print{.screen-print{display:none}}
-      </style></head><body><button class="screen-print" onclick="window.print()">طباعة القصاصة</button><main class="slip"><section class="hero"><div><div class="hero-label">صافي الراتب</div><div class="hero-amount">${money(row.total)}</div></div><div class="hero-month">د.ع<br>${escapeHtml(month)}</div></section><section class="stats"><div class="stat"><span>الأساسي</span><b>${money(row.payroll.basePay)}</b></div><div class="stat"><span>الإضافي</span><b>${money(row.payroll.overtimePay + row.additions)}</b></div><div class="stat"><span>الاستقطاع</span><b>${money(row.deductions)}</b></div></section><section class="identity"><div><span>الموظف</span><b>${escapeHtml(row.employee.full_name)}</b></div><div><span>الرقم</span><b>${escapeHtml(row.employee.employee_no)}</b></div><div><span>القسم</span><b>${escapeHtml(row.employee.departments?.name || "—")}</b></div><div><span>أيام العمل</span><b>${row.summary.presentDays} يوم</b></div></section><div class="heading"><span>تفاصيل الراتب</span><span>د.ع</span></div><div class="table-wrap"><table><tbody><tr><td>الراتب الأساسي</td><td class="amount">${money(row.payroll.basePay)}</td></tr><tr><td>بدل الساعات الإضافية (${roundMoney(row.payroll.overtimeHours)} ساعة)</td><td class="amount">${money(row.payroll.overtimePay)}</td></tr><tr><td>الإضافات والمكافآت</td><td class="amount">${money(row.additions)}</td></tr>${deductionRows}<tr><td>إجمالي الاستقطاعات</td><td class="amount">−${money(row.deductions)}</td></tr></tbody></table></div><section class="net"><span>صافي الراتب</span><b>${money(row.total)}</b></section><footer class="footer"><span>صادرة إلكترونيًا من نظام الموارد البشرية</span><span>١ من ١</span></footer></main></body></html>`;
+    const html = buildPayrollSlipHtml(row, month);
     const printWindow = window.open("about:blank", "_blank", "width=440,height=680");
     if (!printWindow) {
       toast.error("اسمح بالنوافذ المنبثقة للطباعة");
@@ -593,9 +611,14 @@ function PayrollPage() {
                           <td className="p-3 text-red-600">{money(row.deductions)}</td>
                           <td className="p-3 font-bold">{money(row.total)}</td>
                           <td className="p-3">
+                            <div className="flex items-center gap-2">
+                              <Button size="sm" variant="outline" onClick={() => setPreviewRow(row)}>
+                                <Eye className="ml-2 h-4 w-4" /> عرض القصاصة
+                              </Button>
                             <Button size="sm" variant="outline" onClick={() => printSlip(row)}>
                               <Printer className="ml-2 h-4 w-4" /> طباعة
                             </Button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -680,6 +703,23 @@ function PayrollPage() {
           );
         })}
       </Tabs>
+      <Dialog open={previewRow !== null} onOpenChange={(open) => !open && setPreviewRow(null)}>
+        <DialogContent dir="rtl" className="max-h-[95vh] w-[calc(100vw-2rem)] max-w-[680px] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle>قصاصة راتب — {previewRow?.employee.full_name}</DialogTitle>
+          </DialogHeader>
+          {previewRow && (
+            <div className="flex w-full justify-center overflow-auto bg-slate-100 p-4 sm:p-6">
+              <iframe
+                title={`معاينة قصاصة راتب ${previewRow.employee.full_name}`}
+                className="h-[min(70vh,150mm)] w-[min(calc(100vw-5rem),100mm)] shrink-0 border-0 bg-white shadow-md"
+                srcDoc={buildPayrollSlipHtml(previewRow, month)}
+                sandbox="allow-scripts"
+              />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
