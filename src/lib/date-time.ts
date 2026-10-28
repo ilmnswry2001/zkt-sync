@@ -42,10 +42,14 @@ export function addCalendarDays(date: string, amount: number) {
   return new Date(Date.UTC(year, month - 1, day + amount)).toISOString().slice(0, 10);
 }
 
-export function instantAtMidnightInTimeZone(date: string, timeZone = COMPANY_TIME_ZONE) {
+export function instantAtTimeInTimeZone(date: string, time: string, timeZone = COMPANY_TIME_ZONE) {
   const { year, month, day } = parseCalendarDate(date);
-  const localMidnightAsUtc = Date.UTC(year, month - 1, day);
-  let guess = localMidnightAsUtc;
+  const match = /^(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(time);
+  if (!match || Number(match[1]) > 23 || Number(match[2]) > 59 || Number(match[3] ?? 0) > 59) {
+    throw new Error("وقت غير صالح");
+  }
+  const localAsUtc = Date.UTC(year, month - 1, day, Number(match[1]), Number(match[2]), Number(match[3] ?? 0));
+  let guess = localAsUtc;
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone,
     year: "numeric",
@@ -61,16 +65,16 @@ export function instantAtMidnightInTimeZone(date: string, timeZone = COMPANY_TIM
       formatter.formatToParts(new Date(guess)).map((part) => [part.type, part.value]),
     );
     const renderedAsUtc = Date.UTC(
-      Number(parts.year),
-      Number(parts.month) - 1,
-      Number(parts.day),
-      Number(parts.hour),
-      Number(parts.minute),
-      Number(parts.second),
+      Number(parts.year), Number(parts.month) - 1, Number(parts.day),
+      Number(parts.hour), Number(parts.minute), Number(parts.second),
     );
-    guess = localMidnightAsUtc - (renderedAsUtc - guess);
+    guess = localAsUtc - (renderedAsUtc - guess);
   }
   return new Date(guess).toISOString();
+}
+
+export function instantAtMidnightInTimeZone(date: string, timeZone = COMPANY_TIME_ZONE) {
+  return instantAtTimeInTimeZone(date, "00:00", timeZone);
 }
 
 export function monthInstantRangeInBaghdad(month: string) {

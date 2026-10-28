@@ -1,4 +1,4 @@
-import { dateKeyInTimeZone } from "./date-time.ts";
+import { dateKeyInTimeZone, instantAtTimeInTimeZone } from "./date-time.ts";
 
 export type DayStatus = "present" | "absent" | "leave" | "holiday" | "rest";
 export type ComputedStatus = DayStatus | "incomplete";
@@ -62,7 +62,9 @@ export function summarizeAttendancePunches(
     hours -= attendancePairs.reduce((sum, [start, end]) => sum + overlapHours(start, end, breakStart, breakEnd), 0);
   }
 
-  const shiftEndAt = shiftEnd && checkOut ? `${dateKeyInTimeZone(checkOut)}T${shiftEnd}Z` : null;
+  const shiftEndAt = shiftEnd && checkOut
+    ? instantAtTimeInTimeZone(dateKeyInTimeZone(checkOut), shiftEnd)
+    : null;
   let overtime = overtimePairs.reduce((sum, [start, end]) => {
     const billableStart = shiftEndAt ? Math.max(Date.parse(start), Date.parse(shiftEndAt)) : Date.parse(start);
     return sum + Math.max(0, Date.parse(end) - billableStart) / 3600000;

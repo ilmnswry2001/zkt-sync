@@ -23,6 +23,7 @@ import { enqueueSelfAttendance, readSelfAttendanceQueue, removeQueuedSelfAttenda
 import { FaceCameraDialog } from "@/components/FaceCameraDialog";
 import { getAttendancePushKey, saveAttendancePushSubscription } from "@/lib/push.functions";
 import { createForm } from "@/lib/forms.functions";
+import { summarizeAttendancePunches } from "@/lib/monthly-report";
 import {
   CheckCircle2,
   Clock3,
@@ -66,6 +67,7 @@ type Employee = {
   position: string | null;
   site_id: string | null;
   sites: Site | null;
+  shifts: { end_time: string | null; grace_minutes: number | null } | null;
   face_descriptor: number[] | null;
 };
 type AttendanceLog = {
@@ -210,7 +212,7 @@ function SelfAttendancePage() {
     const employeeResult = await client
       .from("employees")
       .select(
-        "id, employee_no, full_name, position, site_id, face_descriptor, sites!site_id(id, name, latitude, longitude, geofence_radius_meters)",
+        "id, employee_no, full_name, position, site_id, face_descriptor, sites!site_id(id, name, latitude, longitude, geofence_radius_meters), shifts(end_time, grace_minutes)",
       )
       .eq("email", user.email ?? "")
       .eq("status", "active")
@@ -564,7 +566,22 @@ function SelfAttendancePage() {
     }
     const result = data?.[0];
     if (!result?.id) return toast.error("رُفضت الحركة بسبب انتقال غير منطقي وسُجلت للمراجعة الإدارية");
-    toast.success(eventType === "check_in" ? "تم تسجيل حضورك بنجاح" : "تم تسجيل انصرافك بنجاح");
+    if (eventType === "check_in") {
+      toast.success("تم تسجيل حضورك بنجاح");
+    } else {
+      const overtimeHours = employee?.shifts?.end_time
+        ? summarizeAttendancePunches(
+            [...logs, { verify_time: result.recorded_at, self_event_type: "check_out" }],
+            employee.shifts.end_time,
+            employee.shifts.grace_minutes ?? 0,
+          ).overtime_hours
+        : 0;
+      toast.success(
+        overtimeHours > 0
+          ? `تم تسجيل انصرافك بنجاح، والوقت الإضافي المحتسب اليوم ${overtimeHours.toLocaleString("ar-IQ")} ساعة`
+          : "تم تسجيل انصرافك بنجاح، ولم يُحتسب وقت إضافي اليوم",
+      );
+    }
     await loadAttendance();
   };
 
