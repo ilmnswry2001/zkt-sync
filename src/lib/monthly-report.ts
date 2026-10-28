@@ -107,6 +107,12 @@ export type WeeklyShiftSchedule = {
   effective_until: string | null;
 };
 
+export type AttendanceDailyOvertime = {
+  employee_id: string;
+  work_date: string;
+  overtime_hours: number;
+};
+
 export function buildPenaltyAttendanceOverride(
   penaltyType: "absence" | "deduction" | "warning",
   workDate: string,
@@ -143,6 +149,7 @@ export function buildAttendanceDays(
   payType: PayType = "monthly",
   graceMinutes = 0,
   weeklySchedules: WeeklyShiftSchedule[] = [],
+  storedOvertime: AttendanceDailyOvertime[] = [],
 ): AttendanceDay[] {
   const byDay = new Map<string, AttendancePunch[]>();
   for (const log of logs) {
@@ -154,6 +161,7 @@ export function buildAttendanceDays(
     byDay.set(date, dayPunches);
   }
   const manualDays = new Map(overrides.map((day) => [day.work_date, day]));
+  const storedOvertimeByDate = new Map(storedOvertime.map((item) => [item.work_date, item.overtime_hours]));
   return dates.map((date) => {
     const times = byDay.get(date) ?? [];
     const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
@@ -170,7 +178,12 @@ export function buildAttendanceDays(
     const friday = isFriday(date);
     const override = manualDays.get(date);
     const manualOvertime = Number(override?.overtime_hours ?? 0);
-    let overtime = manualOvertime > 0 ? manualOvertime : complete ? attendance.overtime_hours : 0;
+    const calculatedOvertime = storedOvertimeByDate.get(date);
+    let overtime = manualOvertime > 0
+      ? manualOvertime
+      : complete
+        ? calculatedOvertime == null ? attendance.overtime_hours : Number(calculatedOvertime)
+        : 0;
     // دوام فعلي يوم الجمعة يُمنح 10 ساعات وقت إضافي لأي موظف
     if (friday && complete && manualOvertime <= 0) overtime = FRIDAY_OVERTIME_HOURS;
     const hasAnyPunch = attendance.has_punch;

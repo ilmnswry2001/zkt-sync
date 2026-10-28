@@ -16,6 +16,7 @@ import { amountInArabicIqd } from "@/lib/arabic-currency";
 import { currentMonthInBaghdad, monthInstantRangeInBaghdad, todayInBaghdad } from "@/lib/date-time";
 import { getEmployeePayType } from "@/lib/employee-pay-type";
 import {
+  type AttendanceDailyOvertime,
   buildAttendanceDays,
   calculatePayroll,
   loadAllRows,
@@ -104,7 +105,7 @@ function PayrollPage() {
     queryKey: ["payroll", month],
     queryFn: async () => {
       const attendanceRange = monthInstantRangeInBaghdad(month);
-      const [employees, additions, penalties, logs, overrides, weeklySchedules, vehicles, vehicleOperations, leaveCalendar] =
+      const [employees, additions, penalties, logs, overrides, weeklySchedules, storedOvertime, vehicles, vehicleOperations, leaveCalendar] =
         await Promise.all([
           loadAllRows((from, to) =>
             supabase
@@ -164,6 +165,16 @@ function PayrollPage() {
           ),
           loadAllRows((from, to) =>
             (supabase as any)
+              .from("attendance_daily_overtime")
+              .select("employee_id, work_date, overtime_hours")
+              .gte("work_date", `${month}-01`)
+              .lt("work_date", nextMonth)
+              .order("employee_id")
+              .order("work_date")
+              .range(from, to),
+          ),
+          loadAllRows((from, to) =>
+            (supabase as any)
               .from("vehicles")
               .select("id, vehicle_no, name, vehicle_class, daily_rate, currency, is_active")
               .eq("is_active", true)
@@ -204,6 +215,7 @@ function PayrollPage() {
         logs: logs as AttendanceLog[],
         overrides: [...(overrides as AttendanceOverride[]), ...approvedLeaveDays],
         weeklySchedules: weeklySchedules as WeeklyShiftSchedule[],
+        storedOvertime: storedOvertime as AttendanceDailyOvertime[],
         vehicles: vehicles as Vehicle[],
         vehicleOperations: vehicleOperations as VehicleOperation[],
       };
@@ -222,6 +234,7 @@ function PayrollPage() {
           payType,
           employee.shifts?.grace_minutes ?? 0,
           (query.data?.weeklySchedules ?? []).filter((schedule) => schedule.employee_id === employee.id),
+          (query.data?.storedOvertime ?? []).filter((item) => item.employee_id === employee.id),
         );
         const summary = summarizeDays(days);
         const monthlySalary = Number(

@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
+  type AttendanceDailyOvertime,
   buildAttendanceDays,
   calculatePayroll,
   loadAllRows,
@@ -102,7 +103,7 @@ export const getMonthlySheet = createServerFn({ method: "GET" })
     const rows = [];
     for (let i = 0; i < (employees ?? []).length; i += 100) {
       const batch = (employees ?? []).slice(i, i + 100);
-      const [logs, overrides, weeklySchedules] = await Promise.all([
+      const [logs, overrides, weeklySchedules, storedOvertime] = await Promise.all([
         loadAllRows((from, to) =>
           supabase
             .from("attendance_logs")
@@ -141,6 +142,15 @@ export const getMonthlySheet = createServerFn({ method: "GET" })
             .order("effective_from", { ascending: false })
             .range(from, to),
         ),
+        loadAllRows((from, to) =>
+          (supabase as any)
+            .from("attendance_daily_overtime")
+            .select("employee_id, work_date, overtime_hours")
+            .in("employee_id", batch.map((employee) => employee.id))
+            .gte("work_date", start)
+            .lt("work_date", endDate)
+            .range(from, to),
+        ),
       ]);
       const leaveOverrides = await approvedLeaveOverrides(supabase, batch.map((employee) => employee.id), start, endDate);
       const logsByEmployee = new Map<string, typeof logs>();
@@ -165,6 +175,7 @@ export const getMonthlySheet = createServerFn({ method: "GET" })
           employee.pay_type === "daily" ? "daily" : "monthly",
           employee.shifts?.grace_minutes ?? 0,
           (weeklySchedules as WeeklyShiftSchedule[]).filter((schedule) => schedule.employee_id === employee.id),
+          (storedOvertime as AttendanceDailyOvertime[]).filter((item) => item.employee_id === employee.id),
         );
         rows.push({ employee, days, summary: summarizeDays(days) });
       }
@@ -188,7 +199,7 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
     if (error) throw new Error(error.message);
     if (!emp) throw new Error("الموظف غير موجود");
 
-    const [logs, overrides, additions, penalties, leaveOverrides, weeklySchedules] = await Promise.all([
+    const [logs, overrides, additions, penalties, leaveOverrides, weeklySchedules, storedOvertime] = await Promise.all([
       loadAllRows((from, to) =>
         supabase
           .from("attendance_logs")
@@ -240,6 +251,15 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
           .order("effective_from", { ascending: false })
           .range(from, to),
       ),
+      loadAllRows((from, to) =>
+        (supabase as any)
+          .from("attendance_daily_overtime")
+          .select("employee_id, work_date, overtime_hours")
+          .eq("employee_id", data.employee_id)
+          .gte("work_date", start)
+          .lt("work_date", endDate)
+          .range(from, to),
+      ),
     ]);
     const payType = getEmployeePayType(emp);
     const days = buildAttendanceDays(
@@ -251,6 +271,7 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
       payType,
       emp.shifts?.grace_minutes ?? 0,
       weeklySchedules as WeeklyShiftSchedule[],
+      storedOvertime as AttendanceDailyOvertime[],
     );
     const summary = summarizeDays(days);
     const wage = emp.wage_rates;
