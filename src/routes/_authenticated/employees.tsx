@@ -45,6 +45,7 @@ function EmployeesPage() {
   const [editing, setEditing] = useState<Emp | null>(null);
   const [allowAllAttendanceSites, setAllowAllAttendanceSites] = useState(false);
   const [attendanceSiteIds, setAttendanceSiteIds] = useState<string[]>([]);
+  const [checkInGraceHours, setCheckInGraceHours] = useState("0");
   const [search, setSearch] = useState("");
   const [profileSearch, setProfileSearch] = useState("");
   const [selectedProfileId, setSelectedProfileId] = useState("");
@@ -177,13 +178,14 @@ function EmployeesPage() {
     queryFn: async () => {
       const client = supabase as any;
       const [accessResult, sitesResult] = await Promise.all([
-        client.from("employee_self_attendance_access").select("allow_all_sites").eq("employee_id", editing!.id).maybeSingle(),
+        client.from("employee_self_attendance_access").select("allow_all_sites, check_in_grace_hours").eq("employee_id", editing!.id).maybeSingle(),
         client.from("employee_self_attendance_sites").select("site_id").eq("employee_id", editing!.id),
       ]);
       if (accessResult.error) throw accessResult.error;
       if (sitesResult.error) throw sitesResult.error;
       return {
         allowAll: Boolean(accessResult.data?.allow_all_sites),
+        checkInGraceHours: String(accessResult.data?.check_in_grace_hours ?? 0),
         siteIds: (sitesResult.data ?? []).map((row: { site_id: string }) => row.site_id),
       };
     },
@@ -192,11 +194,13 @@ function EmployeesPage() {
     if (!open) return;
     setAllowAllAttendanceSites(false);
     setAttendanceSiteIds([]);
+    setCheckInGraceHours("0");
   }, [open, editing?.id]);
   useEffect(() => {
     if (!employeeSiteAccessQuery.data) return;
     setAllowAllAttendanceSites(employeeSiteAccessQuery.data.allowAll);
     setAttendanceSiteIds(employeeSiteAccessQuery.data.siteIds);
+    setCheckInGraceHours(employeeSiteAccessQuery.data.checkInGraceHours);
   }, [employeeSiteAccessQuery.data]);
   const { data: wages = [] } = useQuery({
     queryKey: ["wage_rates"],
@@ -269,6 +273,16 @@ function EmployeesPage() {
     mutationFn: async (d: any) => {
       const payload = sanitizeEmployeePayload(d);
       const client = supabase as any;
+      const graceHours = Number(d.checkInGraceHours);
+      if (!Number.isFinite(graceHours) || graceHours < 0 || graceHours > 24) {
+        throw new Error("مهلة التأخير يجب أن تكون بين صفر و24 ساعة");
+      }
+      if (isAdmin && editing && employeeSiteAccessQuery.isLoading) {
+        throw new Error("انتظر اكتمال تحميل إعدادات الحضور قبل الحفظ");
+      }
+      if (isAdmin && editing && employeeSiteAccessQuery.isError) {
+        throw new Error("تعذر تحميل إعدادات الحضور السابقة؛ أعد فتح ملف الموظف قبل الحفظ");
+      }
       let employeeId = editing?.id;
       if (employeeId) {
         const { error } = await client.from("employees").update(payload).eq("id", employeeId);
@@ -285,6 +299,11 @@ function EmployeesPage() {
           p_site_ids: d.allowAllAttendanceSites ? [] : d.attendanceSiteIds,
         });
         if (accessError) throw accessError;
+        const { error: graceError } = await client.rpc("set_employee_self_attendance_check_in_grace", {
+          p_employee_id: employeeId,
+          p_hours: graceHours,
+        });
+        if (graceError) throw graceError;
       }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); qc.invalidateQueries({ queryKey: ["employees_count"] }); qc.invalidateQueries({ queryKey: ["employee-self-attendance-site-access"] }); setOpen(false); setEditing(null); toast.success("تم الحفظ"); },
@@ -450,6 +469,7 @@ function EmployeesPage() {
                 email: g("email"), phone1: g("phone1"), phone2: g("phone2"), address: g("address"),
                 allowAllAttendanceSites,
                 attendanceSiteIds,
+                checkInGraceHours,
                 salary_type: g("salary_type"), salary_structure: g("salary_structure"), project: g("project"),
                 passport_no: g("passport_no"), passport_expiry: g("passport_expiry"),
                 residency_no: g("residency_no"), residency_expiry: g("residency_expiry"),
@@ -538,8 +558,21 @@ function EmployeesPage() {
               {isAdmin && (
                 <section className="space-y-3 rounded-xl border border-cyan-900/10 bg-cyan-50/40 p-4 shadow-sm dark:bg-cyan-950/10">
                   <div>
-                    <h3 className="font-semibold">مواقع الحضور الذاتي</h3>
-                    <p className="text-xs text-muted-foreground">اختر المواقع التي يسمح للموظف بتسجيل الحضور منها. عند عدم اختيار مواقع إضافية، يبقى موقع العمل الرئيسي هو المسموح.</p>
+                    <h3 className="font-semibold">إعدادات الحضور الذاتي</h3>
+                    <p className="text-xs text-muted-foreground">اختر المواقع المسموحة وحدد مهلة تجاوز حد تسجيل الدخول لهذا الموظف.</p>
+                  </div>
+                  <div className="max-w-xs space-y-2 rounded-lg border bg-background p-3">
+                    <Label htmlFor="employee-check-in-grace">مهلة تجاوز حد تسجيل الدخول (ساعات)</Label>
+                    <Input
+                      id="employee-check-in-grace"
+                      type="number"
+                      min="0"
+                      max="24"
+                      step="0.5"
+                      value={checkInGraceHours}
+                      onChange={(event) => setCheckInGraceHours(event.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">صفر: لا توجد مهلة إضافية. الحد الأعلى 24 ساعة بعد وقت الدخول المحدد في إعدادات الحضور.</p>
                   </div>
                   <label className="flex cursor-pointer items-center gap-3 rounded-lg border bg-background p-3">
                     <Checkbox

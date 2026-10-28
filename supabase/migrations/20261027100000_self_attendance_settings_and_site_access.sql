@@ -29,6 +29,7 @@ CREATE POLICY "admin manage self attendance settings"
 CREATE TABLE IF NOT EXISTS public.employee_self_attendance_access (
   employee_id uuid PRIMARY KEY REFERENCES public.employees(id) ON DELETE CASCADE,
   allow_all_sites boolean NOT NULL DEFAULT false,
+  check_in_grace_hours numeric(4,2) NOT NULL DEFAULT 0 CHECK (check_in_grace_hours BETWEEN 0 AND 24),
   updated_at timestamptz NOT NULL DEFAULT now(),
   updated_by uuid REFERENCES auth.users(id) ON DELETE SET NULL
 );
@@ -148,6 +149,7 @@ DECLARE
   v_has_site_assignments boolean := false;
   v_latest_check_in_time time;
   v_latest_check_out_time time;
+  v_check_in_grace_hours numeric := 0;
 BEGIN
   v_recorded_at := CASE
     WHEN coalesce(p_submitted_offline, false) AND p_client_recorded_at IS NOT NULL THEN p_client_recorded_at
@@ -183,7 +185,8 @@ BEGIN
     END IF;
   END IF;
 
-  SELECT coalesce(a.allow_all_sites, false) INTO v_allow_all_sites
+  SELECT coalesce(a.allow_all_sites, false), coalesce(a.check_in_grace_hours, 0)
+    INTO v_allow_all_sites, v_check_in_grace_hours
   FROM public.employee_self_attendance_access a WHERE a.employee_id = v_employee.id;
   v_allow_all_sites := coalesce(v_allow_all_sites, false);
   SELECT EXISTS (SELECT 1 FROM public.employee_self_attendance_sites eas WHERE eas.employee_id = v_employee.id)
@@ -193,8 +196,9 @@ BEGIN
   FROM public.self_attendance_settings c WHERE c.id = true;
 
   IF p_event_type = 'check_in' AND v_latest_check_in_time IS NOT NULL
-     AND (v_recorded_at AT TIME ZONE 'Asia/Baghdad')::time > v_latest_check_in_time THEN
-    RAISE EXCEPTION 'انتهى الوقت المسموح لتسجيل الحضور';
+     AND (v_recorded_at AT TIME ZONE 'Asia/Baghdad') >
+       ((v_recorded_at AT TIME ZONE 'Asia/Baghdad')::date + v_latest_check_in_time + v_check_in_grace_hours * interval '1 hour') THEN
+    RAISE EXCEPTION 'انتهى وقت تسجيل الدخول المسموح، بما في ذلك مهلة الموظف البالغة % ساعة', v_check_in_grace_hours;
   END IF;
   IF p_event_type = 'check_out' AND v_latest_check_out_time IS NOT NULL
      AND (v_recorded_at AT TIME ZONE 'Asia/Baghdad')::time > v_latest_check_out_time THEN

@@ -163,6 +163,7 @@ function SelfAttendancePage() {
   const [siteSaving, setSiteSaving] = useState(false);
   const [latestCheckInTime, setLatestCheckInTime] = useState("");
   const [latestCheckOutTime, setLatestCheckOutTime] = useState("");
+  const [checkInGraceHours, setCheckInGraceHours] = useState(0);
   const [attendanceSettingsSaving, setAttendanceSettingsSaving] = useState(false);
   const [queuedCount, setQueuedCount] = useState(0);
   const [selfForms, setSelfForms] = useState<{ id: string; form_no: number; kind: "overtime" | "early_exit"; status: string; overtime_hours: number; check_out: string | null; rejection_reason: string | null }[]>([]);
@@ -228,7 +229,7 @@ function SelfAttendancePage() {
     }
     const accessClient = supabase as any;
     const [accessResult, assignedSitesResult] = await Promise.all([
-      accessClient.from("employee_self_attendance_access").select("allow_all_sites").eq("employee_id", nextEmployee.id).maybeSingle(),
+      accessClient.from("employee_self_attendance_access").select("allow_all_sites, check_in_grace_hours").eq("employee_id", nextEmployee.id).maybeSingle(),
       accessClient.from("employee_self_attendance_sites").select("site_id").eq("employee_id", nextEmployee.id),
     ]);
     if (accessResult.error || assignedSitesResult.error) {
@@ -237,6 +238,7 @@ function SelfAttendancePage() {
       return;
     }
     const allowAllSites = Boolean(accessResult.data?.allow_all_sites);
+    setCheckInGraceHours(Number(accessResult.data?.check_in_grace_hours ?? 0));
     const assignedSiteIds = (assignedSitesResult.data ?? []).map((row: { site_id: string }) => row.site_id);
     if (allowAllSites || assignedSiteIds.length) {
       let sitesQuery = accessClient.from("sites").select("id, name, latitude, longitude, geofence_radius_meters").order("name");
@@ -419,10 +421,16 @@ function SelfAttendancePage() {
   const recordAttendance = async (eventType: "check_in" | "check_out") => {
     const deadline = eventType === "check_in" ? latestCheckInTime : latestCheckOutTime;
     const currentMinutes = baghdadMinutes(now);
-    if (deadline && currentMinutes > minutesFromTime(deadline)) {
-      const lateMinutes = currentMinutes - minutesFromTime(deadline);
+    const allowedMinutes = deadline
+      ? minutesFromTime(deadline) + (eventType === "check_in" ? checkInGraceHours * 60 : 0)
+      : null;
+    if (deadline && allowedMinutes != null && currentMinutes > allowedMinutes) {
+      const lateMinutes = currentMinutes - allowedMinutes;
+      const graceMessage = eventType === "check_in" && checkInGraceHours > 0
+        ? ` والمهلة الخاصة بك ${checkInGraceHours.toLocaleString("ar-IQ")} ساعة`
+        : "";
       return toast.error(
-        `تعذر التسجيل: الوقت الآن ${baghdadTime(now)} والحد المسموح ${deadline}. الفرق ${formatMinutes(lateMinutes)} بعد الوقت المحدد. استخدم تبويب الوقت الإضافي إذا كان تسجيلك للعمل بعد الدوام.`,
+        `تعذر التسجيل: الوقت الآن ${baghdadTime(now)} والحد العام ${deadline}${graceMessage}. تجاوزت آخر وقت مسموح بـ ${formatMinutes(lateMinutes)}. استخدم تبويب الوقت الإضافي إذا كان تسجيلك للعمل بعد الدوام.`,
       );
     }
     if (!employee || !site) return toast.error("لا يوجد موقع عمل مخصص لهذا الموظف");
