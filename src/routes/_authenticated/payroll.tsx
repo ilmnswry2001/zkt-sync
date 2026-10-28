@@ -22,6 +22,7 @@ import {
   monthDates,
   roundMoney,
   summarizeDays,
+  type WeeklyShiftSchedule,
 } from "@/lib/monthly-report";
 
 export const Route = createFileRoute("/_authenticated/payroll")({
@@ -103,7 +104,7 @@ function PayrollPage() {
     queryKey: ["payroll", month],
     queryFn: async () => {
       const attendanceRange = monthInstantRangeInBaghdad(month);
-      const [employees, additions, penalties, logs, overrides, vehicles, vehicleOperations, leaveCalendar] =
+      const [employees, additions, penalties, logs, overrides, weeklySchedules, vehicles, vehicleOperations, leaveCalendar] =
         await Promise.all([
           loadAllRows((from, to) =>
             supabase
@@ -154,6 +155,15 @@ function PayrollPage() {
           ),
           loadAllRows((from, to) =>
             (supabase as any)
+              .from("employee_weekly_schedules")
+              .select("employee_id, weekday, start_time, end_time, grace_minutes, effective_from, effective_until")
+              .lt("effective_from", nextMonth)
+              .or(`effective_until.is.null,effective_until.gte.${month}-01`)
+              .order("effective_from", { ascending: false })
+              .range(from, to),
+          ),
+          loadAllRows((from, to) =>
+            (supabase as any)
               .from("vehicles")
               .select("id, vehicle_no, name, vehicle_class, daily_rate, currency, is_active")
               .eq("is_active", true)
@@ -193,6 +203,7 @@ function PayrollPage() {
         penalties: penalties as Penalty[],
         logs: logs as AttendanceLog[],
         overrides: [...(overrides as AttendanceOverride[]), ...approvedLeaveDays],
+        weeklySchedules: weeklySchedules as WeeklyShiftSchedule[],
         vehicles: vehicles as Vehicle[],
         vehicleOperations: vehicleOperations as VehicleOperation[],
       };
@@ -210,6 +221,7 @@ function PayrollPage() {
           todayInBaghdad(),
           payType,
           employee.shifts?.grace_minutes ?? 0,
+          (query.data?.weeklySchedules ?? []).filter((schedule) => schedule.employee_id === employee.id),
         );
         const summary = summarizeDays(days);
         const monthlySalary = Number(

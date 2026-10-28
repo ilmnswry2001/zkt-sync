@@ -97,6 +97,16 @@ export type AttendanceDay = {
   is_paid_leave?: boolean;
 };
 
+export type WeeklyShiftSchedule = {
+  employee_id: string;
+  weekday: number;
+  start_time: string;
+  end_time: string;
+  grace_minutes: number;
+  effective_from: string;
+  effective_until: string | null;
+};
+
 export function buildPenaltyAttendanceOverride(
   penaltyType: "absence" | "deduction" | "warning",
   workDate: string,
@@ -132,6 +142,7 @@ export function buildAttendanceDays(
   today: string,
   payType: PayType = "monthly",
   graceMinutes = 0,
+  weeklySchedules: WeeklyShiftSchedule[] = [],
 ): AttendanceDay[] {
   const byDay = new Map<string, AttendancePunch[]>();
   for (const log of logs) {
@@ -145,7 +156,16 @@ export function buildAttendanceDays(
   const manualDays = new Map(overrides.map((day) => [day.work_date, day]));
   return dates.map((date) => {
     const times = byDay.get(date) ?? [];
-    const attendance = summarizeAttendancePunches(times, shiftEnd, graceMinutes);
+    const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
+    const schedule = weeklySchedules
+      .filter((item) => item.weekday === weekday && item.effective_from <= date &&
+        (item.effective_until == null || item.effective_until >= date))
+      .sort((a, b) => b.effective_from.localeCompare(a.effective_from))[0];
+    const attendance = summarizeAttendancePunches(
+      times,
+      schedule?.end_time ?? shiftEnd,
+      schedule?.grace_minutes ?? graceMinutes,
+    );
     const complete = attendance.complete;
     const friday = isFriday(date);
     const override = manualDays.get(date);

@@ -126,7 +126,8 @@ function minutesFromTime(value: string) {
   return hours * 60 + minutes;
 }
 function formatMinutes(value: number) {
-  return `${Math.floor(value / 60).toLocaleString("ar-IQ")} س ${String(value % 60).padStart(2, "0").toLocaleString("ar-IQ")} د`;
+  const minutes = new Intl.NumberFormat("ar-IQ", { minimumIntegerDigits: 2, useGrouping: false }).format(value % 60);
+  return `${Math.floor(value / 60).toLocaleString("ar-IQ")} س ${minutes} د`;
 }
 function haversineMeters(aLat: number, aLon: number, bLat: number, bLon: number) {
   const radius = 6371000;
@@ -143,6 +144,7 @@ function SelfAttendancePage() {
   const { user, isAdmin } = useAuth();
   const [now, setNow] = useState(new Date());
   const [employee, setEmployee] = useState<Employee | null>(null);
+  const [todayShift, setTodayShift] = useState<{ end_time: string | null; grace_minutes: number | null } | null>(null);
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [locationLoading, setLocationLoading] = useState(false);
@@ -230,9 +232,19 @@ function SelfAttendancePage() {
       return;
     }
     const accessClient = supabase as any;
-    const [accessResult, assignedSitesResult] = await Promise.all([
+    const weekday = new Date(`${today}T00:00:00Z`).getUTCDay();
+    const [accessResult, assignedSitesResult, todayScheduleResult] = await Promise.all([
       accessClient.from("employee_self_attendance_access").select("allow_all_sites, check_in_grace_hours").eq("employee_id", nextEmployee.id).maybeSingle(),
       accessClient.from("employee_self_attendance_sites").select("site_id").eq("employee_id", nextEmployee.id),
+      accessClient.from("employee_weekly_schedules")
+        .select("end_time, grace_minutes")
+        .eq("employee_id", nextEmployee.id)
+        .eq("weekday", weekday)
+        .lte("effective_from", today)
+        .or(`effective_until.is.null,effective_until.gte.${today}`)
+        .order("effective_from", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
     if (accessResult.error || assignedSitesResult.error) {
       toast.error(`تعذر قراءة مواقع الحضور المسموحة: ${formatErrorMessage(accessResult.error ?? assignedSitesResult.error)}`);
@@ -241,6 +253,7 @@ function SelfAttendancePage() {
     }
     const allowAllSites = Boolean(accessResult.data?.allow_all_sites);
     setCheckInGraceHours(Number(accessResult.data?.check_in_grace_hours ?? 0));
+    setTodayShift(todayScheduleResult.data ?? nextEmployee.shifts);
     const assignedSiteIds = (assignedSitesResult.data ?? []).map((row: { site_id: string }) => row.site_id);
     if (allowAllSites || assignedSiteIds.length) {
       let sitesQuery = accessClient.from("sites").select("id, name, latitude, longitude, geofence_radius_meters").order("name");
@@ -569,11 +582,11 @@ function SelfAttendancePage() {
     if (eventType === "check_in") {
       toast.success("تم تسجيل حضورك بنجاح");
     } else {
-      const overtimeHours = employee?.shifts?.end_time
+      const overtimeHours = todayShift?.end_time
         ? summarizeAttendancePunches(
             [...logs, { verify_time: result.recorded_at, self_event_type: "check_out" }],
-            employee.shifts.end_time,
-            employee.shifts.grace_minutes ?? 0,
+            todayShift.end_time,
+            todayShift.grace_minutes ?? 0,
           ).overtime_hours
         : 0;
       toast.success(
