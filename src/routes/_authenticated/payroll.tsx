@@ -75,7 +75,7 @@ type Penalty = {
   notes: string | null;
 };
 type AttendanceLog = { employee_no: string; verify_time: string; status: number | null; source: string | null; self_event_type: string | null };
-type ApprovedLeaveCalendarDay = { employee_id: string; work_date: string; is_paid: boolean; status: string };
+type ApprovedLeaveCalendarDay = { employee_id: string; work_date: string; leave_end_date: string | null; is_paid: boolean; count_non_working_days: boolean | null; status: string };
 type AttendanceOverride = {
   employee_id: string;
   work_date: string;
@@ -115,126 +115,170 @@ function buildPayrollSlipHtml(row: PayrollSlipRow, month: string) {
     </style></head><body><main class="slip"><section class="hero"><div><div class="hero-label">صافي الراتب</div><div class="hero-amount">${money(row.total)}</div></div><div class="hero-month">د.ع<br>${escapeHtml(month)}</div></section><section class="stats"><div class="stat"><span>الأساسي</span><b>${money(row.payroll.basePay)}</b></div><div class="stat"><span>الإضافي</span><b>${money(row.payroll.overtimePay + row.additions)}</b></div><div class="stat"><span>الاستقطاع</span><b>${money(row.deductions)}</b></div></section><section class="identity"><div><span>الموظف</span><b>${escapeHtml(row.employee.full_name)}</b></div><div><span>الرقم</span><b>${escapeHtml(row.employee.employee_no)}</b></div><div><span>القسم</span><b>${escapeHtml(row.employee.departments?.name || "—")}</b></div><div><span>أيام العمل</span><b>${row.summary.presentDays} يوم</b></div></section><div class="heading"><span>تفاصيل الراتب</span><span>د.ع</span></div><div class="table-wrap"><table><tbody><tr><td>الراتب الأساسي</td><td class="amount">${money(row.payroll.basePay)}</td></tr><tr><td>بدل الساعات الإضافية (${roundMoney(row.payroll.overtimeHours)} ساعة)</td><td class="amount">${money(row.payroll.overtimePay)}</td></tr><tr><td>الإضافات والمكافآت</td><td class="amount">${money(row.additions)}</td></tr>${deductionRows}<tr><td>إجمالي الاستقطاعات</td><td class="amount">−${money(row.deductions)}</td></tr></tbody></table></div><section class="net"><span>صافي الراتب</span><b>${money(row.total)}</b></section><footer class="footer"><span>صادرة إلكترونيًا من نظام الموارد البشرية</span><span>١ من ١</span></footer></main></body></html>`;
 }
 
+function PayrollSlipPreview({ row, month }: { row: PayrollSlipRow; month: string }) {
+  const deductions = row.penalties
+    .filter((penalty) => Number(penalty.deduction_amount) > 0)
+    .map((penalty) => ({ label: penalty.notes || "استقطاع", amount: Number(penalty.deduction_amount) }));
+  return (
+    <article className="mx-auto flex aspect-[2/3] w-full max-w-[100mm] flex-col overflow-hidden border border-slate-200 bg-white p-[5%] text-slate-900 shadow-md">
+      <header className="flex h-[17%] shrink-0 items-center justify-between rounded-lg bg-gradient-to-l from-teal-700 to-cyan-700 px-[5%] text-white">
+        <div><span className="block text-xs">صافي الراتب</span><b className="mt-1 block text-xl" dir="ltr">{money(row.total)}</b></div>
+        <div className="text-left text-xs">د.ع<br />{month}</div>
+      </header>
+      <section className="mt-[3%] grid shrink-0 grid-cols-3 gap-2 text-right text-xs">
+        <div className="rounded bg-slate-50 p-2"><span className="text-slate-500">الأساسي</span><b className="mt-1 block">{money(row.payroll.basePay)}</b></div>
+        <div className="rounded bg-slate-50 p-2"><span className="text-slate-500">الإضافي</span><b className="mt-1 block">{money(row.payroll.overtimePay + row.additions)}</b></div>
+        <div className="rounded bg-slate-50 p-2"><span className="text-slate-500">الاستقطاع</span><b className="mt-1 block">{money(row.deductions)}</b></div>
+      </section>
+      <section className="mt-[3%] grid shrink-0 grid-cols-2 gap-x-4 gap-y-2 rounded border border-slate-200 p-[4%] text-xs">
+        <div><span className="text-slate-500">الموظف</span><b className="block">{row.employee.full_name}</b></div>
+        <div><span className="text-slate-500">الرقم</span><b className="block">{row.employee.employee_no}</b></div>
+        <div><span className="text-slate-500">القسم</span><b className="block">{row.employee.departments?.name || "—"}</b></div>
+        <div><span className="text-slate-500">أيام العمل</span><b className="block">{row.summary.presentDays} يوم</b></div>
+      </section>
+      <div className="mt-[3%] flex shrink-0 justify-between bg-slate-100 px-3 py-2 text-xs font-semibold"><span>تفاصيل الراتب</span><span>د.ع</span></div>
+      <div className="min-h-0 flex-1 overflow-auto text-xs">
+        <div className="flex justify-between border-b border-slate-100 py-2"><span>الراتب الأساسي</span><b>{money(row.payroll.basePay)}</b></div>
+        <div className="flex justify-between border-b border-slate-100 py-2"><span>الساعات الإضافية ({roundMoney(row.payroll.overtimeHours)} ساعة)</span><b>{money(row.payroll.overtimePay)}</b></div>
+        <div className="flex justify-between border-b border-slate-100 py-2"><span>الإضافات والمكافآت</span><b>{money(row.additions)}</b></div>
+        {deductions.map((item, index) => <div key={`${item.label}-${index}`} className="flex justify-between border-b border-slate-100 py-2"><span>{item.label}</span><b>−{money(item.amount)}</b></div>)}
+        <div className="flex justify-between border-b border-slate-100 py-2"><span>إجمالي الاستقطاعات</span><b>−{money(row.deductions)}</b></div>
+      </div>
+      <footer className="mt-[3%] flex shrink-0 justify-between rounded bg-teal-50 px-3 py-2 text-sm font-semibold"><span>صافي الراتب</span><b>{money(row.total)}</b></footer>
+      <div className="mt-2 shrink-0 border-t pt-2 text-[10px] text-slate-500">صادرة إلكترونيًا من نظام الموارد البشرية</div>
+    </article>
+  );
+}
+
 function PayrollPage() {
   const [previewRow, setPreviewRow] = useState<PayrollSlipRow | null>(null);
   const [month, setMonth] = useState(currentMonthInBaghdad);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const pageSize = 20;
   const nextMonth = useMemo(() => {
     const date = new Date(`${month}-01T00:00:00Z`);
     date.setUTCMonth(date.getUTCMonth() + 1);
     return date.toISOString().slice(0, 10);
   }, [month]);
   const query = useQuery({
-    queryKey: ["payroll", month],
+    queryKey: ["payroll", month, page, search],
     staleTime: 60_000,
     queryFn: async () => {
       const attendanceRange = monthInstantRangeInBaghdad(month);
-      const [employees, additions, penalties, logs, overrides, weeklySchedules, storedOvertime, vehicles, vehicleOperations, leaveCalendar] =
+      let employeeQuery = supabase
+        .from("employees")
+        .select(
+          "id, employee_no, full_name, position, base_salary, pay_type, salary_type, contract_type, bank_name, bank_account, iban, sites!employees_site_id_fkey(name), departments!employees_department_id_fkey(name), wage_rates(title, monthly_rate, daily_rate, overtime_hour_rate, currency), shifts(end_time, grace_minutes)",
+          { count: "exact" },
+        )
+        .order("employee_no")
+        .order("id");
+      if (search.trim()) {
+        const term = search.trim().replace(/[(),]/g, "");
+        employeeQuery = employeeQuery.or(`full_name.ilike.%${term}%,employee_no.ilike.%${term}%`);
+      }
+      const { data: employeePage, count: employeeCount, error: employeeError } = await employeeQuery.range(
+        (page - 1) * pageSize,
+        page * pageSize - 1,
+      );
+      if (employeeError) throw new Error(employeeError.message);
+      const employees = (employeePage ?? []) as Employee[];
+      const employeeIds = employees.map((employee) => employee.id);
+      const employeeNumbers = employees.map((employee) => employee.employee_no);
+      const [additions, penalties, logs, overrides, weeklySchedules, storedOvertime, vehicles, vehicleOperations, leaveCalendar] =
         await Promise.all([
-          loadAllRows((from, to) =>
-            supabase
-              .from("employees")
-              .select(
-                "id, employee_no, full_name, position, base_salary, pay_type, salary_type, contract_type, bank_name, bank_account, iban, sites!employees_site_id_fkey(name), departments!employees_department_id_fkey(name), wage_rates(title, monthly_rate, daily_rate, overtime_hour_rate, currency), shifts(end_time, grace_minutes)",
-              )
-              .order("employee_no")
-              .order("id")
-              .range(from, to),
-          ),
-          loadAllRows((from, to) =>
+          employeeIds.length ? loadAllRows((from, to) =>
             supabase
               .from("salary_additions")
               .select("employee_id, amount, kind")
+              .in("employee_id", employeeIds)
               .eq("month", `${month}-01`)
               .order("id")
               .range(from, to),
-          ),
-          loadAllRows((from, to) =>
+          ) : Promise.resolve([]),
+          employeeIds.length ? loadAllRows((from, to) =>
             supabase
               .from("employee_penalties")
               .select("id, employee_id, deduction_amount, penalty_date, notes")
+              .in("employee_id", employeeIds)
               .gte("penalty_date", `${month}-01`)
               .lt("penalty_date", nextMonth)
               .order("id")
               .range(from, to),
-          ),
-          loadAllRows((from, to) =>
+          ) : Promise.resolve([]),
+          employeeNumbers.length ? loadAllRows((from, to) =>
             supabase
               .from("attendance_logs")
               .select("employee_no, verify_time, status, source, self_event_type")
+              .in("employee_no", employeeNumbers)
               .gte("verify_time", attendanceRange.start)
               .lt("verify_time", attendanceRange.end)
               .order("verify_time")
               .order("id")
               .range(from, to),
-          ),
-          loadAllRows((from, to) =>
+          ) : Promise.resolve([]),
+          employeeIds.length ? loadAllRows((from, to) =>
             supabase
               .from("attendance_day_status")
               .select("employee_id, work_date, status, notes, overtime_hours")
+              .in("employee_id", employeeIds)
               .gte("work_date", `${month}-01`)
               .lt("work_date", nextMonth)
               .order("employee_id")
               .order("work_date")
               .range(from, to),
-          ),
-          loadAllRows((from, to) =>
+          ) : Promise.resolve([]),
+          employeeIds.length ? loadAllRows((from, to) =>
             (supabase as any)
               .from("employee_weekly_schedules")
               .select("employee_id, weekday, start_time, end_time, grace_minutes, effective_from, effective_until")
+              .in("employee_id", employeeIds)
               .lt("effective_from", nextMonth)
               .or(`effective_until.is.null,effective_until.gte.${month}-01`)
               .order("effective_from", { ascending: false })
               .range(from, to),
-          ),
-          loadAllRows((from, to) =>
+          ) : Promise.resolve([]),
+          employeeIds.length ? loadAllRows((from, to) =>
             (supabase as any)
               .from("attendance_daily_overtime")
               .select("employee_id, work_date, overtime_hours")
+              .in("employee_id", employeeIds)
               .gte("work_date", `${month}-01`)
               .lt("work_date", nextMonth)
               .order("employee_id")
               .order("work_date")
               .range(from, to),
-          ),
-          loadAllRows((from, to) =>
-            (supabase as any)
-              .from("vehicles")
-              .select("id, vehicle_no, name, vehicle_class, daily_rate, currency, is_active")
-              .eq("is_active", true)
-              .order("vehicle_no")
+          ) : Promise.resolve([]),
+          Promise.resolve([]),
+          Promise.resolve([]),
+          employeeIds.length ? loadAllRows((from, to) =>
+            supabase
+              .from("forms")
+              .select("employee_id, work_date, leave_end_date, status, leave_types(is_paid, count_non_working_days)")
+              .in("employee_id", employeeIds)
+              .eq("kind", "leave")
+              .in("status", ["pending_execution", "executed"])
+              .lt("work_date", nextMonth)
+              .gte("leave_end_date", `${month}-01`)
               .range(from, to),
-          ),
-          loadAllRows((from, to) =>
-            (supabase as any)
-              .from("vehicle_monthly_operations")
-              .select("vehicle_id, operating_days")
-              .eq("month", `${month}-01`)
-              .order("vehicle_id")
-              .range(from, to),
-          ),
-          loadAllRows((from, to) =>
-            (supabase as any)
-              .rpc("leave_calendar_month", {
-                _year: Number(month.slice(0, 4)),
-                _month: Number(month.slice(5, 7)),
-              })
-              .range(from, to),
-          ),
+          ) : Promise.resolve([]),
         ]);
-      const approvedLeaveDays = (leaveCalendar as ApprovedLeaveCalendarDay[])
-        .filter((day) => ["pending_execution", "executed"].includes(day.status))
-        .map((day): AttendanceOverride => ({
-          employee_id: day.employee_id,
-          work_date: day.work_date,
-          status: "leave",
-          notes: `إجازة ${day.is_paid ? "مدفوعة" : "بدون راتب"}`,
-          overtime_hours: 0,
-          is_paid: day.is_paid,
-        }));
+      const approvedLeaveDays: AttendanceOverride[] = (leaveCalendar as any[]).flatMap((form) => {
+        const leaveType = Array.isArray(form.leave_types) ? form.leave_types[0] : form.leave_types;
+        const end = form.leave_end_date || form.work_date;
+        const dates: AttendanceOverride[] = [];
+        for (let date = new Date(`${form.work_date}T00:00:00Z`); date <= new Date(`${end}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + 1)) {
+          const workDate = date.toISOString().slice(0, 10);
+          if (workDate < `${month}-01` || workDate >= nextMonth) continue;
+          if (!leaveType?.count_non_working_days && [0, 5].includes(date.getUTCDay())) continue;
+          dates.push({ employee_id: form.employee_id, work_date: workDate, status: "leave", notes: `إجازة ${leaveType?.is_paid ? "مدفوعة" : "بدون راتب"}`, overtime_hours: 0, is_paid: Boolean(leaveType?.is_paid) });
+        }
+        return dates;
+      });
       return {
-        employees: employees as Employee[],
+        employees,
+        employeeCount: employeeCount ?? 0,
         additions: additions as Addition[],
         penalties: penalties as Penalty[],
         logs: logs as AttendanceLog[],
@@ -310,14 +354,9 @@ function PayrollPage() {
       }),
     [query.data?.employees, dataByEmployee, month],
   );
-  const filteredRows = rows.filter((row) =>
-    `${row.employee.full_name} ${row.employee.employee_no}`
-      .toLocaleLowerCase("ar")
-      .includes(search.trim().toLocaleLowerCase("ar")),
-  );
-  const pageSize = 20;
-  const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
-  const visibleRows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
+  const filteredRows = rows;
+  const pageCount = Math.max(1, Math.ceil((query.data?.employeeCount ?? 0) / pageSize));
+  const visibleRows = filteredRows;
   const bankRows = rows.filter(
     (row) => row.employee.bank_account?.trim() || row.employee.iban?.trim(),
   );
@@ -560,7 +599,7 @@ function PayrollPage() {
                   <p className="text-sm text-muted-foreground">صافي رواتب الموظفين</p>
                   <p className="mt-1 text-2xl font-bold">{money(total)}</p>
                 </div>
-                <Badge variant="secondary">{rows.length} موظف</Badge>
+                <Badge variant="secondary">{query.data?.employeeCount ?? 0} موظف</Badge>
               </CardContent>
             </Card>
           </div>
@@ -570,9 +609,10 @@ function PayrollPage() {
                 <CardTitle>تقرير رواتب الموظفين</CardTitle>
                 <p className="mt-1 text-sm text-muted-foreground">
                   يشمل احتساب الحضور والراحة والعطل والإضافي والإضافات والاستقطاعات.
-                  {rows.length > bankRows.length &&
-                    ` · ${rows.length - bankRows.length} موظف دون بيانات دفع مصرفية`}
-                  {` · ${cashRows.length} قسيمة نقدية/يومية`}
+                  {` · ${query.data?.employeeCount ?? 0} موظفًا`}
+                  {query.data?.employeeCount && rows.length > bankRows.length
+                    ? ` · بعض نتائج البنك تخص الصفحة الحالية فقط`
+                    : ""}
                 </p>
               </div>
               <div className="relative w-full sm:max-w-xs">
@@ -657,10 +697,10 @@ function PayrollPage() {
                       لا توجد بيانات مطابقة.
                     </p>
                   )}
-                  {filteredRows.length > pageSize && (
+                  {(query.data?.employeeCount ?? 0) > pageSize && (
                     <div className="flex flex-wrap items-center justify-between gap-3 border-t p-4">
                       <p className="text-sm text-muted-foreground">
-                        عرض {((page - 1) * pageSize) + 1}–{Math.min(page * pageSize, filteredRows.length)} من {filteredRows.length} موظفًا
+                        عرض {((page - 1) * pageSize) + 1}–{Math.min(page * pageSize, query.data?.employeeCount ?? 0)} من {query.data?.employeeCount ?? 0} موظفًا
                       </p>
                       <Pagination className="mx-0 w-auto">
                         <PaginationContent>
@@ -769,13 +809,8 @@ function PayrollPage() {
             <DialogTitle>قصاصة راتب — {previewRow?.employee.full_name}</DialogTitle>
           </DialogHeader>
           {previewRow && (
-            <div className="flex w-full justify-center overflow-auto bg-slate-100 p-4 sm:p-6">
-              <iframe
-                title={`معاينة قصاصة راتب ${previewRow.employee.full_name}`}
-                className="h-[min(70vh,150mm)] w-[min(calc(100vw-5rem),100mm)] shrink-0 border-0 bg-white shadow-md"
-                srcDoc={buildPayrollSlipHtml(previewRow, month)}
-                sandbox="allow-scripts"
-              />
+            <div className="max-h-[78vh] w-full overflow-auto rounded-lg bg-slate-100 p-3 sm:p-5">
+              <PayrollSlipPreview row={previewRow} month={month} />
             </div>
           )}
         </DialogContent>
