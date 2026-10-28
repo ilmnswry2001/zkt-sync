@@ -54,7 +54,7 @@ type FormRow = {
   id: string;
   form_no: number;
   work_date: string;
-  kind: "attendance" | "overtime" | "leave";
+  kind: "attendance" | "overtime" | "leave" | "early_exit";
   day_status: string | null;
   overtime_hours: number;
   check_in: string | null;
@@ -72,6 +72,7 @@ const KIND_LABEL: Record<string, string> = {
   attendance: "حضور",
   overtime: "وقت إضافي",
   leave: "إجازة",
+  early_exit: "خروج مبكر",
 };
 const STATUS_LABEL: Record<string, string> = {
   pending_manager: "بانتظار مدير القسم",
@@ -90,7 +91,11 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "
 
 function printForm(row: FormRow) {
   const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[char] ?? char);
-  const details = row.kind === "overtime" ? `${row.overtime_hours} ساعة` : `${row.check_in ?? "—"} → ${row.check_out ?? "—"}`;
+  const details = row.kind === "overtime"
+    ? `${row.overtime_hours} ساعة`
+    : row.kind === "early_exit"
+      ? `وقت الخروج المطلوب: ${row.check_out ?? "—"}`
+      : `${row.check_in ?? "—"} → ${row.check_out ?? "—"}`;
   const popup = window.open("", "_blank", "width=900,height=800");
   if (!popup) {
     toast.error("تعذر فتح نافذة الطباعة؛ اسمح بالنوافذ المنبثقة ثم حاول مرة أخرى");
@@ -108,7 +113,7 @@ function FormsPage() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState<string>("all");
-  const [kind, setKind] = useState<"attendance" | "overtime" | "leave">("attendance");
+  const [kind, setKind] = useState<"attendance" | "overtime" | "leave" | "early_exit">("attendance");
   const [leaveTypeId, setLeaveTypeId] = useState("");
   const [employeeId, setEmployeeId] = useState("");
   const [search, setSearch] = useState("");
@@ -200,7 +205,7 @@ function FormsPage() {
       qc.invalidateQueries({ queryKey: ["forms"] });
       setOpen(false);
       setEmployeeId("");
-      toast.success("تم إرسال الاستمارة إلى قائمة التنفيذ");
+      toast.success("تم إرسال الاستمارة إلى مسار الموافقة");
     },
     onError: (e: any) => toast.error(formatErrorMessage(e) ?? "فشل إرسال الاستمارة"),
   });
@@ -300,6 +305,7 @@ function FormsPage() {
                     <SelectItem value="attendance">إثبات حضور</SelectItem>
                     <SelectItem value="overtime">وقت إضافي</SelectItem>
                     <SelectItem value="leave">إجازة</SelectItem>
+                    <SelectItem value="early_exit">طلب خروج مبكر</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -341,6 +347,11 @@ function FormsPage() {
                 <div>
                   <Label>ساعات الوقت الإضافي</Label>
                   <Input type="number" step="0.5" min="0" max="24" name="overtime_hours" defaultValue="1" />
+                </div>
+              ) : kind === "early_exit" ? (
+                <div className="col-span-2">
+                  <Label>وقت الخروج المطلوب</Label>
+                  <Input type="time" name="check_out" required />
                 </div>
               ) : (
                 <>
@@ -417,7 +428,9 @@ function FormsPage() {
                   <TableCell className="text-xs whitespace-nowrap">
                     {row.kind === "overtime"
                       ? `${row.overtime_hours} ساعة`
-                      : `${row.check_in ?? "—"} → ${row.check_out ?? "—"}`}
+                      : row.kind === "early_exit"
+                        ? `خروج مطلوب ${row.check_out ?? "—"}`
+                        : `${row.check_in ?? "—"} → ${row.check_out ?? "—"}`}
                   </TableCell>
                   <TableCell className="max-w-56 truncate text-xs" title={row.reason}>
                     {row.reason}
@@ -496,7 +509,7 @@ function FormsPage() {
                 <div><span className="text-muted-foreground">التاريخ:</span> {selectedForm.work_date}</div>
                 <div><span className="text-muted-foreground">القسم:</span> {selectedForm.department?.name ?? "—"}</div>
                 <div><span className="text-muted-foreground">مرسلة إلى:</span> {selectedForm.target?.name ?? "—"}</div>
-                <div><span className="text-muted-foreground">التفاصيل:</span> {selectedForm.kind === "overtime" ? `${selectedForm.overtime_hours} ساعة` : `${selectedForm.check_in ?? "—"} → ${selectedForm.check_out ?? "—"}`}</div>
+                <div><span className="text-muted-foreground">التفاصيل:</span> {selectedForm.kind === "overtime" ? `${selectedForm.overtime_hours} ساعة` : selectedForm.kind === "early_exit" ? `وقت الخروج المطلوب ${selectedForm.check_out ?? "—"}` : `${selectedForm.check_in ?? "—"} → ${selectedForm.check_out ?? "—"}`}</div>
               </div>
               <div className="rounded-lg bg-muted/50 p-4"><p className="text-sm font-semibold mb-1">السبب والتفاصيل</p><p className="whitespace-pre-wrap">{selectedForm.reason}</p></div>
               {selectedForm.rejection_reason && <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-destructive"><p className="text-sm font-semibold mb-1">سبب الرفض</p><p>{selectedForm.rejection_reason}</p></div>}

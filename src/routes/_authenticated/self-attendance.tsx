@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -21,6 +22,7 @@ import { toast } from "sonner";
 import { enqueueSelfAttendance, readSelfAttendanceQueue, removeQueuedSelfAttendance, type QueuedSelfAttendance } from "@/lib/self-attendance-queue";
 import { FaceCameraDialog } from "@/components/FaceCameraDialog";
 import { getAttendancePushKey, saveAttendancePushSubscription } from "@/lib/push.functions";
+import { createForm } from "@/lib/forms.functions";
 import {
   CheckCircle2,
   Clock3,
@@ -110,6 +112,20 @@ function baghdadTime(date = new Date()) {
     hour12: true,
   }).format(date);
 }
+function baghdadMinutes(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Baghdad", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(date);
+  const value = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? 0);
+  return value("hour") * 60 + value("minute");
+}
+function minutesFromTime(value: string) {
+  const [hours, minutes] = value.slice(0, 5).split(":").map(Number);
+  return hours * 60 + minutes;
+}
+function formatMinutes(value: number) {
+  return `${Math.floor(value / 60).toLocaleString("ar-IQ")} س ${String(value % 60).padStart(2, "0").toLocaleString("ar-IQ")} د`;
+}
 function haversineMeters(aLat: number, aLon: number, bLat: number, bLon: number) {
   const radius = 6371000;
   const toRad = (value: number) => (value * Math.PI) / 180;
@@ -149,8 +165,13 @@ function SelfAttendancePage() {
   const [latestCheckOutTime, setLatestCheckOutTime] = useState("");
   const [attendanceSettingsSaving, setAttendanceSettingsSaving] = useState(false);
   const [queuedCount, setQueuedCount] = useState(0);
+  const [selfForms, setSelfForms] = useState<{ id: string; form_no: number; kind: "overtime" | "early_exit"; status: string; overtime_hours: number; check_out: string | null; rejection_reason: string | null }[]>([]);
+  const [earlyExitReason, setEarlyExitReason] = useState("");
+  const [overtimeReason, setOvertimeReason] = useState("");
+  const [selfFormSaving, setSelfFormSaving] = useState(false);
   const getPushKey = useServerFn(getAttendancePushKey);
   const savePushSubscription = useServerFn(saveAttendancePushSubscription);
+  const submitForm = useServerFn(createForm);
 
   const today = baghdadDate(now);
   const measuredSites = coordinates
@@ -173,6 +194,13 @@ function SelfAttendancePage() {
   const checkedOut = logs.some(
     (log) => log.self_event_type === "check_out" || log.status === 1,
   );
+  const overtimeMinutes = latestCheckOutTime
+    ? Math.max(0, baghdadMinutes(now) - minutesFromTime(latestCheckOutTime))
+    : 0;
+  const overtimeHoursAvailable = Math.floor(overtimeMinutes / 30) / 2;
+  const hasActiveOvertimeForm = selfForms.some((form) => form.kind === "overtime" && form.status !== "rejected");
+  const earlyExitForms = selfForms.filter((form) => form.kind === "early_exit");
+  const overtimeForms = selfForms.filter((form) => form.kind === "overtime");
 
   const loadAttendance = async () => {
     if (!user) return;
@@ -234,6 +262,15 @@ function SelfAttendancePage() {
       .order("verify_time", { ascending: true });
     if (logsResult.error) toast.error(`تعذر قراءة حالة حضور اليوم: ${formatErrorMessage(logsResult.error)}`);
     setLogs((logsResult.data ?? []) as AttendanceLog[]);
+    const { data: formRows, error: formsError } = await (supabase as any)
+      .from("forms")
+      .select("id, form_no, kind, status, overtime_hours, check_out, rejection_reason")
+      .eq("employee_id", nextEmployee.id)
+      .eq("work_date", today)
+      .in("kind", ["overtime", "early_exit"])
+      .order("created_at", { ascending: false });
+    if (formsError) toast.error(`تعذر تحميل طلباتك: ${formatErrorMessage(formsError)}`);
+    setSelfForms((formRows ?? []) as typeof selfForms);
     setLoading(false);
   };
 
@@ -308,7 +345,6 @@ function SelfAttendancePage() {
     })();
   }, [isAdmin, selectedSiteId]);
   useEffect(() => {
-    if (!isAdmin) return;
     void (async () => {
       const { data, error } = await (supabase as any)
         .from("self_attendance_settings")
@@ -319,7 +355,7 @@ function SelfAttendancePage() {
       setLatestCheckInTime(data?.latest_check_in_time?.slice(0, 5) ?? "");
       setLatestCheckOutTime(data?.latest_check_out_time?.slice(0, 5) ?? "");
     })();
-  }, [isAdmin]);
+  }, []);
   const selectedSite = sites.find((item) => item.id === selectedSiteId) ?? null;
   const sitesWithoutCoordinates = sites.filter(
     (item) => item.latitude == null || item.longitude == null,
@@ -381,6 +417,14 @@ function SelfAttendancePage() {
   }, [employee?.id]);
 
   const recordAttendance = async (eventType: "check_in" | "check_out") => {
+    const deadline = eventType === "check_in" ? latestCheckInTime : latestCheckOutTime;
+    const currentMinutes = baghdadMinutes(now);
+    if (deadline && currentMinutes > minutesFromTime(deadline)) {
+      const lateMinutes = currentMinutes - minutesFromTime(deadline);
+      return toast.error(
+        `تعذر التسجيل: الوقت الآن ${baghdadTime(now)} والحد المسموح ${deadline}. الفرق ${formatMinutes(lateMinutes)} بعد الوقت المحدد. استخدم تبويب الوقت الإضافي إذا كان تسجيلك للعمل بعد الدوام.`,
+      );
+    }
     if (!employee || !site) return toast.error("لا يوجد موقع عمل مخصص لهذا الموظف");
     if (!coordinates) return toast.error("حدّث موقعك قبل تسجيل الحركة");
     if (!insideGeofence)
@@ -398,6 +442,56 @@ function SelfAttendancePage() {
     }
     setPendingEventType(eventType);
     setFaceCameraOpen(true);
+  };
+
+  const requestEarlyExit = async () => {
+    if (!employee || !checkedIn) return toast.error("يجب تسجيل الحضور أولاً قبل طلب الخروج المبكر");
+    if (!latestCheckOutTime) return toast.error("لم تحدد الإدارة وقت نهاية الدوام");
+    if (baghdadMinutes(now) >= minutesFromTime(latestCheckOutTime)) return toast.error("انتهى وقت الدوام؛ لم يعد طلب الخروج المبكر متاحاً");
+    if (earlyExitReason.trim().length < 3) return toast.error("اكتب سبب طلب الخروج المبكر");
+    setSelfFormSaving(true);
+    try {
+      const currentParts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Baghdad", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(now);
+      const getPart = (type: string) => currentParts.find((item) => item.type === type)?.value ?? "00";
+      await submitForm({ data: {
+        employee_id: employee.id, target_department_id: null, work_date: today,
+        kind: "early_exit", day_status: null, overtime_hours: 0,
+        check_in: null, check_out: `${getPart("hour")}:${getPart("minute")}`,
+        reason: earlyExitReason.trim(),
+      } });
+      setEarlyExitReason("");
+      toast.success("أُرسل طلب الخروج المبكر إلى مدير القسم ثم مدير الشركة");
+      await loadAttendance();
+    } catch (error) {
+      toast.error(`تعذر إرسال الطلب: ${formatErrorMessage(error)}`);
+    } finally {
+      setSelfFormSaving(false);
+    }
+  };
+
+  const requestOvertime = async () => {
+    if (!employee) return toast.error("تعذر تحديد ملف الموظف");
+    if (!latestCheckOutTime) return toast.error("لم تحدد الإدارة وقت نهاية الدوام؛ لا يمكن تسجيل وقت إضافي");
+    const elapsedMinutes = baghdadMinutes(now) - minutesFromTime(latestCheckOutTime);
+    const hours = Math.floor(elapsedMinutes / 30) / 2;
+    if (hours < 0.5) return toast.error("يتاح تسجيل الوقت الإضافي بعد نهاية الدوام بنصف ساعة على الأقل");
+    if (overtimeReason.trim().length < 3) return toast.error("اكتب وصف العمل الإضافي");
+    if (selfForms.some((form) => form.kind === "overtime" && form.status !== "rejected")) return toast.error("يوجد طلب وقت إضافي لهذا اليوم قيد الإجراء أو معتمد");
+    setSelfFormSaving(true);
+    try {
+      await submitForm({ data: {
+        employee_id: employee.id, target_department_id: null, work_date: today,
+        kind: "overtime", day_status: null, overtime_hours: hours,
+        check_in: null, check_out: null, reason: overtimeReason.trim(),
+      } });
+      setOvertimeReason("");
+      toast.success(`أُرسل طلب الوقت الإضافي (${hours.toLocaleString("ar-IQ")} ساعة) للموافقة`);
+      await loadAttendance();
+    } catch (error) {
+      toast.error(`تعذر إرسال طلب الوقت الإضافي: ${formatErrorMessage(error)}`);
+    } finally {
+      setSelfFormSaving(false);
+    }
   };
 
   const submitVerifiedAttendance = async (
@@ -586,8 +680,10 @@ function SelfAttendancePage() {
       </section>
       {queuedCount > 0 && <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">لديك {queuedCount} حركة محفوظة دون اتصال؛ ستُرسل تلقائياً عند عودة الإنترنت.</p>}
       <Tabs defaultValue="attendance" dir="rtl">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1">
           <TabsTrigger value="attendance">تسجيل الحضور</TabsTrigger>
+          <TabsTrigger value="overtime"><Clock3 className="ml-2 h-4 w-4" /> الوقت الإضافي</TabsTrigger>
+          <TabsTrigger value="early-exit"><LogOut className="ml-2 h-4 w-4" /> طلب خروج مبكر</TabsTrigger>
           {isAdmin && (
             <TabsTrigger value="settings">
               <Settings2 className="ml-2 h-4 w-4" /> الإعدادات
@@ -719,6 +815,67 @@ function SelfAttendancePage() {
               </Card>
             </>
           )}
+        </TabsContent>
+        <TabsContent value="overtime" className="space-y-4">
+          <Card>
+            <CardHeader><CardTitle className="flex items-center gap-2"><Clock3 className="h-5 w-5" /> تسجيل وقت إضافي</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                لا يتاح الطلب إلا بعد وقت نهاية الدوام ({latestCheckOutTime || "غير محدد"}) بنصف ساعة على الأقل. تُحسب الساعات المكتملة بنصف ساعة وتُرسل للموافقة.
+              </p>
+              <p className="text-sm font-semibold">الساعات المتاحة الآن: {overtimeHoursAvailable.toLocaleString("ar-IQ")}</p>
+              <div className="space-y-2">
+                <Label htmlFor="self-overtime-reason">وصف العمل الإضافي</Label>
+                <Textarea id="self-overtime-reason" value={overtimeReason} onChange={(event) => setOvertimeReason(event.target.value)} minLength={3} maxLength={1000} rows={3} placeholder="اكتب وصف العمل الذي أنجزته بعد الدوام" />
+              </div>
+              <Button onClick={() => void requestOvertime()} disabled={selfFormSaving || overtimeHoursAvailable < 0.5 || hasActiveOvertimeForm}>
+                {selfFormSaving ? "جارٍ الإرسال..." : hasActiveOvertimeForm ? "يوجد طلب لهذا اليوم" : "إرسال طلب الوقت الإضافي"}
+              </Button>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>حالة طلبات الوقت الإضافي لليوم</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+              {overtimeForms.length ? overtimeForms.map((form) => (
+                <div key={form.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm">
+                  <span>استمارة #{form.form_no} · {Number(form.overtime_hours).toLocaleString("ar-IQ")} ساعة</span>
+                  <Badge variant={form.status === "executed" ? "default" : form.status === "rejected" ? "destructive" : "secondary"}>
+                    {form.status === "pending_manager" ? "بانتظار مدير القسم" : form.status === "pending_ceo" ? "بانتظار مدير الشركة" : form.status === "pending_execution" ? "بانتظار التنفيذ" : form.status === "executed" ? "معتمد" : "مرفوض"}
+                  </Badge>
+                </div>
+              )) : <p className="text-sm text-muted-foreground">لا توجد طلبات وقت إضافي لهذا اليوم.</p>}
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="early-exit" className="space-y-4">
+          <Card>
+            <CardHeader><CardTitle className="flex items-center gap-2"><LogOut className="h-5 w-5" /> طلب خروج قبل نهاية الدوام</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">يُرسل الطلب أولاً إلى مدير قسمك، ثم إلى مدير الشركة. عند الموافقة النهائية يُعتمد اليوم كحضور.</p>
+              <p className="text-sm">نهاية الدوام المحددة: <strong>{latestCheckOutTime || "غير محددة"}</strong> · الوقت الحالي: <strong>{baghdadTime(now)}</strong></p>
+              <div className="space-y-2">
+                <Label htmlFor="early-exit-reason">سبب طلب الخروج</Label>
+                <Textarea id="early-exit-reason" value={earlyExitReason} onChange={(event) => setEarlyExitReason(event.target.value)} minLength={3} maxLength={1000} rows={3} placeholder="اذكر سبب طلب المغادرة قبل نهاية الدوام" />
+              </div>
+              <Button onClick={() => void requestEarlyExit()} disabled={selfFormSaving || !checkedIn || !latestCheckOutTime || baghdadMinutes(now) >= minutesFromTime(latestCheckOutTime) || earlyExitForms.some((form) => form.status !== "rejected")}>
+                {selfFormSaving ? "جارٍ الإرسال..." : "إرسال طلب الخروج المبكر"}
+              </Button>
+              {!checkedIn && <p className="text-sm text-muted-foreground">سجّل حضورك أولاً حتى تتمكن من تقديم الطلب.</p>}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>حالة طلبات الخروج المبكر لليوم</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+              {earlyExitForms.length ? earlyExitForms.map((form) => (
+                <div key={form.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm">
+                  <span>استمارة #{form.form_no} · وقت الخروج المطلوب {form.check_out ?? "—"}</span>
+                  <Badge variant={form.status === "executed" ? "default" : form.status === "rejected" ? "destructive" : "secondary"}>
+                    {form.status === "pending_manager" ? "بانتظار مدير القسم" : form.status === "pending_ceo" ? "بانتظار مدير الشركة" : form.status === "executed" ? "معتمد كحضور" : "مرفوض"}
+                  </Badge>
+                </div>
+              )) : <p className="text-sm text-muted-foreground">لا توجد طلبات خروج مبكر لهذا اليوم.</p>}
+            </CardContent>
+          </Card>
         </TabsContent>
         {isAdmin && (
           <TabsContent value="settings" className="space-y-4">

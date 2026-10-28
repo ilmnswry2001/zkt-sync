@@ -134,7 +134,9 @@ SET search_path = public
 AS $$
 DECLARE
   v_employee public.employees%ROWTYPE;
-  v_site public.sites%ROWTYPE;
+  v_site_id uuid;
+  v_site_name text;
+  v_site_geofence_radius_meters numeric;
   v_distance numeric;
   v_now timestamptz := clock_timestamp();
   v_recorded_at timestamptz;
@@ -199,13 +201,13 @@ BEGIN
     RAISE EXCEPTION 'انتهى الوقت المسموح لتسجيل الانصراف';
   END IF;
 
-  SELECT s,
+  SELECT s.id, s.name, s.geofence_radius_meters,
     6371000 * 2 * asin(sqrt(
       power(sin(radians(p_latitude - s.latitude) / 2), 2)
       + cos(radians(s.latitude)) * cos(radians(p_latitude))
       * power(sin(radians(p_longitude - s.longitude) / 2), 2)
     )) AS calculated_distance
-  INTO v_site, v_distance
+  INTO v_site_id, v_site_name, v_site_geofence_radius_meters, v_distance
   FROM public.sites s
   WHERE s.latitude IS NOT NULL AND s.longitude IS NOT NULL
     AND (
@@ -218,9 +220,9 @@ BEGIN
     )
   ORDER BY (calculated_distance <= s.geofence_radius_meters) DESC, calculated_distance ASC
   LIMIT 1;
-  IF v_site.id IS NULL THEN RAISE EXCEPTION 'لا يوجد موقع حضور مسموح لهذا الموظف'; END IF;
-  IF v_distance > v_site.geofence_radius_meters THEN
-    RAISE EXCEPTION 'خارج نطاق المواقع المسموحة؛ أقرب موقع هو % ويبعد % متراً', v_site.name, round(v_distance);
+  IF v_site_id IS NULL THEN RAISE EXCEPTION 'لا يوجد موقع حضور مسموح لهذا الموظف'; END IF;
+  IF v_distance > v_site_geofence_radius_meters THEN
+    RAISE EXCEPTION 'خارج نطاق المواقع المسموحة؛ أقرب موقع هو % ويبعد % متراً', v_site_name, round(v_distance);
   END IF;
 
   SELECT l.latitude, l.longitude, l.verify_time INTO v_previous
@@ -238,7 +240,7 @@ BEGIN
       INSERT INTO public.attendance_suspicious_attempts(employee_id, client_recorded_at, latitude, longitude, selfie_path, reason)
       VALUES (v_employee.id, p_client_recorded_at, p_latitude, p_longitude, p_selfie_path,
         format('سرعة انتقال غير منطقية: %s كم/ساعة', round(v_speed, 1)));
-      RETURN QUERY SELECT NULL::uuid, v_employee.id, v_now, p_event_type, round(v_distance, 2), v_site.name;
+      RETURN QUERY SELECT NULL::uuid, v_employee.id, v_now, p_event_type, round(v_distance, 2), v_site_name;
       RETURN;
     END IF;
   END IF;
@@ -258,13 +260,13 @@ BEGIN
     source, latitude, longitude, distance_meters, gps_accuracy_meters, device_info, self_event_type,
     selfie_path, client_recorded_at, submitted_offline, client_event_id, face_match_score, is_liveness_verified
   ) VALUES (
-    v_employee.employee_no, v_employee.id, v_site.id, NULL, NULL, v_recorded_at,
+    v_employee.employee_no, v_employee.id, v_site_id, NULL, NULL, v_recorded_at,
     CASE WHEN p_event_type = 'check_in' THEN 0 ELSE 1 END,
     'mobile_self', p_latitude, p_longitude, round(v_distance, 2), p_accuracy_meters,
     p_device_info, p_event_type, p_selfie_path, p_client_recorded_at, p_submitted_offline,
     p_client_event_id, round(p_face_score::numeric, 2), coalesce(p_liveness_verified, false)
   ) RETURNING attendance_logs.id INTO v_id;
-  RETURN QUERY SELECT v_id, v_employee.id, v_recorded_at, p_event_type, round(v_distance, 2), v_site.name;
+  RETURN QUERY SELECT v_id, v_employee.id, v_recorded_at, p_event_type, round(v_distance, 2), v_site_name;
 END;
 $$;
 

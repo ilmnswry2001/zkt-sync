@@ -14,7 +14,7 @@ const createSchema = z.object({
     .nullable()
     .optional(),
   leave_type_id: z.string().uuid().nullable().optional(),
-  kind: z.enum(["attendance", "overtime", "leave"]),
+  kind: z.enum(["attendance", "overtime", "leave", "early_exit"]),
   day_status: dayStatus.nullable().optional(),
   overtime_hours: z.number().min(0).max(24).default(0),
   check_in: z.string().nullable().optional(),
@@ -78,10 +78,11 @@ export const createForm = createServerFn({ method: "POST" })
       .maybeSingle();
     if (empError) throw new Error(empError.message);
     if (!emp) throw new Error("الموظف غير موجود");
-    const { data: profile, error: profileError } =
-      data.kind === "leave" && !powers?.hr && !powers?.dataEntry
-        ? await supabase.from("profiles").select("email").eq("id", userId).maybeSingle()
-        : { data: null, error: null };
+    const needsProfile = data.kind === "early_exit" || data.kind === "overtime" ||
+      (data.kind === "leave" && !powers?.hr && !powers?.dataEntry);
+    const { data: profile, error: profileError } = needsProfile
+      ? await supabase.from("profiles").select("email").eq("id", userId).maybeSingle()
+      : { data: null, error: null };
     if (profileError) throw new Error(profileError.message);
     if (
       data.kind === "leave" &&
@@ -92,6 +93,93 @@ export const createForm = createServerFn({ method: "POST" })
         emp.email.trim().toLowerCase() !== profile.email.trim().toLowerCase())
     ) {
       throw new Error("يمكنك تقديم طلب إجازة لنفسك فقط");
+    }
+    const isOwnRequest = !!profile?.email && !!emp.email &&
+      emp.email.trim().toLowerCase() === profile.email.trim().toLowerCase();
+    const baghdadParts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Baghdad", year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+    }).formatToParts(new Date());
+    const part = (type: string) => baghdadParts.find((item) => item.type === type)?.value ?? "00";
+    const nowDate = `${part("year")}-${part("month")}-${part("day")}`;
+    const nowMinutes = Number(part("hour")) * 60 + Number(part("minute"));
+    let selfOvertimeHours = data.overtime_hours;
+    if (data.kind === "early_exit") {
+      if (!isOwnRequest || data.work_date !== nowDate) {
+        throw new Error("يمكنك تقديم طلب خروج مبكر لنفسك ولليوم الحالي فقط");
+      }
+      const { data: settings, error: settingsError } = await (supabase as any)
+        .from("self_attendance_settings")
+        .select("latest_check_out_time")
+        .eq("id", true)
+        .maybeSingle();
+      if (settingsError) throw new Error(settingsError.message);
+      const endTime = settings?.latest_check_out_time as string | null;
+      if (!endTime) throw new Error("لم تحدد الإدارة وقت نهاية الدوام بعد");
+      const [endHour, endMinute] = endTime.split(":").map(Number);
+      if (nowMinutes >= endHour * 60 + endMinute) {
+        throw new Error("انتهى وقت الدوام؛ لم يعد طلب الخروج المبكر متاحاً");
+      }
+      const dayStart = `${nowDate}T00:00:00+03:00`;
+      const dayEnd = `${nowDate}T23:59:59+03:00`;
+      const { data: checkIn, error: attendanceError } = await supabase
+        .from("attendance_logs")
+        .select("id")
+        .eq("employee_id", data.employee_id)
+        .gte("verify_time", dayStart)
+        .lt("verify_time", dayEnd)
+        .or("self_event_type.eq.check_in,verify_type.eq.0")
+        .limit(1);
+      if (attendanceError) throw new Error(attendanceError.message);
+      if (!checkIn?.length) throw new Error("سجّل حضورك أولاً قبل طلب الخروج المبكر");
+    }
+    if (data.kind === "overtime" && isOwnRequest) {
+      if (data.work_date !== nowDate) throw new Error("طلب الوقت الإضافي الذاتي متاح لليوم الحالي فقط");
+      const { data: settings, error: settingsError } = await (supabase as any)
+        .from("self_attendance_settings")
+        .select("latest_check_out_time")
+        .eq("id", true)
+        .maybeSingle();
+      if (settingsError) throw new Error(settingsError.message);
+      const endTime = settings?.latest_check_out_time as string | null;
+      if (!endTime) throw new Error("لم تحدد الإدارة وقت نهاية الدوام؛ لا يمكن تسجيل وقت إضافي");
+      const [endHour, endMinute] = endTime.split(":").map(Number);
+      const elapsedMinutes = nowMinutes - (endHour * 60 + endMinute);
+      if (elapsedMinutes < 30) throw new Error("لا يمكن تسجيل الوقت الإضافي إلا بعد انتهاء الدوام بنصف ساعة على الأقل");
+      const dayStart = `${nowDate}T00:00:00+03:00`;
+      const dayEnd = `${nowDate}T23:59:59+03:00`;
+      const { data: checkIn, error: attendanceError } = await supabase
+        .from("attendance_logs")
+        .select("id")
+        .eq("employee_id", data.employee_id)
+        .gte("verify_time", dayStart)
+        .lt("verify_time", dayEnd)
+        .or("self_event_type.eq.check_in,verify_type.eq.0")
+        .limit(1);
+      if (attendanceError) throw new Error(attendanceError.message);
+      if (!checkIn?.length) throw new Error("سجّل حضورك أولاً قبل طلب الوقت الإضافي");
+      selfOvertimeHours = Math.floor(elapsedMinutes / 30) / 2;
+    } else if (data.kind === "overtime" && !isOwnRequest) {
+      const requesterPowers = await actorPowers(supabase, userId);
+      if (!requesterPowers.admin && !requesterPowers.hr && !requesterPowers.dataEntry && !requesterPowers.manager) {
+        throw new Error("يمكنك تقديم طلب وقت إضافي لنفسك فقط");
+      }
+    }
+    if (isOwnRequest && (data.kind === "early_exit" || data.kind === "overtime")) {
+      const { data: existingRequest, error: existingRequestError } = await (supabase as any)
+        .from("forms")
+        .select("id")
+        .eq("employee_id", data.employee_id)
+        .eq("work_date", data.work_date)
+        .eq("kind", data.kind)
+        .neq("status", "rejected")
+        .limit(1);
+      if (existingRequestError) throw new Error(existingRequestError.message);
+      if (existingRequest?.length) {
+        throw new Error(data.kind === "early_exit"
+          ? "لديك طلب خروج مبكر غير مرفوض لهذا اليوم"
+          : "لديك طلب وقت إضافي غير مرفوض لهذا اليوم");
+      }
     }
     const leaveEndDate =
       data.kind === "leave" ? (data.leave_end_date ?? data.work_date) : data.work_date;
@@ -118,7 +206,7 @@ export const createForm = createServerFn({ method: "POST" })
       if (!leaveDays) throw new Error("لا توجد أيام دوام ضمن الفترة المحددة");
     }
 
-    const { data: form, error } = await supabase
+    const { data: form, error } = await (supabase as any)
       .from("forms")
       .insert({
         employee_id: data.employee_id,
@@ -132,11 +220,13 @@ export const createForm = createServerFn({ method: "POST" })
         day_status:
           data.day_status ??
           (data.kind === "leave" ? "leave" : data.kind === "attendance" ? "present" : null),
-        overtime_hours: data.kind === "overtime" ? data.overtime_hours : 0,
+        overtime_hours: data.kind === "overtime" ? selfOvertimeHours : 0,
         check_in: data.check_in || null,
-        check_out: data.check_out || null,
+        check_out: data.kind === "early_exit"
+          ? `${part("hour")}:${part("minute")}`
+          : data.check_out || null,
         reason: data.reason,
-        status: data.kind === "leave" ? "pending_manager" : "pending_execution",
+        status: data.kind === "leave" || data.kind === "early_exit" ? "pending_manager" : "pending_execution",
         created_by: userId,
       })
       .select("id, form_no")
@@ -218,6 +308,13 @@ export const actOnForm = createServerFn({ method: "POST" })
         });
       } else if (form.status === "pending_ceo") {
         if (!powers.ceo) throw new Error("هذه الموافقة من صلاحية مدير الشركة");
+        if ((form.kind as string) === "early_exit") {
+          const { error: approvalError } = await (supabase as any).rpc("approve_self_attendance_early_exit", {
+            p_form_id: form.id,
+          });
+          if (approvalError) throw new Error(approvalError.message);
+          return { status: "executed" };
+        }
         Object.assign(patch, {
           status: "pending_execution",
           ceo_approved_by: userId,
