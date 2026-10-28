@@ -131,24 +131,29 @@ BEGIN
     RAISE EXCEPTION 'انتهى الوقت المسموح لتسجيل الانصراف';
   END IF;
 
-  SELECT s.id, s.name, s.geofence_radius_meters,
-    6371000 * 2 * asin(sqrt(
-      power(sin(radians(p_latitude - s.latitude) / 2), 2)
-      + cos(radians(s.latitude)) * cos(radians(p_latitude))
-      * power(sin(radians(p_longitude - s.longitude) / 2), 2)
-    )) AS calculated_distance
+  SELECT candidate.id, candidate.name, candidate.geofence_radius_meters,
+    candidate.calculated_distance
   INTO v_site_id, v_site_name, v_site_geofence_radius_meters, v_distance
-  FROM public.sites s
-  WHERE s.latitude IS NOT NULL AND s.longitude IS NOT NULL
-    AND (
-      v_allow_all_sites
-      OR EXISTS (
-        SELECT 1 FROM public.employee_self_attendance_sites eas
-        WHERE eas.employee_id = v_employee.id AND eas.site_id = s.id
+  FROM (
+    SELECT s.id, s.name, s.geofence_radius_meters,
+      6371000 * 2 * asin(sqrt(
+        power(sin(radians(p_latitude - s.latitude) / 2), 2)
+        + cos(radians(s.latitude)) * cos(radians(p_latitude))
+        * power(sin(radians(p_longitude - s.longitude) / 2), 2)
+      )) AS calculated_distance
+    FROM public.sites s
+    WHERE s.latitude IS NOT NULL AND s.longitude IS NOT NULL
+      AND (
+        v_allow_all_sites
+        OR EXISTS (
+          SELECT 1 FROM public.employee_self_attendance_sites eas
+          WHERE eas.employee_id = v_employee.id AND eas.site_id = s.id
+        )
+        OR (NOT v_has_site_assignments AND s.id = v_employee.site_id)
       )
-      OR (NOT v_has_site_assignments AND s.id = v_employee.site_id)
-    )
-  ORDER BY (calculated_distance <= s.geofence_radius_meters) DESC, calculated_distance ASC
+  ) AS candidate
+  ORDER BY (candidate.calculated_distance <= candidate.geofence_radius_meters) DESC,
+    candidate.calculated_distance ASC
   LIMIT 1;
   IF v_site_id IS NULL THEN RAISE EXCEPTION 'لا يوجد موقع حضور مسموح لهذا الموظف'; END IF;
   IF v_distance > v_site_geofence_radius_meters THEN
