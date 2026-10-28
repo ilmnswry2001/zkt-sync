@@ -419,19 +419,18 @@ function SelfAttendancePage() {
   }, [employee?.id]);
 
   const recordAttendance = async (eventType: "check_in" | "check_out") => {
-    const deadline = eventType === "check_in" ? latestCheckInTime : latestCheckOutTime;
-    const currentMinutes = baghdadMinutes(now);
-    const allowedMinutes = deadline
-      ? minutesFromTime(deadline) + (eventType === "check_in" ? checkInGraceHours * 60 : 0)
-      : null;
-    if (deadline && allowedMinutes != null && currentMinutes > allowedMinutes) {
-      const lateMinutes = currentMinutes - allowedMinutes;
-      const graceMessage = eventType === "check_in" && checkInGraceHours > 0
-        ? ` والمهلة الخاصة بك ${checkInGraceHours.toLocaleString("ar-IQ")} ساعة`
-        : "";
-      return toast.error(
-        `تعذر التسجيل: الوقت الآن ${baghdadTime(now)} والحد العام ${deadline}${graceMessage}. تجاوزت آخر وقت مسموح بـ ${formatMinutes(lateMinutes)}. استخدم تبويب الوقت الإضافي إذا كان تسجيلك للعمل بعد الدوام.`,
-      );
+    if (eventType === "check_in" && latestCheckInTime) {
+      const allowedMinutes = minutesFromTime(latestCheckInTime) + checkInGraceHours * 60;
+      const currentMinutes = baghdadMinutes(now);
+      if (currentMinutes > allowedMinutes) {
+        const lateMinutes = currentMinutes - allowedMinutes;
+        const graceMessage = checkInGraceHours > 0
+          ? ` والمهلة الخاصة بك ${checkInGraceHours.toLocaleString("ar-IQ")} ساعة`
+          : "";
+        return toast.error(
+          `تعذر التسجيل: الوقت الآن ${baghdadTime(now)} والحد العام ${latestCheckInTime}${graceMessage}. تجاوزت آخر وقت مسموح بـ ${formatMinutes(lateMinutes)}.`,
+        );
+      }
     }
     if (!employee || !site) return toast.error("لا يوجد موقع عمل مخصص لهذا الموظف");
     if (!coordinates) return toast.error("حدّث موقعك قبل تسجيل الحركة");
