@@ -14,7 +14,8 @@ export type AppRole =
   | "warehouse_keeper"
   | "procurement_officer"
   | "maintenance_manager"
-  | "maintenance_admin";
+  | "maintenance_admin"
+  | "accountant";
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -83,6 +84,7 @@ export function useAuth() {
       ? ["/planning"]
       : []),
     ...(roles.includes("warehouse_keeper") || isCompanyManager ? ["/warehouses"] : []),
+    ...(roles.includes("accountant") || roles.includes("hr") || isCompanyManager ? ["/payroll", "/wages"] : []),
     ...(roles.includes("maintenance_manager") || roles.includes("maintenance_admin") ? ["/maintenance"] : []),
     ...(roles.some((role) => ["engineer", "supervisor", "department_manager", "site_admin", "planning_officer", "warehouse_keeper", "procurement_officer"].includes(role)) || isCompanyManager
       ? ["/requests"]

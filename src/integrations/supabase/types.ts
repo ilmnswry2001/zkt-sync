@@ -4236,6 +4236,7 @@ export type Database = {
         | "procurement_officer"
         | "maintenance_manager"
         | "maintenance_admin"
+        | "accountant"
       day_status: "present" | "absent" | "leave" | "holiday" | "rest"
       device_status: "active" | "inactive" | "maintenance"
       employee_status: "active" | "inactive" | "terminated"
@@ -4388,6 +4389,7 @@ export const Constants = {
         "procurement_officer",
         "maintenance_manager",
         "maintenance_admin",
+        "accountant",
       ],
       day_status: ["present", "absent", "leave", "holiday", "rest"],
       device_status: ["active", "inactive", "maintenance"],

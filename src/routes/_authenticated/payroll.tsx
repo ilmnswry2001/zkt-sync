@@ -1,6 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { Banknote, Download, Eye, Printer, RefreshCw, Search, Truck } from "lucide-react";
 import { toast } from "sonner";
@@ -37,7 +39,12 @@ export const Route = createFileRoute("/_authenticated/payroll")({
       .from("user_roles")
       .select("role")
       .eq("user_id", data.user.id);
-    if (!roles?.some((r) => r.role === "admin" || r.role === "hr"))
+    const { data: formRoles } = await supabase
+      .from("form_role_assignments")
+      .select("role")
+      .eq("user_id", data.user.id)
+      .eq("role", "ceo");
+    if (!roles?.some((r) => r.role === "admin" || r.role === "hr" || r.role === "accountant") && !formRoles?.length)
       throw redirect({ to: "/dashboard" });
   },
   component: PayrollPage,
@@ -105,6 +112,9 @@ type PayrollSlipRow = {
   penalties: Array<{ deduction_amount: number | null; notes: string | null }>;
 };
 
+const money = (value: number) =>
+  `${value.toLocaleString("en-US", { maximumFractionDigits: 2 })} د.ع`;
+
 function buildPayrollSlipHtml(row: PayrollSlipRow, month: string) {
   const deductionRows = row.penalties
     .filter((penalty) => Number(penalty.deduction_amount) > 0)
@@ -151,10 +161,13 @@ function PayrollSlipPreview({ row, month }: { row: PayrollSlipRow; month: string
 }
 
 function PayrollPage() {
+  const queryClient = useQueryClient();
   const [previewRow, setPreviewRow] = useState<PayrollSlipRow | null>(null);
   const [month, setMonth] = useState(currentMonthInBaghdad);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [advanceEmployeeId, setAdvanceEmployeeId] = useState("");
+  const [advancePaymentMethod, setAdvancePaymentMethod] = useState("cash");
   const pageSize = 20;
   const nextMonth = useMemo(() => {
     const date = new Date(`${month}-01T00:00:00Z`);
@@ -162,11 +175,11 @@ function PayrollPage() {
     return date.toISOString().slice(0, 10);
   }, [month]);
   const query = useQuery({
-    queryKey: ["payroll", month, page, search],
+    queryKey: ["payroll", month],
     staleTime: 60_000,
     queryFn: async () => {
       const attendanceRange = monthInstantRangeInBaghdad(month);
-      let employeeQuery = supabase
+      const employeeQuery = supabase
         .from("employees")
         .select(
           "id, employee_no, full_name, position, base_salary, pay_type, salary_type, contract_type, bank_name, bank_account, iban, sites!employees_site_id_fkey(name), departments!employees_department_id_fkey(name), wage_rates(title, monthly_rate, daily_rate, overtime_hour_rate, currency), shifts(end_time, grace_minutes)",
@@ -174,16 +187,7 @@ function PayrollPage() {
         )
         .order("employee_no")
         .order("id");
-      if (search.trim()) {
-        const term = search.trim().replace(/[(),]/g, "");
-        employeeQuery = employeeQuery.or(`full_name.ilike.%${term}%,employee_no.ilike.%${term}%`);
-      }
-      const { data: employeePage, count: employeeCount, error: employeeError } = await employeeQuery.range(
-        (page - 1) * pageSize,
-        page * pageSize - 1,
-      );
-      if (employeeError) throw new Error(employeeError.message);
-      const employees = (employeePage ?? []) as Employee[];
+      const employees = await loadAllRows((from, to) => employeeQuery.range(from, to)) as Employee[];
       const employeeIds = employees.map((employee) => employee.id);
       const employeeNumbers = employees.map((employee) => employee.employee_no);
       const [additions, penalties, logs, overrides, weeklySchedules, storedOvertime, vehicles, vehicleOperations, leaveCalendar] =
@@ -264,6 +268,18 @@ function PayrollPage() {
               .range(from, to),
           ) : Promise.resolve([]),
         ]);
+      const [{ data: runData, error: runError }, { data: advanceData, error: advancesError }] = await Promise.all([
+        (supabase as any).from("payroll_runs").select("*").eq("month", `${month}-01`).maybeSingle(),
+        (supabase as any).from("employee_advance_installments")
+          .select("id, advance_id, amount, employee_advances!inner(employee_id, status)")
+          .eq("month", `${month}-01`).eq("status", "scheduled").eq("employee_advances.status", "active"),
+      ]);
+      if (runError) throw new Error(runError.message);
+      if (advancesError) throw new Error(advancesError.message);
+      const { data: payrollLines, error: linesError } = runData
+        ? await (supabase as any).from("payroll_run_lines").select("employee_id, base_amount, overtime_hours, overtime_amount, additions_amount, deductions_amount, advance_deduction, net_amount, calculation_snapshot").eq("payroll_run_id", runData.id)
+        : { data: [], error: null };
+      if (linesError) throw new Error(linesError.message);
       const approvedLeaveDays: AttendanceOverride[] = (leaveCalendar as any[]).flatMap((form) => {
         const leaveType = Array.isArray(form.leave_types) ? form.leave_types[0] : form.leave_types;
         const end = form.leave_end_date || form.work_date;
@@ -278,7 +294,7 @@ function PayrollPage() {
       });
       return {
         employees,
-        employeeCount: employeeCount ?? 0,
+        employeeCount: employees.length,
         additions: additions as Addition[],
         penalties: penalties as Penalty[],
         logs: logs as AttendanceLog[],
@@ -287,6 +303,9 @@ function PayrollPage() {
         storedOvertime: storedOvertime as AttendanceDailyOvertime[],
         vehicles: vehicles as Vehicle[],
         vehicleOperations: vehicleOperations as VehicleOperation[],
+        payrollRun: runData,
+        payrollLines: payrollLines ?? [],
+        advanceInstallments: (advanceData ?? []) as Array<{ id: string; amount: number; employee_advances: { employee_id: string; status: string } | Array<{ employee_id: string; status: string }> }>,
       };
     },
   });
@@ -309,11 +328,16 @@ function PayrollPage() {
       overtime: groupBy(data?.storedOvertime ?? [], (item) => item.employee_id),
       additions: groupBy(data?.additions ?? [], (item) => item.employee_id),
       penalties: groupBy(data?.penalties ?? [], (item) => item.employee_id ?? ""),
+      advances: groupBy(data?.advanceInstallments ?? [], (item) => {
+        const advance = Array.isArray(item.employee_advances) ? item.employee_advances[0] : item.employee_advances;
+        return advance?.employee_id ?? "";
+      }),
     };
   }, [query.data]);
   const rows = useMemo(
-    () =>
-      (query.data?.employees ?? []).map((employee) => {
+    () => {
+      const savedLines = new Map((query.data?.payrollLines ?? []).map((line: any) => [line.employee_id, line]));
+      return (query.data?.employees ?? []).map((employee) => {
         const payType = getEmployeePayType(employee);
         const days = buildAttendanceDays(
           monthDates(month),
@@ -333,10 +357,10 @@ function PayrollPage() {
         const dailyRate = Number(
           employee.wage_rates?.daily_rate ?? (monthlySalary ? monthlySalary / 26 : 0),
         );
-        const additions = (dataByEmployee.additions.get(employee.id) ?? [])
+        let additions = (dataByEmployee.additions.get(employee.id) ?? [])
           .reduce((sum, item) => sum + Number(item.amount || 0), 0);
         const employeePenalties = dataByEmployee.penalties.get(employee.id) ?? [];
-        const deductions = employeePenalties
+        let deductions = employeePenalties
           .reduce((sum, item) => sum + Number(item.deduction_amount || 0), 0);
         const payroll = calculatePayroll({
           payType,
@@ -349,14 +373,36 @@ function PayrollPage() {
           additions,
           deductions,
         });
-        const total = payroll.netPay;
-        return { employee, payType, payroll, summary, additions, deductions, penalties: employeePenalties, total };
-      }),
-    [query.data?.employees, dataByEmployee, month],
+        const advanceInstallments = dataByEmployee.advances.get(employee.id) ?? [];
+        const advanceDeduction = Math.min(payroll.netPay, advanceInstallments.reduce((sum, installment) => sum + Number(installment.amount || 0), 0));
+        const total = Math.max(0, payroll.netPay - advanceDeduction);
+        const saved = ["approved", "paid"].includes(query.data?.payrollRun?.status ?? "")
+          ? savedLines.get(employee.id) as any
+          : undefined;
+        if (saved) {
+          payroll.basePay = Number(saved.base_amount);
+          payroll.overtimeHours = Number(saved.overtime_hours);
+          payroll.overtimePay = Number(saved.overtime_amount);
+          payroll.netPay = Number(saved.net_amount);
+          additions = Number(saved.additions_amount);
+          deductions = Number(saved.deductions_amount);
+          return {
+            employee, payType, payroll,
+            summary: saved.calculation_snapshot?.summary ?? summary,
+            additions, deductions, penalties: employeePenalties,
+            advanceDeduction: Number(saved.advance_deduction), advanceInstallments, total: Number(saved.net_amount),
+          };
+        }
+        return { employee, payType, payroll, summary, additions, deductions, penalties: employeePenalties, advanceDeduction, advanceInstallments, total };
+      });
+    },
+    [query.data?.employees, query.data?.payrollLines, query.data?.payrollRun, dataByEmployee, month],
   );
-  const filteredRows = rows;
-  const pageCount = Math.max(1, Math.ceil((query.data?.employeeCount ?? 0) / pageSize));
-  const visibleRows = filteredRows;
+  const filteredRows = search.trim()
+    ? rows.filter(({ employee }) => `${employee.full_name} ${employee.employee_no}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
+    : rows;
+  const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const visibleRows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
   const bankRows = rows.filter(
     (row) => row.employee.bank_account?.trim() || row.employee.iban?.trim(),
   );
@@ -367,8 +413,110 @@ function PayrollPage() {
     );
   });
   const total = rows.reduce((sum, row) => sum + row.total, 0);
-  const money = (value: number) =>
-    `${value.toLocaleString("en-US", { maximumFractionDigits: 2 })} د.ع`;
+  const payrollRun = query.data?.payrollRun as { id: string; status: string; approved_by: string | null; payment_method: string | null; payment_reference: string | null } | null | undefined;
+  const actorQuery = useQuery({
+    queryKey: ["payroll-actor"],
+    queryFn: async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) return { hr: false, admin: false, accountant: false, ceo: false };
+      const [{ data: roles }, { data: formRoles }] = await Promise.all([
+        supabase.from("user_roles").select("role").eq("user_id", auth.user.id),
+        supabase.from("form_role_assignments").select("role").eq("user_id", auth.user.id).eq("role", "ceo"),
+      ]);
+      return { hr: !!roles?.some((item) => item.role === "hr"), admin: !!roles?.some((item) => item.role === "admin"), accountant: !!roles?.some((item) => item.role === "accountant"), ceo: !!formRoles?.length };
+    },
+  });
+  const isHr = actorQuery.data?.hr || actorQuery.data?.admin;
+  const isPayrollOperator = isHr || actorQuery.data?.accountant;
+  const isCeo = actorQuery.data?.ceo;
+  const isLocked = payrollRun?.status === "approved" || payrollRun?.status === "paid";
+  const savePayrollRun = useMutation({
+    mutationFn: async (action: "draft" | "review" | "approve" | "pay") => {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) throw new Error("انتهت جلسة الدخول");
+      const runPayload: Record<string, unknown> = {};
+      if (action === "draft" || action === "review") {
+        runPayload.month = `${month}-01`;
+        runPayload.total_amount = total;
+      }
+      if (!payrollRun && (action === "draft" || action === "review")) runPayload.created_by = auth.user.id;
+      if (action === "review") runPayload.reviewed_by = auth.user.id;
+      if (action === "approve") { runPayload.status = "approved"; runPayload.approved_by = auth.user.id; }
+      if (action === "pay") {
+        runPayload.status = "paid"; runPayload.paid_by = auth.user.id;
+        runPayload.payment_method = advancePaymentMethod;
+        runPayload.payment_reference = window.prompt("رقم مرجع التحويل أو سند الصرف (اختياري)") || null;
+        runPayload.paid_at = new Date().toISOString();
+      }
+      let runId = payrollRun?.id;
+      if (runId) {
+        const { error } = await (supabase as any).from("payroll_runs").update(runPayload).eq("id", runId);
+        if (error) throw error;
+      } else {
+        const { data, error } = await (supabase as any).from("payroll_runs").insert({ ...runPayload, status: "draft" }).select("id").single();
+        if (error) throw error;
+        runId = data.id;
+      }
+      if (action === "draft" || action === "review") {
+        const { error: deleteError } = await (supabase as any).from("payroll_run_lines").delete().eq("payroll_run_id", runId);
+        if (deleteError) throw deleteError;
+        if (rows.length) {
+          const lines = rows.map((row) => ({
+            payroll_run_id: runId, employee_id: row.employee.id,
+            base_amount: row.payroll.basePay, overtime_hours: row.payroll.overtimeHours,
+            overtime_amount: row.payroll.overtimePay, additions_amount: row.additions,
+            deductions_amount: row.deductions, advance_deduction: row.advanceDeduction,
+            net_amount: row.total,
+            calculation_snapshot: { summary: row.summary, payType: row.payType, penaltyIds: row.penalties.map((item) => item.id) },
+          }));
+          const { error } = await (supabase as any).from("payroll_run_lines").insert(lines);
+          if (error) throw error;
+        }
+      }
+      if (action === "review") {
+        const { error } = await (supabase as any).from("payroll_runs").update({ status: "review" }).eq("id", runId);
+        if (error) throw error;
+      }
+      if (action === "pay") {
+        const installmentIds = rows.flatMap((row) => row.advanceInstallments.map((item) => item.id));
+        if (installmentIds.length) {
+          const { error } = await (supabase as any).from("employee_advance_installments")
+            .update({ status: "deducted", payroll_run_id: runId }).in("id", installmentIds);
+          if (error) throw error;
+        }
+      }
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["payroll", month] });
+      toast.success("تم تحديث دورة الرواتب");
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const createAdvance = useMutation({
+    mutationFn: async (form: FormData) => {
+      const amount = Number(form.get("amount"));
+      const installmentAmount = Number(form.get("installment_amount"));
+      const count = Math.ceil(amount / installmentAmount);
+      const firstMonth = String(form.get("first_month") ?? "");
+      if (!advanceEmployeeId || amount <= 0 || installmentAmount <= 0 || count > 120 || firstMonth < currentMonthInBaghdad()) throw new Error("تحقق من الموظف والمبلغ والقسط وشهر بدء الخصم (الحد الأقصى 120 قسطًا)");
+      const { data: auth } = await supabase.auth.getUser();
+      const { data: advance, error } = await (supabase as any).from("employee_advances").insert({
+        employee_id: advanceEmployeeId, amount, installment_amount: installmentAmount,
+        installments_count: count, first_deduction_month: `${firstMonth}-01`,
+        purpose: form.get("purpose") || null, created_by: auth.user?.id,
+      }).select("id").single();
+      if (error) throw error;
+      const first = new Date(`${firstMonth}-01T00:00:00Z`);
+      const installments = Array.from({ length: count }, (_, index) => {
+        const date = new Date(first); date.setUTCMonth(date.getUTCMonth() + index);
+        return { advance_id: advance.id, month: date.toISOString().slice(0, 10), amount: index === count - 1 ? amount - installmentAmount * (count - 1) : installmentAmount };
+      });
+      const { error: installmentError } = await (supabase as any).from("employee_advance_installments").insert(installments);
+      if (installmentError) throw installmentError;
+    },
+    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["payroll", month] }); toast.success("تم تسجيل السلفة وجدولة أقساطها"); },
+    onError: (error: Error) => toast.error(error.message),
+  });
   const vehicleRows = (kind: Vehicle["vehicle_class"]) =>
     (query.data?.vehicles ?? [])
       .filter((vehicle) => vehicle.vehicle_class === kind)
@@ -567,6 +715,58 @@ function PayrollPage() {
           </Button>
         </div>
       </div>
+      <Card>
+        <CardHeader className="gap-3 border-b sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle>دورة راتب {month}</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              الحالة: {({ draft: "مسودة", review: "قيد المراجعة", approved: "معتمد", paid: "مصروف" } as Record<string, string>)[payrollRun?.status ?? "draft"]}
+              {payrollRun?.payment_method ? ` · طريقة الصرف: ${payrollRun.payment_method === "bank" ? "تحويل مصرفي" : "نقدًا"}` : ""}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={advancePaymentMethod} onValueChange={setAdvancePaymentMethod}>
+              <SelectTrigger className="w-40"><SelectValue placeholder="طريقة الصرف" /></SelectTrigger>
+              <SelectContent><SelectItem value="cash">نقدًا</SelectItem><SelectItem value="bank">تحويل مصرفي</SelectItem></SelectContent>
+            </Select>
+            {isPayrollOperator && !isLocked && <>
+              <Button variant="outline" disabled={savePayrollRun.isPending || query.isLoading} onClick={() => savePayrollRun.mutate("draft")}>حفظ المسودة</Button>
+              <Button disabled={savePayrollRun.isPending || query.isLoading || !rows.length} onClick={() => savePayrollRun.mutate("review")}>إرسال للمراجعة</Button>
+            </>}
+            {isCeo && payrollRun?.status === "review" && <Button disabled={savePayrollRun.isPending} onClick={() => savePayrollRun.mutate("approve")}>اعتماد المسير</Button>}
+            {isPayrollOperator && payrollRun?.status === "approved" && <Button disabled={savePayrollRun.isPending} onClick={() => savePayrollRun.mutate("pay")}>تأكيد صرف الرواتب</Button>}
+            <Badge variant="secondary">الإجمالي الصافي: {money(total)}</Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-4 p-4 lg:grid-cols-[1fr_2fr]">
+          <form className="grid gap-3 rounded-xl border p-4 sm:grid-cols-2 lg:grid-cols-1" onSubmit={(event) => {
+            event.preventDefault();
+            if (payrollRun && payrollRun.status !== "draft") { toast.error("لا يمكن إضافة سلفة بعد بدء مراجعة المسير"); return; }
+            createAdvance.mutate(new FormData(event.currentTarget));
+            event.currentTarget.reset(); setAdvanceEmployeeId("");
+          }}>
+            <h3 className="font-semibold sm:col-span-2 lg:col-span-1">تسجيل سلفة وجدولة أقساط</h3>
+            <Select value={advanceEmployeeId} onValueChange={setAdvanceEmployeeId}>
+              <SelectTrigger className="sm:col-span-2 lg:col-span-1"><SelectValue placeholder="اختر الموظف" /></SelectTrigger>
+              <SelectContent>{(query.data?.employees ?? []).map((employee) => <SelectItem key={employee.id} value={employee.id}>{employee.employee_no} — {employee.full_name}</SelectItem>)}</SelectContent>
+            </Select>
+            <Input name="amount" type="number" min="1" step="0.01" placeholder="مبلغ السلفة بالدينار" required />
+            <Input name="installment_amount" type="number" min="1" step="0.01" placeholder="مبلغ القسط الشهري" required />
+            <Input name="first_month" type="month" defaultValue={month} required />
+            <Input name="purpose" placeholder="سبب السلفة (اختياري)" />
+            <Button type="submit" disabled={!isPayrollOperator || createAdvance.isPending || isLocked} className="sm:col-span-2 lg:col-span-1">تسجيل السلفة</Button>
+          </form>
+          <div className="overflow-x-auto rounded-xl border">
+            <table className="w-full min-w-[520px] text-sm">
+              <thead><tr className="border-b bg-muted/40 text-right"><th className="p-3">الموظف</th><th className="p-3">القسط المستحق هذا الشهر</th><th className="p-3">الصافي بعد الخصم</th></tr></thead>
+              <tbody>{rows.filter((row) => row.advanceDeduction > 0).map((row) => <tr key={row.employee.id} className="border-b"><td className="p-3">{row.employee.full_name}</td><td className="p-3">{money(row.advanceDeduction)}</td><td className="p-3">{money(row.total)}</td></tr>)}
+                {!rows.some((row) => row.advanceDeduction > 0) && <tr><td colSpan={3} className="p-6 text-center text-muted-foreground">لا توجد أقساط سلف مستحقة لهذا الشهر.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          {payrollRun?.payment_reference && <p className="text-sm text-muted-foreground lg:col-span-2">مرجع الصرف: {payrollRun.payment_reference}</p>}
+        </CardContent>
+      </Card>
       <Tabs defaultValue="employees" dir="rtl" className="space-y-5">
         <TabsList className="grid h-auto w-full grid-cols-1 gap-2 bg-transparent sm:grid-cols-3">
           <TabsTrigger value="employees" className="min-h-11 rounded-xl border bg-card">

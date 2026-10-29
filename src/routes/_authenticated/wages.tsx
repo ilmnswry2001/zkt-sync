@@ -42,7 +42,12 @@ export const Route = createFileRoute("/_authenticated/wages")({
       .from("user_roles")
       .select("role")
       .eq("user_id", userData.user.id);
-    if (!data?.some((role) => role.role === "admin" || role.role === "hr")) {
+    const { data: formRoles } = await supabase
+      .from("form_role_assignments")
+      .select("role")
+      .eq("user_id", userData.user.id)
+      .eq("role", "ceo");
+    if (!data?.some((role) => role.role === "admin" || role.role === "hr" || role.role === "accountant") && !formRoles?.length) {
       throw redirect({ to: "/dashboard" });
     }
   },

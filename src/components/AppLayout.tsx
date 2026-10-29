@@ -76,8 +76,8 @@ const nav = [
   { to: "/requests", label: "الطلبات", icon: ClipboardList, access: "requests" },
   { to: "/procurement", label: "المشتريات", icon: ShoppingCart, access: "procurement" },
   { to: "/sites", label: "المواقع", icon: MapPinned, access: "planning" },
-  { to: "/wages", label: "الأجور", icon: Wallet, access: "hr" },
-  { to: "/payroll", label: "الرواتب", icon: Wallet, access: "hr" },
+  { to: "/wages", label: "الأجور", icon: Wallet, access: "finance" },
+  { to: "/payroll", label: "الرواتب والسلف", icon: Wallet, access: "finance" },
   { to: "/vehicles", label: "المركبات", icon: Truck, access: "hr" },
   { to: "/fuel", label: "إدارة الوقود", icon: Fuel, access: "hr" },
   { to: "/maintenance", label: "الصيانة", icon: Wrench, access: "maintenance" },
@@ -113,8 +113,9 @@ const NAV_GROUPS = [
     key: "hr",
     label: "الموارد البشرية",
     icon: Users,
-    tos: ["/employees", "/departments", "/leaves", "/penalties", "/wages", "/payroll"],
+    tos: ["/employees", "/departments", "/leaves", "/penalties"],
   },
+  { key: "finance", label: "الحسابات", icon: Wallet, tos: ["/wages", "/payroll"] },
   { key: "vehicles", label: "المركبات والوقود", icon: Truck, tos: ["/vehicles", "/fuel"] },
   { key: "maintenance", label: "الصيانة", icon: Wrench, tos: ["/maintenance"] },
   { key: "safety", label: "السلامة والبلاغات", icon: ShieldAlert, tos: ["/safety"] },
@@ -263,6 +264,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       !roles.some((role) => ["department_manager", "data_entry"].includes(role)) &&
       !hasLinkedEmployee
     )
+      return false;
+    if ("access" in item && item.access === "finance" && !isAdmin && !isHR && !isCompanyManager && !roles.includes("accountant"))
       return false;
     if ("access" in item && item.access === "executive" && !isAdmin && !isCompanyManager)
       return false;

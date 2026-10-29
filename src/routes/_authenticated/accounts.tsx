@@ -55,7 +55,8 @@ type Role =
   | "warehouse_keeper"
   | "procurement_officer"
   | "maintenance_manager"
-  | "maintenance_admin";
+  | "maintenance_admin"
+  | "accountant";
 type Profile = { id: string; full_name: string | null; email: string | null; created_at: string; allowed_sections: string[] | null };
 type UserRole = { id: string; user_id: string; role: Role };
 type Department = { id: string; name: string };
@@ -86,6 +87,7 @@ const roles: { key: Role; label: string; description: string }[] = [
     label: "إداري / منسق الصيانة",
     description: "تسجيل ومتابعة سجلات الصيانة",
   },
+  { key: "accountant", label: "قسم الحسابات", description: "إدارة مسيرات الرواتب والسلف ومتابعة الصرف" },
 ];
 
 function AccountsPage() {
