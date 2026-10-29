@@ -188,85 +188,76 @@ function PayrollPage() {
         .order("employee_no")
         .order("id");
       const employees = await loadAllRows((from, to) => employeeQuery.range(from, to)) as Employee[];
-      const employeeIds = employees.map((employee) => employee.id);
-      const employeeNumbers = employees.map((employee) => employee.employee_no);
       const [additions, penalties, logs, overrides, weeklySchedules, storedOvertime, vehicles, vehicleOperations, leaveCalendar] =
         await Promise.all([
-          employeeIds.length ? loadAllRows((from, to) =>
+          loadAllRows((from, to) =>
             supabase
               .from("salary_additions")
               .select("employee_id, amount, kind")
-              .in("employee_id", employeeIds)
               .eq("month", `${month}-01`)
               .order("id")
               .range(from, to),
-          ) : Promise.resolve([]),
-          employeeIds.length ? loadAllRows((from, to) =>
+          ),
+          loadAllRows((from, to) =>
             supabase
               .from("employee_penalties")
               .select("id, employee_id, deduction_amount, penalty_date, notes")
-              .in("employee_id", employeeIds)
               .gte("penalty_date", `${month}-01`)
               .lt("penalty_date", nextMonth)
               .order("id")
               .range(from, to),
-          ) : Promise.resolve([]),
-          employeeNumbers.length ? loadAllRows((from, to) =>
+          ),
+          loadAllRows((from, to) =>
             supabase
               .from("attendance_logs")
               .select("employee_no, verify_time, status, source, self_event_type")
-              .in("employee_no", employeeNumbers)
               .gte("verify_time", attendanceRange.start)
               .lt("verify_time", attendanceRange.end)
               .order("verify_time")
               .order("id")
               .range(from, to),
-          ) : Promise.resolve([]),
-          employeeIds.length ? loadAllRows((from, to) =>
+          ),
+          loadAllRows((from, to) =>
             supabase
               .from("attendance_day_status")
               .select("employee_id, work_date, status, notes, overtime_hours")
-              .in("employee_id", employeeIds)
               .gte("work_date", `${month}-01`)
               .lt("work_date", nextMonth)
               .order("employee_id")
               .order("work_date")
               .range(from, to),
-          ) : Promise.resolve([]),
-          employeeIds.length ? loadAllRows((from, to) =>
+          ),
+          loadAllRows((from, to) =>
             (supabase as any)
               .from("employee_weekly_schedules")
               .select("employee_id, weekday, start_time, end_time, grace_minutes, effective_from, effective_until")
-              .in("employee_id", employeeIds)
               .lt("effective_from", nextMonth)
               .or(`effective_until.is.null,effective_until.gte.${month}-01`)
               .order("effective_from", { ascending: false })
               .range(from, to),
-          ) : Promise.resolve([]),
-          employeeIds.length ? loadAllRows((from, to) =>
+          ),
+          loadAllRows((from, to) =>
             (supabase as any)
               .from("attendance_daily_overtime")
               .select("employee_id, work_date, overtime_hours")
-              .in("employee_id", employeeIds)
               .gte("work_date", `${month}-01`)
               .lt("work_date", nextMonth)
               .order("employee_id")
               .order("work_date")
               .range(from, to),
-          ) : Promise.resolve([]),
+          ),
           Promise.resolve([]),
           Promise.resolve([]),
-          employeeIds.length ? loadAllRows((from, to) =>
+          loadAllRows((from, to) =>
             supabase
               .from("forms")
               .select("employee_id, work_date, leave_end_date, status, leave_types(is_paid, count_non_working_days)")
-              .in("employee_id", employeeIds)
               .eq("kind", "leave")
               .in("status", ["pending_execution", "executed"])
               .lt("work_date", nextMonth)
               .gte("leave_end_date", `${month}-01`)
               .range(from, to),
-          ) : Promise.resolve([]),
+          ),
         ]);
       const [{ data: runData, error: runError }, { data: advanceData, error: advancesError }] = await Promise.all([
         (supabase as any).from("payroll_runs").select("*").eq("month", `${month}-01`).maybeSingle(),
