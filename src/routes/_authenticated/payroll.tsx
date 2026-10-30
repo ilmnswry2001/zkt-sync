@@ -246,8 +246,22 @@ function PayrollPage() {
               .order("work_date")
               .range(from, to),
           ),
-          Promise.resolve([]),
-          Promise.resolve([]),
+          loadAllRows((from, to) =>
+            (supabase as any)
+              .from("vehicles")
+              .select("id, vehicle_no, name, vehicle_class, daily_rate, currency, is_active")
+              .eq("is_active", true)
+              .order("vehicle_no")
+              .range(from, to),
+          ),
+          loadAllRows((from, to) =>
+            (supabase as any)
+              .from("vehicle_monthly_operations")
+              .select("vehicle_id, operating_days")
+              .eq("month", `${month}-01`)
+              .order("vehicle_id")
+              .range(from, to),
+          ),
           loadAllRows((from, to) =>
             supabase
               .from("forms")
