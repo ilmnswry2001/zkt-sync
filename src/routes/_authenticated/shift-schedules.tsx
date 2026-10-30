@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
+import { loadAllRows } from "@/lib/monthly-report";
 
 export const Route = createFileRoute("/_authenticated/shift-schedules")({
   head: () => ({ meta: [{ title: "جداول الورديات" }] }), component: ShiftSchedulesPage,
@@ -35,10 +35,9 @@ function ShiftSchedulesPage() {
     if (error) throw error; return data ?? [];
   }, enabled: isAdmin || isHR });
   const schedules = useQuery({ queryKey: ["employee-weekly-schedules"], queryFn: async () => {
-    const { data, error } = await (supabase as any).from("employee_weekly_schedules")
+    return await loadAllRows((from, to) => (supabase as any).from("employee_weekly_schedules")
       .select("id, employee_id, weekday, start_time, end_time, grace_minutes, effective_from, employees(full_name, employee_no)")
-      .order("effective_from", { ascending: false }).order("weekday");
-    if (error) throw error; return data ?? [];
+      .order("effective_from", { ascending: false }).order("weekday").range(from, to)) as any[];
   }, enabled: isAdmin || isHR });
   const save = async () => {
     const targetEmployees = targetType === "all"
@@ -60,11 +59,29 @@ function ShiftSchedulesPage() {
     toast.success(`تم تطبيق الوردية على ${targetEmployees.length} موظف · ${days.length} يوم`);
     client.invalidateQueries({ queryKey: ["employee-weekly-schedules"] });
   };
-  const remove = async (id: string) => {
-    const { error } = await (supabase as any).from("employee_weekly_schedules").delete().eq("id", id);
-    if (error) return toast.error(formatErrorMessage(error));
-    client.invalidateQueries({ queryKey: ["employee-weekly-schedules"] });
+  const removeMany = async (ids: string[]) => {
+    if (!ids.length || !window.confirm(`حذف ${ids.length} سجل وردية؟`)) return;
+    for (let index = 0; index < ids.length; index += 500) {
+      const { error } = await (supabase as any).from("employee_weekly_schedules").delete().in("id", ids.slice(index, index + 500));
+      if (error) return toast.error(formatErrorMessage(error));
+    }
+    toast.success("تم حذف الورديات المحددة");
+    await client.invalidateQueries({ queryKey: ["employee-weekly-schedules"] });
   };
+  const groupedSchedules = (() => {
+    const bySignature = new Map<string, any[]>();
+    for (const item of schedules.data ?? []) {
+      const key = [item.start_time, item.end_time, item.grace_minutes, item.effective_from].join("|");
+      bySignature.set(key, [...(bySignature.get(key) ?? []), item]);
+    }
+    return [...bySignature.entries()].map(([key, items]) => {
+      const employeeIds = [...new Set(items.map((item) => item.employee_id))].sort();
+      const employeeSignature = employeeIds.join(",");
+      const days = [...new Set(items.map((item) => item.weekday))].sort((a, b) => a - b);
+      return { key: `${key}|${employeeSignature}`, items, days, employeeIds,
+        employees: employeeIds.map((id) => items.find((item) => item.employee_id === id)).filter(Boolean) };
+    });
+  })();
   if (!isAdmin && !isHR) return <p className="p-8 text-center">هذه الصفحة مخصصة للإدارة والموارد البشرية.</p>;
   return <div dir="rtl" className="space-y-5 p-4">
     <div><h1 className="text-2xl font-bold">جداول الورديات الأسبوعية</h1><p className="text-sm text-muted-foreground">حدد وقت بداية ونهاية دوام كل موظف لكل يوم. تُستخدم أوقات الوردية لحساب التأخير.</p></div>
@@ -77,6 +94,11 @@ function ShiftSchedulesPage() {
       <Label>سماح التأخير بالدقائق<Input type="number" min="0" max="240" value={grace} onChange={(e) => setGrace(e.target.value)} /></Label><Label>ساري من تاريخ<Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></Label>
       <div className="flex items-end"><Button onClick={() => void save()}>حفظ الوردية</Button></div>
     </CardContent></Card>
-    <Card><CardHeader><CardTitle>الورديات المسجلة</CardTitle></CardHeader><CardContent className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>الموظف</TableHead><TableHead>اليوم</TableHead><TableHead>من</TableHead><TableHead>إلى</TableHead><TableHead>السماح</TableHead><TableHead>ساري من</TableHead><TableHead /></TableRow></TableHeader><TableBody>{(schedules.data ?? []).map((item: any) => <TableRow key={item.id}><TableCell>{item.employees?.employee_no} — {item.employees?.full_name}</TableCell><TableCell>{weekdays[item.weekday]}</TableCell><TableCell>{item.start_time}</TableCell><TableCell>{item.end_time}</TableCell><TableCell>{item.grace_minutes} د</TableCell><TableCell>{item.effective_from}</TableCell><TableCell><Button variant="ghost" size="sm" onClick={() => void remove(item.id)}>حذف</Button></TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
+    <Card><CardHeader className="flex-row items-center justify-between"><CardTitle>الورديات المسجلة ({groupedSchedules.length})</CardTitle><Button variant="destructive" size="sm" disabled={!schedules.data?.length} onClick={() => void removeMany((schedules.data ?? []).map((item: any) => item.id))}>حذف جميع الورديات</Button></CardHeader><CardContent className="space-y-3">
+      {groupedSchedules.map((group) => <section key={group.key} className="rounded-lg border p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold">وردية {group.items[0].start_time} – {group.items[0].end_time}</h3><p className="mt-1 text-sm text-muted-foreground">الأيام: {group.days.map((day) => weekdays[day]).join("، ")} · سماح {group.items[0].grace_minutes} د · سارية من {group.items[0].effective_from}</p><p className="mt-1 text-sm">مطبقة على {group.employees.length} موظف</p></div><Button variant="destructive" size="sm" onClick={() => void removeMany(group.items.map((item: any) => item.id))}>حذف المجموعة</Button></div>
+        <details className="mt-3 border-t pt-3"><summary className="cursor-pointer text-sm font-medium text-primary">عرض الموظفين</summary><ul className="mt-2 grid gap-2 sm:grid-cols-2">{group.employees.map((item: any) => <li key={item.employee_id} className="flex items-center justify-between gap-2 rounded bg-muted/30 px-3 py-2 text-sm"><span>{item.employees?.employee_no} — {item.employees?.full_name}</span><Button variant="ghost" size="sm" onClick={() => void removeMany(group.items.filter((row: any) => row.employee_id === item.employee_id).map((row: any) => row.id))}>حذف الموظف</Button></li>)}</ul></details>
+      </section>)}
+      {!groupedSchedules.length && <p className="py-8 text-center text-muted-foreground">لا توجد ورديات مسجلة.</p>}
+    </CardContent></Card>
   </div>;
 }
