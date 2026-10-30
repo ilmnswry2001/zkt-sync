@@ -101,6 +101,8 @@ type Vehicle = {
   is_active: boolean;
 };
 type VehicleOperation = { vehicle_id: string; operating_days: number };
+type Machinery = { id: string; code: string; asset_number: string | null; name: string; category: string | null; status: string; daily_rent: number | null };
+type MachineryOperation = { machinery_id: string; operating_days: number; operating_dates: string[] };
 
 type PayrollSlipRow = {
   employee: { full_name: string; employee_no: string; departments?: { name: string } | null };
@@ -273,6 +275,14 @@ function PayrollPage() {
               .range(from, to),
           ),
         ]);
+      const [machineryData, machineryOperationsData] = await Promise.all([
+        loadAllRows((from, to) => (supabase as any).from("machinery")
+          .select("id, code, asset_number, name, category, status, daily_rent")
+          .eq("status", "active").order("code").range(from, to)),
+        loadAllRows((from, to) => (supabase as any).from("machinery_monthly_operations")
+          .select("machinery_id, operating_days, operating_dates")
+          .eq("month", `${month}-01`).order("machinery_id").range(from, to)),
+      ]);
       const [{ data: runData, error: runError }, { data: advanceData, error: advancesError }] = await Promise.all([
         (supabase as any).from("payroll_runs").select("*").eq("month", `${month}-01`).maybeSingle(),
         (supabase as any).from("employee_advance_installments")
@@ -308,6 +318,8 @@ function PayrollPage() {
         storedOvertime: storedOvertime as AttendanceDailyOvertime[],
         vehicles: vehicles as Vehicle[],
         vehicleOperations: vehicleOperations as VehicleOperation[],
+        machinery: machineryData as Machinery[],
+        machineryOperations: machineryOperationsData as MachineryOperation[],
         payrollRun: runData,
         payrollLines: payrollLines ?? [],
         advanceInstallments: (advanceData ?? []) as Array<{ id: string; amount: number; employee_advances: { employee_id: string; status: string } | Array<{ employee_id: string; status: string }> }>,
@@ -532,8 +544,25 @@ function PayrollPage() {
         );
         return { vehicle, operatingDays, total: operatingDays * Number(vehicle.daily_rate) };
       });
-  const exportExcel = (kind: "employees" | Vehicle["vehicle_class"] = "employees") => {
+  const machineryRows = () => {
+    const operations = new Map((query.data?.machineryOperations ?? []).map((row) => [row.machinery_id, row]));
+    return (query.data?.machinery ?? []).map((machine) => {
+      const operation = operations.get(machine.id);
+      const operatingDays = operation?.operating_dates?.length ?? Number(operation?.operating_days ?? 0);
+      return { machine, operatingDays, total: operatingDays * Number(machine.daily_rent ?? 0) };
+    });
+  };
+  const exportExcel = (kind: "employees" | Vehicle["vehicle_class"] | "machinery" = "employees") => {
     const workbook = XLSX.utils.book_new();
+    if (kind === "machinery") {
+      const sheet = XLSX.utils.json_to_sheet(machineryRows().map(({ machine, operatingDays, total: net }) => ({
+        "رمز الآلية": machine.code, "رقم الأصل": machine.asset_number ?? "", الآلية: machine.name,
+        "أيام التشغيل": operatingDays, "الإيجار اليومي": Number(machine.daily_rent ?? 0), "إجمالي المستحق": net,
+      })));
+      XLSX.utils.book_append_sheet(workbook, sheet, "رواتب الآليات");
+      XLSX.writeFile(workbook, `رواتب_الآليات_${month}.xlsx`);
+      return;
+    }
     if (kind !== "employees") {
       const vehicleSheet = XLSX.utils.json_to_sheet(
         vehicleRows(kind).map(({ vehicle, operatingDays, total: net }) => ({
@@ -773,7 +802,7 @@ function PayrollPage() {
         </CardContent>
       </Card>
       <Tabs defaultValue="employees" dir="rtl" className="space-y-5">
-        <TabsList className="grid h-auto w-full grid-cols-1 gap-2 bg-transparent sm:grid-cols-3">
+        <TabsList className="grid h-auto w-full grid-cols-1 gap-2 bg-transparent sm:grid-cols-2 xl:grid-cols-4">
           <TabsTrigger value="employees" className="min-h-11 rounded-xl border bg-card">
             رواتب الموظفين
           </TabsTrigger>
@@ -782,6 +811,9 @@ function PayrollPage() {
           </TabsTrigger>
           <TabsTrigger value="heavy-vehicles" className="min-h-11 rounded-xl border bg-card">
             رواتب المركبات الثقيلة
+          </TabsTrigger>
+          <TabsTrigger value="machinery" className="min-h-11 rounded-xl border bg-card">
+            رواتب الآليات الثقيلة
           </TabsTrigger>
         </TabsList>
         <TabsContent value="employees" className="space-y-5">
@@ -1007,6 +1039,17 @@ function PayrollPage() {
             </TabsContent>
           );
         })}
+        <TabsContent value="machinery" className="space-y-5">
+          <div className="flex flex-col justify-between gap-3 rounded-xl border bg-card p-4 sm:flex-row sm:items-center">
+            <div><h2 className="font-semibold">رواتب الآليات الثقيلة</h2><p className="mt-1 text-sm text-muted-foreground">المستحق = أيام الحضور المسجلة في كشف الآليات × الإيجار اليومي · شهر {month}</p></div>
+            <div className="flex items-center gap-3"><Badge variant="secondary">{machineryRows().length} آلية</Badge><Button onClick={() => exportExcel("machinery")} disabled={!machineryRows().length}><Download className="ml-2 h-4 w-4" />تصدير Excel</Button></div>
+          </div>
+          <Card><CardHeader><CardTitle>إجمالي مستحق الآليات: {money(machineryRows().reduce((sum, row) => sum + row.total, 0))}</CardTitle></CardHeader>
+            <CardContent className="overflow-x-auto p-0"><table className="w-full min-w-[760px] text-sm"><thead><tr className="border-b bg-muted/40 text-right"><th className="p-3">الآلية</th><th className="p-3">التصنيف</th><th className="p-3">أيام الحضور</th><th className="p-3">الإيجار اليومي</th><th className="p-3">المستحق</th></tr></thead>
+              <tbody>{machineryRows().map(({ machine, operatingDays, total: net }) => <tr key={machine.id} className="border-b"><td className="p-3"><b>{machine.name}</b><div className="text-xs text-muted-foreground">{machine.code}{machine.asset_number ? ` · ${machine.asset_number}` : ""}</div></td><td className="p-3">{machine.category || "—"}</td><td className="p-3">{operatingDays} يوم</td><td className="p-3">{money(Number(machine.daily_rent ?? 0))}</td><td className="p-3 font-bold">{money(net)}</td></tr>)}</tbody>
+            </table>{!machineryRows().length && <p className="p-8 text-center text-muted-foreground">لا توجد آليات نشطة مسجلة. راجع سجل الآليات.</p>}</CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
       <Dialog open={previewRow !== null} onOpenChange={(open) => !open && setPreviewRow(null)}>
         <DialogContent dir="rtl" className="max-h-[95vh] w-[calc(100vw-2rem)] max-w-[680px] overflow-y-auto p-4 sm:p-6">
