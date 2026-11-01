@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { summarizeAttendancePunches } from "./monthly-report";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { matchZktecoPins } from "@/lib/zkteco-employee-matching";
+import { processUploadedAttendance } from "@/lib/uploaded-attendance";
 import { z } from "zod";
 
 const ingestSchema = z.object({
@@ -27,16 +27,6 @@ const ingestSchema = z.object({
   })).max(100000),
 });
 
-function normalizeVerifyTime(value: string) {
-  const trimmed = value.trim();
-  // ZKTeco exports commonly omit a timezone. Treat those values as UTC,
-  // but do not append a second timezone designator to ISO timestamps.
-  if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(trimmed)) return trimmed;
-  const parsed = new Date(`${trimmed}Z`);
-  if (Number.isNaN(parsed.getTime())) throw new Error(`وقت بصمة غير صالح: ${value}`);
-  return parsed.toISOString();
-}
-
 export const ingestZkData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => ingestSchema.parse(data))
@@ -48,45 +38,22 @@ export const ingestZkData = createServerFn({ method: "POST" })
       .eq("id", data.upload_id);
 
     try {
-      // Attendance Device ID is the only supported mapping for device punches.
-      const pins = [...new Set(data.logs.map((l) => l.user_pin).filter(Boolean))];
-      const empByPin = await matchZktecoPins(supabase, pins);
-      const unmatched = pins.filter((pin) => !empByPin.has(pin)).length;
-
-      // إدراج سجلات البصمة (تجاهل المكرر)
-      const logRows = data.logs.flatMap((l) => {
-        const employee = empByPin.get(l.user_pin);
-        if (!employee) return [];
-        return [{
-          employee_no: employee.employee_no,
-          employee_id: employee.id,
-          device_id: data.device_id,
-          upload_id: data.upload_id,
-          verify_time: normalizeVerifyTime(l.verify_time),
-          verify_type: l.verify_type,
-          status: l.status,
-          external_log_id: l.external_id,
-        }];
-      });
-
-      let inserted = 0;
-      for (let i = 0; i < logRows.length; i += 1000) {
-        const chunk = logRows.slice(i, i + 1000);
-        const { data: rows, error } = await supabase.from("attendance_logs")
-          // Must match attendance_logs' UNIQUE(employee_no, verify_time, device_id)
-          // constraint. The previous two-column target made every import fail
-          // with PostgreSQL's "no unique constraint matching" error.
-          .upsert(chunk, { onConflict: "employee_no,verify_time,device_id", ignoreDuplicates: true })
-          .select("id");
+      // Audit and attendance are committed together; all unique conflicts are
+      // ignored in SQL, including the cross-device employee/time constraint.
+      const { inserted, duplicates, unmatched } = await processUploadedAttendance(data.logs, async (offset, logs) => {
+        const { data: result, error } = await supabase.rpc("ingest_uploaded_attendance_chunk", {
+          p_upload_id: data.upload_id, p_offset: offset, p_logs: logs,
+        });
         if (error) throw error;
-        inserted += rows?.length ?? 0;
-      }
+        return result as { inserted: number; duplicates: number; unmatched: number };
+      });
 
       await supabase.from("uploaded_files").update({
         status: "completed",
         users_count: data.users.length,
         logs_count: data.logs.length,
         inserted_logs: inserted,
+        error_message: null,
         processed_at: new Date().toISOString(),
       }).eq("id", data.upload_id);
 
@@ -95,7 +62,7 @@ export const ingestZkData = createServerFn({ method: "POST" })
         await supabase.from("devices").update({ last_sync_at: new Date().toISOString() }).eq("id", data.device_id);
       }
 
-      return { success: true, inserted, users: data.users.length, departments: 0, unmatched };
+      return { success: true, inserted, duplicates, users: data.users.length, departments: 0, unmatched };
     } catch (e: any) {
       await supabase.from("uploaded_files").update({
         status: "failed",

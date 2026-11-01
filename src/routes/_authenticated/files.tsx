@@ -14,7 +14,7 @@ import { Loader2, Play } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/files")({
-  head: () => ({ meta: [{ title: "سجل الملفات" }] }),
+  head: () => ({ meta: [{ title: "سجل ملفات البصمة | إدارة الحضور" }, { name: "description", content: "معالجة ملفات أجهزة البصمة ومتابعة نتائج استيراد الحركات." }, { property: "og:title", content: "سجل ملفات البصمة | إدارة الحضور" }, { property: "og:description", content: "متابعة الملفات المرفوعة ونتائج معالجة الحضور." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" }] }),
   component: FilesPage,
 });
 
@@ -56,7 +56,8 @@ function FilesPage() {
           logs: parsed.logs,
         },
       });
-      toast.success(`تمت المعالجة وحفظ ${result.inserted} سجل بصمة`);
+      toast.success(`تمت المعالجة: ${result.inserted} مسجلة، ${result.duplicates} مكررة، ${result.unmatched} غير مرتبطة`);
+      await queryClient.invalidateQueries({ queryKey: ["device-sync-records"] });
       await queryClient.invalidateQueries({ queryKey: ["uploaded_files"] });
     } catch (error) {
       toast.error(`فشلت معالجة الملف: ${formatErrorMessage(error, "حدث خطأ غير متوقع")}`);

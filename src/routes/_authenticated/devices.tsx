@@ -22,7 +22,7 @@ import agentInstaller from "../../../scripts/install_agent_background.ps1?raw";
 import multiAgentTemplate from "../../../scripts/multi_agent_bundle.py?raw";
 
 export const Route = createFileRoute("/_authenticated/devices")({
-  head: () => ({ meta: [{ title: "الأجهزة" }] }),
+  head: () => ({ meta: [{ title: "الأجهزة وسجلات التحقق | إدارة الحضور" }, { name: "description", content: "إدارة أجهزة البصمة وتدقيق الحركات المكررة والمعرفات غير المرتبطة." }, { property: "og:title", content: "الأجهزة وسجلات التحقق | إدارة الحضور" }, { property: "og:description", content: "متابعة نتائج مطابقة حركات الأجهزة وملفات البصمة." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" }] }),
   component: DevicesPage,
 });
 
@@ -413,8 +413,8 @@ function DeviceSyncRecords({ devices, canView }: { devices: Device[]; canView: b
     queryFn: async () => {
       const db = supabase as any;
       let request = db.from("device_sync_records")
-        .select("id, device_id, user_pin, employee_no, employee_id, verify_time, verify_type, status, external_log_id, processing_status, error_message, sync_batch_id, employee:employees(full_name), device:devices(name), batch:sync_batches(received_at)", { count: "exact" })
-        .order("verify_time", { ascending: false });
+        .select("id, device_id, user_pin, employee_no, employee_id, verify_time, verify_type, status, external_log_id, processing_status, error_message, sync_batch_id, employee:employees(full_name), device:devices(name), batch:sync_batches(received_at), upload:uploaded_files(file_name)", { count: "exact" })
+        .order("verify_time", { ascending: false }).order("id", { ascending: false });
       if (deviceId !== "all") request = request.eq("device_id", deviceId);
       if (status === "unprocessed") request = request.in("processing_status", ["pending", "error", "unmatched"]);
       else if (status !== "all") request = request.eq("processing_status", status);
@@ -441,7 +441,7 @@ function DeviceSyncRecords({ devices, canView }: { devices: Device[]; canView: b
 
   return <Card>
     <CardHeader className="flex flex-row items-start justify-between gap-4">
-      <div className="space-y-1"><CardTitle>سجلات التحقق من حركات الأجهزة</CardTitle><p className="text-sm text-muted-foreground">تفاصيل كل حركة مرفوعة، ونتيجة مطابقتها بالموظف وسجل الحضور. تبدأ التفاصيل من أول مزامنة بعد تطبيق تحديث النظام وترحيل قاعدة البيانات؛ الدفعات السابقة تحتفظ بإجمالياتها فقط.</p></div>
+      <div className="space-y-1"><CardTitle>سجلات التحقق من حركات الأجهزة والملفات</CardTitle></div>
       {canView && <Button type="button" variant="outline" disabled={reprocess.isPending} onClick={() => {
         if (confirm("ستعاد مطابقة الحركات غير المعالجة والأخطاء والأرقام غير المعرفة باستخدام أرقام أجهزة البصمة والرقم الوظيفي الحالية. سيتم تجاهل الحركات المكررة. متابعة؟")) reprocess.mutate();
       }}>
@@ -473,9 +473,9 @@ function DeviceSyncRecords({ devices, canView }: { devices: Device[]; canView: b
             <TableBody>{rows.map((row: any) => <TableRow key={row.id}>
               <TableCell className="whitespace-nowrap">{new Date(row.verify_time).toLocaleString("ar-IQ")}</TableCell>
               <TableCell className="whitespace-nowrap">{row.batch?.received_at ? new Date(row.batch.received_at).toLocaleString("ar-IQ") : "—"}</TableCell>
-              <TableCell>{row.device?.name ?? devices.find((device) => device.id === row.device_id)?.name ?? "—"}</TableCell>
+              <TableCell>{row.device?.name ?? devices.find((device) => device.id === row.device_id)?.name ?? "—"}{row.upload?.file_name && <div className="text-xs text-muted-foreground break-all">{row.upload.file_name}</div>}</TableCell>
               <TableCell className="font-mono">{row.user_pin}</TableCell>
-              <TableCell>{row.employee_id ? <div>{row.employee?.full_name ?? "موظف مرتبط"}<div className="text-xs text-muted-foreground">{row.employee_no ?? ""}</div></div> : <span className="text-amber-600">غير مرتبط</span>}</TableCell>
+              <TableCell>{row.employee_id ? <div>{row.employee?.full_name ?? "موظف مرتبط"}<div className="text-xs text-muted-foreground">{row.employee_no ?? ""}</div></div> : <span className="text-warning">غير مرتبط</span>}</TableCell>
               <TableCell>{row.verify_type ?? "—"} / {row.status ?? "—"}</TableCell>
               <TableCell>{row.external_log_id ?? "—"}</TableCell>
               <TableCell><Badge variant={row.processing_status === "inserted" ? "default" : row.processing_status === "unmatched" || row.processing_status === "error" ? "destructive" : "secondary"}>{statusLabel(row.processing_status)}</Badge></TableCell>
