@@ -14,6 +14,35 @@ export type Database = {
   }
   public: {
     Tables: {
+      attendance_daily_overtime: {
+        Row: {
+          employee_id: string
+          overtime_hours: number
+          updated_at: string
+          work_date: string
+        }
+        Insert: {
+          employee_id: string
+          overtime_hours?: number
+          updated_at?: string
+          work_date: string
+        }
+        Update: {
+          employee_id?: string
+          overtime_hours?: number
+          updated_at?: string
+          work_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_daily_overtime_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attendance_day_status: {
         Row: {
           created_at: string
@@ -78,6 +107,7 @@ export type Database = {
           longitude: number | null
           self_event_type: string | null
           selfie_path: string | null
+          site_id: string | null
           source: string
           status: number | null
           submitted_offline: boolean
@@ -104,6 +134,7 @@ export type Database = {
           longitude?: number | null
           self_event_type?: string | null
           selfie_path?: string | null
+          site_id?: string | null
           source?: string
           status?: number | null
           submitted_offline?: boolean
@@ -130,6 +161,7 @@ export type Database = {
           longitude?: number | null
           self_event_type?: string | null
           selfie_path?: string | null
+          site_id?: string | null
           source?: string
           status?: number | null
           submitted_offline?: boolean
@@ -150,6 +182,13 @@ export type Database = {
             columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_logs_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
             referencedColumns: ["id"]
           },
           {
@@ -472,6 +511,101 @@ export type Database = {
           },
         ]
       }
+      department_ticket_messages: {
+        Row: {
+          author_id: string
+          created_at: string
+          id: string
+          message: string
+          ticket_id: string
+        }
+        Insert: {
+          author_id?: string
+          created_at?: string
+          id?: string
+          message: string
+          ticket_id: string
+        }
+        Update: {
+          author_id?: string
+          created_at?: string
+          id?: string
+          message?: string
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "department_ticket_messages_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "department_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      department_tickets: {
+        Row: {
+          assigned_to: string | null
+          created_at: string
+          created_by: string
+          details: string
+          due_at: string | null
+          id: string
+          priority: string
+          source_department_id: string | null
+          status: string
+          subject: string
+          target_department_id: string
+          ticket_no: number
+          updated_at: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          created_at?: string
+          created_by?: string
+          details: string
+          due_at?: string | null
+          id?: string
+          priority?: string
+          source_department_id?: string | null
+          status?: string
+          subject: string
+          target_department_id: string
+          ticket_no?: number
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string | null
+          created_at?: string
+          created_by?: string
+          details?: string
+          due_at?: string | null
+          id?: string
+          priority?: string
+          source_department_id?: string | null
+          status?: string
+          subject?: string
+          target_department_id?: string
+          ticket_no?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "department_tickets_source_department_id_fkey"
+            columns: ["source_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "department_tickets_target_department_id_fkey"
+            columns: ["target_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       departments: {
         Row: {
           created_at: string
@@ -501,6 +635,50 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      device_sync_commands: {
+        Row: {
+          completed_at: string | null
+          device_id: string
+          error_message: string | null
+          id: string
+          requested_at: string
+          requested_by: string
+          result: Json
+          started_at: string | null
+          status: string
+        }
+        Insert: {
+          completed_at?: string | null
+          device_id: string
+          error_message?: string | null
+          id?: string
+          requested_at?: string
+          requested_by: string
+          result?: Json
+          started_at?: string | null
+          status?: string
+        }
+        Update: {
+          completed_at?: string | null
+          device_id?: string
+          error_message?: string | null
+          id?: string
+          requested_at?: string
+          requested_by?: string
+          result?: Json
+          started_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_sync_commands_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       device_sync_keys: {
         Row: {
@@ -536,6 +714,86 @@ export type Database = {
             columns: ["device_id"]
             isOneToOne: false
             referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      device_sync_records: {
+        Row: {
+          attendance_log_id: string | null
+          created_at: string
+          device_id: string
+          employee_id: string | null
+          employee_no: string | null
+          error_message: string | null
+          external_log_id: number | null
+          id: string
+          processing_status: string
+          status: number | null
+          sync_batch_id: string
+          user_pin: string
+          verify_time: string
+          verify_type: number | null
+        }
+        Insert: {
+          attendance_log_id?: string | null
+          created_at?: string
+          device_id: string
+          employee_id?: string | null
+          employee_no?: string | null
+          error_message?: string | null
+          external_log_id?: number | null
+          id?: string
+          processing_status?: string
+          status?: number | null
+          sync_batch_id: string
+          user_pin: string
+          verify_time: string
+          verify_type?: number | null
+        }
+        Update: {
+          attendance_log_id?: string | null
+          created_at?: string
+          device_id?: string
+          employee_id?: string | null
+          employee_no?: string | null
+          error_message?: string | null
+          external_log_id?: number | null
+          id?: string
+          processing_status?: string
+          status?: number | null
+          sync_batch_id?: string
+          user_pin?: string
+          verify_time?: string
+          verify_type?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_sync_records_attendance_log_id_fkey"
+            columns: ["attendance_log_id"]
+            isOneToOne: false
+            referencedRelation: "attendance_logs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "device_sync_records_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "device_sync_records_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "device_sync_records_sync_batch_id_fkey"
+            columns: ["sync_batch_id"]
+            isOneToOne: false
+            referencedRelation: "sync_batches"
             referencedColumns: ["id"]
           },
         ]
@@ -584,6 +842,104 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      employee_advance_installments: {
+        Row: {
+          advance_id: string
+          amount: number
+          created_at: string
+          id: string
+          month: string
+          payroll_run_id: string | null
+          status: string
+        }
+        Insert: {
+          advance_id: string
+          amount: number
+          created_at?: string
+          id?: string
+          month: string
+          payroll_run_id?: string | null
+          status?: string
+        }
+        Update: {
+          advance_id?: string
+          amount?: number
+          created_at?: string
+          id?: string
+          month?: string
+          payroll_run_id?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_advance_installments_advance_id_fkey"
+            columns: ["advance_id"]
+            isOneToOne: false
+            referencedRelation: "employee_advances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_advance_installments_payroll_run_id_fkey"
+            columns: ["payroll_run_id"]
+            isOneToOne: false
+            referencedRelation: "payroll_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_advances: {
+        Row: {
+          amount: number
+          approved_by: string | null
+          created_at: string
+          created_by: string | null
+          employee_id: string
+          first_deduction_month: string
+          id: string
+          installment_amount: number
+          installments_count: number
+          purpose: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          approved_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          employee_id: string
+          first_deduction_month: string
+          id?: string
+          installment_amount: number
+          installments_count: number
+          purpose?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          approved_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          employee_id?: string
+          first_deduction_month?: string
+          id?: string
+          installment_amount?: number
+          installments_count?: number
+          purpose?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_advances_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       employee_clearances: {
         Row: {
@@ -1074,6 +1430,68 @@ export type Database = {
           },
         ]
       }
+      employee_self_attendance_access: {
+        Row: {
+          allow_all_sites: boolean
+          check_in_grace_hours: number
+          employee_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          allow_all_sites?: boolean
+          check_in_grace_hours?: number
+          employee_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          allow_all_sites?: boolean
+          check_in_grace_hours?: number
+          employee_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_self_attendance_access_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_self_attendance_sites: {
+        Row: {
+          employee_id: string
+          site_id: string
+        }
+        Insert: {
+          employee_id: string
+          site_id: string
+        }
+        Update: {
+          employee_id?: string
+          site_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_self_attendance_sites_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_self_attendance_sites_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employee_task_events: {
         Row: {
           actor_id: string | null
@@ -1341,13 +1759,13 @@ export type Database = {
           employee_contract_nomination: string | null
           employee_import_data: Json
           employee_no: string
-          face_descriptor: Json | null
-          face_enrolled_at: string | null
-          face_enrolled_by: string | null
           employment_form: string | null
           erp_no: string | null
           executive_guidance_follow_up: string | null
           executive_guidance_notes: string | null
+          face_descriptor: Json | null
+          face_enrolled_at: string | null
+          face_enrolled_by: string | null
           full_name: string
           gender: string | null
           graduation_certificate: string | null
@@ -1430,13 +1848,13 @@ export type Database = {
           employee_contract_nomination?: string | null
           employee_import_data?: Json
           employee_no: string
-          face_descriptor?: Json | null
-          face_enrolled_at?: string | null
-          face_enrolled_by?: string | null
           employment_form?: string | null
           erp_no?: string | null
           executive_guidance_follow_up?: string | null
           executive_guidance_notes?: string | null
+          face_descriptor?: Json | null
+          face_enrolled_at?: string | null
+          face_enrolled_by?: string | null
           full_name: string
           gender?: string | null
           graduation_certificate?: string | null
@@ -1519,13 +1937,13 @@ export type Database = {
           employee_contract_nomination?: string | null
           employee_import_data?: Json
           employee_no?: string
-          face_descriptor?: Json | null
-          face_enrolled_at?: string | null
-          face_enrolled_by?: string | null
           employment_form?: string | null
           erp_no?: string | null
           executive_guidance_follow_up?: string | null
           executive_guidance_notes?: string | null
+          face_descriptor?: Json | null
+          face_enrolled_at?: string | null
+          face_enrolled_by?: string | null
           full_name?: string
           gender?: string | null
           graduation_certificate?: string | null
@@ -1786,6 +2204,355 @@ export type Database = {
           },
         ]
       }
+      hse_memberships: {
+        Row: {
+          active: boolean
+          area: string
+          created_at: string
+          employee_id: string
+          id: string
+          role: string
+          site_id: string | null
+          team_leader_id: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          active?: boolean
+          area?: string
+          created_at?: string
+          employee_id: string
+          id?: string
+          role: string
+          site_id?: string | null
+          team_leader_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          active?: boolean
+          area?: string
+          created_at?: string
+          employee_id?: string
+          id?: string
+          role?: string
+          site_id?: string | null
+          team_leader_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hse_memberships_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hse_memberships_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hse_memberships_team_leader_id_fkey"
+            columns: ["team_leader_id"]
+            isOneToOne: false
+            referencedRelation: "hse_memberships"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hse_report_attachments: {
+        Row: {
+          created_at: string
+          created_by: string
+          file_name: string
+          id: string
+          report_id: string
+          storage_path: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          file_name: string
+          id?: string
+          report_id: string
+          storage_path: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          file_name?: string
+          id?: string
+          report_id?: string
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hse_report_attachments_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "hse_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hse_report_items: {
+        Row: {
+          corrective_action: string | null
+          created_at: string
+          id: string
+          issue_description: string | null
+          item_key: string
+          item_label: string
+          report_id: string
+          result: string
+        }
+        Insert: {
+          corrective_action?: string | null
+          created_at?: string
+          id?: string
+          issue_description?: string | null
+          item_key: string
+          item_label: string
+          report_id: string
+          result: string
+        }
+        Update: {
+          corrective_action?: string | null
+          created_at?: string
+          id?: string
+          issue_description?: string | null
+          item_key?: string
+          item_label?: string
+          report_id?: string
+          result?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hse_report_items_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "hse_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hse_report_template_items: {
+        Row: {
+          active: boolean
+          created_at: string
+          created_by: string | null
+          department_id: string
+          id: string
+          item_key: string
+          item_label: string
+          report_kind: string
+          sort_order: number
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          department_id: string
+          id?: string
+          item_key: string
+          item_label: string
+          report_kind: string
+          sort_order?: number
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          department_id?: string
+          id?: string
+          item_key?: string
+          item_label?: string
+          report_kind?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hse_report_template_items_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hse_reports: {
+        Row: {
+          created_at: string
+          created_by: string
+          department_id: string | null
+          employee_id: string
+          id: string
+          notes: string | null
+          permit_count: number
+          report_kind: string
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          shift: string
+          site_id: string
+          status: string
+          updated_at: string
+          work_date: string
+          workforce_count: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          department_id?: string | null
+          employee_id: string
+          id?: string
+          notes?: string | null
+          permit_count?: number
+          report_kind: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          shift: string
+          site_id: string
+          status?: string
+          updated_at?: string
+          work_date?: string
+          workforce_count?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          department_id?: string | null
+          employee_id?: string
+          id?: string
+          notes?: string | null
+          permit_count?: number
+          report_kind?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          shift?: string
+          site_id?: string
+          status?: string
+          updated_at?: string
+          work_date?: string
+          workforce_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hse_reports_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hse_reports_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hse_reports_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hse_risks: {
+        Row: {
+          assigned_employee_id: string | null
+          closure_note: string | null
+          due_date: string | null
+          id: string
+          report_item_id: string
+          status: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          assigned_employee_id?: string | null
+          closure_note?: string | null
+          due_date?: string | null
+          id?: string
+          report_item_id: string
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          assigned_employee_id?: string | null
+          closure_note?: string | null
+          due_date?: string | null
+          id?: string
+          report_item_id?: string
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hse_risks_assigned_employee_id_fkey"
+            columns: ["assigned_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hse_risks_report_item_id_fkey"
+            columns: ["report_item_id"]
+            isOneToOne: true
+            referencedRelation: "hse_report_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hse_score_events: {
+        Row: {
+          created_at: string
+          created_by: string
+          employee_id: string
+          id: string
+          points: number
+          reason: string
+          score_month: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          employee_id: string
+          id?: string
+          points: number
+          reason: string
+          score_month: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          employee_id?: string
+          id?: string
+          points?: number
+          reason?: string
+          score_month?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hse_score_events_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leave_balance_transactions: {
         Row: {
           amount: number
@@ -1899,51 +2666,140 @@ export type Database = {
       }
       machinery: {
         Row: {
+          asset_number: string | null
+          ato_expiry: string | null
+          ato_status: string | null
           category: string | null
           code: string
+          color: string | null
           created_at: string
           current_hours: number
           current_odometer: number
+          daily_rent: number
+          document_days_remaining: string | null
+          document_status: string | null
+          driver_daily_cost: number
+          driver_name: string | null
+          extra_hourly_rate: number
           id: string
           model: string | null
           name: string
           notes: string | null
+          owner_name: string | null
           plate_no: string | null
+          requires_ato: boolean
+          security_permit_expiry: string | null
+          security_permit_no: string | null
+          security_permit_status: string | null
+          source_row: number | null
           status: string
           updated_at: string
           year: number | null
         }
         Insert: {
+          asset_number?: string | null
+          ato_expiry?: string | null
+          ato_status?: string | null
           category?: string | null
           code: string
+          color?: string | null
           created_at?: string
           current_hours?: number
           current_odometer?: number
+          daily_rent?: number
+          document_days_remaining?: string | null
+          document_status?: string | null
+          driver_daily_cost?: number
+          driver_name?: string | null
+          extra_hourly_rate?: number
           id?: string
           model?: string | null
           name: string
           notes?: string | null
+          owner_name?: string | null
           plate_no?: string | null
+          requires_ato?: boolean
+          security_permit_expiry?: string | null
+          security_permit_no?: string | null
+          security_permit_status?: string | null
+          source_row?: number | null
           status?: string
           updated_at?: string
           year?: number | null
         }
         Update: {
+          asset_number?: string | null
+          ato_expiry?: string | null
+          ato_status?: string | null
           category?: string | null
           code?: string
+          color?: string | null
           created_at?: string
           current_hours?: number
           current_odometer?: number
+          daily_rent?: number
+          document_days_remaining?: string | null
+          document_status?: string | null
+          driver_daily_cost?: number
+          driver_name?: string | null
+          extra_hourly_rate?: number
           id?: string
           model?: string | null
           name?: string
           notes?: string | null
+          owner_name?: string | null
           plate_no?: string | null
+          requires_ato?: boolean
+          security_permit_expiry?: string | null
+          security_permit_no?: string | null
+          security_permit_status?: string | null
+          source_row?: number | null
           status?: string
           updated_at?: string
           year?: number | null
         }
         Relationships: []
+      }
+      machinery_monthly_operations: {
+        Row: {
+          created_at: string
+          id: string
+          machinery_id: string
+          month: string
+          notes: string | null
+          operating_dates: string[]
+          operating_days: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          machinery_id: string
+          month: string
+          notes?: string | null
+          operating_dates?: string[]
+          operating_days?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          machinery_id?: string
+          month?: string
+          notes?: string | null
+          operating_dates?: string[]
+          operating_days?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "machinery_monthly_operations_machinery_id_fkey"
+            columns: ["machinery_id"]
+            isOneToOne: false
+            referencedRelation: "machinery"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       maintenance_record_attachments: {
         Row: {
@@ -2685,11 +3541,120 @@ export type Database = {
         }
         Relationships: []
       }
+      payroll_run_lines: {
+        Row: {
+          additions_amount: number
+          advance_deduction: number
+          base_amount: number
+          calculation_snapshot: Json
+          created_at: string
+          deductions_amount: number
+          employee_id: string
+          id: string
+          net_amount: number
+          overtime_amount: number
+          overtime_hours: number
+          payroll_run_id: string
+        }
+        Insert: {
+          additions_amount?: number
+          advance_deduction?: number
+          base_amount?: number
+          calculation_snapshot?: Json
+          created_at?: string
+          deductions_amount?: number
+          employee_id: string
+          id?: string
+          net_amount?: number
+          overtime_amount?: number
+          overtime_hours?: number
+          payroll_run_id: string
+        }
+        Update: {
+          additions_amount?: number
+          advance_deduction?: number
+          base_amount?: number
+          calculation_snapshot?: Json
+          created_at?: string
+          deductions_amount?: number
+          employee_id?: string
+          id?: string
+          net_amount?: number
+          overtime_amount?: number
+          overtime_hours?: number
+          payroll_run_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_run_lines_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_run_lines_payroll_run_id_fkey"
+            columns: ["payroll_run_id"]
+            isOneToOne: false
+            referencedRelation: "payroll_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payroll_runs: {
+        Row: {
+          approved_by: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          month: string
+          paid_at: string | null
+          paid_by: string | null
+          payment_method: string | null
+          payment_reference: string | null
+          reviewed_by: string | null
+          status: string
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          approved_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          month: string
+          paid_at?: string | null
+          paid_by?: string | null
+          payment_method?: string | null
+          payment_reference?: string | null
+          reviewed_by?: string | null
+          status?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          approved_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          month?: string
+          paid_at?: string | null
+          paid_by?: string | null
+          payment_method?: string | null
+          payment_reference?: string | null
+          reviewed_by?: string | null
+          status?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           allowed_sections: string[] | null
           created_at: string
           email: string | null
+          employee_id: string | null
           full_name: string | null
           id: string
         }
@@ -2697,6 +3662,7 @@ export type Database = {
           allowed_sections?: string[] | null
           created_at?: string
           email?: string | null
+          employee_id?: string | null
           full_name?: string | null
           id: string
         }
@@ -2704,10 +3670,19 @@ export type Database = {
           allowed_sections?: string[] | null
           created_at?: string
           email?: string | null
+          employee_id?: string | null
           full_name?: string | null
           id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       report_catalog_items: {
         Row: {
@@ -2782,6 +3757,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      self_attendance_settings: {
+        Row: {
+          id: boolean
+          latest_check_in_time: string | null
+          latest_check_out_time: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          id?: boolean
+          latest_check_in_time?: string | null
+          latest_check_out_time?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          id?: boolean
+          latest_check_in_time?: string | null
+          latest_check_out_time?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
       }
       shifts: {
         Row: {
@@ -3765,6 +4764,50 @@ export type Database = {
           },
         ]
       }
+      violation_reports: {
+        Row: {
+          anonymous: boolean
+          created_at: string
+          created_by: string
+          department_id: string
+          details: string
+          id: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          anonymous?: boolean
+          created_at?: string
+          created_by?: string
+          department_id: string
+          details: string
+          id?: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          anonymous?: boolean
+          created_at?: string
+          created_by?: string
+          department_id?: string
+          details?: string
+          id?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "violation_reports_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       wage_rates: {
         Row: {
           created_at: string
@@ -3921,6 +4964,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      approve_self_attendance_early_exit: {
+        Args: { p_form_id: string }
+        Returns: undefined
+      }
       can_access_department: {
         Args: { _department_id: string; _user_id: string }
         Returns: boolean
@@ -3934,6 +4981,10 @@ export type Database = {
       can_manage_employee_goal: { Args: { _goal_id: string }; Returns: boolean }
       can_manage_stock: { Args: { _uid: string }; Returns: boolean }
       can_manage_work_task: { Args: { _task_id: string }; Returns: boolean }
+      can_read_self_attendance_employee: {
+        Args: { p_employee_id: string }
+        Returns: boolean
+      }
       create_employee_goal_task: {
         Args: {
           _description?: string
@@ -3971,6 +5022,7 @@ export type Database = {
         Args: { _from: string; _to: string }
         Returns: number
       }
+      get_current_employee_id: { Args: never; Returns: string }
       get_employee_custody: {
         Args: { emp_id: string }
         Returns: {
@@ -3999,6 +5051,24 @@ export type Database = {
         }
         Returns: boolean
       }
+      hse_can_manage_department: {
+        Args: { _department_id: string; _user_id: string }
+        Returns: boolean
+      }
+      hse_can_manage_report_template: {
+        Args: { _department_id: string; _user_id: string }
+        Returns: boolean
+      }
+      hse_can_review_report: {
+        Args: { _employee_id: string; _user_id: string }
+        Returns: boolean
+      }
+      hse_can_submit_kind: {
+        Args: { _kind: string; _user_id: string }
+        Returns: boolean
+      }
+      hse_is_manager: { Args: { _user_id: string }; Returns: boolean }
+      hse_is_staff: { Args: { _user_id: string }; Returns: boolean }
       ingest_zkteco_sync: {
         Args: { p_device_id: string; p_logs: Json; p_site_id: string }
         Returns: {
@@ -4160,8 +5230,8 @@ export type Database = {
           p_device_info?: Json
           p_event_type: string
           p_face_score?: number
-          p_liveness_verified?: boolean
           p_latitude: number
+          p_liveness_verified?: boolean
           p_longitude: number
           p_selfie_path?: string
           p_submitted_offline?: boolean
@@ -4174,6 +5244,10 @@ export type Database = {
           recorded_at: string
           site_name: string
         }[]
+      }
+      refresh_attendance_day_overtime: {
+        Args: { p_employee_id: string; p_work_date: string }
+        Returns: undefined
       }
       replace_maintenance_record_parts: {
         Args: { _parts: Json; _record_id: string }
@@ -4210,6 +5284,18 @@ export type Database = {
         Args: { _department_id: string; _employee_id?: string }
         Returns: string
       }
+      set_employee_self_attendance_check_in_grace: {
+        Args: { p_employee_id: string; p_hours: number }
+        Returns: undefined
+      }
+      set_employee_self_attendance_site_access: {
+        Args: {
+          p_allow_all_sites: boolean
+          p_employee_id: string
+          p_site_ids?: string[]
+        }
+        Returns: undefined
+      }
       submit_employee_monthly_evaluation: {
         Args: {
           _employee_id: string
@@ -4240,7 +5326,7 @@ export type Database = {
       day_status: "present" | "absent" | "leave" | "holiday" | "rest"
       device_status: "active" | "inactive" | "maintenance"
       employee_status: "active" | "inactive" | "terminated"
-      form_kind: "attendance" | "overtime" | "leave"
+      form_kind: "attendance" | "overtime" | "leave" | "early_exit"
       form_role: "dept_manager" | "ceo" | "executor"
       form_status:
         | "pending_manager"
@@ -4394,7 +5480,7 @@ export const Constants = {
       day_status: ["present", "absent", "leave", "holiday", "rest"],
       device_status: ["active", "inactive", "maintenance"],
       employee_status: ["active", "inactive", "terminated"],
-      form_kind: ["attendance", "overtime", "leave"],
+      form_kind: ["attendance", "overtime", "leave", "early_exit"],
       form_role: ["dept_manager", "ceo", "executor"],
       form_status: [
         "pending_manager",
