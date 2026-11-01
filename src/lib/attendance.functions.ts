@@ -49,7 +49,7 @@ export const ingestZkData = createServerFn({ method: "POST" })
 
     try {
       // Attendance Device ID is the only supported mapping for device punches.
-      const pins = [...new Set(data.logs.map((l) => l.user_pin))];
+      const pins = [...new Set(data.logs.map((l) => l.user_pin).filter(Boolean))];
       const empByPin = await matchZktecoPins(supabase, pins);
       const unmatched = pins.filter((pin) => !empByPin.has(pin)).length;
 
