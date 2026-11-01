@@ -45,3 +45,5 @@ Minimize unnecessary context, token usage, repeated work, and unrelated changes 
 Report what changed, files changed, tests executed with actual results, and unresolved risks or blockers. Keep the report to five concise bullets or fewer.
 
 Do not implement additional features beyond the requested scope.
+
+- Uploaded device punches are ingested through the authenticated SQL chunk function into attendance_logs and device_sync_records atomically; retain duplicate and unmatched movements for audit without counting them as attendance.

@@ -43,6 +43,13 @@
       "when": 1791278525285,
       "tag": "0005_warehouses",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793520235403,
+      "tag": "0006_audit_uploaded_attendance_movements",
+      "breakpoints": true
     }
   ]
 }
