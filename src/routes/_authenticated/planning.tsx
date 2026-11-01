@@ -887,9 +887,9 @@ function PlanningPage() {
     const defaults = getDefaultWage(item.specialty);
     const dailyRate =
       Number(rate?.daily_rate) > 0
-        ? Number(rate.daily_rate)
+        ? Number(rate?.daily_rate)
         : Number(rate?.monthly_rate) > 0
-          ? Number(rate.monthly_rate) / 26
+          ? Number(rate?.monthly_rate) / 26
           : defaults.daily_rate;
     return sum + dailyRate * Number(item.quantity);
   }, 0);

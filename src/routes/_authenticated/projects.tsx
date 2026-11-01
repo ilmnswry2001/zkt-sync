@@ -217,7 +217,7 @@ function ProjectsPage() {
           ? Array.from(assignedSpecialties, ([name, count]) => {
               const wage = wageByTitle.get(name);
               const fallback = getDefaultWage(name);
-              const dailyRate = Number(wage?.daily_rate) > 0 ? Number(wage.daily_rate) : Number(wage?.monthly_rate) > 0 ? Number(wage.monthly_rate) / 26 : fallback.daily_rate;
+              const dailyRate = Number(wage?.daily_rate) > 0 ? Number(wage?.daily_rate) : Number(wage?.monthly_rate) > 0 ? Number(wage?.monthly_rate) / 26 : fallback.daily_rate;
               return { name, count, dailyRate, cost: count * dailyRate, hasRate: Boolean(wage), usedDefault: !wage && fallback.daily_rate > 0 };
             })
           : workerLines.map((line) => {
@@ -226,9 +226,9 @@ function ProjectsPage() {
           const fallback = getDefaultWage(line.item_name);
           const dailyRate =
             Number(wage?.daily_rate) > 0
-              ? Number(wage.daily_rate)
+              ? Number(wage?.daily_rate)
               : Number(wage?.monthly_rate) > 0
-                ? Number(wage.monthly_rate) / 26
+                ? Number(wage?.monthly_rate) / 26
                 : fallback.daily_rate;
           return {
             name: line.item_name,
@@ -249,9 +249,9 @@ function ProjectsPage() {
           const fallback = getDefaultWage(item.specialty);
           const dailyRate =
             Number(wage?.daily_rate) > 0
-              ? Number(wage.daily_rate)
+              ? Number(wage?.daily_rate)
               : Number(wage?.monthly_rate) > 0
-                ? Number(wage.monthly_rate) / 26
+                ? Number(wage?.monthly_rate) / 26
                 : fallback.daily_rate;
           return {
             name: item.specialty,

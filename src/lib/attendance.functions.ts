@@ -9,7 +9,7 @@ const ingestSchema = z.object({
   device_id: z.string().uuid().nullable(),
   serial: z.string().max(64),
   users: z.array(z.object({
-    user_pin: z.string().min(1).max(48),
+    user_pin: z.string().max(48),
     name: z.string().max(96),
     privilege: z.number().int(),
     dept_id: z.number().int(),
@@ -20,7 +20,7 @@ const ingestSchema = z.object({
   })).max(2000),
   logs: z.array(z.object({
     external_id: z.number().int(),
-    user_pin: z.string().min(1).max(48),
+    user_pin: z.string().max(48),
     verify_time: z.string().min(10).max(40),
     verify_type: z.number().int(),
     status: z.number().int(),
@@ -49,7 +49,7 @@ export const ingestZkData = createServerFn({ method: "POST" })
 
     try {
       // Attendance Device ID is the only supported mapping for device punches.
-      const pins = [...new Set(data.logs.map((l) => l.user_pin))];
+      const pins = [...new Set(data.logs.map((l) => l.user_pin).filter(Boolean))];
       const empByPin = await matchZktecoPins(supabase, pins);
       const unmatched = pins.filter((pin) => !empByPin.has(pin)).length;
 

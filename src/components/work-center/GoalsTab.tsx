@@ -268,7 +268,7 @@ export function GoalsTab({ uid, employeeId, employees, departments, isManager, s
     const description = window.prompt("وصف المهمة", goal.description ?? "");
     const dueDate = window.prompt("تاريخ الاستحقاق (YYYY-MM-DD)", goal.due_date) || goal.due_date;
     const { error } = await workCenterDb.rpc("create_employee_goal_task", {
-      _goal_id: goal.id, _title: title.trim(), _description: description?.trim() || null,
+      _goal_id: goal.id, _title: title.trim(), _description: description?.trim() || undefined,
       _due_date: dueDate, _priority: goal.priority,
     });
     if (error) toast.error(`تعذر ربط المهمة بالهدف: ${formatErrorMessage(error)}`); else { toast.success("تم إنشاء مهمة مرتبطة بالهدف"); void qc.invalidateQueries({ queryKey: ["wc-tasks"] }); void qc.invalidateQueries({ queryKey: ["wc-goal-tasks"] }); }
