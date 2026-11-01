@@ -722,7 +722,7 @@ export type Database = {
         Row: {
           attendance_log_id: string | null
           created_at: string
-          device_id: string
+          device_id: string | null
           employee_id: string | null
           employee_no: string | null
           error_message: string | null
@@ -731,6 +731,8 @@ export type Database = {
           processing_status: string
           status: number | null
           sync_batch_id: string
+          upload_id: string | null
+          upload_row_index: number | null
           user_pin: string
           verify_time: string
           verify_type: number | null
@@ -738,7 +740,7 @@ export type Database = {
         Insert: {
           attendance_log_id?: string | null
           created_at?: string
-          device_id: string
+          device_id?: string | null
           employee_id?: string | null
           employee_no?: string | null
           error_message?: string | null
@@ -747,6 +749,8 @@ export type Database = {
           processing_status?: string
           status?: number | null
           sync_batch_id: string
+          upload_id?: string | null
+          upload_row_index?: number | null
           user_pin: string
           verify_time: string
           verify_type?: number | null
@@ -754,7 +758,7 @@ export type Database = {
         Update: {
           attendance_log_id?: string | null
           created_at?: string
-          device_id?: string
+          device_id?: string | null
           employee_id?: string | null
           employee_no?: string | null
           error_message?: string | null
@@ -763,6 +767,8 @@ export type Database = {
           processing_status?: string
           status?: number | null
           sync_batch_id?: string
+          upload_id?: string | null
+          upload_row_index?: number | null
           user_pin?: string
           verify_time?: string
           verify_type?: number | null
@@ -794,6 +800,13 @@ export type Database = {
             columns: ["sync_batch_id"]
             isOneToOne: false
             referencedRelation: "sync_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "device_sync_records_upload_id_fkey"
+            columns: ["upload_id"]
+            isOneToOne: false
+            referencedRelation: "uploaded_files"
             referencedColumns: ["id"]
           },
         ]
@@ -4222,7 +4235,7 @@ export type Database = {
       }
       sync_batches: {
         Row: {
-          device_id: string
+          device_id: string | null
           duplicate_count: number
           error_count: number
           error_details: Json
@@ -4233,7 +4246,7 @@ export type Database = {
           unmatched_count: number
         }
         Insert: {
-          device_id: string
+          device_id?: string | null
           duplicate_count?: number
           error_count?: number
           error_details?: Json
@@ -4244,7 +4257,7 @@ export type Database = {
           unmatched_count?: number
         }
         Update: {
-          device_id?: string
+          device_id?: string | null
           duplicate_count?: number
           error_count?: number
           error_details?: Json
@@ -5069,6 +5082,10 @@ export type Database = {
       }
       hse_is_manager: { Args: { _user_id: string }; Returns: boolean }
       hse_is_staff: { Args: { _user_id: string }; Returns: boolean }
+      ingest_uploaded_attendance_chunk: {
+        Args: { p_logs: Json; p_offset: number; p_upload_id: string }
+        Returns: Json
+      }
       ingest_zkteco_sync: {
         Args: { p_device_id: string; p_logs: Json; p_site_id: string }
         Returns: {
