@@ -475,7 +475,7 @@ function AttendancePage() {
         ? assignments.length
         : totalsByName.get(specialty) ?? 0;
       return {
-        kind: "worker_specialty" as const,
+        kind: "worker_specialty" as "worker_specialty" | "equipment_type",
         specialty: item.specialty ?? item.name ?? "غير محدد",
         quantity: requestedCount,
         reported: reportedCount,
@@ -569,7 +569,7 @@ function AttendancePage() {
     return Number(wage?.daily_rate) > 0
       ? Number(wage?.daily_rate)
       : Number(wage?.monthly_rate) > 0
-        ? Math.round((Number(wage.monthly_rate) / 26) * 100) / 100
+        ? Math.round((Number(wage?.monthly_rate) / 26) * 100) / 100
         : null;
   };
   const matchingResponsibleEmployees = (responsibleEmployeesQuery.data ?? []).filter((employee) =>
