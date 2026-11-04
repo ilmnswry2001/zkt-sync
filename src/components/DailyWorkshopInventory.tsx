@@ -624,6 +624,8 @@ export function DailyWorkshopInventory() {
                       }{" "}
                       من {activeRoster.length}
                       {savedReport ? " · يوجد سجل محفوظ لهذا اليوم" : ""}
+                      {!online ? " · وضع عدم الاتصال" : ""}
+                      {pendingCount ? ` · ${pendingCount} جرد بانتظار المزامنة` : ""}
                     </p>
                     <Button onClick={() => void saveDailyReport()} disabled={saving}>
                       <Save className="ml-2 h-4 w-4" />
