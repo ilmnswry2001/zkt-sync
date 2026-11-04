@@ -77,6 +77,53 @@ async function loadActiveEmployees(): Promise<Employee[]> {
   }
 }
 
+type QueuedInventory = {
+  key: string;
+  workshopId: string;
+  date: string;
+  notes: string | null;
+  lines: Omit<AttendanceLine, "id" | "report_id" | "site_id">[];
+};
+class OfflineError extends Error {}
+const QUEUE_KEY = "workshop-inventory-offline-queue";
+function readInventoryQueue(): QueuedInventory[] {
+  try {
+    return JSON.parse(localStorage.getItem(QUEUE_KEY) ?? "[]");
+  } catch {
+    return [];
+  }
+}
+function queueInventory(item: QueuedInventory) {
+  const rest = readInventoryQueue().filter((entry) => entry.key !== item.key);
+  localStorage.setItem(QUEUE_KEY, JSON.stringify([...rest, item]));
+}
+function removeQueuedInventory(key: string) {
+  localStorage.setItem(QUEUE_KEY, JSON.stringify(readInventoryQueue().filter((e) => e.key !== key)));
+}
+async function submitInventory(item: QueuedInventory) {
+  const { data: header, error: headerError } = await supa
+    .from("daily_workshop_reports")
+    .upsert(
+      {
+        workshop_id: item.workshopId,
+        report_date: item.date,
+        notes: item.notes,
+        recorded_by: (await supabase.auth.getUser()).data.user?.id ?? null,
+      },
+      { onConflict: "workshop_id,report_date" },
+    )
+    .select("id")
+    .single();
+  if (headerError || !header) throw headerError ?? new Error("تعذر إنشاء سجل الجرد");
+  const { error } = await supa
+    .from("daily_workshop_report_lines")
+    .upsert(
+      item.lines.map((line) => ({ ...line, report_id: header.id })),
+      { onConflict: "report_id,employee_id" },
+    );
+  if (error) throw error;
+}
+
 export function DailyWorkshopInventory() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState("inventory");
@@ -289,44 +336,73 @@ export function DailyWorkshopInventory() {
   const saveDailyReport = async () => {
     if (!workshopId) return toast.error("أضف ورشة أو اخترها أولاً");
     if (!activeRoster.length) return toast.error("أضف الموظفين إلى الورشة أولاً");
-    setSaving(true);
-    try {
-      const { data: header, error: headerError } = await supa
-        .from("daily_workshop_reports")
-        .upsert(
-          {
-            workshop_id: workshopId,
-            report_date: date,
-            notes: notes.trim() || null,
-            recorded_by: (await supabase.auth.getUser()).data.user?.id ?? null,
-          },
-          { onConflict: "workshop_id,report_date" },
-        )
-        .select("id")
-        .single();
-      if (headerError || !header) throw headerError ?? new Error("تعذر إنشاء سجل الجرد");
-      const reportLines = activeRoster.map(({ employee, role_label }) => ({
-        report_id: header.id,
+    const payload: QueuedInventory = {
+      key: `${workshopId}:${date}`,
+      workshopId,
+      date,
+      notes: notes.trim() || null,
+      lines: activeRoster.map(({ employee, role_label }) => ({
         employee_id: employee!.id,
         employee_no_snapshot: employee!.employee_no,
         employee_name_snapshot: employee!.full_name,
         role_label: role_label?.trim() || employee!.position || null,
         attended: attendedByEmployee[employee!.id] === true,
-      }));
-      const { error: linesError } = await supa
-        .from("daily_workshop_report_lines")
-        .upsert(reportLines, {
-          onConflict: "report_id,employee_id",
-        });
-      if (linesError) throw linesError;
+      })),
+    };
+    setSaving(true);
+    try {
+      if (!navigator.onLine) throw new OfflineError();
+      await submitInventory(payload);
       await refreshData();
       toast.success("تم حفظ جرد الورشة لهذا اليوم");
     } catch (error) {
-      toast.error(formatErrorMessage(error, "تعذر حفظ الجرد اليومي"));
+      if (error instanceof OfflineError || !navigator.onLine || error instanceof TypeError) {
+        queueInventory(payload);
+        setPendingCount(readInventoryQueue().length);
+        toast.success("لا يوجد اتصال — حُفظ الجرد على الهاتف وسيُرسل تلقائياً عند عودة الشبكة");
+      } else {
+        toast.error(formatErrorMessage(error, "تعذر حفظ الجرد اليومي"));
+      }
     } finally {
       setSaving(false);
     }
   };
+
+  const [pendingCount, setPendingCount] = useState(0);
+  const [online, setOnline] = useState(true);
+  useEffect(() => {
+    let busy = false;
+    const flush = async () => {
+      setOnline(navigator.onLine);
+      setPendingCount(readInventoryQueue().length);
+      if (busy || !navigator.onLine) return;
+      busy = true;
+      let sent = 0;
+      for (const item of readInventoryQueue()) {
+        try {
+          await submitInventory(item);
+          removeQueuedInventory(item.key);
+          sent += 1;
+        } catch {
+          break;
+        }
+      }
+      busy = false;
+      setPendingCount(readInventoryQueue().length);
+      if (sent) {
+        toast.success(`تمت مزامنة ${sent} جرد محفوظ دون اتصال`);
+        await queryClient.invalidateQueries({ queryKey: ["daily-workshop-reports"] });
+      }
+    };
+    void flush();
+    const offline = () => setOnline(false);
+    window.addEventListener("online", flush);
+    window.addEventListener("offline", offline);
+    return () => {
+      window.removeEventListener("online", flush);
+      window.removeEventListener("offline", offline);
+    };
+  }, [queryClient]);
 
   const assignSite = async (line: AttendanceLine, siteId: string) => {
     const otherAssignment = presentLines.find(
@@ -351,19 +427,36 @@ export function DailyWorkshopInventory() {
     const savedReports = reportQuery.data?.reports ?? [];
     const allLines = reportQuery.data?.lines ?? [];
     if (!savedReports.length) return toast.error("لا توجد تقارير محفوظة لهذا التاريخ");
+    const countRoles = (items: AttendanceLine[]) => {
+      const counts = new Map<string, number>();
+      for (const line of items) {
+        const role = line.role_label?.trim() || "بدون صفة";
+        counts.set(role, (counts.get(role) ?? 0) + 1);
+      }
+      return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    };
     const content = savedReports
       .map((report) => {
         const workshop = workshops.find((item) => item.id === report.workshop_id);
         const lines = allLines.filter((line) => line.report_id === report.id);
         const attended = lines.filter((line) => line.attended);
         const absent = lines.filter((line) => !line.attended);
+        const rate = lines.length ? Math.round((attended.length / lines.length) * 100) : 0;
+        const assigned = countRoles(lines);
+        const present = new Map(countRoles(attended));
+        const roleRows = assigned
+          .map(([role, total]) => `<tr><td>${escapeHtml(role)}</td><td class="num">${total}</td><td class="num">${present.get(role) ?? 0}</td><td class="num">${total - (present.get(role) ?? 0)}</td></tr>`)
+          .join("");
         const makeTable = (title: string, items: AttendanceLine[]) =>
-          `<h3>${title} (${items.length})</h3><table><thead><tr><th>الرقم الوظيفي</th><th>الاسم</th><th>الصفة</th></tr></thead><tbody>${items.map((line) => `<tr><td>${escapeHtml(line.employee_no_snapshot)}</td><td>${escapeHtml(line.employee_name_snapshot)}</td><td>${escapeHtml(line.role_label ?? "—")}</td></tr>`).join("")}</tbody></table>`;
-        return `<section><h2>${escapeHtml(workshop?.name ?? "ورشة")}</h2><p>إجمالي الكادر: ${lines.length} · حضروا البصمة: ${attended.length} · لم يسجل حضورهم: ${absent.length}</p>${makeTable("الحاضرون", attended)}${makeTable("غير الحاضرين", absent)}${report.notes ? `<p><b>ملاحظات:</b> ${escapeHtml(report.notes)}</p>` : ""}</section>`;
+          items.length
+            ? `<h3>${title} (${items.length})</h3><table><thead><tr><th>#</th><th>الرقم الوظيفي</th><th>الاسم</th><th>الصفة</th></tr></thead><tbody>${items.map((line, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(line.employee_no_snapshot)}</td><td>${escapeHtml(line.employee_name_snapshot)}</td><td>${escapeHtml(line.role_label ?? "—")}</td></tr>`).join("")}</tbody></table>`
+            : "";
+        return `<section class="workshop-sheet"><h2>${escapeHtml(workshop?.name ?? "ورشة")}</h2><p>التاريخ: ${escapeHtml(date)}</p><div class="meta"><span>إجمالي الكادر: <b>${lines.length}</b></span><span>الحاضرون: <b>${attended.length}</b></span><span>الغائبون: <b>${absent.length}</b></span><span>نسبة الحضور: <b>${rate}%</b></span><span>التخصصات الحاضرة: <b>${present.size}</b></span></div><h3>إحصائية التخصصات</h3><table><thead><tr><th>التخصص / الصفة</th><th>المنسبون</th><th>الحاضرون</th><th>الغائبون</th></tr></thead><tbody>${roleRows}<tr class="total"><td>المجموع</td><td class="num">${lines.length}</td><td class="num">${attended.length}</td><td class="num">${absent.length}</td></tr></tbody></table>${makeTable("الحاضرون", attended)}${makeTable("غير الحاضرين", absent)}${report.notes ? `<p class="note"><b>ملاحظات:</b> ${escapeHtml(report.notes)}</p>` : ""}</section>`;
       })
       .join("");
+    const pageStyle = `<style>.workshop-sheet{break-before:page;page-break-before:always}.workshop-sheet:first-of-type{break-before:auto;page-break-before:auto}.workshop-sheet h3{font-size:15px;margin:12px 0 4px}.workshop-sheet thead{display:table-header-group}.workshop-sheet tr{break-inside:avoid}td.num{text-align:center;font-weight:700}body>h1{display:none}</style>`;
     if (
-      !printReport(`الجرد اليومي للورش — ${date}`, `<p>التاريخ: ${escapeHtml(date)}</p>${content}`)
+      !printReport(`الجرد اليومي للورش — ${date}`, `${pageStyle}${content}`)
     ) {
       toast.error("اسمح بالنوافذ المنبثقة لطباعة التقرير");
     }
@@ -531,6 +624,8 @@ export function DailyWorkshopInventory() {
                       }{" "}
                       من {activeRoster.length}
                       {savedReport ? " · يوجد سجل محفوظ لهذا اليوم" : ""}
+                      {!online ? " · وضع عدم الاتصال" : ""}
+                      {pendingCount ? ` · ${pendingCount} جرد بانتظار المزامنة` : ""}
                     </p>
                     <Button onClick={() => void saveDailyReport()} disabled={saving}>
                       <Save className="ml-2 h-4 w-4" />
