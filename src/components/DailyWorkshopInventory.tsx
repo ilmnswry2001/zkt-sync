@@ -351,19 +351,36 @@ export function DailyWorkshopInventory() {
     const savedReports = reportQuery.data?.reports ?? [];
     const allLines = reportQuery.data?.lines ?? [];
     if (!savedReports.length) return toast.error("لا توجد تقارير محفوظة لهذا التاريخ");
+    const countRoles = (items: AttendanceLine[]) => {
+      const counts = new Map<string, number>();
+      for (const line of items) {
+        const role = line.role_label?.trim() || "بدون صفة";
+        counts.set(role, (counts.get(role) ?? 0) + 1);
+      }
+      return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    };
     const content = savedReports
       .map((report) => {
         const workshop = workshops.find((item) => item.id === report.workshop_id);
         const lines = allLines.filter((line) => line.report_id === report.id);
         const attended = lines.filter((line) => line.attended);
         const absent = lines.filter((line) => !line.attended);
+        const rate = lines.length ? Math.round((attended.length / lines.length) * 100) : 0;
+        const assigned = countRoles(lines);
+        const present = new Map(countRoles(attended));
+        const roleRows = assigned
+          .map(([role, total]) => `<tr><td>${escapeHtml(role)}</td><td class="num">${total}</td><td class="num">${present.get(role) ?? 0}</td><td class="num">${total - (present.get(role) ?? 0)}</td></tr>`)
+          .join("");
         const makeTable = (title: string, items: AttendanceLine[]) =>
-          `<h3>${title} (${items.length})</h3><table><thead><tr><th>الرقم الوظيفي</th><th>الاسم</th><th>الصفة</th></tr></thead><tbody>${items.map((line) => `<tr><td>${escapeHtml(line.employee_no_snapshot)}</td><td>${escapeHtml(line.employee_name_snapshot)}</td><td>${escapeHtml(line.role_label ?? "—")}</td></tr>`).join("")}</tbody></table>`;
-        return `<section><h2>${escapeHtml(workshop?.name ?? "ورشة")}</h2><p>إجمالي الكادر: ${lines.length} · حضروا البصمة: ${attended.length} · لم يسجل حضورهم: ${absent.length}</p>${makeTable("الحاضرون", attended)}${makeTable("غير الحاضرين", absent)}${report.notes ? `<p><b>ملاحظات:</b> ${escapeHtml(report.notes)}</p>` : ""}</section>`;
+          items.length
+            ? `<h3>${title} (${items.length})</h3><table><thead><tr><th>#</th><th>الرقم الوظيفي</th><th>الاسم</th><th>الصفة</th></tr></thead><tbody>${items.map((line, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(line.employee_no_snapshot)}</td><td>${escapeHtml(line.employee_name_snapshot)}</td><td>${escapeHtml(line.role_label ?? "—")}</td></tr>`).join("")}</tbody></table>`
+            : "";
+        return `<section class="workshop-sheet"><h2>${escapeHtml(workshop?.name ?? "ورشة")}</h2><p>التاريخ: ${escapeHtml(date)}</p><div class="meta"><span>إجمالي الكادر: <b>${lines.length}</b></span><span>الحاضرون: <b>${attended.length}</b></span><span>الغائبون: <b>${absent.length}</b></span><span>نسبة الحضور: <b>${rate}%</b></span><span>التخصصات الحاضرة: <b>${present.size}</b></span></div><h3>إحصائية التخصصات</h3><table><thead><tr><th>التخصص / الصفة</th><th>المنسبون</th><th>الحاضرون</th><th>الغائبون</th></tr></thead><tbody>${roleRows}<tr class="total"><td>المجموع</td><td class="num">${lines.length}</td><td class="num">${attended.length}</td><td class="num">${absent.length}</td></tr></tbody></table>${makeTable("الحاضرون", attended)}${makeTable("غير الحاضرين", absent)}${report.notes ? `<p class="note"><b>ملاحظات:</b> ${escapeHtml(report.notes)}</p>` : ""}</section>`;
       })
       .join("");
+    const pageStyle = `<style>.workshop-sheet{break-before:page;page-break-before:always}.workshop-sheet:first-of-type{break-before:auto;page-break-before:auto}.workshop-sheet h3{font-size:15px;margin:12px 0 4px}.workshop-sheet thead{display:table-header-group}.workshop-sheet tr{break-inside:avoid}td.num{text-align:center;font-weight:700}body>h1{display:none}</style>`;
     if (
-      !printReport(`الجرد اليومي للورش — ${date}`, `<p>التاريخ: ${escapeHtml(date)}</p>${content}`)
+      !printReport(`الجرد اليومي للورش — ${date}`, `${pageStyle}${content}`)
     ) {
       toast.error("اسمح بالنوافذ المنبثقة لطباعة التقرير");
     }
