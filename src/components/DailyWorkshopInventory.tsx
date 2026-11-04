@@ -77,6 +77,53 @@ async function loadActiveEmployees(): Promise<Employee[]> {
   }
 }
 
+type QueuedInventory = {
+  key: string;
+  workshopId: string;
+  date: string;
+  notes: string | null;
+  lines: Omit<AttendanceLine, "id" | "report_id" | "site_id">[];
+};
+class OfflineError extends Error {}
+const QUEUE_KEY = "workshop-inventory-offline-queue";
+function readInventoryQueue(): QueuedInventory[] {
+  try {
+    return JSON.parse(localStorage.getItem(QUEUE_KEY) ?? "[]");
+  } catch {
+    return [];
+  }
+}
+function queueInventory(item: QueuedInventory) {
+  const rest = readInventoryQueue().filter((entry) => entry.key !== item.key);
+  localStorage.setItem(QUEUE_KEY, JSON.stringify([...rest, item]));
+}
+function removeQueuedInventory(key: string) {
+  localStorage.setItem(QUEUE_KEY, JSON.stringify(readInventoryQueue().filter((e) => e.key !== key)));
+}
+async function submitInventory(item: QueuedInventory) {
+  const { data: header, error: headerError } = await supa
+    .from("daily_workshop_reports")
+    .upsert(
+      {
+        workshop_id: item.workshopId,
+        report_date: item.date,
+        notes: item.notes,
+        recorded_by: (await supabase.auth.getUser()).data.user?.id ?? null,
+      },
+      { onConflict: "workshop_id,report_date" },
+    )
+    .select("id")
+    .single();
+  if (headerError || !header) throw headerError ?? new Error("تعذر إنشاء سجل الجرد");
+  const { error } = await supa
+    .from("daily_workshop_report_lines")
+    .upsert(
+      item.lines.map((line) => ({ ...line, report_id: header.id })),
+      { onConflict: "report_id,employee_id" },
+    );
+  if (error) throw error;
+}
+
 export function DailyWorkshopInventory() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState("inventory");
