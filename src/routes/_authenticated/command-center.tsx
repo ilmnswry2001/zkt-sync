@@ -32,8 +32,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/hooks/use-auth";
+import { ExecutiveIntelligenceCard } from "@/components/ExecutiveIntelligenceCard";
 import { supabase } from "@/integrations/supabase/client";
 import { dateKeyInTimeZone } from "@/lib/date-time";
+import { analyzeCrewRequirements } from "@/lib/workforce-intelligence";
 
 const BADGES = {
   hse_guardian: { label: "نجم السلامة", icon: Shield, tone: "text-emerald-300" },
@@ -217,6 +219,12 @@ function CommandCenter() {
         sites: sitesResult.data ?? [],
       };
     },
+  });
+  const crewQuery = useQuery({
+    queryKey: ["command-center", "crew-requirements", today],
+    enabled: canView,
+    refetchInterval: autoRefresh ? 30_000 : false,
+    queryFn: () => analyzeCrewRequirements(today),
   });
 
   const awardMutation = useMutation({
@@ -534,6 +542,56 @@ function CommandCenter() {
           circular
         />
       </section>
+
+      <div className={kiosk && scene !== 0 ? "hidden space-y-4" : "space-y-4"}>
+        {(isAdmin || isHR || isCompanyManager) && (
+          <ExecutiveIntelligenceCard className="border-slate-700" />
+        )}
+
+      {crewQuery.isError ? (
+        <div role="alert" className="rounded-xl border border-rose-400/30 bg-rose-950/40 p-3 text-sm text-rose-200">
+          تعذر تحليل احتياج الكوادر: {crewQuery.error.message}
+        </div>
+      ) : crewQuery.data?.requirements.length ? (
+        <Card className="border-slate-800 bg-slate-900/75 text-slate-100">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Users className="h-5 w-5 text-cyan-300" />
+              احتياج الكوادر وإعادة التوزيع المقترحة
+            </CardTitle>
+            <p className="text-xs text-slate-400">
+              توصيات حسب سجلات الجرد والتخصص والموقع؛ تتطلب اعتماد المشرف قبل التنفيذ.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              {crewQuery.data.requirements
+                .filter((item) => item.status !== "balanced")
+                .map((item) => (
+                  <div key={`${item.workshopId}:${item.siteId}:${item.trade}`} className="rounded-lg border border-slate-800 bg-[#0b1725] p-3 text-sm">
+                    <p className="font-semibold">{item.workshopName} · {item.trade}</p>
+                    <p className={item.status === "shortage" ? "text-rose-300" : "text-amber-200"}>
+                      {item.status === "shortage" ? "نقص" : "فائض"}: {toArabicNumber(item.present)} / {toArabicNumber(item.required)}
+                    </p>
+                    <p className="text-xs text-slate-400">{item.siteName} · {toArabicNumber(item.percentage)}٪</p>
+                  </div>
+                ))}
+            </div>
+            {crewQuery.data.reallocations.length ? (
+              <ul className="space-y-2 text-sm">
+                {crewQuery.data.reallocations.map((move) => (
+                  <li key={`${move.employeeId}:${move.toWorkshopId}`} className="rounded-lg border border-cyan-300/15 bg-cyan-400/5 p-3">
+                    {move.employeeName}: {move.fromWorkshopName} ← {move.toWorkshopName} · {move.trade} · {move.siteName}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-slate-400">لا توجد إعادة توزيع مقترحة ضمن الموقع والتخصص نفسيهما.</p>
+            )}
+          </CardContent>
+        </Card>
+        ) : null}
+      </div>
 
       <section className={`grid gap-5 ${kiosk ? "" : "xl:grid-cols-[1.55fr_0.85fr]"}`}>
         <Card

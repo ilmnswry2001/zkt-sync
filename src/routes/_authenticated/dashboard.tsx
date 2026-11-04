@@ -15,6 +15,7 @@ import {
   type WageRateCostRow,
 } from "@/lib/site-costs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ExecutiveIntelligenceCard } from "@/components/ExecutiveIntelligenceCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -371,6 +372,7 @@ function Dashboard() {
 
   return (
     <div dir="rtl" className="space-y-6 pb-6">
+      <ExecutiveIntelligenceCard />
       {showDesignProposals && (
         <section className="fixed inset-0 z-50 overflow-y-auto bg-background p-4 sm:p-8">
           <div className="mx-auto max-w-7xl space-y-5">

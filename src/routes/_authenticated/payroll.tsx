@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
-import { Banknote, Download, Eye, Printer, RefreshCw, Search, Truck } from "lucide-react";
+import { AlertTriangle, Banknote, ClipboardCheck, Download, Eye, Printer, RefreshCw, Search, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { printReport, escapeHtml } from "@/lib/report-print";
 import { amountInArabicIqd } from "@/lib/arabic-currency";
@@ -113,6 +113,13 @@ type PayrollSlipRow = {
   summary: { presentDays: number };
   penalties: Array<{ deduction_amount: number | null; notes: string | null }>;
 };
+type PayrollAuditFlag = {
+  id: string;
+  anomaly_type: string;
+  severity: string;
+  entity_name: string | null;
+  details: { work_date?: string; overtime_hours?: number };
+};
 
 const money = (value: number) =>
   `${value.toLocaleString("en-US", { maximumFractionDigits: 2 })} د.ع`;
@@ -166,6 +173,8 @@ function PayrollPage() {
   const queryClient = useQueryClient();
   const [previewRow, setPreviewRow] = useState<PayrollSlipRow | null>(null);
   const [month, setMonth] = useState(currentMonthInBaghdad);
+  const [auditedMonth, setAuditedMonth] = useState<string | null>(null);
+  const [auditFlags, setAuditFlags] = useState<PayrollAuditFlag[]>([]);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [advanceEmployeeId, setAdvanceEmployeeId] = useState("");
@@ -446,6 +455,20 @@ function PayrollPage() {
   const isHr = actorQuery.data?.hr || actorQuery.data?.admin;
   const isPayrollOperator = isHr || actorQuery.data?.accountant;
   const isCeo = actorQuery.data?.ceo;
+  const auditMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc("run_pre_payroll_audit", { p_month: `${month}-01` });
+      if (error) throw error;
+      return (data as { flags?: PayrollAuditFlag[] }).flags ?? [];
+    },
+    onSuccess: (flags) => {
+      setAuditedMonth(month);
+      setAuditFlags(flags);
+      if (flags.length) toast.warning(`اكتمل التدقيق مع ${flags.length} تنبيهًا يحتاج المراجعة`);
+      else toast.success("اكتمل التدقيق الذكي، ولا توجد مؤشرات معلقة");
+    },
+    onError: (error) => toast.error(`تعذر تدقيق الرواتب: ${error.message}`),
+  });
   const isLocked = payrollRun?.status === "approved" || payrollRun?.status === "paid";
   const savePayrollRun = useMutation({
     mutationFn: async (action: "draft" | "review" | "approve" | "pay") => {
@@ -658,6 +681,10 @@ function PayrollPage() {
     else toast.success("تم تنزيل كشف الصرف المصرفي");
   };
   const printCashVouchers = () => {
+    if (auditedMonth !== month) {
+      toast.error("أكمل التدقيق الذكي لهذا الشهر قبل إصدار قسائم الصرف");
+      return;
+    }
     if (!cashRows.length) {
       toast.error("لا توجد عمالة يومية أو عقود نقدية في كشف هذا الشهر");
       return;
@@ -690,6 +717,10 @@ function PayrollPage() {
     printWindow.document.close();
   };
   const printSlip = (row: (typeof rows)[number]) => {
+    if (auditedMonth !== month) {
+      toast.error("أكمل التدقيق الذكي لهذا الشهر قبل إصدار قصاصات الرواتب");
+      return;
+    }
     const html = buildPayrollSlipHtml(row, month);
     const printWindow = window.open("about:blank", "_blank", "width=520,height=760");
     if (!printWindow) {
@@ -723,6 +754,10 @@ function PayrollPage() {
           <Button variant="outline" onClick={() => query.refetch()} disabled={query.isFetching}>
             <RefreshCw className={`ml-2 h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} /> تحديث
           </Button>
+          <Button variant="outline" onClick={() => auditMutation.mutate()} disabled={auditMutation.isPending || query.isLoading}>
+            <ClipboardCheck className="ml-2 h-4 w-4" />
+            {auditMutation.isPending ? "جارٍ التدقيق..." : "تدقيق ذكي قبل الصرف"}
+          </Button>
           <Button onClick={() => exportExcel()} disabled={!filteredRows.length || query.isLoading}>
             <Download className="ml-2 h-4 w-4" /> تصدير Excel
           </Button>
@@ -749,6 +784,28 @@ function PayrollPage() {
           </Button>
         </div>
       </div>
+      {auditedMonth === month && (
+        <Card className={auditFlags.length ? "border-red-500/30 bg-red-500/5" : "border-emerald-500/30 bg-emerald-500/5"}>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <AlertTriangle className="h-5 w-5" />
+              نتائج تدقيق {month}: {auditFlags.length ? `${auditFlags.length} تنبيه` : "لا توجد تنبيهات"}
+            </CardTitle>
+          </CardHeader>
+          {auditFlags.length > 0 && (
+            <CardContent className="space-y-2">
+              {auditFlags.map((flag) => (
+                <div key={flag.id} className="rounded-lg border p-3 text-sm">
+                  <b>{flag.entity_name ?? "موظف"} · {flag.anomaly_type === "DAILY_WAGE_DURING_LEAVE" ? "أجر يومي أثناء إجازة" : "إضافي دون تسجيل انصراف"}</b>
+                  <span className="mr-2 text-muted-foreground">
+                    {flag.details.work_date ?? ""}{flag.details.overtime_hours ? ` · ${flag.details.overtime_hours} ساعة` : ""}
+                  </span>
+                </div>
+              ))}
+            </CardContent>
+          )}
+        </Card>
+      )}
       <Card>
         <CardHeader className="gap-3 border-b sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -825,7 +882,12 @@ function PayrollPage() {
                   id="payroll-month"
                   type="month"
                   value={month}
-                  onChange={(e) => { setMonth(e.target.value); setPage(1); }}
+                  onChange={(e) => {
+                    setMonth(e.target.value);
+                    setPage(1);
+                    setAuditedMonth(null);
+                    setAuditFlags([]);
+                  }}
                   className="mt-2 max-w-xs"
                 />
               </CardContent>
@@ -920,7 +982,7 @@ function PayrollPage() {
                               <Button size="sm" variant="outline" onClick={() => setPreviewRow(row)}>
                                 <Eye className="ml-2 h-4 w-4" /> عرض القصاصة
                               </Button>
-                            <Button size="sm" variant="outline" onClick={() => printSlip(row)}>
+                            <Button size="sm" variant="outline" onClick={() => printSlip(row)} disabled={auditedMonth !== month}>
                               <Printer className="ml-2 h-4 w-4" /> طباعة
                             </Button>
                             </div>
@@ -1066,4 +1128,3 @@ function PayrollPage() {
     </div>
   );
 }
-

@@ -482,6 +482,51 @@ export type Database = {
         }
         Relationships: []
       }
+      operational_anomalies: {
+        Row: {
+          anomaly_type: string
+          created_at: string
+          details: Json
+          entity_id: string
+          entity_name: string | null
+          entity_type: string
+          id: string
+          is_resolved: boolean
+          resolution_notes: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: string
+        }
+        Insert: {
+          anomaly_type: string
+          created_at?: string
+          details?: Json
+          entity_id: string
+          entity_name?: string | null
+          entity_type: string
+          id?: string
+          is_resolved?: boolean
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity: string
+        }
+        Update: {
+          anomaly_type?: string
+          created_at?: string
+          details?: Json
+          entity_id?: string
+          entity_name?: string | null
+          entity_type?: string
+          id?: string
+          is_resolved?: boolean
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+        }
+        Relationships: []
+      }
       department_managers: {
         Row: {
           created_at: string
@@ -4728,6 +4773,50 @@ export type Database = {
           },
         ]
       }
+      vehicle_maintenance_schedules: {
+        Row: {
+          created_at: string
+          id: string
+          interval_km: number
+          last_service_odometer: number
+          next_due_odometer: number
+          service_type: string
+          updated_at: string
+          vehicle_id: string
+          warning_threshold_km: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          interval_km?: number
+          last_service_odometer?: number
+          next_due_odometer: number
+          service_type: string
+          updated_at?: string
+          vehicle_id: string
+          warning_threshold_km?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          interval_km?: number
+          last_service_odometer?: number
+          next_due_odometer?: number
+          service_type?: string
+          updated_at?: string
+          vehicle_id?: string
+          warning_threshold_km?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_maintenance_schedules_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vehicle_monthly_operations: {
         Row: {
           created_at: string
@@ -5034,6 +5123,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      audit_fuel_voucher_anomalies: {
+        Args: { p_voucher_id: string }
+        Returns: number
+      }
+      get_executive_daily_brief: {
+        Args: { p_date?: string }
+        Returns: Json
+      }
+      run_biometric_vs_inventory_audit: {
+        Args: { p_date?: string }
+        Returns: number
+      }
+      run_pre_payroll_audit: {
+        Args: { p_month: string }
+        Returns: Json
+      }
       approve_self_attendance_early_exit: {
         Args: { p_form_id: string }
         Returns: undefined

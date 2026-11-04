@@ -98,6 +98,13 @@ type Driver = {
   department_id: string | null;
   departments?: { name: string } | null;
 };
+type VehicleMaintenanceSchedule = {
+  id: string;
+  vehicle_id: string;
+  service_type: string;
+  next_due_odometer: number;
+  warning_threshold_km: number;
+};
 type Machinery = {
   id: string;
   code: string;
@@ -596,6 +603,25 @@ function VehiclesPage() {
       return { vehicles, operations: operations ?? [] };
     },
   });
+  const maintenanceSchedulesQuery = useQuery({
+    queryKey: ["vehicle-maintenance-schedules"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("vehicle_maintenance_schedules")
+        .select("id, vehicle_id, service_type, next_due_odometer, warning_threshold_km");
+      if (error) throw error;
+      return data as VehicleMaintenanceSchedule[];
+    },
+  });
+  const schedulesByVehicle = useMemo(() => {
+    const schedules = new Map<string, VehicleMaintenanceSchedule[]>();
+    for (const schedule of maintenanceSchedulesQuery.data ?? []) {
+      const existing = schedules.get(schedule.vehicle_id) ?? [];
+      existing.push(schedule);
+      schedules.set(schedule.vehicle_id, existing);
+    }
+    return schedules;
+  }, [maintenanceSchedulesQuery.data]);
   const createVehicle = useMutation({
     mutationFn: async () => {
       const { error } = await (supabase as any).from("vehicles").insert({
@@ -828,6 +854,23 @@ function VehiclesPage() {
                         <td className="p-3">
                           <b>{vehicle.name}</b>
                           <div className="text-xs text-muted-foreground">{vehicle.vehicle_no}</div>
+                          {schedulesByVehicle.get(vehicle.id)?.map((schedule) => {
+                            const remaining = schedule.next_due_odometer - vehicle.current_odometer;
+                            const overdue = remaining <= 0;
+                            const dueSoon = !overdue && remaining <= schedule.warning_threshold_km;
+                            if (!overdue && !dueSoon) return null;
+                            return (
+                              <Badge
+                                key={schedule.id}
+                                variant={overdue ? "destructive" : "outline"}
+                                className="mt-1 ml-1"
+                              >
+                                {overdue
+                                  ? `صيانة متأخرة ${Math.abs(remaining).toLocaleString("ar-IQ")} كم`
+                                  : `الصيانة خلال ${remaining.toLocaleString("ar-IQ")} كم`}
+                              </Badge>
+                            );
+                          })}
                         </td>
                         <td className="p-3">
                           {vehicle.vehicle_class === "light" ? "خفيفة" : "ثقيلة"}
