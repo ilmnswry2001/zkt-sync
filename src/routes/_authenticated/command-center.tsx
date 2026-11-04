@@ -97,6 +97,33 @@ function CommandCenter() {
   const [badgeType, setBadgeType] = useState<BadgeType>("punctuality_champion");
   const [incentive, setIncentive] = useState("");
   const [notes, setNotes] = useState("");
+  const [kiosk, setKiosk] = useState(false);
+  const [scene, setScene] = useState(0);
+  const [sceneTick, setSceneTick] = useState(0);
+  const [pausedUntil, setPausedUntil] = useState(0);
+  const SCENE_SECONDS = 20;
+
+  useEffect(() => {
+    if (!kiosk) return;
+    const pause = () => setPausedUntil(Date.now() + 8000);
+    const timer = window.setInterval(() => {
+      if (Date.now() < pausedUntil) return;
+      setSceneTick((tick) => {
+        if (tick + 1 >= SCENE_SECONDS) {
+          setScene((s) => (s + 1) % 2);
+          return 0;
+        }
+        return tick + 1;
+      });
+    }, 1000);
+    window.addEventListener("mousemove", pause);
+    window.addEventListener("touchstart", pause);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("mousemove", pause);
+      window.removeEventListener("touchstart", pause);
+    };
+  }, [kiosk, pausedUntil]);
   const today = baghdadDate(new Date());
   const weekStart = addDays(today, -6);
 
@@ -385,7 +412,7 @@ function CommandCenter() {
   return (
     <div
       dir="rtl"
-      className="command-ticker min-h-[calc(100vh-7rem)] space-y-5 rounded-3xl bg-[#07111d] p-4 text-slate-100 sm:p-6"
+      className="dark command-ticker min-h-[calc(100vh-7rem)] space-y-5 rounded-3xl bg-[#07111d] p-4 text-slate-100 sm:p-6"
     >
       <style>{`@keyframes command-ticker { from { transform: translateX(0); } to { transform: translateX(50%); } } .command-ticker-track { animation: command-ticker 36s linear infinite; } .command-ticker-track:hover { animation-play-state: paused; }`}</style>
       <header className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-cyan-300/15 bg-slate-900/80 p-4 shadow-[0_0_40px_rgba(8,145,178,0.12)]">
@@ -423,6 +450,18 @@ function CommandCenter() {
             تحديث الآن
           </Button>
           <Button
+            variant="outline"
+            className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
+            onClick={() => {
+              setKiosk((k) => !k);
+              setScene(0);
+              setSceneTick(0);
+            }}
+          >
+            <Expand className="ms-2 h-4 w-4" />
+            {kiosk ? "إيقاف وضع الكشك" : "وضع الكشك الجداري"}
+          </Button>
+          <Button
             className="bg-cyan-500 text-slate-950 hover:bg-cyan-400"
             onClick={() => void toggleFullscreen()}
           >
@@ -441,7 +480,26 @@ function CommandCenter() {
         </div>
       )}
 
-      <section aria-label="مؤشرات العمليات" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {kiosk && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span>
+              {scene === 0 ? "المشهد ١: نبض العمليات" : "المشهد ٢: لوحة الشرف والتتويج"}
+            </span>
+            <span>
+              {Date.now() < pausedUntil
+                ? "متوقف مؤقتاً بسبب التفاعل"
+                : `الانتقال خلال ${toArabicNumber(SCENE_SECONDS - sceneTick)} ث`}
+            </span>
+          </div>
+          <Progress value={(sceneTick / SCENE_SECONDS) * 100} className="h-1 bg-slate-800" />
+        </div>
+      )}
+
+      <section
+        aria-label="مؤشرات العمليات"
+        className={`grid gap-3 sm:grid-cols-2 xl:grid-cols-4 ${kiosk && scene !== 0 ? "hidden" : ""}`}
+      >
         <MetricCard
           title="حضور الكادر الميداني اليوم"
           value={`${toArabicNumber(presentToday.size)} / ${toArabicNumber(activeFieldIds.size)}`}
@@ -477,8 +535,10 @@ function CommandCenter() {
         />
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-[1.55fr_0.85fr]">
-        <Card className="border-slate-800 bg-slate-900/75 text-slate-100">
+      <section className={`grid gap-5 ${kiosk ? "" : "xl:grid-cols-[1.55fr_0.85fr]"}`}>
+        <Card
+          className={`border-slate-800 bg-slate-900/75 text-slate-100 ${kiosk && scene !== 0 ? "hidden" : ""}`}
+        >
           <CardHeader className="flex flex-row items-center justify-between gap-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Activity className="h-5 w-5 text-cyan-300" />
@@ -564,7 +624,9 @@ function CommandCenter() {
           </CardContent>
         </Card>
 
-        <Card className="border-slate-800 bg-slate-900/75 text-slate-100">
+        <Card
+          className={`border-slate-800 bg-slate-900/75 text-slate-100 ${kiosk && scene !== 1 ? "hidden" : ""}`}
+        >
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Trophy className="h-5 w-5 text-amber-300" />
@@ -614,7 +676,9 @@ function CommandCenter() {
         </Card>
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+      <section
+        className={`grid gap-5 xl:grid-cols-[1.2fr_0.8fr] ${kiosk && scene !== 1 ? "hidden" : ""}`}
+      >
         <Card className="border-slate-800 bg-slate-900/75 text-slate-100">
           <CardHeader className="flex flex-row items-center justify-between gap-3">
             <CardTitle className="flex items-center gap-2 text-lg">
