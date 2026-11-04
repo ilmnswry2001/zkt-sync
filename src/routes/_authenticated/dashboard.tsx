@@ -34,6 +34,7 @@ import {
   ShieldAlert,
   Users,
   UserCheck,
+  Radar,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -420,6 +421,28 @@ function Dashboard() {
           <Button variant="secondary" onClick={() => setShowDesignProposals(true)}>معاينة 3 تصاميم</Button>
         </div>
       </header>
+
+      {canAccessSection("/command-center") && (
+        <Link
+          to="/command-center"
+          className="group flex flex-col justify-between gap-4 overflow-hidden rounded-2xl border border-cyan-300/20 bg-gradient-to-l from-[#082b3b] via-[#0d3543] to-[#122438] p-5 text-white shadow-lg shadow-cyan-950/10 transition hover:border-cyan-200/40 hover:shadow-cyan-950/20 sm:flex-row sm:items-center"
+        >
+          <span className="flex items-center gap-4">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-cyan-300/10 text-cyan-200">
+              <Radar className="h-6 w-6 transition-transform duration-500 group-hover:rotate-45" />
+            </span>
+            <span>
+              <span className="block text-lg font-bold">مركز العمليات الحي</span>
+              <span className="mt-1 block text-sm text-cyan-50/70">
+                مراقبة حضور الكادر الميداني، جرد الورش، ولوحة الشرف
+              </span>
+            </span>
+          </span>
+          <span className="rounded-lg border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold">
+            فتح مركز العمليات
+          </span>
+        </Link>
+      )}
 
       <section aria-label="أقسام النظام" className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-2">

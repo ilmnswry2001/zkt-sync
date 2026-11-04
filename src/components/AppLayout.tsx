@@ -37,6 +37,7 @@ import {
   SlidersHorizontal,
   Network,
   ShieldAlert,
+  Radar,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -59,6 +60,7 @@ import {
 
 const nav = [
   { to: "/dashboard", label: "لوحة التحكم", icon: LayoutDashboard, access: "executive" },
+  { to: "/command-center", label: "مركز العمليات", icon: Radar, access: "command" },
   { to: "/attendance", label: "التقارير اليومية", icon: ClockIcon },
   { to: "/shift-schedules", label: "جداول الورديات", icon: CalendarDays, access: "hr" },
   { to: "/tasks", label: "مهامي اليومية", icon: ClipboardCheck },
@@ -96,7 +98,12 @@ export const SECTION_OPTIONS = nav.map(({ to, label }) => ({ to, label }));
 type NavItem = (typeof nav)[number];
 
 const NAV_GROUPS = [
-  { key: "home", label: "الرئيسية", icon: LayoutDashboard, tos: ["/dashboard", "/monthly"] },
+  {
+    key: "home",
+    label: "الرئيسية",
+    icon: LayoutDashboard,
+    tos: ["/dashboard", "/monthly", "/command-center"],
+  },
   {
     key: "attendance",
     label: "الحضور والدوام",
@@ -268,6 +275,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     if ("access" in item && item.access === "finance" && !isAdmin && !isHR && !isCompanyManager && !roles.includes("accountant"))
       return false;
     if ("access" in item && item.access === "executive" && !isAdmin && !isCompanyManager)
+      return false;
+    if (
+      "access" in item &&
+      item.access === "command" &&
+      !isAdmin &&
+      !isHR &&
+      !isCompanyManager &&
+      !roles.some((role) => ["supervisor", "data_entry"].includes(role))
+    )
       return false;
     if (
       "access" in item &&
