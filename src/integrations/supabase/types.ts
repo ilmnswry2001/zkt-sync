@@ -482,63 +482,6 @@ export type Database = {
         }
         Relationships: []
       }
-      gamification_badges: {
-        Row: {
-          awarded_at: string
-          awarded_by: string | null
-          badge_type: string
-          id: string
-          incentive_iqd: number
-          notes: string | null
-          period_month: string
-          salary_addition_id: string | null
-          target_id: string
-          target_name: string
-          target_type: string
-        }
-        Insert: {
-          awarded_at?: string
-          awarded_by?: string | null
-          badge_type: string
-          id?: string
-          incentive_iqd?: number
-          notes?: string | null
-          period_month: string
-          salary_addition_id?: string | null
-          target_id: string
-          target_name: string
-          target_type: string
-        }
-        Update: {
-          awarded_at?: string
-          awarded_by?: string | null
-          badge_type?: string
-          id?: string
-          incentive_iqd?: number
-          notes?: string | null
-          period_month?: string
-          salary_addition_id?: string | null
-          target_id?: string
-          target_name?: string
-          target_type?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "gamification_badges_awarded_by_fkey"
-            columns: ["awarded_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gamification_badges_salary_addition_id_fkey"
-            columns: ["salary_addition_id"]
-            isOneToOne: false
-            referencedRelation: "salary_additions"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       department_managers: {
         Row: {
           created_at: string
@@ -2270,6 +2213,63 @@ export type Database = {
             columns: ["target_department_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gamification_badges: {
+        Row: {
+          awarded_at: string
+          awarded_by: string | null
+          badge_type: string
+          id: string
+          incentive_iqd: number
+          notes: string | null
+          period_month: string
+          salary_addition_id: string | null
+          target_id: string
+          target_name: string
+          target_type: string
+        }
+        Insert: {
+          awarded_at?: string
+          awarded_by?: string | null
+          badge_type: string
+          id?: string
+          incentive_iqd?: number
+          notes?: string | null
+          period_month: string
+          salary_addition_id?: string | null
+          target_id: string
+          target_name: string
+          target_type: string
+        }
+        Update: {
+          awarded_at?: string
+          awarded_by?: string | null
+          badge_type?: string
+          id?: string
+          incentive_iqd?: number
+          notes?: string | null
+          period_month?: string
+          salary_addition_id?: string | null
+          target_id?: string
+          target_name?: string
+          target_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gamification_badges_awarded_by_fkey"
+            columns: ["awarded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gamification_badges_salary_addition_id_fkey"
+            columns: ["salary_addition_id"]
+            isOneToOne: false
+            referencedRelation: "salary_additions"
             referencedColumns: ["id"]
           },
         ]
@@ -5034,14 +5034,11 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      award_badge_incentive: {
-        Args: { p_badge_id: string }
-        Returns: string
-      }
       approve_self_attendance_early_exit: {
         Args: { p_form_id: string }
         Returns: undefined
       }
+      award_badge_incentive: { Args: { p_badge_id: string }; Returns: string }
       can_access_department: {
         Args: { _department_id: string; _user_id: string }
         Returns: boolean
