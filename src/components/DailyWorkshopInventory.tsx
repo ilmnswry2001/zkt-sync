@@ -289,44 +289,73 @@ export function DailyWorkshopInventory() {
   const saveDailyReport = async () => {
     if (!workshopId) return toast.error("أضف ورشة أو اخترها أولاً");
     if (!activeRoster.length) return toast.error("أضف الموظفين إلى الورشة أولاً");
-    setSaving(true);
-    try {
-      const { data: header, error: headerError } = await supa
-        .from("daily_workshop_reports")
-        .upsert(
-          {
-            workshop_id: workshopId,
-            report_date: date,
-            notes: notes.trim() || null,
-            recorded_by: (await supabase.auth.getUser()).data.user?.id ?? null,
-          },
-          { onConflict: "workshop_id,report_date" },
-        )
-        .select("id")
-        .single();
-      if (headerError || !header) throw headerError ?? new Error("تعذر إنشاء سجل الجرد");
-      const reportLines = activeRoster.map(({ employee, role_label }) => ({
-        report_id: header.id,
+    const payload: QueuedInventory = {
+      key: `${workshopId}:${date}`,
+      workshopId,
+      date,
+      notes: notes.trim() || null,
+      lines: activeRoster.map(({ employee, role_label }) => ({
         employee_id: employee!.id,
         employee_no_snapshot: employee!.employee_no,
         employee_name_snapshot: employee!.full_name,
         role_label: role_label?.trim() || employee!.position || null,
         attended: attendedByEmployee[employee!.id] === true,
-      }));
-      const { error: linesError } = await supa
-        .from("daily_workshop_report_lines")
-        .upsert(reportLines, {
-          onConflict: "report_id,employee_id",
-        });
-      if (linesError) throw linesError;
+      })),
+    };
+    setSaving(true);
+    try {
+      if (!navigator.onLine) throw new OfflineError();
+      await submitInventory(payload);
       await refreshData();
       toast.success("تم حفظ جرد الورشة لهذا اليوم");
     } catch (error) {
-      toast.error(formatErrorMessage(error, "تعذر حفظ الجرد اليومي"));
+      if (error instanceof OfflineError || !navigator.onLine || error instanceof TypeError) {
+        queueInventory(payload);
+        setPendingCount(readInventoryQueue().length);
+        toast.success("لا يوجد اتصال — حُفظ الجرد على الهاتف وسيُرسل تلقائياً عند عودة الشبكة");
+      } else {
+        toast.error(formatErrorMessage(error, "تعذر حفظ الجرد اليومي"));
+      }
     } finally {
       setSaving(false);
     }
   };
+
+  const [pendingCount, setPendingCount] = useState(0);
+  const [online, setOnline] = useState(true);
+  useEffect(() => {
+    let busy = false;
+    const flush = async () => {
+      setOnline(navigator.onLine);
+      setPendingCount(readInventoryQueue().length);
+      if (busy || !navigator.onLine) return;
+      busy = true;
+      let sent = 0;
+      for (const item of readInventoryQueue()) {
+        try {
+          await submitInventory(item);
+          removeQueuedInventory(item.key);
+          sent += 1;
+        } catch {
+          break;
+        }
+      }
+      busy = false;
+      setPendingCount(readInventoryQueue().length);
+      if (sent) {
+        toast.success(`تمت مزامنة ${sent} جرد محفوظ دون اتصال`);
+        await queryClient.invalidateQueries({ queryKey: ["daily-workshop-reports"] });
+      }
+    };
+    void flush();
+    const offline = () => setOnline(false);
+    window.addEventListener("online", flush);
+    window.addEventListener("offline", offline);
+    return () => {
+      window.removeEventListener("online", flush);
+      window.removeEventListener("offline", offline);
+    };
+  }, [queryClient]);
 
   const assignSite = async (line: AttendanceLine, siteId: string) => {
     const otherAssignment = presentLines.find(
