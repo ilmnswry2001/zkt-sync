@@ -339,6 +339,28 @@ export function DailyWorkshopInventory() {
     () => new Map(devices.map((device) => [device.id, device])),
     [devices],
   );
+  const punchByEmployeeId = useMemo(() => {
+    const punchesByEmployee = new Map<string, { deviceName: string; time: string }>();
+    for (const punch of attendancePunches) {
+      const employee =
+        (punch.employee_id ? employeeById.get(punch.employee_id) : undefined) ??
+        employeeByNumber.get(punch.employee_no);
+      if (!employee || punchesByEmployee.has(employee.id)) continue;
+      const time = new Date(punch.verify_time).toLocaleTimeString("en-US", {
+        timeZone: "Asia/Baghdad",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
+      punchesByEmployee.set(employee.id, {
+        deviceName: punch.device_id
+          ? (deviceById.get(punch.device_id)?.name ?? "جهاز غير محدد")
+          : "جهاز غير محدد",
+        time,
+      });
+    }
+    return punchesByEmployee;
+  }, [attendancePunches, deviceById, employeeById, employeeByNumber]);
   const activeWorkshopEmployeeIds = useMemo(
     () => new Set((activeWorkshopMembersQuery.data ?? []).map((member) => member.employee_id)),
     [activeWorkshopMembersQuery.data],
@@ -1016,7 +1038,22 @@ export function DailyWorkshopInventory() {
                           }
                         />
                         <div className="min-w-0">
-                          <p className="truncate font-medium">{employee!.full_name}</p>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="truncate font-medium">{employee!.full_name}</p>
+                            {attendedByEmployee[employee!.id] === true &&
+                              punchByEmployeeId.get(employee!.id) && (
+                                <Badge
+                                  variant="outline"
+                                  className="inline-flex gap-1 border-cyan-500/40 bg-cyan-500/15 px-1.5 py-0.5 text-[10px] font-medium text-cyan-700 dark:text-cyan-300"
+                                >
+                                  <Fingerprint className="h-3 w-3" />
+                                  <span>
+                                    {punchByEmployeeId.get(employee!.id)!.deviceName} ·{" "}
+                                    {punchByEmployeeId.get(employee!.id)!.time}
+                                  </span>
+                                </Badge>
+                              )}
+                          </div>
                           <p className="text-xs text-muted-foreground">{employee!.employee_no}</p>
                         </div>
                       </div>
