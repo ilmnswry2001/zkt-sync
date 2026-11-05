@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Check,
   ChevronsUpDown,
@@ -149,7 +150,7 @@ export function DailyWorkshopInventory() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState("inventory");
   const [date, setDate] = useState(todayInBaghdad());
-  const [deviceId, setDeviceId] = useState("all");
+  const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>(["all"]);
   const [workshopId, setWorkshopId] = useState("");
   const [workshopName, setWorkshopName] = useState("");
   const [employeeId, setEmployeeId] = useState("");
@@ -169,7 +170,7 @@ export function DailyWorkshopInventory() {
   useEffect(() => {
     setDismissedPunchEmployees(new Set());
     setSelectedWorkshopByPunch({});
-  }, [date, deviceId]);
+  }, [date, selectedDeviceIds]);
 
   const sitesQuery = useQuery<WorkSite[]>({
     queryKey: ["daily-work-allocation-sites"],
@@ -215,7 +216,7 @@ export function DailyWorkshopInventory() {
     },
   });
   const attendancePunchesQuery = useQuery<AttendancePunch[]>({
-    queryKey: ["daily-workshop-attendance-punches", date, deviceId],
+    queryKey: ["daily-workshop-attendance-punches", date, selectedDeviceIds],
     queryFn: async () => {
       const start = new Date(`${date}T00:00:00+03:00`);
       const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
@@ -230,7 +231,9 @@ export function DailyWorkshopInventory() {
           .lt("verify_time", end.toISOString())
           .order("verify_time")
           .range(from, from + 999);
-        if (deviceId !== "all") request = request.eq("device_id", deviceId);
+        if (!selectedDeviceIds.includes("all")) {
+          request = request.in("device_id", selectedDeviceIds);
+        }
         const { data, error } = await request;
         if (error) throw error;
         punches.push(...(data ?? []));
@@ -245,14 +248,14 @@ export function DailyWorkshopInventory() {
       );
     },
   });
-  const activeWorkshopMembersQuery = useQuery<Array<{ employee_id: string }>>({
+  const activeWorkshopMembersQuery = useQuery<Array<{ workshop_id: string; employee_id: string }>>({
     queryKey: ["daily-workshop-all-active-members"],
     queryFn: async () => {
-      const rows: Array<{ employee_id: string }> = [];
+      const rows: Array<{ workshop_id: string; employee_id: string }> = [];
       for (let from = 0; ; from += 1000) {
         const { data, error } = await supa
           .from("daily_workshop_members")
-          .select("employee_id")
+          .select("workshop_id, employee_id")
           .eq("is_active", true)
           .range(from, from + 999);
         if (error) throw error;
@@ -340,6 +343,10 @@ export function DailyWorkshopInventory() {
     () => new Set((activeWorkshopMembersQuery.data ?? []).map((member) => member.employee_id)),
     [activeWorkshopMembersQuery.data],
   );
+  const activeWorkshopIds = useMemo(
+    () => new Set(workshops.map((workshop) => workshop.id)),
+    [workshops],
+  );
   const unmatchedPunches = useMemo(() => {
     if (
       attendancePunchesQuery.isError ||
@@ -424,24 +431,91 @@ export function DailyWorkshopInventory() {
   ) => updateDraft({ attended: typeof value === "function" ? value(attendedByEmployee) : value });
   const draftCount = Object.keys(drafts).filter(Boolean).length;
 
-  const markRosterFromBiometrics = async () => {
-    const result = await attendancePunchesQuery.refetch();
-    if (result.error) {
-      toast.error(formatErrorMessage(result.error, "تعذر جلب حركات البصمة"));
+  const toggleDeviceSelection = (id: string, checked: boolean) => {
+    if (id === "all") {
+      setSelectedDeviceIds(["all"]);
       return;
     }
-    const punches = result.data ?? [];
+    setSelectedDeviceIds((current) => {
+      const selected = current.filter((value) => value !== "all");
+      const next = checked
+        ? [...new Set([...selected, id])]
+        : selected.filter((value) => value !== id);
+      return next.length ? next : ["all"];
+    });
+  };
+
+  const markEmployeePresentInWorkshop = (targetWorkshopId: string, targetEmployeeId: string) => {
+    const saved = reportQuery.data?.reports.find(
+      (report) => report.workshop_id === targetWorkshopId,
+    );
+    const savedAttendance = Object.fromEntries(
+      (reportQuery.data?.lines ?? [])
+        .filter((line) => line.report_id === saved?.id)
+        .map((line) => [line.employee_id, line.attended]),
+    );
+    setDrafts((current) => ({
+      ...current,
+      [targetWorkshopId]: {
+        attended: {
+          ...(current[targetWorkshopId]?.attended ?? savedAttendance),
+          [targetEmployeeId]: true,
+        },
+        notes: current[targetWorkshopId]?.notes ?? saved?.notes ?? "",
+      },
+    }));
+  };
+
+  const markRosterFromBiometrics = async () => {
+    const [punchesResult, membersResult, reportsResult] = await Promise.all([
+      attendancePunchesQuery.refetch(),
+      activeWorkshopMembersQuery.refetch(),
+      reportQuery.refetch(),
+    ]);
+    const queryError = punchesResult.error ?? membersResult.error ?? reportsResult.error;
+    if (queryError) {
+      toast.error(formatErrorMessage(queryError, "تعذر مطابقة حركات البصمة مع الورش"));
+      return;
+    }
+    const punches = punchesResult.data ?? [];
     const punchEmployeeIds = new Set(punches.map((punch) => punch.employee_id).filter(Boolean));
     const punchEmployeeNumbers = new Set(punches.map((punch) => punch.employee_no));
-    const matched = activeRoster.filter(
-      ({ employee }) =>
-        punchEmployeeIds.has(employee!.id) || punchEmployeeNumbers.has(employee!.employee_no),
+    const matchedMembers = (membersResult.data ?? []).filter(
+      (member) =>
+        activeWorkshopIds.has(member.workshop_id) &&
+        (punchEmployeeIds.has(member.employee_id) ||
+          punchEmployeeNumbers.has(employeeById.get(member.employee_id)?.employee_no ?? "")),
     );
-    setAttendedByEmployee({
-      ...attendedByEmployee,
-      ...Object.fromEntries(matched.map(({ employee }) => [employee!.id, true])),
+    const reports = reportsResult.data?.reports ?? [];
+    const lines = reportsResult.data?.lines ?? [];
+    const markedByWorkshop = new Map<string, Set<string>>();
+    for (const member of matchedMembers) {
+      const employeeIds = markedByWorkshop.get(member.workshop_id) ?? new Set<string>();
+      employeeIds.add(member.employee_id);
+      markedByWorkshop.set(member.workshop_id, employeeIds);
+    }
+    setDrafts((current) => {
+      const next = { ...current };
+      for (const [targetWorkshopId, employeeIds] of markedByWorkshop) {
+        const savedReport = reports.find((report) => report.workshop_id === targetWorkshopId);
+        const savedAttendance = Object.fromEntries(
+          lines
+            .filter((line) => line.report_id === savedReport?.id)
+            .map((line) => [line.employee_id, line.attended]),
+        );
+        const attended = { ...(current[targetWorkshopId]?.attended ?? savedAttendance) };
+        for (const id of employeeIds) attended[id] = true;
+        next[targetWorkshopId] = {
+          attended,
+          notes: current[targetWorkshopId]?.notes ?? savedReport?.notes ?? "",
+        };
+      }
+      return next;
     });
-    toast.success(`تم تأشير ${matched.length} موظفاً حاضراً بالبصمة من أصل ${activeRoster.length}`);
+    const matchedEmployeeCount = new Set(matchedMembers.map((member) => member.employee_id)).size;
+    toast.success(
+      `تم تأشير ${matchedEmployeeCount} موظفاً في ${markedByWorkshop.size} ورشة بالبصمة`,
+    );
   };
 
   const assignUnmatchedPunch = async (employee: Employee, targetWorkshopId: string) => {
@@ -466,9 +540,7 @@ export function DailyWorkshopInventory() {
         ["daily-workshop-members", targetWorkshopId],
         (current = []) => [...current.filter((member) => member.employee_id !== employee.id), data],
       );
-      if (targetWorkshopId === workshopId) {
-        setAttendedByEmployee({ ...attendedByEmployee, [employee.id]: true });
-      }
+      markEmployeePresentInWorkshop(targetWorkshopId, employee.id);
       setSelectedWorkshopByPunch((current) => ({ ...current, [employee.id]: "" }));
       setDismissedPunchEmployees((current) => new Set(current).add(employee.id));
       await Promise.all([
@@ -786,21 +858,57 @@ export function DailyWorkshopInventory() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="workshop-inventory-device">جهاز البصمة</Label>
-                  <select
-                    id="workshop-inventory-device"
-                    className={inputClass}
-                    value={deviceId}
-                    onChange={(event) => setDeviceId(event.target.value)}
-                  >
-                    <option value="all">كل الأجهزة المضافة</option>
-                    {devices.map((device) => (
-                      <option key={device.id} value={device.id}>
-                        {device.name}
-                        {device.serial_number ? ` · ${device.serial_number}` : ""}
-                      </option>
-                    ))}
-                  </select>
+                  <Label>أجهزة البصمة</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={`${inputClass} justify-between font-normal`}
+                      >
+                        {selectedDeviceIds.includes("all")
+                          ? `كل الأجهزة (${devices.length})`
+                          : `${selectedDeviceIds.length} أجهزة محددة`}
+                        <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-72 p-2" align="start">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 rounded-md p-2 text-sm hover:bg-muted">
+                          <Checkbox
+                            id="all-attendance-devices"
+                            checked={selectedDeviceIds.includes("all")}
+                            onCheckedChange={(checked) =>
+                              toggleDeviceSelection("all", checked === true)
+                            }
+                          />
+                          <label htmlFor="all-attendance-devices" className="flex-1 cursor-pointer">
+                            كل الأجهزة المضافة ({devices.length})
+                          </label>
+                        </div>
+                        {devices.map((device) => (
+                          <div
+                            key={device.id}
+                            className="flex items-center gap-2 rounded-md p-2 text-sm hover:bg-muted"
+                          >
+                            <Checkbox
+                              id={`attendance-device-${device.id}`}
+                              checked={selectedDeviceIds.includes(device.id)}
+                              onCheckedChange={(checked) =>
+                                toggleDeviceSelection(device.id, checked === true)
+                              }
+                            />
+                            <label
+                              htmlFor={`attendance-device-${device.id}`}
+                              className="min-w-0 flex-1 cursor-pointer truncate"
+                            >
+                              {device.name}
+                              {device.serial_number ? ` · ${device.serial_number}` : ""}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="workshop-inventory-select">الورشة</Label>
@@ -864,12 +972,16 @@ export function DailyWorkshopInventory() {
                       size="sm"
                       variant="outline"
                       onClick={() => void markRosterFromBiometrics()}
-                      disabled={attendancePunchesQuery.isFetching || !activeRoster.length}
+                      disabled={
+                        attendancePunchesQuery.isFetching ||
+                        activeWorkshopMembersQuery.isLoading ||
+                        activeWorkshopMembersQuery.isError
+                      }
                     >
                       <Fingerprint className="ml-2 h-4 w-4" />
                       {attendancePunchesQuery.isFetching
                         ? "جارٍ فحص البصمات..."
-                        : "تأشير الحاضرين بالبصمة"}
+                        : "تأشير كل الورش بالبصمة"}
                     </Button>
                   </div>
                 </div>
@@ -921,7 +1033,10 @@ export function DailyWorkshopInventory() {
                     <h3 className="font-semibold">حاضرون بالبصمة غير مسجلين في الورش</h3>
                     <p className="mt-1 text-xs text-muted-foreground">
                       حركات دخول بتاريخ {date} ومن{" "}
-                      {deviceId === "all" ? "كل الأجهزة" : "الجهاز المحدد"}.
+                      {selectedDeviceIds.includes("all")
+                        ? "كل الأجهزة"
+                        : `${selectedDeviceIds.length} أجهزة محددة`}
+                      .
                     </p>
                   </div>
                   <div className="space-y-2">
