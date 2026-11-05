@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import webpush from "web-push";
 
 function sameSecret(a: string, b: string) {
   if (!a || a.length !== b.length) return false;
@@ -23,6 +22,8 @@ export const Route = createFileRoute("/api/public/attendance-reminders")({
     const privateKey = process.env.VAPID_PRIVATE_KEY;
     const subject = process.env.VAPID_SUBJECT;
     if (!publicKey || !privateKey || !subject) return Response.json({ error: "Web Push is not configured" }, { status: 503 });
+    // Loaded inside the handler so the Node-only library never reaches the browser bundle.
+    const webpush = (await import("web-push")).default;
     webpush.setVapidDetails(subject, publicKey, privateKey);
     try {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
