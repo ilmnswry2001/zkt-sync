@@ -133,9 +133,11 @@ export function DailyWorkshopInventory() {
   const [employeeId, setEmployeeId] = useState("");
   const [employeePickerOpen, setEmployeePickerOpen] = useState(false);
   const [roleLabel, setRoleLabel] = useState("");
-  const [notes, setNotes] = useState("");
-  const [attendedByEmployee, setAttendedByEmployee] = useState<Record<string, boolean>>({});
+  const [drafts, setDrafts] = useState<
+    Record<string, { attended: Record<string, boolean>; notes: string }>
+  >({});
   const [saving, setSaving] = useState(false);
+  useEffect(() => setDrafts({}), [date]);
 
   const sitesQuery = useQuery<WorkSite[]>({
     queryKey: ["daily-work-allocation-sites"],
@@ -257,13 +259,26 @@ export function DailyWorkshopInventory() {
   useEffect(() => {
     if (!workshopId && workshops[0]) setWorkshopId(workshops[0].id);
   }, [workshopId, workshops]);
-  useEffect(() => {
-    if (reportQuery.isLoading) return;
-    setNotes(savedReport?.notes ?? "");
-    setAttendedByEmployee(
-      Object.fromEntries(savedLines.map((line) => [line.employee_id, line.attended])),
-    );
-  }, [date, workshopId, reportQuery.isLoading, savedReport, savedLines]);
+  const savedAttended = useMemo(
+    () => Object.fromEntries(savedLines.map((line) => [line.employee_id, line.attended])),
+    [savedLines],
+  );
+  const attendedByEmployee: Record<string, boolean> = drafts[workshopId]?.attended ?? savedAttended;
+  const notes = drafts[workshopId]?.notes ?? savedReport?.notes ?? "";
+  const updateDraft = (patch: { attended?: Record<string, boolean>; notes?: string }) =>
+    setDrafts((current) => ({
+      ...current,
+      [workshopId]: {
+        attended: current[workshopId]?.attended ?? savedAttended,
+        notes: current[workshopId]?.notes ?? savedReport?.notes ?? "",
+        ...patch,
+      },
+    }));
+  const setNotes = (value: string) => updateDraft({ notes: value });
+  const setAttendedByEmployee = (
+    value: Record<string, boolean> | ((c: Record<string, boolean>) => Record<string, boolean>),
+  ) => updateDraft({ attended: typeof value === "function" ? value(attendedByEmployee) : value });
+  const draftCount = Object.keys(drafts).filter(Boolean).length;
 
   const refreshData = async () => {
     await Promise.all([
@@ -334,35 +349,78 @@ export function DailyWorkshopInventory() {
   };
 
   const saveDailyReport = async () => {
-    if (!workshopId) return toast.error("أضف ورشة أو اخترها أولاً");
-    if (!activeRoster.length) return toast.error("أضف الموظفين إلى الورشة أولاً");
-    const payload: QueuedInventory = {
-      key: `${workshopId}:${date}`,
-      workshopId,
-      date,
-      notes: notes.trim() || null,
-      lines: activeRoster.map(({ employee, role_label }) => ({
-        employee_id: employee!.id,
-        employee_no_snapshot: employee!.employee_no,
-        employee_name_snapshot: employee!.full_name,
-        role_label: role_label?.trim() || employee!.position || null,
-        attended: attendedByEmployee[employee!.id] === true,
-      })),
-    };
+    const ids = Object.keys(drafts).filter(Boolean);
+    if (workshopId && !ids.includes(workshopId)) ids.push(workshopId);
+    if (!ids.length) return toast.error("أضف ورشة أو اخترها أولاً");
     setSaving(true);
     try {
-      if (!navigator.onLine) throw new OfflineError();
-      await submitInventory(payload);
-      await refreshData();
-      toast.success("تم حفظ جرد الورشة لهذا اليوم");
-    } catch (error) {
-      if (error instanceof OfflineError || !navigator.onLine || error instanceof TypeError) {
-        queueInventory(payload);
-        setPendingCount(readInventoryQueue().length);
-        toast.success("لا يوجد اتصال — حُفظ الجرد على الهاتف وسيُرسل تلقائياً عند عودة الشبكة");
+      // Rosters for every edited workshop (cached query for the current one, fetch the rest).
+      let allMembers: Member[] = members;
+      const others = ids.filter((id) => id !== workshopId);
+      if (others.length && navigator.onLine) {
+        const { data, error } = await supa
+          .from("daily_workshop_members")
+          .select("id, workshop_id, employee_id, role_label, is_active")
+          .in("workshop_id", others)
+          .eq("is_active", true);
+        if (error) throw error;
+        allMembers = [...members, ...(data ?? [])];
       } else {
-        toast.error(formatErrorMessage(error, "تعذر حفظ الجرد اليومي"));
+        for (const id of others) {
+          const cached = queryClient.getQueryData<Member[]>(["daily-workshop-members", id]);
+          if (cached) allMembers = [...allMembers, ...cached];
+        }
       }
+      const reports = reportQuery.data?.reports ?? [];
+      const lines = reportQuery.data?.lines ?? [];
+      const payloads: QueuedInventory[] = [];
+      for (const id of ids) {
+        const report = reports.find((r) => r.workshop_id === id);
+        const saved = Object.fromEntries(
+          lines.filter((l) => l.report_id === report?.id).map((l) => [l.employee_id, l.attended]),
+        );
+        const attended = drafts[id]?.attended ?? saved;
+        const roster = allMembers
+          .filter((m) => m.workshop_id === id)
+          .map((m) => ({ ...m, employee: employees.find((e) => e.id === m.employee_id) }))
+          .filter((m) => m.employee);
+        if (!roster.length) continue;
+        payloads.push({
+          key: `${id}:${date}`,
+          workshopId: id,
+          date,
+          notes: (drafts[id]?.notes ?? report?.notes ?? "").trim() || null,
+          lines: roster.map(({ employee, role_label }) => ({
+            employee_id: employee!.id,
+            employee_no_snapshot: employee!.employee_no,
+            employee_name_snapshot: employee!.full_name,
+            role_label: role_label?.trim() || employee!.position || null,
+            attended: attended[employee!.id] === true,
+          })),
+        });
+      }
+      if (!payloads.length) return toast.error("لا يوجد كادر في الورش المحددة");
+      let queued = 0;
+      for (const payload of payloads) {
+        try {
+          if (!navigator.onLine) throw new OfflineError();
+          await submitInventory(payload);
+        } catch (error) {
+          if (error instanceof OfflineError || !navigator.onLine || error instanceof TypeError) {
+            queueInventory(payload);
+            queued += 1;
+          } else throw error;
+        }
+      }
+      setDrafts({});
+      setPendingCount(readInventoryQueue().length);
+      if (queued) toast.success(`لا يوجد اتصال — حُفظ ${queued} جرد على الهاتف وسيُرسل تلقائياً`);
+      if (payloads.length - queued) {
+        await refreshData();
+        toast.success(`تم إرسال جرد ${payloads.length - queued} ورشة`);
+      }
+    } catch (error) {
+      toast.error(formatErrorMessage(error, "تعذر حفظ الجرد اليومي"));
     } finally {
       setSaving(false);
     }
@@ -451,7 +509,7 @@ export function DailyWorkshopInventory() {
           items.length
             ? `<h3>${title} (${items.length})</h3><table><thead><tr><th>#</th><th>الرقم الوظيفي</th><th>الاسم</th><th>الصفة</th></tr></thead><tbody>${items.map((line, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(line.employee_no_snapshot)}</td><td>${escapeHtml(line.employee_name_snapshot)}</td><td>${escapeHtml(line.role_label ?? "—")}</td></tr>`).join("")}</tbody></table>`
             : "";
-        return `<section class="workshop-sheet"><h2>${escapeHtml(workshop?.name ?? "ورشة")}</h2><p>التاريخ: ${escapeHtml(date)}</p><div class="meta"><span>إجمالي الكادر: <b>${lines.length}</b></span><span>الحاضرون: <b>${attended.length}</b></span><span>الغائبون: <b>${absent.length}</b></span><span>نسبة الحضور: <b>${rate}%</b></span><span>التخصصات الحاضرة: <b>${present.size}</b></span></div><h3>إحصائية التخصصات</h3><table><thead><tr><th>التخصص / الصفة</th><th>المنسبون</th><th>الحاضرون</th><th>الغائبون</th></tr></thead><tbody>${roleRows}<tr class="total"><td>المجموع</td><td class="num">${lines.length}</td><td class="num">${attended.length}</td><td class="num">${absent.length}</td></tr></tbody></table>${makeTable("الحاضرون", attended)}${makeTable("غير الحاضرين", absent)}${report.notes ? `<p class="note"><b>ملاحظات:</b> ${escapeHtml(report.notes)}</p>` : ""}</section>`;
+        return `<section class="workshop-sheet"><h2>${escapeHtml(workshop?.name ?? "ورشة")}</h2><p>التاريخ: ${escapeHtml(date)}</p><div class="meta"><span>إجمالي الكادر: <b>${lines.length}</b></span><span>الحاضرون: <b>${attended.length}</b></span><span>الغائبون: <b>${absent.length}</b></span><span>نسبة الحضور: <b>${rate}%</b></span><span>التخصصات الحاضرة: <b>${present.size}</b></span></div><h3>إحصائية التخصصات</h3><table><thead><tr><th>التخصص / الصفة</th><th>المنسبون</th><th>الحاضرون</th><th>الغائبون</th></tr></thead><tbody>${roleRows}<tr class="total"><td>المجموع</td><td class="num">${lines.length}</td><td class="num">${attended.length}</td><td class="num">${absent.length}</td></tr></tbody></table>${makeTable("الحاضرون", attended)}${report.notes ? `<p class="note"><b>ملاحظات:</b> ${escapeHtml(report.notes)}</p>` : ""}</section>`;
       })
       .join("");
     const pageStyle = `<style>.workshop-sheet{break-before:page;page-break-before:always}.workshop-sheet:first-of-type{break-before:auto;page-break-before:auto}.workshop-sheet h3{font-size:15px;margin:12px 0 4px}.workshop-sheet thead{display:table-header-group}.workshop-sheet tr{break-inside:avoid}td.num{text-align:center;font-weight:700}body>h1{display:none}</style>`;
@@ -629,7 +687,11 @@ export function DailyWorkshopInventory() {
                     </p>
                     <Button onClick={() => void saveDailyReport()} disabled={saving}>
                       <Save className="ml-2 h-4 w-4" />
-                      {saving ? "جارٍ الحفظ..." : "حفظ جرد الورشة"}
+                      {saving
+                        ? "جارٍ الإرسال..."
+                        : draftCount > 1
+                          ? `إرسال جرد كل الورش (${draftCount})`
+                          : "إرسال الجرد"}
                     </Button>
                   </div>
                 </>
