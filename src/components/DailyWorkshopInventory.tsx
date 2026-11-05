@@ -16,6 +16,7 @@ import {
   Check,
   ChevronsUpDown,
   ClipboardCheck,
+  Fingerprint,
   HardHat,
   Plus,
   Printer,
@@ -36,6 +37,23 @@ import {
 
 type Workshop = { id: string; name: string; is_active: boolean };
 type Employee = { id: string; employee_no: string; full_name: string; position: string | null };
+type Device = {
+  id: string;
+  name: string;
+  serial_number: string | null;
+  status: string;
+};
+type AttendancePunch = {
+  id: string;
+  employee_id: string | null;
+  employee_no: string;
+  verify_time: string;
+  device_id: string | null;
+  status: number | null;
+  verify_type: number | null;
+  self_event_type: string | null;
+  is_suspicious: boolean;
+};
 type Member = {
   id: string;
   workshop_id: string;
@@ -61,6 +79,8 @@ const inputClass = "flex h-10 w-full rounded-md border border-input bg-backgroun
 const noWorkshops: Workshop[] = [];
 const noEmployees: Employee[] = [];
 const noMembers: Member[] = [];
+const noDevices: Device[] = [];
+const noAttendancePunches: AttendancePunch[] = [];
 
 async function loadActiveEmployees(): Promise<Employee[]> {
   const rows: Employee[] = [];
@@ -98,7 +118,10 @@ function queueInventory(item: QueuedInventory) {
   localStorage.setItem(QUEUE_KEY, JSON.stringify([...rest, item]));
 }
 function removeQueuedInventory(key: string) {
-  localStorage.setItem(QUEUE_KEY, JSON.stringify(readInventoryQueue().filter((e) => e.key !== key)));
+  localStorage.setItem(
+    QUEUE_KEY,
+    JSON.stringify(readInventoryQueue().filter((e) => e.key !== key)),
+  );
 }
 async function submitInventory(item: QueuedInventory) {
   const { data: header, error: headerError } = await supa
@@ -115,12 +138,10 @@ async function submitInventory(item: QueuedInventory) {
     .select("id")
     .single();
   if (headerError || !header) throw headerError ?? new Error("تعذر إنشاء سجل الجرد");
-  const { error } = await supa
-    .from("daily_workshop_report_lines")
-    .upsert(
-      item.lines.map((line) => ({ ...line, report_id: header.id })),
-      { onConflict: "report_id,employee_id" },
-    );
+  const { error } = await supa.from("daily_workshop_report_lines").upsert(
+    item.lines.map((line) => ({ ...line, report_id: header.id })),
+    { onConflict: "report_id,employee_id" },
+  );
   if (error) throw error;
 }
 
@@ -128,6 +149,7 @@ export function DailyWorkshopInventory() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState("inventory");
   const [date, setDate] = useState(todayInBaghdad());
+  const [deviceId, setDeviceId] = useState("all");
   const [workshopId, setWorkshopId] = useState("");
   const [workshopName, setWorkshopName] = useState("");
   const [employeeId, setEmployeeId] = useState("");
@@ -137,7 +159,17 @@ export function DailyWorkshopInventory() {
     Record<string, { attended: Record<string, boolean>; notes: string }>
   >({});
   const [saving, setSaving] = useState(false);
+  const [dismissedPunchEmployees, setDismissedPunchEmployees] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [selectedWorkshopByPunch, setSelectedWorkshopByPunch] = useState<Record<string, string>>(
+    {},
+  );
   useEffect(() => setDrafts({}), [date]);
+  useEffect(() => {
+    setDismissedPunchEmployees(new Set());
+    setSelectedWorkshopByPunch({});
+  }, [date, deviceId]);
 
   const sitesQuery = useQuery<WorkSite[]>({
     queryKey: ["daily-work-allocation-sites"],
@@ -150,7 +182,9 @@ export function DailyWorkshopInventory() {
   const wagesQuery = useQuery<WageRate[]>({
     queryKey: ["daily-work-allocation-wages"],
     queryFn: async () => {
-      const { data, error } = await supa.from("wage_rates").select("title, daily_rate, monthly_rate");
+      const { data, error } = await supa
+        .from("wage_rates")
+        .select("title, daily_rate, monthly_rate");
       if (error) throw error;
       return data ?? [];
     },
@@ -168,6 +202,64 @@ export function DailyWorkshopInventory() {
           if (error) throw error;
           return data ?? [];
         }),
+  });
+  const devicesQuery = useQuery<Device[]>({
+    queryKey: ["daily-workshop-attendance-devices"],
+    queryFn: async () => {
+      const { data, error } = await supa
+        .from("devices")
+        .select("id, name, serial_number, status")
+        .order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const attendancePunchesQuery = useQuery<AttendancePunch[]>({
+    queryKey: ["daily-workshop-attendance-punches", date, deviceId],
+    queryFn: async () => {
+      const start = new Date(`${date}T00:00:00+03:00`);
+      const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+      const punches: AttendancePunch[] = [];
+      for (let from = 0; ; from += 1000) {
+        let request = supa
+          .from("attendance_logs")
+          .select(
+            "id, employee_id, employee_no, verify_time, device_id, status, verify_type, self_event_type, is_suspicious",
+          )
+          .gte("verify_time", start.toISOString())
+          .lt("verify_time", end.toISOString())
+          .order("verify_time")
+          .range(from, from + 999);
+        if (deviceId !== "all") request = request.eq("device_id", deviceId);
+        const { data, error } = await request;
+        if (error) throw error;
+        punches.push(...(data ?? []));
+        if (!data || data.length < 1000) break;
+      }
+      return punches.filter(
+        (punch) =>
+          !punch.is_suspicious &&
+          (punch.self_event_type === "check_in" ||
+            (punch.self_event_type == null &&
+              (punch.status === 0 || (punch.status == null && punch.verify_type === 0)))),
+      );
+    },
+  });
+  const activeWorkshopMembersQuery = useQuery<Array<{ employee_id: string }>>({
+    queryKey: ["daily-workshop-all-active-members"],
+    queryFn: async () => {
+      const rows: Array<{ employee_id: string }> = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await supa
+          .from("daily_workshop_members")
+          .select("employee_id")
+          .eq("is_active", true)
+          .range(from, from + 999);
+        if (error) throw error;
+        rows.push(...(data ?? []));
+        if (!data || data.length < 1000) return rows;
+      }
+    },
   });
   const employeesQuery = useQuery<Employee[]>({
     queryKey: ["daily-workshop-employees"],
@@ -213,6 +305,8 @@ export function DailyWorkshopInventory() {
   const workshops = workshopsQuery.data ?? noWorkshops;
   const employees = employeesQuery.data ?? noEmployees;
   const members = membersQuery.data ?? noMembers;
+  const devices = devicesQuery.data ?? noDevices;
+  const attendancePunches = attendancePunchesQuery.data ?? noAttendancePunches;
   const selectedWorkshop = workshops.find((workshop) => workshop.id === workshopId);
   const activeRoster = useMemo(
     () =>
@@ -230,6 +324,56 @@ export function DailyWorkshopInventory() {
     [reportQuery.data?.lines, savedReport?.id],
   );
   const selectedEmployee = employees.find((employee) => employee.id === employeeId);
+  const employeeById = useMemo(
+    () => new Map(employees.map((employee) => [employee.id, employee])),
+    [employees],
+  );
+  const employeeByNumber = useMemo(
+    () => new Map(employees.map((employee) => [employee.employee_no, employee])),
+    [employees],
+  );
+  const deviceById = useMemo(
+    () => new Map(devices.map((device) => [device.id, device])),
+    [devices],
+  );
+  const activeWorkshopEmployeeIds = useMemo(
+    () => new Set((activeWorkshopMembersQuery.data ?? []).map((member) => member.employee_id)),
+    [activeWorkshopMembersQuery.data],
+  );
+  const unmatchedPunches = useMemo(() => {
+    if (
+      attendancePunchesQuery.isError ||
+      activeWorkshopMembersQuery.isLoading ||
+      activeWorkshopMembersQuery.isError
+    ) {
+      return [];
+    }
+    const seen = new Set<string>();
+    return attendancePunches.flatMap((punch) => {
+      const employee =
+        (punch.employee_id ? employeeById.get(punch.employee_id) : undefined) ??
+        employeeByNumber.get(punch.employee_no);
+      if (
+        !employee ||
+        activeWorkshopEmployeeIds.has(employee.id) ||
+        dismissedPunchEmployees.has(employee.id) ||
+        seen.has(employee.id)
+      ) {
+        return [];
+      }
+      seen.add(employee.id);
+      return [{ employee, punch }];
+    });
+  }, [
+    attendancePunches,
+    employeeById,
+    employeeByNumber,
+    activeWorkshopEmployeeIds,
+    dismissedPunchEmployees,
+    attendancePunchesQuery.isError,
+    activeWorkshopMembersQuery.isLoading,
+    activeWorkshopMembersQuery.isError,
+  ]);
   const sites = sitesQuery.data ?? [];
   const presentLines = (reportQuery.data?.lines ?? []).filter((line) => line.attended);
   const presentGroups = useMemo(() => {
@@ -279,6 +423,69 @@ export function DailyWorkshopInventory() {
     value: Record<string, boolean> | ((c: Record<string, boolean>) => Record<string, boolean>),
   ) => updateDraft({ attended: typeof value === "function" ? value(attendedByEmployee) : value });
   const draftCount = Object.keys(drafts).filter(Boolean).length;
+
+  const markRosterFromBiometrics = async () => {
+    const result = await attendancePunchesQuery.refetch();
+    if (result.error) {
+      toast.error(formatErrorMessage(result.error, "تعذر جلب حركات البصمة"));
+      return;
+    }
+    const punches = result.data ?? [];
+    const punchEmployeeIds = new Set(punches.map((punch) => punch.employee_id).filter(Boolean));
+    const punchEmployeeNumbers = new Set(punches.map((punch) => punch.employee_no));
+    const matched = activeRoster.filter(
+      ({ employee }) =>
+        punchEmployeeIds.has(employee!.id) || punchEmployeeNumbers.has(employee!.employee_no),
+    );
+    setAttendedByEmployee({
+      ...attendedByEmployee,
+      ...Object.fromEntries(matched.map(({ employee }) => [employee!.id, true])),
+    });
+    toast.success(`تم تأشير ${matched.length} موظفاً حاضراً بالبصمة من أصل ${activeRoster.length}`);
+  };
+
+  const assignUnmatchedPunch = async (employee: Employee, targetWorkshopId: string) => {
+    if (!targetWorkshopId) return toast.error("اختر الورشة أولاً");
+    setSaving(true);
+    try {
+      const { data, error } = await supa
+        .from("daily_workshop_members")
+        .upsert(
+          {
+            workshop_id: targetWorkshopId,
+            employee_id: employee.id,
+            role_label: employee.position,
+            is_active: true,
+          },
+          { onConflict: "workshop_id,employee_id" },
+        )
+        .select("id, workshop_id, employee_id, role_label, is_active")
+        .single();
+      if (error) throw error;
+      queryClient.setQueryData<Member[]>(
+        ["daily-workshop-members", targetWorkshopId],
+        (current = []) => [...current.filter((member) => member.employee_id !== employee.id), data],
+      );
+      if (targetWorkshopId === workshopId) {
+        setAttendedByEmployee({ ...attendedByEmployee, [employee.id]: true });
+      }
+      setSelectedWorkshopByPunch((current) => ({ ...current, [employee.id]: "" }));
+      setDismissedPunchEmployees((current) => new Set(current).add(employee.id));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["daily-workshop-members"] }),
+        queryClient.invalidateQueries({ queryKey: ["daily-workshop-all-active-members"] }),
+      ]);
+      toast.success(
+        targetWorkshopId === workshopId
+          ? `تمت إضافة ${employee.full_name} إلى الورشة وتأشيره حاضراً`
+          : `تمت إضافة ${employee.full_name} إلى الورشة`,
+      );
+    } catch (error) {
+      toast.error(formatErrorMessage(error, "تعذر إضافة الموظف إلى الورشة"));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const refreshData = async () => {
     await Promise.all([
@@ -467,7 +674,9 @@ export function DailyWorkshopInventory() {
       (item) => item.employee_id === line.employee_id && item.id !== line.id && item.site_id,
     );
     if (siteId && otherAssignment) {
-      return toast.error("هذا الموظف مسند بالفعل إلى مركز تكلفة آخر اليوم؛ ألغِ إسناده السابق أولاً");
+      return toast.error(
+        "هذا الموظف مسند بالفعل إلى مركز تكلفة آخر اليوم؛ ألغِ إسناده السابق أولاً",
+      );
     }
     const { error } = await supa
       .from("daily_workshop_report_lines")
@@ -503,7 +712,10 @@ export function DailyWorkshopInventory() {
         const assigned = countRoles(lines);
         const present = new Map(countRoles(attended));
         const roleRows = assigned
-          .map(([role, total]) => `<tr><td>${escapeHtml(role)}</td><td class="num">${total}</td><td class="num">${present.get(role) ?? 0}</td><td class="num">${total - (present.get(role) ?? 0)}</td></tr>`)
+          .map(
+            ([role, total]) =>
+              `<tr><td>${escapeHtml(role)}</td><td class="num">${total}</td><td class="num">${present.get(role) ?? 0}</td><td class="num">${total - (present.get(role) ?? 0)}</td></tr>`,
+          )
           .join("");
         const makeTable = (title: string, items: AttendanceLine[]) =>
           items.length
@@ -513,9 +725,7 @@ export function DailyWorkshopInventory() {
       })
       .join("");
     const pageStyle = `<style>.workshop-sheet{break-before:page;page-break-before:always}.workshop-sheet:first-of-type{break-before:auto;page-break-before:auto}.workshop-sheet h3{font-size:15px;margin:12px 0 4px}.workshop-sheet thead{display:table-header-group}.workshop-sheet tr{break-inside:avoid}td.num{text-align:center;font-weight:700}body>h1{display:none}</style>`;
-    if (
-      !printReport(`الجرد اليومي للورش — ${date}`, `${pageStyle}${content}`)
-    ) {
+    if (!printReport(`الجرد اليومي للورش — ${date}`, `${pageStyle}${content}`)) {
       toast.error("اسمح بالنوافذ المنبثقة لطباعة التقرير");
     }
   };
@@ -564,7 +774,7 @@ export function DailyWorkshopInventory() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="workshop-inventory-date">التاريخ</Label>
                   <Input
@@ -574,6 +784,23 @@ export function DailyWorkshopInventory() {
                     value={date}
                     onChange={(event) => setDate(event.target.value)}
                   />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="workshop-inventory-device">جهاز البصمة</Label>
+                  <select
+                    id="workshop-inventory-device"
+                    className={inputClass}
+                    value={deviceId}
+                    onChange={(event) => setDeviceId(event.target.value)}
+                  >
+                    <option value="all">كل الأجهزة المضافة</option>
+                    {devices.map((device) => (
+                      <option key={device.id} value={device.id}>
+                        {device.name}
+                        {device.serial_number ? ` · ${device.serial_number}` : ""}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="workshop-inventory-select">الورشة</Label>
@@ -592,6 +819,22 @@ export function DailyWorkshopInventory() {
                   </select>
                 </div>
               </div>
+              {devicesQuery.isError && (
+                <p role="alert" className="text-sm text-destructive">
+                  تعذر تحميل أجهزة البصمة: {formatErrorMessage(devicesQuery.error)}
+                </p>
+              )}
+              {attendancePunchesQuery.isError && (
+                <p role="alert" className="text-sm text-destructive">
+                  تعذر تحميل حركات البصمة: {formatErrorMessage(attendancePunchesQuery.error)}
+                </p>
+              )}
+              {activeWorkshopMembersQuery.isError && (
+                <p role="alert" className="text-sm text-destructive">
+                  تعذر التحقق من عضويات الورش النشطة:{" "}
+                  {formatErrorMessage(activeWorkshopMembersQuery.error)}
+                </p>
+              )}
               {selectedWorkshop && (
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-muted/20 p-3">
                   <div>
@@ -600,7 +843,7 @@ export function DailyWorkshopInventory() {
                       علّم الموظفين الذين حضروا لتسجيل البصمة
                     </p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <Button
                       size="sm"
                       variant="outline"
@@ -616,6 +859,17 @@ export function DailyWorkshopInventory() {
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => setAttendedByEmployee({})}>
                       إلغاء التحديد
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void markRosterFromBiometrics()}
+                      disabled={attendancePunchesQuery.isFetching || !activeRoster.length}
+                    >
+                      <Fingerprint className="ml-2 h-4 w-4" />
+                      {attendancePunchesQuery.isFetching
+                        ? "جارٍ فحص البصمات..."
+                        : "تأشير الحاضرين بالبصمة"}
                     </Button>
                   </div>
                 </div>
@@ -660,6 +914,95 @@ export function DailyWorkshopInventory() {
                     </label>
                   ))}
                 </div>
+              )}
+              {unmatchedPunches.length > 0 && (
+                <section className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+                  <div>
+                    <h3 className="font-semibold">حاضرون بالبصمة غير مسجلين في الورش</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      حركات دخول بتاريخ {date} ومن{" "}
+                      {deviceId === "all" ? "كل الأجهزة" : "الجهاز المحدد"}.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    {unmatchedPunches.map(({ employee, punch }) => {
+                      const device = punch.device_id ? deviceById.get(punch.device_id) : undefined;
+                      return (
+                        <article
+                          key={employee.id}
+                          className="flex flex-col gap-3 rounded-lg border bg-background/70 p-3 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="min-w-0">
+                            <p className="font-medium">{employee.full_name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {employee.employee_no} · {employee.position || "بدون مسمى"}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {new Date(punch.verify_time).toLocaleTimeString("ar-IQ", {
+                                timeZone: "Asia/Baghdad",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                              {" · "}
+                              {device
+                                ? `${device.name}${device.serial_number ? ` (${device.serial_number})` : ""}`
+                                : "جهاز غير محدد"}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <select
+                              className={`${inputClass} w-auto min-w-40`}
+                              aria-label={`اختر ورشة لإضافة ${employee.full_name}`}
+                              value={selectedWorkshopByPunch[employee.id] ?? ""}
+                              onChange={(event) =>
+                                setSelectedWorkshopByPunch((current) => ({
+                                  ...current,
+                                  [employee.id]: event.target.value,
+                                }))
+                              }
+                            >
+                              <option value="">اختر ورشة</option>
+                              {workshops.map((workshop) => (
+                                <option key={workshop.id} value={workshop.id}>
+                                  {workshop.name}
+                                </option>
+                              ))}
+                            </select>
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                void assignUnmatchedPunch(
+                                  employee,
+                                  selectedWorkshopByPunch[employee.id] ?? "",
+                                )
+                              }
+                              disabled={
+                                saving ||
+                                !selectedWorkshopByPunch[employee.id] ||
+                                activeWorkshopMembersQuery.isLoading ||
+                                activeWorkshopMembersQuery.isError
+                              }
+                            >
+                              <Plus className="ml-1 h-4 w-4" />
+                              إضافة إلى ورشة
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() =>
+                                setDismissedPunchEmployees((current) =>
+                                  new Set(current).add(employee.id),
+                                )
+                              }
+                            >
+                              إهمال
+                            </Button>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </section>
               )}
               {workshopId && activeRoster.length > 0 && (
                 <>
@@ -948,34 +1291,84 @@ export function DailyWorkshopInventory() {
           <Card>
             <CardHeader>
               <CardTitle>تقسيم الكادر الحاضر على مراكز التكلفة</CardTitle>
-              <p className="text-sm text-muted-foreground">يعرض الموظفين المسجل حضورهم في جرد هذا اليوم فقط. اختر CTR لحساب كلفة العامل ضمن متابعة نشر الموقع.</p>
+              <p className="text-sm text-muted-foreground">
+                يعرض الموظفين المسجل حضورهم في جرد هذا اليوم فقط. اختر CTR لحساب كلفة العامل ضمن
+                متابعة نشر الموقع.
+              </p>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/30 p-3 text-sm">
-                <span>التاريخ: <b>{date}</b> · الحاضرون: <b>{presentLines.length}</b></span>
-                <span>إجمالي الكلفة المسندة: <b>{presentLines.reduce((sum, line) => sum + (line.site_id ? dailyCost(line) : 0), 0).toLocaleString("ar-IQ")} د.ع</b></span>
+                <span>
+                  التاريخ: <b>{date}</b> · الحاضرون: <b>{presentLines.length}</b>
+                </span>
+                <span>
+                  إجمالي الكلفة المسندة:{" "}
+                  <b>
+                    {presentLines
+                      .reduce((sum, line) => sum + (line.site_id ? dailyCost(line) : 0), 0)
+                      .toLocaleString("ar-IQ")}{" "}
+                    د.ع
+                  </b>
+                </span>
               </div>
               {presentGroups.map((group) => (
                 <section key={group.name} className="space-y-2 rounded-xl border p-3">
-                  <h3 className="font-semibold">{group.name} <Badge variant="secondary">{group.lines.length} حاضر</Badge></h3>
+                  <h3 className="font-semibold">
+                    {group.name} <Badge variant="secondary">{group.lines.length} حاضر</Badge>
+                  </h3>
                   {group.lines.map((line) => (
-                    <div key={line.id} className="grid gap-3 rounded-xl border bg-card p-3 sm:grid-cols-[1fr_1fr_auto] sm:items-center">
+                    <div
+                      key={line.id}
+                      className="grid gap-3 rounded-xl border bg-card p-3 sm:grid-cols-[1fr_1fr_auto] sm:items-center"
+                    >
                       <div>
                         <p className="font-medium">{line.employee_name_snapshot}</p>
-                        <p className="text-xs text-muted-foreground">{line.role_label || "بدون صفة"}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {line.role_label || "بدون صفة"}
+                        </p>
                       </div>
-                      <select className={inputClass} aria-label={`مركز تكلفة ${line.employee_name_snapshot}`} value={line.site_id ?? "unassigned"} onChange={(event) => void assignSite(line, event.target.value === "unassigned" ? "" : event.target.value)}>
+                      <select
+                        className={inputClass}
+                        aria-label={`مركز تكلفة ${line.employee_name_snapshot}`}
+                        value={line.site_id ?? "unassigned"}
+                        onChange={(event) =>
+                          void assignSite(
+                            line,
+                            event.target.value === "unassigned" ? "" : event.target.value,
+                          )
+                        }
+                      >
                         <option value="unassigned">اختر مركز التكلفة CTR</option>
-                        {sites.map((site) => <option key={site.id} value={site.id}>{site.ctr_code} — {site.name}</option>)}
+                        {sites.map((site) => (
+                          <option key={site.id} value={site.id}>
+                            {site.ctr_code} — {site.name}
+                          </option>
+                        ))}
                       </select>
-                      <Badge variant={line.site_id ? "default" : "secondary"}>{line.site_id ? `${dailyCost(line).toLocaleString("ar-IQ")} د.ع / يوم` : "غير مسند"}</Badge>
+                      <Badge variant={line.site_id ? "default" : "secondary"}>
+                        {line.site_id
+                          ? `${dailyCost(line).toLocaleString("ar-IQ")} د.ع / يوم`
+                          : "غير مسند"}
+                      </Badge>
                     </div>
                   ))}
                 </section>
               ))}
-              {!presentLines.length && <p className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">احفظ جرد الحضور أولاً ليظهر الكادر الحاضر هنا.</p>}
-              {sitesQuery.error && <p role="alert" className="text-sm text-destructive">تعذر تحميل مراكز التكلفة: {formatErrorMessage(sitesQuery.error)}</p>}
-              {wagesQuery.error && <p role="alert" className="text-sm text-destructive">تعذر تحميل أجور التخصصات: {formatErrorMessage(wagesQuery.error)}</p>}
+              {!presentLines.length && (
+                <p className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">
+                  احفظ جرد الحضور أولاً ليظهر الكادر الحاضر هنا.
+                </p>
+              )}
+              {sitesQuery.error && (
+                <p role="alert" className="text-sm text-destructive">
+                  تعذر تحميل مراكز التكلفة: {formatErrorMessage(sitesQuery.error)}
+                </p>
+              )}
+              {wagesQuery.error && (
+                <p role="alert" className="text-sm text-destructive">
+                  تعذر تحميل أجور التخصصات: {formatErrorMessage(wagesQuery.error)}
+                </p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
