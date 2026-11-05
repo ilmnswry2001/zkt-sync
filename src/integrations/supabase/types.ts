@@ -482,51 +482,6 @@ export type Database = {
         }
         Relationships: []
       }
-      operational_anomalies: {
-        Row: {
-          anomaly_type: string
-          created_at: string
-          details: Json
-          entity_id: string
-          entity_name: string | null
-          entity_type: string
-          id: string
-          is_resolved: boolean
-          resolution_notes: string | null
-          resolved_at: string | null
-          resolved_by: string | null
-          severity: string
-        }
-        Insert: {
-          anomaly_type: string
-          created_at?: string
-          details?: Json
-          entity_id: string
-          entity_name?: string | null
-          entity_type: string
-          id?: string
-          is_resolved?: boolean
-          resolution_notes?: string | null
-          resolved_at?: string | null
-          resolved_by?: string | null
-          severity: string
-        }
-        Update: {
-          anomaly_type?: string
-          created_at?: string
-          details?: Json
-          entity_id?: string
-          entity_name?: string | null
-          entity_type?: string
-          id?: string
-          is_resolved?: boolean
-          resolution_notes?: string | null
-          resolved_at?: string | null
-          resolved_by?: string | null
-          severity?: string
-        }
-        Relationships: []
-      }
       department_managers: {
         Row: {
           created_at: string
@@ -3656,6 +3611,51 @@ export type Database = {
         }
         Relationships: []
       }
+      operational_anomalies: {
+        Row: {
+          anomaly_type: string
+          created_at: string
+          details: Json
+          entity_id: string
+          entity_name: string | null
+          entity_type: string
+          id: string
+          is_resolved: boolean
+          resolution_notes: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: string
+        }
+        Insert: {
+          anomaly_type: string
+          created_at?: string
+          details?: Json
+          entity_id: string
+          entity_name?: string | null
+          entity_type: string
+          id?: string
+          is_resolved?: boolean
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity: string
+        }
+        Update: {
+          anomaly_type?: string
+          created_at?: string
+          details?: Json
+          entity_id?: string
+          entity_name?: string | null
+          entity_type?: string
+          id?: string
+          is_resolved?: boolean
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+        }
+        Relationships: []
+      }
       payroll_run_lines: {
         Row: {
           additions_amount: number
@@ -5123,25 +5123,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      audit_fuel_voucher_anomalies: {
-        Args: { p_voucher_id: string }
-        Returns: number
-      }
-      get_executive_daily_brief: {
-        Args: { p_date?: string }
-        Returns: Json
-      }
-      run_biometric_vs_inventory_audit: {
-        Args: { p_date?: string }
-        Returns: number
-      }
-      run_pre_payroll_audit: {
-        Args: { p_month: string }
-        Returns: Json
-      }
       approve_self_attendance_early_exit: {
         Args: { p_form_id: string }
         Returns: undefined
+      }
+      audit_fuel_voucher_anomalies: {
+        Args: { p_voucher_id: string }
+        Returns: number
       }
       award_badge_incentive: { Args: { p_badge_id: string }; Returns: string }
       can_access_department: {
@@ -5213,6 +5201,7 @@ export type Database = {
           warehouse_name: string
         }[]
       }
+      get_executive_daily_brief: { Args: { p_date?: string }; Returns: Json }
       has_form_role: {
         Args: {
           _role: Database["public"]["Enums"]["form_role"]
@@ -5443,6 +5432,11 @@ export type Database = {
         }
         Returns: string
       }
+      run_biometric_vs_inventory_audit: {
+        Args: { p_date?: string }
+        Returns: number
+      }
+      run_pre_payroll_audit: { Args: { p_month: string }; Returns: Json }
       send_work_guidance: {
         Args: {
           _content: string
