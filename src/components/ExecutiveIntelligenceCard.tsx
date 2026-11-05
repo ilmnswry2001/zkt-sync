@@ -65,19 +65,21 @@ export function ExecutiveIntelligenceCard({ className = "" }: { className?: stri
     },
   });
   const resolveMutation = useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (target: string) => {
       const { data: authData, error: authError } = await supabase.auth.getUser();
       if (authError) throw authError;
       if (!authData.user) throw new Error("انتهت جلسة الدخول، أعد تسجيل الدخول");
-      const { error } = await supabase
+      let request = supabase
         .from("operational_anomalies")
         .update({
           is_resolved: true,
           resolved_by: authData.user.id,
           resolved_at: new Date().toISOString(),
         })
-        .eq("id", id)
         .eq("is_resolved", false);
+      if (target === "workshops") request = request.eq("entity_type", "workshop");
+      else if (target !== "all") request = request.eq("id", target);
+      const { error } = await request;
       if (error) throw error;
     },
     onSuccess: async () => {
@@ -157,9 +159,26 @@ export function ExecutiveIntelligenceCard({ className = "" }: { className?: stri
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-sm font-bold">التنبيهات المفتوحة</h3>
-                <span className="text-xs text-slate-400">
-                  {Number(brief?.unresolved_anomalies ?? 0).toLocaleString("ar-IQ")}
-                </span>
+                <div className="flex items-center gap-2">
+                  {canResolve && visibleAnomalies.length > 0 && (
+                    <>
+                      <Button size="sm" variant="outline" className="h-7 border-current bg-black/10 text-current text-xs"
+                        disabled={resolveMutation.isPending}
+                        onClick={() => confirm("إزالة جميع تنبيهات الورش؟") && resolveMutation.mutate("workshops")}>
+                        إزالة تنبيهات الورش
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-7 border-current bg-black/10 text-current text-xs"
+                        disabled={resolveMutation.isPending}
+                        onClick={() => confirm("إزالة جميع التنبيهات المفتوحة؟") && resolveMutation.mutate("all")}>
+                        <CheckCheck className="ms-1 h-3 w-3" />
+                        إزالة الكل
+                      </Button>
+                    </>
+                  )}
+                  <span className="text-xs text-slate-400">
+                    {Number(brief?.unresolved_anomalies ?? 0).toLocaleString("ar-IQ")}
+                  </span>
+                </div>
               </div>
               {visibleAnomalies.length ? (
                 visibleAnomalies.map((anomaly) => (

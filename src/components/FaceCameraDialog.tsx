@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import * as faceapi from "@vladmandic/face-api";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { calculateFaceMatch, detectEyeBlink, loadFaceApiModels } from "@/lib/face-recognition";
+import { calculateFaceMatch, detectEyeBlink, getFaceApi, loadFaceApiModels } from "@/lib/face-recognition";
 
 type Mode = "enroll" | "verify";
 type Completion = {
@@ -86,6 +85,7 @@ export function FaceCameraDialog({
           if (cancelled || !videoRef.current || videoRef.current.readyState < 2) return;
           const currentVideo = videoRef.current;
           try {
+            const faceapi = await getFaceApi();
             const result = await faceapi
               .detectSingleFace(currentVideo, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.55 }))
               .withFaceLandmarks(true)
