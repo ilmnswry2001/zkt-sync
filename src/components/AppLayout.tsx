@@ -34,6 +34,8 @@ import {
   Sun,
   Bell,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   SlidersHorizontal,
   Network,
   ShieldAlert,
@@ -49,6 +51,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useOperationalAlerts } from "@/hooks/use-operational-alerts";
 import { supabase } from "@/integrations/supabase/client";
 import { NavigationCustomizer } from "@/components/NavigationCustomizer";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -100,39 +108,38 @@ type NavItem = (typeof nav)[number];
 const NAV_GROUPS = [
   {
     key: "home",
-    label: "الرئيسية",
-    icon: LayoutDashboard,
-    tos: ["/dashboard", "/monthly", "/command-center"],
-  },
-  {
-    key: "attendance",
-    label: "الحضور والدوام",
-    icon: ClockIcon,
-    tos: ["/attendance", "/self-attendance", "/shift-schedules"],
-  },
-  {
-    key: "tasks",
-    label: "المهام والفريق",
-    icon: ListChecks,
-    tos: ["/tasks", "/work-center", "/team-follow-up", "/forms"],
+    label: "العمليات والتشغيل الميداني",
+    icon: Radar,
+    tos: [
+      "/dashboard",
+      "/command-center",
+      "/attendance",
+      "/self-attendance",
+      "/shift-schedules",
+      "/tasks",
+      "/work-center",
+      "/team-follow-up",
+      "/monthly",
+    ],
   },
   {
     key: "hr",
     label: "الموارد البشرية",
     icon: Users,
-    tos: ["/employees", "/departments", "/leaves", "/penalties"],
+    tos: ["/employees", "/departments", "/leaves", "/penalties", "/forms"],
   },
-  { key: "finance", label: "الحسابات", icon: Wallet, tos: ["/wages", "/payroll"] },
-  { key: "vehicles", label: "المركبات والوقود", icon: Truck, tos: ["/vehicles", "/fuel"] },
-  { key: "maintenance", label: "الصيانة", icon: Wrench, tos: ["/maintenance"] },
-  { key: "safety", label: "السلامة والبلاغات", icon: ShieldAlert, tos: ["/safety"] },
   {
-    key: "projects",
-    label: "المشاريع والخطط",
-    icon: ClipboardList,
-    tos: ["/planning", "/sites", "/projects", "/requests"],
+    key: "vehicles",
+    label: "الأسطول والآليات",
+    icon: Truck,
+    tos: ["/vehicles", "/fuel", "/maintenance", "/safety"],
   },
-  { key: "procurement", label: "المشتريات", icon: ShoppingCart, tos: ["/procurement"] },
+  {
+    key: "finance",
+    label: "المالية والمشاريع",
+    icon: Wallet,
+    tos: ["/payroll", "/wages", "/projects", "/procurement", "/sites", "/planning", "/requests"],
+  },
   {
     key: "inventory",
     label: "المخازن والأجهزة",
@@ -141,7 +148,7 @@ const NAV_GROUPS = [
   },
   {
     key: "settings",
-    label: "الإعدادات",
+    label: "الإدارة والمنظومة",
     icon: Settings2,
     tos: ["/settings", "/accounts", "/system-map"],
   },
@@ -354,7 +361,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const resolveGroupKey = useCallback(
     (to: string) => {
       const assigned = navAssignments[to];
-      if (assigned && NAV_GROUPS.some((group) => group.key === assigned)) return assigned;
+      const legacyGroupKeys: Record<string, string> = {
+        attendance: "home",
+        tasks: "home",
+        maintenance: "vehicles",
+        safety: "vehicles",
+        projects: "finance",
+        procurement: "finance",
+      };
+      const normalizedAssignment = assigned ? legacyGroupKeys[assigned] ?? assigned : "";
+      if (NAV_GROUPS.some((group) => group.key === normalizedAssignment))
+        return normalizedAssignment;
       return baseGroupKeyByTo.get(to) ?? "";
     },
     [navAssignments, baseGroupKeyByTo],
@@ -421,41 +438,25 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         aria-hidden={!mobileSidebarOpen}
         tabIndex={mobileSidebarOpen ? undefined : -1}
         className={cn(
-          "fixed inset-0 z-30 bg-slate-950/45 backdrop-blur-sm transition-opacity duration-300 md:hidden",
+          "fixed inset-0 z-30 bg-background/80 backdrop-blur-sm transition-opacity duration-300 md:hidden",
           mobileSidebarOpen ? "opacity-100" : "pointer-events-none opacity-0",
         )}
         onClick={() => setMobileSidebarOpen(false)}
       />
       <aside
         className={cn(
-          "app-sidebar fixed bottom-3 left-3 right-auto top-3 z-40 flex w-[min(19rem,calc(100vw-1.5rem))] shrink-0 flex-col overflow-hidden rounded-2xl border border-border bg-sidebar text-sidebar-foreground shadow-xl shadow-slate-950/15 transition-[width,height,transform] duration-300 ease-out md:left-4 md:right-auto md:top-4 md:translate-x-0",
-          mobileSidebarOpen ? "translate-x-0" : "-translate-x-[calc(100%+0.75rem)]",
-          sidebarCollapsed
-            ? "md:bottom-auto md:h-[4.625rem] md:w-[4.5rem]"
-            : "md:bottom-4 md:h-[calc(100vh-2rem)] md:w-64",
+          "app-sidebar fixed inset-y-0 right-0 z-40 flex h-screen w-[min(19rem,calc(100vw-1.5rem))] shrink-0 flex-col overflow-hidden border-l border-sidebar-border bg-sidebar text-sidebar-foreground shadow-xl transition-[width,transform] duration-300 ease-in-out md:translate-x-0",
+          mobileSidebarOpen ? "translate-x-0" : "translate-x-full",
+          sidebarCollapsed ? "md:w-[4.25rem]" : "md:w-64",
         )}
       >
-        <div
-          className={cn(
-            "flex min-h-16 items-center justify-between border-b border-border px-4 py-3",
-            sidebarCollapsed && "md:justify-center md:px-2",
-          )}
-        >
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                if (window.innerWidth < 768) setMobileSidebarOpen(false);
-                else toggleSidebar();
-              }}
-              aria-label={sidebarCollapsed ? "فتح القائمة" : "طي القائمة"}
-              title={sidebarCollapsed ? "فتح القائمة" : "طي القائمة"}
-              className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-300 to-cyan-500 shadow-lg shadow-teal-950/25 ring-1 ring-white/20 transition-transform duration-300 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-            >
-              <Fingerprint className="h-6 w-6 text-slate-950" />
-              <span className="absolute -bottom-1 -left-1 h-3 w-3 rounded-full border-2 border-sidebar bg-emerald-400" />
-            </button>
-            <div className={cn("min-w-0", sidebarCollapsed && "md:hidden")}>
+        <TooltipProvider delayDuration={100}>
+          <div className="flex min-h-16 items-center gap-3 border-b border-sidebar-border px-3 py-3">
+            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/15">
+              <Fingerprint className="h-5 w-5" />
+              <span className="absolute -bottom-0.5 -left-0.5 h-2.5 w-2.5 rounded-full border-2 border-sidebar bg-emerald-500" />
+            </div>
+            <div className={cn("min-w-0 flex-1", sidebarCollapsed && "md:hidden")}>
               {isEditingWorkspaceName ? (
                 <input
                   autoFocus
@@ -466,172 +467,248 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     if (event.key === "Escape") setIsEditingWorkspaceName(false);
                   }}
                   aria-label="اسم النظام"
-                  className="w-36 rounded-md border border-sidebar-border bg-sidebar px-2 py-1 text-sm font-bold text-sidebar-foreground outline-none"
+                  className="w-full rounded-md border border-sidebar-border bg-sidebar px-2 py-1 text-sm font-bold text-sidebar-foreground outline-none"
                 />
               ) : (
-                <h1 className="truncate font-bold text-[15px] tracking-tight">{workspaceName}</h1>
+                <h1 className="truncate text-sm font-bold">{workspaceName}</h1>
               )}
-              <p className="mt-1 text-[11px] text-sidebar-foreground/55">إدارة الموارد والمشاريع</p>
+              <p className="mt-1 truncate text-[11px] text-sidebar-foreground/55">
+                إدارة الموارد والمشاريع
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "h-8 w-8 text-sidebar-foreground/65 hover:bg-muted",
+                  sidebarCollapsed && "md:hidden",
+                )}
+                onClick={() =>
+                  isEditingWorkspaceName ? saveWorkspaceName() : setIsEditingWorkspaceName(true)
+                }
+                aria-label={isEditingWorkspaceName ? "حفظ اسم النظام" : "تعديل اسم النظام"}
+                title={isEditingWorkspaceName ? "حفظ اسم النظام" : "تعديل اسم النظام"}
+              >
+                <Settings2 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="hidden h-8 w-8 text-sidebar-foreground/65 hover:bg-muted md:inline-flex"
+                onClick={toggleSidebar}
+                aria-label={sidebarCollapsed ? "توسيع القائمة" : "طي القائمة"}
+                title={sidebarCollapsed ? "توسيع القائمة" : "طي القائمة"}
+              >
+                {sidebarCollapsed ? (
+                  <ChevronLeft className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-sidebar-foreground/65 hover:bg-muted md:hidden"
+                onClick={() => setMobileSidebarOpen(false)}
+                aria-label="إخفاء اللوحة الجانبية"
+                title="إخفاء اللوحة الجانبية"
+              >
+                <X className="h-4 w-4" />
+              </Button>
             </div>
           </div>
-          <div className={cn("flex items-center gap-1", sidebarCollapsed && "md:hidden")}>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-lg text-sidebar-foreground/65 hover:bg-black/[0.05] hover:text-sidebar-foreground dark:hover:bg-white/10"
-              onClick={() =>
-                isEditingWorkspaceName ? saveWorkspaceName() : setIsEditingWorkspaceName(true)
-              }
-              aria-label={isEditingWorkspaceName ? "حفظ اسم النظام" : "تعديل اسم النظام"}
-              title={isEditingWorkspaceName ? "حفظ اسم النظام" : "تعديل اسم النظام"}
-            >
-              <Settings2 className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-lg text-sidebar-foreground/65 hover:bg-black/[0.05] hover:text-sidebar-foreground dark:hover:bg-white/10 md:hidden"
-              onClick={() => setMobileSidebarOpen(false)}
-              title="إخفاء اللوحة الجانبية"
-              aria-label="إخفاء اللوحة الجانبية"
-            >
-              <X className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-        <nav
-          aria-label="التنقل الرئيسي"
-          className={cn(
-            "app-sidebar-nav flex-1 space-y-1.5 overflow-y-auto p-3 transition-opacity duration-200",
-            sidebarCollapsed && "md:px-2",
-            sidebarCollapsed && "md:hidden",
-          )}
-        >
-          <p
+          <nav
+            aria-label="التنقل الرئيسي"
             className={cn(
-              "px-3 pb-1 pt-2 text-[10px] font-bold tracking-[0.16em] text-sidebar-foreground/40",
-              sidebarCollapsed && "md:hidden",
+              "app-sidebar-nav flex-1 space-y-1.5 overflow-y-auto p-3",
+              sidebarCollapsed && "md:px-2",
             )}
           >
-            القائمة الرئيسية
-          </p>
-          {mergedGroups.map((group) => {
-            const isOpen = openGroups.includes(group.key);
-            const isGroupActive = group.items.some(
-              (item) => pathname === item.to || pathname.startsWith(item.to + "/"),
-            );
-            const GroupIcon = group.icon;
-            return (
-              <div
-                key={group.key}
-                dir="rtl"
-                className="space-y-1"
-              >
-                  <button
-                    type="button"
-                    onClick={() => toggleGroup(group.key)}
-                    aria-expanded={isOpen}
+            <p
+              className={cn(
+                "px-3 pb-1 pt-2 text-[10px] font-bold text-sidebar-foreground/40",
+                sidebarCollapsed && "md:hidden",
+              )}
+            >
+              القائمة الرئيسية
+            </p>
+            {mergedGroups.map((group) => {
+              const isOpen = openGroups.includes(group.key);
+              const isGroupActive = group.items.some(
+                (item) => pathname === item.to || pathname.startsWith(item.to + "/"),
+              );
+              const GroupIcon = group.icon;
+              return (
+                <div key={group.key} dir="rtl" className="space-y-1">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={() => toggleGroup(group.key)}
+                        aria-label={group.label}
+                        aria-expanded={isOpen}
+                        className={cn(
+                          "flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-[12px] font-semibold transition-colors",
+                          sidebarCollapsed && "md:justify-center md:px-0",
+                          isGroupActive
+                            ? "bg-primary/10 text-primary"
+                            : "text-sidebar-foreground/65 hover:bg-muted hover:text-sidebar-foreground",
+                        )}
+                      >
+                        <span className="flex min-w-0 items-center gap-2">
+                          <GroupIcon className="h-4 w-4 shrink-0" />
+                          <span className={cn(sidebarCollapsed && "md:hidden")}>{group.label}</span>
+                        </span>
+                        <ChevronDown
+                          className={cn(
+                            "h-3.5 w-3.5 shrink-0 transition-transform",
+                            isOpen && "rotate-180",
+                            sidebarCollapsed && "md:hidden",
+                          )}
+                        />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="left" className={cn(!sidebarCollapsed && "hidden")}>
+                      {group.label}
+                    </TooltipContent>
+                  </Tooltip>
+                  <div
                     className={cn(
-                      "flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-[12px] font-semibold transition-colors",
-                      isGroupActive
-                        ? "bg-primary/10 text-primary"
-                        : "text-sidebar-foreground/65 hover:bg-muted hover:text-sidebar-foreground",
+                      "grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                      isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
                     )}
                   >
-                    <span className="flex min-w-0 items-center gap-2">
-                      <GroupIcon className="h-4 w-4 shrink-0" />
-                      {group.label}
-                    </span>
-                    <ChevronDown
-                      className={cn(
-                        "h-3.5 w-3.5 shrink-0 transition-transform",
-                        isOpen && "rotate-180",
-                      )}
-                    />
-                  </button>
-                <div
-                  className={cn(
-                    "grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-                    isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
-                  )}
-                >
-                  <div className="overflow-hidden">
-                    <div className="space-y-1 pr-2">
-                      {group.items.map((item) => {
-                        const active = pathname === item.to || pathname.startsWith(item.to + "/");
-                        const Icon = item.icon;
-                        return (
-                          <Link
-                            key={item.to}
-                            to={item.to as any}
-                            onClick={() => {
-                              if (window.innerWidth < 768) setMobileSidebarOpen(false);
-                            }}
-                            className={cn(
-                              "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors",
-                              sidebarCollapsed && "md:hidden",
-                              active
-                                ? "bg-primary/10 text-primary"
-                                : "text-sidebar-foreground/70 hover:bg-muted hover:text-sidebar-foreground",
-                            )}
-                            style={{
-                              animationDelay: `${delayByTo.get(item.to) ?? 0}ms`,
-                            }}
-                          >
-                            {active && (
-                              <span className="absolute inset-y-2 right-0 w-0.5 rounded-full bg-primary" />
-                            )}
-                            <Icon className="w-4 h-4 shrink-0 transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3" />
-                            {item.label}
-                          </Link>
-                        );
-                      })}
+                    <div className="overflow-hidden">
+                      <div
+                        className={cn(
+                          "space-y-1 pr-2",
+                          sidebarCollapsed && "md:space-y-1.5 md:pr-0",
+                        )}
+                      >
+                        {group.items.map((item) => {
+                          const active = pathname === item.to || pathname.startsWith(item.to + "/");
+                          const Icon = item.icon;
+                          return (
+                            <Tooltip key={item.to}>
+                              <TooltipTrigger asChild>
+                                <Link
+                                  to={item.to as any}
+                                  onClick={() => {
+                                    if (window.innerWidth < 768) setMobileSidebarOpen(false);
+                                  }}
+                                  aria-label={item.label}
+                                  className={cn(
+                                    "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors",
+                                    sidebarCollapsed && "md:justify-center md:gap-0 md:px-0 md:py-2.5",
+                                    active
+                                      ? "bg-primary/10 text-primary"
+                                      : "text-sidebar-foreground/70 hover:bg-muted hover:text-sidebar-foreground",
+                                  )}
+                                  style={{
+                                    animationDelay: `${delayByTo.get(item.to) ?? 0}ms`,
+                                  }}
+                                >
+                                  {active && (
+                                    <span className="absolute inset-y-2 right-0 w-0.5 rounded-full bg-primary" />
+                                  )}
+                                  <Icon className="h-4 w-4 shrink-0 transition-transform duration-300 group-hover:scale-110" />
+                                  <span className={cn(sidebarCollapsed && "md:hidden")}>
+                                    {item.label}
+                                  </span>
+                                </Link>
+                              </TooltipTrigger>
+                              <TooltipContent
+                                side="left"
+                                className={cn(!sidebarCollapsed && "hidden")}
+                              >
+                                {item.label}
+                              </TooltipContent>
+                            </Tooltip>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 </div>
+              );
+            })}
+          </nav>
+          <div className="space-y-3 border-t border-sidebar-border/80 px-3 py-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <UserCircle2 className="h-5 w-5" />
+              </span>
+              <div className={cn("min-w-0", sidebarCollapsed && "md:hidden")}>
+                <p className="truncate text-xs font-semibold">
+                  {profileName || user?.user_metadata?.full_name || "حسابي"}
+                </p>
+                <p className="mt-0.5 truncate text-[10px] text-sidebar-foreground/55">
+                  {isAdmin ? "مدير النظام" : isHR ? "الموارد البشرية" : roles[0] || "مستخدم"}
+                </p>
               </div>
-            );
-          })}
-        </nav>
-        <div
-          className={cn(
-            "border-t border-sidebar-border/80 px-4 py-3",
-            sidebarCollapsed && "md:px-2",
-            sidebarCollapsed && "md:hidden",
-          )}
-        >
-          <div
-            className={cn(
-              "flex items-center justify-between gap-2",
-              sidebarCollapsed && "md:flex-col md:justify-center",
-            )}
-          >
+            </div>
+            <div
+              className={cn(
+                "flex items-center gap-1",
+                sidebarCollapsed && "md:flex-col md:items-center",
+              )}
+            >
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0 text-sidebar-foreground/65 hover:bg-muted"
+                onClick={toggleTheme}
+                aria-label={themeMode === "dark" ? "تفعيل المظهر الفاتح" : "تفعيل المظهر الداكن"}
+                title={themeMode === "dark" ? "المظهر الفاتح" : "المظهر الداكن"}
+              >
+                {themeMode === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              </Button>
+              {isAdmin && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0 text-sidebar-foreground/65 hover:bg-muted"
+                  onClick={() => setCustomizerOpen(true)}
+                  aria-label="تخصيص القائمة"
+                  title="تخصيص القائمة"
+                >
+                  <SlidersHorizontal className="h-4 w-4" />
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0 text-sidebar-foreground/65 hover:bg-muted"
+                onClick={async () => {
+                  await signOut();
+                  navigate({ to: "/auth" });
+                }}
+                aria-label="تسجيل الخروج"
+                title="تسجيل الخروج"
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
             <div
               title="النظام متصل"
               className={cn(
                 "flex items-center gap-2 text-[10px] text-sidebar-foreground/55",
-                sidebarCollapsed && "md:justify-center",
+                sidebarCollapsed && "md:hidden",
               )}
             >
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />{" "}
-              <span className={cn(sidebarCollapsed && "md:hidden")}>النظام متصل</span>
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              النظام متصل
             </div>
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={() => setCustomizerOpen(true)}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] font-semibold text-sidebar-foreground/60 transition-colors hover:bg-muted hover:text-sidebar-foreground",
-                  sidebarCollapsed && "md:hidden",
-                )}
-              >
-                <SlidersHorizontal className="h-3.5 w-3.5" /> تخصيص القائمة
-              </button>
-            )}
           </div>
-        </div>
+        </TooltipProvider>
       </aside>
-      <main className="app-main min-w-0 flex-1 overflow-auto">
+      <main
+        className={cn(
+          "app-main min-w-0 flex-1 overflow-auto transition-[margin] duration-300 ease-in-out",
+          sidebarCollapsed ? "md:mr-[4.25rem]" : "md:mr-64",
+        )}
+      >
         <div className="mx-auto max-w-[1500px] p-4 sm:p-6 xl:p-8">
           <header className="mb-7 flex items-center justify-between gap-4 rounded-2xl border border-white/70 bg-white/75 px-4 py-3 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70">
             <div className="flex min-w-0 items-center gap-3">
@@ -762,15 +839,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   </PopoverContent>
                 </Popover>
               )}
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={toggleTheme}
-                aria-label={themeMode === "dark" ? "تفعيل المظهر الفاتح" : "تفعيل المظهر الداكن"}
-                title="تغيير المظهر"
-              >
-                {themeMode === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              </Button>
               <div className="hidden items-center gap-2 rounded-xl bg-primary/5 px-3 py-2 text-xs font-semibold text-primary sm:flex">
                 <Sparkles className="h-4 w-4" /> نظام إدارة موحد
               </div>
