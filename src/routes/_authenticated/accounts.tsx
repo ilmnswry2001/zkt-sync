@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { PlanPermissionsEditor } from "@/components/PlanPermissionsEditor";
 import { KeyRound, Loader2, Plus, RefreshCw, ShieldCheck, UserCog, Users, Trash2, Save } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
@@ -695,6 +696,7 @@ function AccountsPage() {
                           <Save className="ml-2 h-4 w-4" /> حفظ الأقسام والصفحات
                         </Button>
                       </div>
+                      <PlanPermissionsEditor userId={profile.id} />
                     </div>
                   )}
                 </div>
