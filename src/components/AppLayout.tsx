@@ -223,14 +223,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (blocked && allowedSections?.[0]) navigate({ to: allowedSections[0] as any });
   }, [blocked, allowedSections, navigate]);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
   const [workspaceName, setWorkspaceName] = useState("منظومة زِكت");
   const [isEditingWorkspaceName, setIsEditingWorkspaceName] = useState(false);
   useEffect(() => {
     const savedSidebar = window.localStorage.getItem("zkt-sidebar-collapsed-v2");
-    setSidebarCollapsed(savedSidebar === null ? true : savedSidebar === "true");
+    setSidebarCollapsed(savedSidebar === "true");
     const savedWorkspaceName = window.localStorage.getItem("zkt-workspace-name");
     if (savedWorkspaceName?.trim()) setWorkspaceName(savedWorkspaceName.trim());
     const savedTheme = window.localStorage.getItem("zkt-theme");
@@ -384,15 +384,27 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   })).filter((group) => group.items.length > 0);
 
   const [openGroups, setOpenGroups] = useState<string[]>(() => {
-    if (typeof window === "undefined") return [];
+    const defaultGroups = NAV_GROUPS.slice(0, 2).map((group) => group.key);
+    if (typeof window === "undefined") return defaultGroups;
     try {
       const saved = window.localStorage.getItem("zkt-nav-groups-v2");
       const parsed = saved ? JSON.parse(saved) : null;
-      return Array.isArray(parsed)
-        ? parsed.filter((value): value is string => typeof value === "string")
-        : [];
+      if (!Array.isArray(parsed)) return defaultGroups;
+      const legacyGroupKeys: Record<string, string> = {
+        attendance: "home",
+        tasks: "home",
+        maintenance: "vehicles",
+        safety: "vehicles",
+        projects: "finance",
+        procurement: "finance",
+      };
+      return [...new Set(
+        parsed
+          .filter((value): value is string => typeof value === "string")
+          .map((key) => legacyGroupKeys[key] ?? key),
+      )];
     } catch {
-      return [];
+      return defaultGroups;
     }
   });
   useEffect(() => {
@@ -447,7 +459,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         className={cn(
           "app-sidebar fixed inset-y-0 right-0 z-40 flex h-screen w-[min(19rem,calc(100vw-1.5rem))] shrink-0 flex-col overflow-hidden border-l border-sidebar-border bg-sidebar text-sidebar-foreground shadow-xl transition-[width,transform] duration-300 ease-in-out md:translate-x-0",
           mobileSidebarOpen ? "translate-x-0" : "translate-x-full",
-          sidebarCollapsed ? "md:w-[4.25rem]" : "md:w-64",
+          sidebarCollapsed ? "md:w-16" : "md:w-72",
         )}
       >
         <TooltipProvider delayDuration={100}>
@@ -549,20 +561,26 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         aria-label={group.label}
                         aria-expanded={isOpen}
                         className={cn(
-                          "flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-[12px] font-semibold transition-colors",
+                          "mb-1.5 flex w-full items-center justify-between gap-2 rounded-xl border border-sidebar-accent/20 bg-sidebar-accent/15 px-3 py-2.5 text-xs font-bold text-sidebar-foreground transition-colors hover:bg-sidebar-accent/25",
                           sidebarCollapsed && "md:justify-center md:px-0",
-                          isGroupActive
-                            ? "bg-primary/10 text-primary"
-                            : "text-sidebar-foreground/65 hover:bg-muted hover:text-sidebar-foreground",
                         )}
                       >
                         <span className="flex min-w-0 items-center gap-2">
-                          <GroupIcon className="h-4 w-4 shrink-0" />
+                          <GroupIcon className="h-4 w-4 shrink-0 text-primary" />
                           <span className={cn(sidebarCollapsed && "md:hidden")}>{group.label}</span>
+                          <span
+                            className={cn(
+                              "rounded-full bg-background/70 px-1.5 py-0.5 text-[10px] font-bold",
+                              sidebarCollapsed && "md:hidden",
+                              isGroupActive && "text-primary",
+                            )}
+                          >
+                            {group.items.length}
+                          </span>
                         </span>
                         <ChevronDown
                           className={cn(
-                            "h-3.5 w-3.5 shrink-0 transition-transform",
+                            "h-3.5 w-3.5 shrink-0 transition-transform duration-300",
                             isOpen && "rotate-180",
                             sidebarCollapsed && "md:hidden",
                           )}
@@ -582,8 +600,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     <div className="overflow-hidden">
                       <div
                         className={cn(
-                          "space-y-1 pr-2",
-                          sidebarCollapsed && "md:space-y-1.5 md:pr-0",
+                          "my-1 mr-3.5 space-y-1 border-r-2 border-sidebar-border/60 pr-2.5",
+                          sidebarCollapsed && "md:my-0 md:mr-0 md:border-r-0 md:pr-0",
                         )}
                       >
                         {group.items.map((item) => {
@@ -599,11 +617,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                                   }}
                                   aria-label={item.label}
                                   className={cn(
-                                    "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors",
+                                    "group relative flex items-center gap-3 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors",
                                     sidebarCollapsed && "md:justify-center md:gap-0 md:px-0 md:py-2.5",
                                     active
-                                      ? "bg-primary/10 text-primary"
-                                      : "text-sidebar-foreground/70 hover:bg-muted hover:text-sidebar-foreground",
+                                      ? "bg-primary/10 font-semibold text-primary"
+                                      : "text-sidebar-foreground/75 hover:bg-sidebar-accent/10 hover:text-sidebar-foreground",
                                   )}
                                   style={{
                                     animationDelay: `${delayByTo.get(item.to) ?? 0}ms`,
@@ -679,6 +697,20 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <Button
                 variant="ghost"
                 size="icon"
+                className="hidden h-8 w-8 shrink-0 text-sidebar-foreground/65 hover:bg-muted md:inline-flex"
+                onClick={toggleSidebar}
+                aria-label={sidebarCollapsed ? "توسيع القائمة" : "طي القائمة"}
+                title={sidebarCollapsed ? "توسيع القائمة" : "طي القائمة"}
+              >
+                {sidebarCollapsed ? (
+                  <ChevronLeft className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
                 className="h-8 w-8 shrink-0 text-sidebar-foreground/65 hover:bg-muted"
                 onClick={async () => {
                   await signOut();
@@ -706,7 +738,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <main
         className={cn(
           "app-main min-w-0 flex-1 overflow-auto transition-[margin] duration-300 ease-in-out",
-          sidebarCollapsed ? "md:mr-[4.25rem]" : "md:mr-64",
+          sidebarCollapsed ? "md:mr-16" : "md:mr-72",
         )}
       >
         <div className="mx-auto max-w-[1500px] p-4 sm:p-6 xl:p-8">
