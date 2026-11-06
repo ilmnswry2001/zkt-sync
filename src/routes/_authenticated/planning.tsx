@@ -65,6 +65,7 @@ import {
   type StaffAssignmentGroup,
 } from "@/lib/planning-staff";
 import { escapeHtml, printReport } from "@/lib/report-print";
+import { PLAN_FULL_ROLES, canStaffSpecialty, usePlanStaffingPermission } from "@/lib/plan-permissions";
 
 export const Route = createFileRoute("/_authenticated/planning")({
   beforeLoad: async () => {
@@ -654,7 +655,13 @@ function FinalPlanDocument({
 
 function PlanningPage() {
   const qc = useQueryClient();
-  const { isEngineer } = useAuth();
+  const { isEngineer: isEngineerRole, user, roles } = useAuth();
+  const planPermQuery = usePlanStaffingPermission(user?.id);
+  const isEngineer =
+    isEngineerRole ||
+    !!planPermQuery.data?.can_request ||
+    roles.some((r) => PLAN_FULL_ROLES.includes(r));
+  const canStaff = (specialty: string) => canStaffSpecialty(roles, planPermQuery.data, specialty);
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Site | null>(null);
@@ -925,7 +932,7 @@ function PlanningPage() {
 
   const createWorkPlanRequest = useMutation({
     mutationFn: async () => {
-      if (!isEngineer) throw new Error("إنشاء الخطط متاح للمهندس من قسم خطط المشاريع فقط");
+      if (!isEngineer) throw new Error("ليست لديك صلاحية طلب خطة");
       const { data: userData } = await supabase.auth.getUser();
       const user = userData.user;
       const validSpecialties = draftSpecialties.filter(
@@ -1144,6 +1151,10 @@ function PlanningPage() {
   };
 
   const addManagementAssignment = (planId: string, specialtyName: string, rawNames: string) => {
+    if (!canStaff(specialtyName)) {
+      toast.error(`لا تملك صلاحية إدراج كوادر تخصص ${specialtyName}`);
+      return;
+    }
     const names = parsePersonNames(rawNames);
     if (!names.length) {
       toast.error("اكتب اسمًا واحدًا على الأقل؛ افصل الأسماء المتعددة بفاصلة أو سطر جديد");
@@ -1186,6 +1197,10 @@ function PlanningPage() {
   };
 
   const removeManagementName = (planId: string, specialtyName: string, name: string) => {
+    if (!canStaff(specialtyName)) {
+      toast.error(`لا تملك صلاحية إدراج كوادر تخصص ${specialtyName}`);
+      return;
+    }
     queueStaffAssignmentUpdate(
       planId,
       (current) =>
@@ -1201,6 +1216,10 @@ function PlanningPage() {
   };
 
   const clearManagementNames = (planId: string, specialtyName: string) => {
+    if (!canStaff(specialtyName)) {
+      toast.error(`لا تملك صلاحية إدراج كوادر تخصص ${specialtyName}`);
+      return;
+    }
     const group = workPlans
       .find((item) => item.id === planId)
       ?.assigned_staff.find((item) => item.specialty === specialtyName);
@@ -2014,7 +2033,12 @@ function PlanningPage() {
                               className="rounded-xl border bg-background p-3"
                             >
                               <div className="mb-2 flex items-center justify-between gap-2">
-                                <div className="font-bold">{item.specialty}</div>
+                                <div className="font-bold">
+                                  {item.specialty}
+                                  {!canStaff(item.specialty) && (
+                                    <span className="mr-2 text-xs font-normal text-muted-foreground">(يملؤه القسم المختص)</span>
+                                  )}
+                                </div>
                                 <Badge
                                   className={
                                     complete
