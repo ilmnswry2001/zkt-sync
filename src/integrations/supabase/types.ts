@@ -3764,6 +3764,30 @@ export type Database = {
         }
         Relationships: []
       }
+      plan_staffing_permissions: {
+        Row: {
+          can_request: boolean
+          can_staff_all: boolean
+          specialties: string[]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          can_request?: boolean
+          can_staff_all?: boolean
+          specialties?: string[]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          can_request?: boolean
+          can_staff_all?: boolean
+          specialties?: string[]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           allowed_sections: string[] | null
@@ -5147,6 +5171,10 @@ export type Database = {
       can_manage_work_task: { Args: { _task_id: string }; Returns: boolean }
       can_read_self_attendance_employee: {
         Args: { p_employee_id: string }
+        Returns: boolean
+      }
+      can_staff_site_work_plans: {
+        Args: { _user_id?: string }
         Returns: boolean
       }
       create_employee_goal_task: {

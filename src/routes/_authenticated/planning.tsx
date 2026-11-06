@@ -65,6 +65,7 @@ import {
   type StaffAssignmentGroup,
 } from "@/lib/planning-staff";
 import { escapeHtml, printReport } from "@/lib/report-print";
+import { PLAN_FULL_ROLES, canStaffSpecialty, usePlanStaffingPermission } from "@/lib/plan-permissions";
 
 export const Route = createFileRoute("/_authenticated/planning")({
   beforeLoad: async () => {
@@ -261,12 +262,12 @@ function planPdfMarkup(plan: SiteWorkPlan, site?: Site) {
         <td class="num">${row.assigned}</td>
         <td class="num">${row.missing}</td>
         <td>${row.complete ? "مكتمل" : `نقص ${row.missing}`}</td>
-        <td>${row.names.length ? row.names.map((name, index) => `${index + 1}. ${escapeHtml(name)}`).join("<br>") : '<span class="plan-empty">لم يُسند أحد</span>'}</td>
+        <td>${row.names.length ? `<ol class="plan-names">${row.names.map((name) => `<li>${escapeHtml(name)}</li>`).join("")}</ol>` : '<span class="plan-empty">لم يُسند أحد</span>'}</td>
       </tr>`;
     })
     .join("");
 
-  return `<section class="plan-sheet">
+  return `<style>.plan-names{margin:0;padding:0 18px 0 0;columns:2;column-gap:18px;font-size:12px}.plan-names li{break-inside:avoid;padding:2px 0;border-bottom:1px dotted #d4dcd7}.plan-table td:last-child{width:45%}.plan-table thead{display:table-header-group}.plan-table tr{break-inside:avoid}.plan-signs{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin:26px 18px 8px;break-inside:avoid}.plan-signs div{text-align:center;font-size:11px;color:#475569}.plan-signs i{display:block;height:44px;border-bottom:1px solid #94a3b8}.plan-sheet{break-inside:auto!important;page-break-inside:auto!important}</style><section class="plan-sheet">
     <header class="plan-header">
       <div>
         <div class="eyebrow">وثيقة توزيع تشغيلية${site?.ctr_code ? ` · ${escapeHtml(site.ctr_code)}` : ""}</div>
@@ -288,6 +289,7 @@ function planPdfMarkup(plan: SiteWorkPlan, site?: Site) {
     </table>
     <div class="note"><strong>ملاحظات المهندس</strong><p>${escapeHtml(plan.engineer_notes || "لا توجد ملاحظات")}</p></div>
     <div class="note"><strong>ملاحظات الخطة</strong><p>${escapeHtml(plan.final_plan?.notes || plan.management_notes || plan.planning_notes || "لا توجد ملاحظات إضافية")}</p></div>
+    <div class="plan-signs"><div><span>المهندس / طالب الخطة</span><i></i></div><div><span>قسم التخطيط</span><i></i></div><div><span>الإدارة / الاعتماد</span><i></i></div></div>
     <footer class="plan-footer"><span>كشف توزيع معتمد · منظومة إدارة المشاريع</span><span>${new Date().toLocaleDateString("ar-IQ")}</span></footer>
   </section>`;
 }
@@ -654,7 +656,13 @@ function FinalPlanDocument({
 
 function PlanningPage() {
   const qc = useQueryClient();
-  const { isEngineer } = useAuth();
+  const { isEngineer: isEngineerRole, user, roles } = useAuth();
+  const planPermQuery = usePlanStaffingPermission(user?.id);
+  const isEngineer =
+    isEngineerRole ||
+    !!planPermQuery.data?.can_request ||
+    roles.some((r) => PLAN_FULL_ROLES.includes(r));
+  const canStaff = (specialty: string) => canStaffSpecialty(roles, planPermQuery.data, specialty);
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Site | null>(null);
@@ -925,7 +933,7 @@ function PlanningPage() {
 
   const createWorkPlanRequest = useMutation({
     mutationFn: async () => {
-      if (!isEngineer) throw new Error("إنشاء الخطط متاح للمهندس من قسم خطط المشاريع فقط");
+      if (!isEngineer) throw new Error("ليست لديك صلاحية طلب خطة");
       const { data: userData } = await supabase.auth.getUser();
       const user = userData.user;
       const validSpecialties = draftSpecialties.filter(
@@ -1144,6 +1152,10 @@ function PlanningPage() {
   };
 
   const addManagementAssignment = (planId: string, specialtyName: string, rawNames: string) => {
+    if (!canStaff(specialtyName)) {
+      toast.error(`لا تملك صلاحية إدراج كوادر تخصص ${specialtyName}`);
+      return;
+    }
     const names = parsePersonNames(rawNames);
     if (!names.length) {
       toast.error("اكتب اسمًا واحدًا على الأقل؛ افصل الأسماء المتعددة بفاصلة أو سطر جديد");
@@ -1186,6 +1198,10 @@ function PlanningPage() {
   };
 
   const removeManagementName = (planId: string, specialtyName: string, name: string) => {
+    if (!canStaff(specialtyName)) {
+      toast.error(`لا تملك صلاحية إدراج كوادر تخصص ${specialtyName}`);
+      return;
+    }
     queueStaffAssignmentUpdate(
       planId,
       (current) =>
@@ -1201,6 +1217,10 @@ function PlanningPage() {
   };
 
   const clearManagementNames = (planId: string, specialtyName: string) => {
+    if (!canStaff(specialtyName)) {
+      toast.error(`لا تملك صلاحية إدراج كوادر تخصص ${specialtyName}`);
+      return;
+    }
     const group = workPlans
       .find((item) => item.id === planId)
       ?.assigned_staff.find((item) => item.specialty === specialtyName);
@@ -2014,7 +2034,12 @@ function PlanningPage() {
                               className="rounded-xl border bg-background p-3"
                             >
                               <div className="mb-2 flex items-center justify-between gap-2">
-                                <div className="font-bold">{item.specialty}</div>
+                                <div className="font-bold">
+                                  {item.specialty}
+                                  {!canStaff(item.specialty) && (
+                                    <span className="mr-2 text-xs font-normal text-muted-foreground">(يملؤه القسم المختص)</span>
+                                  )}
+                                </div>
                                 <Badge
                                   className={
                                     complete
