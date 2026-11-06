@@ -8,14 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -30,7 +22,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Banknote, Plus, Pencil, Trash2, Users } from "lucide-react";
+import {
+  Activity,
+  Banknote,
+  ClipboardList,
+  Copy,
+  ExternalLink,
+  MapPin,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  Users,
+} from "lucide-react";
 import { toast } from "sonner";
 import { getDefaultWage } from "@/lib/wage-defaults";
 
@@ -70,12 +74,16 @@ type Site = {
   end_date: string | null;
   status: string;
   site_admin_employee_id?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 function PlanningPage() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Site | null>(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const { data: sites = [] } = useQuery({
     queryKey: ["sites"],
@@ -86,17 +94,6 @@ function PlanningPage() {
     },
   });
 
-  const { data: counts = {} } = useQuery({
-    queryKey: ["site-emp-counts"],
-    queryFn: async () => {
-      const { data } = await supabase.from("employees").select("site_id");
-      const map: Record<string, number> = {};
-      (data ?? []).forEach((e: any) => {
-        if (e.site_id) map[e.site_id] = (map[e.site_id] ?? 0) + 1;
-      });
-      return map;
-    },
-  });
   const { data: siteAdmins = [], error: siteAdminsError } = useQuery({
     queryKey: ["site-administrators"],
     queryFn: async () => {
@@ -129,6 +126,18 @@ function PlanningPage() {
         employees: (employeesResult.data ?? []) as any[],
         rates: (ratesResult.data ?? []) as any[],
       };
+    },
+  });
+  const { data: sitePlans = [] } = useQuery({
+    queryKey: ["site-work-plan-summary"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("site_work_plans")
+        .select("id, site_id, status, assigned_staff")
+        .neq("status", "finalized")
+        .limit(2000);
+      if (error) throw error;
+      return data ?? [];
     },
   });
   const siteEmployees = costData.employees;
@@ -171,7 +180,34 @@ function PlanningPage() {
     }
     return result;
   }, [costData.rates, siteEmployees]);
-  const totalMonthly = Object.values(siteSummary).reduce((sum, item) => sum + item.monthly, 0);
+  const plansBySite = useMemo(() => {
+    const result: Record<string, { plans: number; workers: number }> = {};
+    for (const plan of sitePlans) {
+      const summary = result[plan.site_id] ?? { plans: 0, workers: 0 };
+      summary.plans += 1;
+      if (Array.isArray(plan.assigned_staff)) {
+        for (const assignment of plan.assigned_staff) {
+          if (!assignment || typeof assignment !== "object") continue;
+          const item = assignment as { names?: unknown; employees?: unknown };
+          if (Array.isArray(item.names)) summary.workers += item.names.length;
+          else if (Array.isArray(item.employees)) summary.workers += item.employees.length;
+        }
+      }
+      result[plan.site_id] = summary;
+    }
+    return result;
+  }, [sitePlans]);
+  const filteredSites = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase("ar");
+    return sites.filter((site) => {
+      const matchesTerm = !term ||
+        `${site.name} ${site.ctr_code} ${site.status}`.toLocaleLowerCase("ar").includes(term);
+      return matchesTerm && (statusFilter === "all" || site.status === statusFilter);
+    });
+  }, [search, sites, statusFilter]);
+  const activeSiteCount = sites.filter((site) => site.status === "active").length;
+  const ctrSiteCount = sites.filter((site) => site.ctr_code?.trim()).length;
+  const geoSiteCount = sites.filter((site) => site.latitude != null && site.longitude != null).length;
 
   const save = useMutation({
     mutationFn: async (d: any) => {
@@ -240,8 +276,23 @@ function PlanningPage() {
                 const f = new FormData(e.currentTarget);
                 const v = (k: string) => (f.get(k) as string)?.trim() || null;
                 const siteAdminId = v("site_admin_employee_id");
-                if (!siteAdminId) {
+                const latitudeValue = v("latitude");
+                const longitudeValue = v("longitude");
+                if (!siteAdminId || siteAdminId === "none") {
                   toast.error("اختيار إداري الموقع مطلوب");
+                  return;
+                }
+                if (Boolean(latitudeValue) !== Boolean(longitudeValue)) {
+                  toast.error("أدخل خط العرض والطول معًا");
+                  return;
+                }
+                const latitude = latitudeValue === null ? null : Number(latitudeValue);
+                const longitude = longitudeValue === null ? null : Number(longitudeValue);
+                if (
+                  (latitude !== null && (!Number.isFinite(latitude) || latitude < -90 || latitude > 90)) ||
+                  (longitude !== null && (!Number.isFinite(longitude) || longitude < -180 || longitude > 180))
+                ) {
+                  toast.error("إحداثيات GPS خارج النطاق الصحيح");
                   return;
                 }
                 save.mutate({
@@ -254,6 +305,8 @@ function PlanningPage() {
                   end_date: v("end_date"),
                   status: f.get("status") as string,
                   site_admin_employee_id: siteAdminId,
+                  latitude,
+                  longitude,
                 });
               }}
               className="grid grid-cols-2 gap-3"
@@ -278,6 +331,28 @@ function PlanningPage() {
               <div>
                 <Label>الموقع الجغرافي</Label>
                 <Input name="location" defaultValue={editing?.location ?? ""} />
+              </div>
+              <div>
+                <Label>خط العرض</Label>
+                <Input
+                  type="number"
+                  step="any"
+                  name="latitude"
+                  defaultValue={editing?.latitude ?? ""}
+                  dir="ltr"
+                  placeholder="33.3152"
+                />
+              </div>
+              <div>
+                <Label>خط الطول</Label>
+                <Input
+                  type="number"
+                  step="any"
+                  name="longitude"
+                  defaultValue={editing?.longitude ?? ""}
+                  dir="ltr"
+                  placeholder="44.3661"
+                />
               </div>
               <div>
                 <Label>الحالة</Label>
@@ -337,130 +412,216 @@ function PlanningPage() {
         </Dialog>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="rounded-xl bg-primary p-3">
-              <Users className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">إجمالي الموظفين بالمواقع</p>
-              <p className="text-2xl font-bold">
-                {Object.values(siteSummary).reduce((sum, item) => sum + item.employees, 0)}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="rounded-xl bg-emerald-600 p-3">
-              <Banknote className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">التكلفة الشهرية التقديرية</p>
-              <p className="text-2xl font-bold">{totalMonthly.toLocaleString()} د.ع</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">قاعدة الحساب</p>
-            <p className="font-semibold mt-1">
-              الراتب الأساسي، ثم أجر التخصص الافتراضي عند عدم وجود راتب خاص
-            </p>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        {[
+          { label: "إجمالي المواقع", value: sites.length, icon: MapPin },
+          { label: "المواقع النشطة", value: activeSiteCount, icon: Activity },
+          { label: "مرتبطة بكود CTR", value: ctrSiteCount, icon: Banknote },
+          { label: "بإحداثيات GPS", value: geoSiteCount, icon: MapPin },
+        ].map((stat) => (
+          <Card key={stat.label}>
+            <CardContent className="flex items-center gap-3 p-4">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <stat.icon className="h-5 w-5" />
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-xs text-muted-foreground">{stat.label}</p>
+                <p className="text-xl font-bold tabular-nums">{stat.value}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>مواقع العمل</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>كود التكلفة</TableHead>
-                <TableHead>الموقع</TableHead>
-                <TableHead>التخصصات العاملة</TableHead>
-                <TableHead>إداري الموقع</TableHead>
-                <TableHead>الموظفون</TableHead>
-                <TableHead>التكلفة الشهرية</TableHead>
-                <TableHead>الحالة</TableHead>
-                <TableHead></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sites.map((s) => (
-                <TableRow key={s.id}>
-                  <TableCell className="font-mono font-semibold">{s.ctr_code}</TableCell>
-                  <TableCell className="font-medium">{s.name}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1 max-w-xs">
-                      {Object.entries(siteSummary[s.id]?.specialties ?? {}).map(
-                        ([title, count]) => (
-                          <Badge key={title} variant="outline">
-                            {title} ({count})
-                          </Badge>
-                        ),
-                      )}
-                      {!siteSummary[s.id]?.employees && (
-                        <span className="text-muted-foreground">لا يوجد موظفون</span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {(siteAdmins as any[]).find(
-                      (employee) => employee.id === s.site_admin_employee_id,
-                    )?.full_name ?? <span className="text-warning">غير محدد</span>}
-                  </TableCell>
-                  <TableCell>
-                    {siteSummary[s.id]?.employees ?? (counts as any)[s.id] ?? 0}
-                  </TableCell>
-                  <TableCell className="font-semibold">
-                    {(siteSummary[s.id]?.monthly ?? 0).toLocaleString()} د.ع
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={s.status === "active" ? "default" : "secondary"}>
-                      {s.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => {
-                          setEditing(s);
-                          setOpen(true);
-                        }}
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => {
-                          if (confirm("حذف الموقع؟")) del.mutate(s.id);
-                        }}
-                      >
-                        <Trash2 className="w-4 h-4 text-destructive" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {!sites.length && (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                    لا توجد مواقع بعد
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="relative min-w-0 flex-1">
+          <Search className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
+          <Input
+            className="min-h-11 pr-9"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="ابحث باسم الموقع أو كود CTR..."
+            aria-label="البحث في المواقع"
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="min-h-11 sm:w-48">
+            <SelectValue placeholder="كل الحالات" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">كل الحالات</SelectItem>
+            <SelectItem value="active">نشط</SelectItem>
+            <SelectItem value="planned">مخطط</SelectItem>
+            <SelectItem value="suspended">معلق</SelectItem>
+            <SelectItem value="completed">منتهي</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        {filteredSites.map((site) => {
+          const coordinates =
+            site.latitude != null && site.longitude != null
+              ? `${site.latitude}, ${site.longitude}`
+              : null;
+          const manager = siteAdmins.find(
+            (employee: any) => employee.id === site.site_admin_employee_id,
+          );
+          const sitePlanSummary = plansBySite[site.id] ?? { plans: 0, workers: 0 };
+          const statusLabel =
+            site.status === "active"
+              ? "نشط"
+              : site.status === "suspended"
+                ? "معلق"
+                : site.status === "planned"
+                  ? "مخطط"
+                  : site.status === "completed"
+                    ? "منتهي"
+                    : site.status;
+          return (
+            <Card key={site.id} className="overflow-hidden">
+              <CardHeader className="space-y-3 pb-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <CardTitle className="truncate text-lg">{site.name}</CardTitle>
+                    <p className="mt-1 truncate text-sm text-muted-foreground">
+                      {site.client || "موقع عمل"}
+                    </p>
+                  </div>
+                  <Badge variant={site.status === "active" ? "default" : "secondary"}>
+                    {statusLabel}
+                  </Badge>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-primary/5 px-3 py-2">
+                  <span className="text-xs text-muted-foreground">كود التكلفة CTR</span>
+                  <Badge variant="outline" className="font-mono text-sm font-bold text-primary">
+                    {site.ctr_code || "غير محدد"}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="rounded-lg border p-3">
+                    <p className="text-xs font-semibold text-muted-foreground">إحداثيات GPS</p>
+                    {coordinates ? (
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <span dir="ltr" className="truncate font-mono text-xs">{coordinates}</span>
+                        <div className="flex shrink-0">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            aria-label="نسخ الإحداثيات"
+                            title="نسخ الإحداثيات"
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(coordinates);
+                                toast.success("تم نسخ الإحداثيات");
+                              } catch {
+                                toast.error("تعذر نسخ الإحداثيات");
+                              }
+                            }}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                          <Button asChild type="button" variant="ghost" size="icon" className="h-8 w-8">
+                            <a
+                              href={`https://www.google.com/maps?q=${site.latitude},${site.longitude}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              aria-label="فتح الموقع على الخريطة"
+                              title="فتح الموقع على الخريطة"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                            </a>
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-sm text-muted-foreground">الإحداثيات غير محددة</p>
+                    )}
+                    {site.location && (
+                      <p className="mt-1 truncate text-xs text-muted-foreground">{site.location}</p>
+                    )}
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <p className="text-xs font-semibold text-muted-foreground">المشرف المسؤول</p>
+                    <p className="mt-2 truncate text-sm font-medium">
+                      {manager?.full_name || "غير محدد"}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {site.start_date || "—"} {site.end_date ? ` إلى ${site.end_date}` : ""}
+                    </p>
+                  </div>
+                </div>
+                {site.description && (
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground">وصف العمل / النطاق</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm leading-6">{site.description}</p>
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(siteSummary[site.id]?.specialties ?? {}).map(([title, count]) => (
+                    <Badge key={title} variant="outline">{title} · {count}</Badge>
+                  ))}
+                  {!siteSummary[site.id]?.employees && (
+                    <span className="text-xs text-muted-foreground">لا يوجد موظفون مسجلون للموقع</span>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted/40 p-3 text-sm">
+                  <div className="flex items-center gap-2">
+                    <ClipboardList className="h-4 w-4 text-primary" />
+                    <span>{sitePlanSummary.plans} خطة جارية</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-primary" />
+                    <span>{sitePlanSummary.workers} كادر مسكّن</span>
+                  </div>
+                  <div className="col-span-2 flex items-center gap-2 border-t pt-2 font-semibold">
+                    <Banknote className="h-4 w-4 text-primary" />
+                    <span>التكلفة الشهرية: {(siteSummary[site.id]?.monthly ?? 0).toLocaleString("ar-IQ")} د.ع</span>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-1 border-t pt-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`تعديل ${site.name}`}
+                    title="تعديل الموقع"
+                    onClick={() => {
+                      setEditing(site);
+                      setOpen(true);
+                    }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`حذف ${site.name}`}
+                    title="حذف الموقع"
+                    onClick={() => {
+                      if (confirm(`حذف موقع ${site.name}؟`)) del.mutate(site.id);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+        {!filteredSites.length && (
+          <Card className="xl:col-span-2">
+            <CardContent className="p-8 text-center text-muted-foreground">
+              {sites.length ? "لا توجد مواقع مطابقة للتصفية" : "لا توجد مواقع بعد"}
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }

@@ -21,6 +21,15 @@ import {
 } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   Select,
   SelectContent,
@@ -44,24 +53,28 @@ import {
   ChevronDown,
   CircleAlert,
   ClipboardList,
+  Copy,
   FileCheck2,
   MapPin,
   MoreHorizontal,
   Minus,
   NotebookPen,
+  Phone,
   Plus,
   Printer,
   Search,
   Pencil,
   ShieldCheck,
   Trash2,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getDefaultWage } from "@/lib/wage-defaults";
 import {
-  appendStaffNames,
+  appendStaffEmployee,
   normalizeStaffAssignments,
-  parsePersonNames,
+  removeStaffEmployee,
+  type AssignedStaffEmployee,
   type StaffAssignmentGroup,
 } from "@/lib/planning-staff";
 import { escapeHtml, printReport } from "@/lib/report-print";
@@ -702,6 +715,26 @@ function PlanningPage() {
       return map;
     },
   });
+  const { data: activeEmployees = [], error: activeEmployeesError } = useQuery({
+    queryKey: ["planning-active-employees"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("employees")
+        .select("id, full_name, employee_no, phone1, position, department_name")
+        .eq("status", "active")
+        .order("full_name")
+        .limit(2000);
+      if (error) throw error;
+      return (data ?? []).map((employee) => ({
+        id: employee.id,
+        full_name: employee.full_name,
+        employee_no: employee.employee_no,
+        phone: employee.phone1,
+        position: employee.position,
+        department_name: employee.department_name,
+      })) satisfies AssignedStaffEmployee[];
+    },
+  });
   const { data: siteAdmins = [], error: siteAdminsError } = useQuery({
     queryKey: ["site-administrators"],
     queryFn: async () => {
@@ -779,11 +812,8 @@ function PlanningPage() {
   );
   const [draftSpecialties, setDraftSpecialties] = useState<WorkPlanSpecialty[]>([]);
   const [managementNote, setManagementNote] = useState<Record<string, string>>({});
-  const [managementAssignments, setManagementAssignments] = useState<
-    Record<string, Record<string, string>>
-  >({});
   const assignmentSaveQueue = useRef(new Map<string, Promise<void>>());
-  const staffInputRefs = useRef(new Map<string, HTMLInputElement>());
+  const [openStaffSelector, setOpenStaffSelector] = useState<string | null>(null);
   const [finalPlanTitle, setFinalPlanTitle] = useState<Record<string, string>>({});
   const [finalPlanNotes, setFinalPlanNotes] = useState<Record<string, string>>({});
 
@@ -1151,36 +1181,24 @@ function PlanningPage() {
     });
   };
 
-  const addManagementAssignment = (planId: string, specialtyName: string, rawNames: string) => {
+  const addManagementEmployee = (
+    planId: string,
+    specialtyName: string,
+    employee: AssignedStaffEmployee,
+  ) => {
     if (!canStaff(specialtyName)) {
       toast.error(`لا تملك صلاحية إدراج كوادر تخصص ${specialtyName}`);
       return;
     }
-    const names = parsePersonNames(rawNames);
-    if (!names.length) {
-      toast.error("اكتب اسمًا واحدًا على الأقل؛ افصل الأسماء المتعددة بفاصلة أو سطر جديد");
-      return;
-    }
-
-    const inputKey = `${planId}::${specialtyName}`;
-    setManagementAssignments((current) => ({
-      ...current,
-      [planId]: { ...(current[planId] ?? {}), [specialtyName]: "" },
-    }));
-    requestAnimationFrame(() => staffInputRefs.current.get(inputKey)?.focus());
-
-    let addedCount = 0;
+    setOpenStaffSelector(null);
     queueStaffAssignmentUpdate(
       planId,
       (current) => {
-        const result = appendStaffNames(current, specialtyName, rawNames);
-        const duplicateCount = result.duplicates.length;
-        if (!result.added.length) {
-          toast.warning("هذا الاسم مضاف مسبقًا لهذا التخصص");
+        const result = appendStaffEmployee(current, specialtyName, employee);
+        if (result.duplicate) {
+          toast.warning("هذا الموظف مسكّن مسبقًا ضمن الخطة");
           return current;
         }
-        addedCount = result.added.length;
-        if (duplicateCount) toast.warning("تم تجاهل الاسم المكرر");
 
         const required = Number(
           workPlans
@@ -1193,7 +1211,7 @@ function PlanningPage() {
           toast.warning(`تم تجاوز العدد المطلوب بمقدار ${assigned - required}`);
         return result.assignments;
       },
-      () => `تمت إضافة ${addedCount} اسم إلى ${specialtyName}`,
+      () => `تم تسكين ${employee.full_name} ضمن ${specialtyName}`,
     );
   };
 
@@ -1208,11 +1226,31 @@ function PlanningPage() {
         current
           .map((group) =>
             group.specialty === specialtyName
-              ? { ...group, names: group.names.filter((item) => item !== name) }
+              ? {
+                  ...group,
+                  names: group.names.filter((item) => item !== name),
+                  employees: group.employees.filter((employee) => employee.full_name !== name),
+                }
               : group,
           )
           .filter((group) => group.names.length > 0),
       "تم حذف الاسم من التخصص",
+    );
+  };
+
+  const removeManagementEmployee = (
+    planId: string,
+    specialtyName: string,
+    employee: AssignedStaffEmployee,
+  ) => {
+    if (!canStaff(specialtyName)) {
+      toast.error(`لا تملك صلاحية إدراج كوادر تخصص ${specialtyName}`);
+      return;
+    }
+    queueStaffAssignmentUpdate(
+      planId,
+      (current) => removeStaffEmployee(current, specialtyName, employee.id),
+      `تم إلغاء تسكين ${employee.full_name}`,
     );
   };
 
@@ -2051,64 +2089,165 @@ function PlanningPage() {
                                 </Badge>
                               </div>
 
-                              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
-                                <div>
-                                  <Label>أسماء الكوادر لهذا التخصص</Label>
-                                  <Input
-                                    ref={(element) => {
-                                      if (element) staffInputRefs.current.set(inputKey, element);
-                                      else staffInputRefs.current.delete(inputKey);
-                                    }}
-                                    value={managementAssignments[plan.id]?.[item.specialty] ?? ""}
-                                    onChange={(event) =>
-                                      setManagementAssignments((current) => ({
-                                        ...current,
-                                        [plan.id]: {
-                                          ...(current[plan.id] ?? {}),
-                                          [item.specialty]: event.target.value,
-                                        },
-                                      }))
-                                    }
-                                    onKeyDown={(event) => {
-                                      if (event.key === "Enter") {
-                                        event.preventDefault();
-                                        addManagementAssignment(
-                                          plan.id,
-                                          item.specialty,
-                                          managementAssignments[plan.id]?.[item.specialty] ?? "",
-                                        );
-                                      }
-                                    }}
-                                    placeholder="اكتب اسمًا، أو افصل الأسماء بفاصلة / سطر جديد"
-                                    className="min-h-11"
-                                  />
-                                </div>
-
-                                <div className="flex items-end">
+                              <Popover
+                                open={openStaffSelector === inputKey}
+                                onOpenChange={(isOpen) =>
+                                  setOpenStaffSelector(isOpen ? inputKey : null)
+                                }
+                              >
+                                <PopoverTrigger asChild>
                                   <Button
-                                    className="min-h-11 w-full sm:w-auto"
                                     type="button"
-                                    onClick={() =>
-                                      addManagementAssignment(
-                                        plan.id,
-                                        item.specialty,
-                                        managementAssignments[plan.id]?.[item.specialty] ?? "",
-                                      )
-                                    }
+                                    variant="outline"
+                                    className="min-h-11 w-full justify-start"
+                                    aria-label={`اختيار موظف لتخصص ${item.specialty}`}
                                   >
-                                    <Plus className="ml-2 h-4 w-4" /> إضافة هذا الشخص
+                                    <Search className="ml-2 h-4 w-4" /> اختر موظفاً مسجلاً
                                   </Button>
-                                </div>
-                              </div>
+                                </PopoverTrigger>
+                                <PopoverContent dir="rtl" align="start" className="w-[min(25rem,calc(100vw-2rem))] p-0">
+                                  <Command>
+                                    <CommandInput placeholder="ابحث بالاسم أو الرقم أو التخصص..." />
+                                    <CommandList>
+                                      <CommandEmpty>لا يوجد موظف مطابق للبحث.</CommandEmpty>
+                                      {activeEmployeesError ? (
+                                        <div className="p-3 text-sm text-destructive">
+                                          تعذر تحميل الموظفين النشطين.
+                                        </div>
+                                      ) : (
+                                        <CommandGroup>
+                                          {[...activeEmployees]
+                                            .sort((left, right) => {
+                                              const leftMatches = left.position
+                                                ?.toLocaleLowerCase("ar")
+                                                .includes(item.specialty.toLocaleLowerCase("ar"));
+                                              const rightMatches = right.position
+                                                ?.toLocaleLowerCase("ar")
+                                                .includes(item.specialty.toLocaleLowerCase("ar"));
+                                              return Number(Boolean(rightMatches)) - Number(Boolean(leftMatches));
+                                            })
+                                            .map((employee) => {
+                                              const assignedAlready = plan.assigned_staff.some(
+                                                (group) =>
+                                                  group.employees.some((assigned) => assigned.id === employee.id) ||
+                                                  group.names.some(
+                                                    (name) =>
+                                                      name.toLocaleLowerCase("ar") ===
+                                                      employee.full_name.toLocaleLowerCase("ar"),
+                                                  ),
+                                              );
+                                              return (
+                                                <CommandItem
+                                                  key={employee.id}
+                                                  value={`${employee.full_name} ${employee.employee_no} ${employee.position ?? ""} ${employee.department_name ?? ""}`}
+                                                  disabled={assignedAlready}
+                                                  onSelect={() =>
+                                                    addManagementEmployee(plan.id, item.specialty, employee)
+                                                  }
+                                                >
+                                                  <div className="min-w-0 flex-1 text-right">
+                                                    <p className="truncate font-semibold">{employee.full_name}</p>
+                                                    <p className="truncate text-xs text-muted-foreground">
+                                                      {employee.employee_no} · {employee.position || "بدون مسمى"}
+                                                      {assignedAlready ? " · مسكّن في الخطة" : ""}
+                                                    </p>
+                                                  </div>
+                                                  {assignedAlready && <Check className="h-4 w-4 text-primary" />}
+                                                </CommandItem>
+                                              );
+                                            })}
+                                        </CommandGroup>
+                                      )}
+                                    </CommandList>
+                                  </Command>
+                                </PopoverContent>
+                              </Popover>
+
+                              {activeEmployeesError && (
+                                <p className="mt-2 text-xs text-destructive">
+                                  تعذر تحميل دليل الموظفين. أعد المحاولة لاحقاً.
+                                </p>
+                              )}
 
                               {names.length > 0 ? (
                                 <div className="mt-3 space-y-2">
-                                  <StaffNameChips
-                                    names={names}
-                                    onRemove={(name) =>
-                                      removeManagementName(plan.id, item.specialty, name)
-                                    }
-                                  />
+                                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                    {(plan.assigned_staff.find((group) => group.specialty === item.specialty)
+                                      ?.employees ?? []
+                                    ).map((employee) => (
+                                      <div
+                                        key={employee.id}
+                                        className="rounded-lg border bg-background p-3"
+                                      >
+                                        <div className="flex items-start justify-between gap-2">
+                                          <div className="min-w-0">
+                                            <p className="truncate font-bold">{employee.full_name}</p>
+                                            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                                              <span>رقم: {employee.employee_no || "—"}</span>
+                                              <Badge variant="outline">{item.specialty}</Badge>
+                                            </div>
+                                          </div>
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 shrink-0 text-destructive"
+                                            aria-label={`إلغاء تسكين ${employee.full_name}`}
+                                            title="إلغاء التسكين"
+                                            onClick={() =>
+                                              removeManagementEmployee(plan.id, item.specialty, employee)
+                                            }
+                                          >
+                                            <X className="h-4 w-4" />
+                                          </Button>
+                                        </div>
+                                        <div className="mt-2 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                                          <Phone className="h-3.5 w-3.5 shrink-0" />
+                                          <span dir="ltr" className="min-w-0 flex-1 truncate text-right">
+                                            {employee.phone || "رقم الهاتف غير مسجل"}
+                                          </span>
+                                          {employee.phone && (
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-7 w-7 shrink-0"
+                                              aria-label={`نسخ رقم ${employee.full_name}`}
+                                              title="نسخ رقم الهاتف"
+                                              onClick={async () => {
+                                                try {
+                                                  await navigator.clipboard.writeText(employee.phone!);
+                                                  toast.success("تم نسخ رقم الهاتف");
+                                                } catch {
+                                                  toast.error("تعذر نسخ رقم الهاتف");
+                                                }
+                                              }}
+                                            >
+                                              <Copy className="h-3.5 w-3.5" />
+                                            </Button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {(() => {
+                                    const employeeNames = new Set(
+                                      (plan.assigned_staff.find((group) => group.specialty === item.specialty)
+                                        ?.employees ?? []
+                                      ).map((employee) => employee.full_name.toLocaleLowerCase("ar")),
+                                    );
+                                    const legacyNames = names.filter(
+                                      (name) => !employeeNames.has(name.toLocaleLowerCase("ar")),
+                                    );
+                                    return legacyNames.length ? (
+                                      <StaffNameChips
+                                        names={legacyNames}
+                                        onRemove={(name) =>
+                                          removeManagementName(plan.id, item.specialty, name)
+                                        }
+                                      />
+                                    ) : null;
+                                  })()}
                                   <Button
                                     type="button"
                                     variant="ghost"

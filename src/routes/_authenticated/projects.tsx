@@ -56,7 +56,13 @@ type ProjectPlan = {
   final_plan: { specialties?: PlanSpecialty[] } | null;
   request_date: string;
 };
-type CrewAssignment = { site_id: string; role_label: string | null };
+type CrewAssignment = {
+  site_id: string;
+  employee_id: string | null;
+  employee_name_snapshot: string;
+  role_label: string | null;
+  employees?: { position: string | null } | { position: string | null }[] | null;
+};
 
 const today = todayInBaghdad();
 
@@ -136,7 +142,7 @@ function ProjectsPage() {
       if (crewReportIds.length) {
         const crewResult = await (supabase as any)
           .from("daily_workshop_report_lines")
-          .select("site_id, role_label")
+          .select("site_id, employee_id, employee_name_snapshot, role_label, employees(position)")
           .in("report_id", crewReportIds)
           .eq("attended", true)
           .not("site_id", "is", null)
@@ -206,14 +212,22 @@ function ProjectsPage() {
           .filter((line) => line.kind === "equipment_type")
           .reduce((sum, line) => sum + Number(line.total_count || 0), 0);
         const workerLines = lines.filter((line) => line.kind === "worker_specialty");
+        const siteCrewAssignments = data.crewAssignments.filter(
+          (line) => line.site_id === project.id,
+        );
         const assignedSpecialties = new Map<string, number>();
-        data.crewAssignments
-          .filter((line) => line.site_id === project.id)
-          .forEach((line) => {
-            const name = line.role_label?.trim() || "بدون صفة";
+        const countedEmployees = new Set<string>();
+        siteCrewAssignments.forEach((line) => {
+            const relatedEmployee = Array.isArray(line.employees)
+              ? line.employees[0]
+              : line.employees;
+            const name = line.role_label?.trim() || relatedEmployee?.position?.trim() || "بدون صفة";
+            const employeeKey = line.employee_id || line.employee_name_snapshot.trim().toLocaleLowerCase("ar");
+            if (countedEmployees.has(employeeKey)) return;
+            countedEmployees.add(employeeKey);
             assignedSpecialties.set(name, (assignedSpecialties.get(name) ?? 0) + 1);
           });
-        const specialtyCosts = data.crewAssignments.length > 0
+        const specialtyCosts = siteCrewAssignments.length > 0
           ? Array.from(assignedSpecialties, ([name, count]) => {
               const wage = wageByTitle.get(name);
               const fallback = getDefaultWage(name);
@@ -256,19 +270,33 @@ function ProjectsPage() {
           return {
             name: item.specialty,
             count: Number(item.quantity || 0),
+            dailyRate,
             cost: Number(item.quantity || 0) * dailyRate,
+          };
+        });
+        const actualBySpecialty = new Map(
+          specialtyCosts.map((item) => [item.name.trim().toLocaleLowerCase("ar"), item.count]),
+        );
+        const plannedCoverage = plannedSpecialtyCosts.map((item) => {
+          const actualCount = actualBySpecialty.get(item.name.trim().toLocaleLowerCase("ar")) ?? 0;
+          return {
+            ...item,
+            actualCount,
+            coveragePercent: item.count > 0 ? Math.min(100, Math.round((actualCount / item.count) * 100)) : 0,
           };
         });
         return {
           project,
           report,
+          actualAvailable: siteCrewAssignments.length > 0 || Boolean(report),
           lines,
           workerTotal,
+          actualWorkerTotal: specialtyCosts.reduce((sum, item) => sum + item.count, 0),
           equipmentTotal,
           specialtyCosts,
           siteDailyCost,
           plan,
-          plannedSpecialtyCosts,
+          plannedSpecialtyCosts: plannedCoverage,
           plannedWorkerTotal: plannedSpecialtyCosts.reduce((sum, item) => sum + item.count, 0),
           plannedDailyCost: plannedSpecialtyCosts.reduce((sum, item) => sum + item.cost, 0),
         };
@@ -311,7 +339,7 @@ function ProjectsPage() {
       sum + card.specialtyCosts.filter((item) => item.count > 0 && !item.hasRate).length,
     0,
   );
-  const comparableProjects = projectCards.filter((card) => card.plan && card.report);
+  const comparableProjects = projectCards.filter((card) => card.plan && card.actualAvailable);
   const plannedDailyCost = comparableProjects.reduce((sum, card) => sum + card.plannedDailyCost, 0);
   const comparableDailyCost = comparableProjects.reduce((sum, card) => sum + card.siteDailyCost, 0);
   const dailyCostVariance = comparableDailyCost - plannedDailyCost;
@@ -459,7 +487,7 @@ function ProjectsPage() {
                 : "—"
             }
             icon={dailyCostVariance > 0 ? TriangleAlert : CheckCircle2}
-            tone={dailyCostVariance > 0 ? "bg-amber-600" : "bg-emerald-600"}
+            tone={dailyCostVariance > 0 ? "bg-destructive" : "bg-emerald-600"}
           />
         </CardContent>
       </Card>
@@ -498,13 +526,14 @@ function ProjectsPage() {
               <div>
                 <h3 className="mb-3 text-base font-semibold">مقارنة التكلفة حسب المشروع</h3>
                 <div className="overflow-x-auto rounded-xl border">
-                  <table className="min-w-[780px] w-full text-sm">
+                  <table className="min-w-[980px] w-full text-sm">
                     <thead className="bg-muted/60">
                       <tr className="border-b text-right">
                         <th className="px-4 py-3 font-semibold">المشروع</th>
                         <th className="px-4 py-3 text-center font-semibold">الخطة النهائية</th>
                         <th className="px-4 py-3 text-center font-semibold">العمالة المخططة</th>
                         <th className="px-4 py-3 text-center font-semibold">العمالة الفعلية</th>
+                        <th className="px-4 py-3 text-center font-semibold">تغطية التخصصات</th>
                         <th className="px-4 py-3 text-center font-semibold">الفرق</th>
                         <th className="px-4 py-3 text-center font-semibold">التقرير اليومي</th>
                       </tr>
@@ -543,21 +572,47 @@ function ProjectsPage() {
                               )}
                             </td>
                             <td className="px-4 py-3 text-center tabular-nums">
-                              {card.report ? (
+                              {card.actualAvailable ? (
                                 <>
-                                  <b>{card.workerTotal}</b>
+                                  <b>{card.actualWorkerTotal}</b>
                                   <span className="block text-xs text-muted-foreground">
                                     {card.siteDailyCost.toLocaleString("ar-IQ")} د.ع/يوم
                                   </span>
                                 </>
                               ) : (
-                                <span className="text-muted-foreground">لا يوجد تقرير</span>
+                                <span className="text-muted-foreground">لا يوجد حضور مسجل</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              {card.plan && card.actualAvailable ? (
+                                <div className="flex min-w-36 flex-col gap-1">
+                                  {card.plannedSpecialtyCosts.map((item) => (
+                                    <div
+                                      key={item.name}
+                                      className="flex items-center justify-between gap-2 text-xs"
+                                    >
+                                      <span className="truncate">{item.name}</span>
+                                      <Badge
+                                        variant="outline"
+                                        className={
+                                          item.coveragePercent === 100
+                                            ? "shrink-0 text-emerald-700 dark:text-emerald-300"
+                                            : "shrink-0 text-amber-700 dark:text-amber-300"
+                                        }
+                                      >
+                                        {item.actualCount}/{item.count} · {item.coveragePercent}%
+                                      </Badge>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
                               )}
                             </td>
                             <td
-                              className={`px-4 py-3 text-center font-semibold tabular-nums ${variance > 0 ? "text-amber-700 dark:text-amber-300" : "text-emerald-700 dark:text-emerald-300"}`}
+                              className={`px-4 py-3 text-center font-semibold tabular-nums ${variance > 0 ? "text-destructive" : "text-emerald-700 dark:text-emerald-300"}`}
                             >
-                              {card.plan && card.report
+                              {card.plan && card.actualAvailable
                                 ? `${variance > 0 ? "+" : "−"}${Math.abs(variance).toLocaleString("ar-IQ")} د.ع`
                                 : "—"}
                             </td>
