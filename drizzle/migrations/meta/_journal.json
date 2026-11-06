@@ -50,6 +50,13 @@
       "when": 1793520235403,
       "tag": "0006_audit_uploaded_attendance_movements",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793958793024,
+      "tag": "0007_plan_staffing_permissions",
+      "breakpoints": true
     }
   ]
 }
