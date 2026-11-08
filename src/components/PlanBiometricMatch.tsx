@@ -18,11 +18,13 @@ type Punch = {
 export function PlanBiometricMatch({
   planDate,
   assignments,
+  autoLoad = false,
 }: {
   planDate: string;
   assignments: StaffAssignmentGroup[];
+  autoLoad?: boolean;
 }) {
-  const [enabled, setEnabled] = useState(false);
+  const [enabled, setEnabled] = useState(autoLoad);
   const employees = useMemo(
     () => assignments.flatMap((g) => g.employees.map((e) => ({ ...e, specialty: g.specialty }))),
     [assignments],

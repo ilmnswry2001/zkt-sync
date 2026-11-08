@@ -41,6 +41,7 @@ import { toast } from "sonner";
 import { readLocalCatalog, type CatalogItem, type CatalogKind } from "@/lib/report-catalog";
 import { normalizeStaffAssignments } from "@/lib/planning-staff";
 import { DailyWorkshopInventory } from "@/components/DailyWorkshopInventory";
+import { PlanBiometricMatch } from "@/components/PlanBiometricMatch";
 
 export const Route = createFileRoute("/_authenticated/attendance")({
   head: () => ({ meta: [{ title: "التقارير اليومية" }] }),
@@ -817,6 +818,12 @@ function AttendancePage() {
                     </div>
                   </div>
                 </div>
+
+                <PlanBiometricMatch
+                  planDate={date}
+                  assignments={finalizedPlanQuery.data.assigned_staff}
+                  autoLoad
+                />
 
                 {(() => {
                   const req = publishSummary.reduce((s, i) => s + i.quantity, 0);
