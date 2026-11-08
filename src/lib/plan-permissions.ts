@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 export type PlanStaffingPermission = {
   user_id: string;
   can_request: boolean;
+  can_approve: boolean;
   can_staff_all: boolean;
   specialties: string[];
 };
@@ -24,7 +25,7 @@ export function usePlanStaffingPermission(userId?: string | null) {
     queryFn: async () => {
       const { data } = await (supabase as any)
         .from("plan_staffing_permissions")
-        .select("user_id, can_request, can_staff_all, specialties")
+        .select("user_id, can_request, can_approve, can_staff_all, specialties")
         .eq("user_id", userId)
         .maybeSingle();
       return (data ?? null) as PlanStaffingPermission | null;

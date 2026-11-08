@@ -11,6 +11,7 @@ export function PlanPermissionsEditor({ userId }: { userId: string }) {
   const qc = useQueryClient();
   const { data, isLoading } = usePlanStaffingPermission(userId);
   const [canRequest, setCanRequest] = useState(false);
+  const [canApprove, setCanApprove] = useState(false);
   const [canStaffAll, setCanStaffAll] = useState(false);
   const [specialties, setSpecialties] = useState<string[]>([]);
   const [extra, setExtra] = useState("");
@@ -18,6 +19,7 @@ export function PlanPermissionsEditor({ userId }: { userId: string }) {
 
   useEffect(() => {
     setCanRequest(!!data?.can_request);
+    setCanApprove(!!data?.can_approve);
     setCanStaffAll(!!data?.can_staff_all);
     setSpecialties(data?.specialties ?? []);
   }, [data]);
@@ -32,6 +34,7 @@ export function PlanPermissionsEditor({ userId }: { userId: string }) {
     const { error } = await (supabase as any).from("plan_staffing_permissions").upsert({
       user_id: userId,
       can_request: canRequest,
+      can_approve: canApprove,
       can_staff_all: canStaffAll,
       specialties: [...new Set([...specialties, ...extras])],
       updated_at: new Date().toISOString(),
@@ -57,6 +60,10 @@ export function PlanPermissionsEditor({ userId }: { userId: string }) {
             <label className="flex items-center gap-2 text-sm font-medium">
               <Checkbox checked={canRequest} onCheckedChange={(v) => setCanRequest(v === true)} />
               يستطيع طلب خطة
+            </label>
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <Checkbox checked={canApprove} onCheckedChange={(v) => setCanApprove(v === true)} />
+              يستطيع الموافقة على الخطط
             </label>
             <label className="flex items-center gap-2 text-sm font-medium">
               <Checkbox checked={canStaffAll} onCheckedChange={(v) => setCanStaffAll(v === true)} />

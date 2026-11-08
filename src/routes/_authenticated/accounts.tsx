@@ -453,7 +453,7 @@ function AccountsPage() {
                       </label>
                     ))}
                   </div>
-                </div>
+                </details>
               )}
               {createForm.role === "engineer" && (
                 <p className="md:col-span-2 text-sm text-muted-foreground">
@@ -676,9 +676,9 @@ function AccountsPage() {
                           </span>
                         </label>
                       ))}
-                      <div className="md:col-span-2 rounded-xl border bg-muted/20 p-4">
-                        <p className="mb-2 font-medium">الأقسام المصرح بها (فارغ = كافة الأقسام)</p>
-                        <div className="flex flex-wrap gap-2">
+                      <details open className="md:col-span-2 rounded-xl border bg-muted/20 p-4">
+                        <summary className="cursor-pointer font-medium">الأقسام المصرح بها (فارغ = كافة الأقسام)</summary>
+                        <div className="mt-3 flex flex-wrap gap-2">
                           {departments.map((department) => (
                             <label key={department.id} className="flex items-center gap-2 text-sm">
                               <Checkbox
@@ -695,34 +695,34 @@ function AccountsPage() {
                             </label>
                           ))}
                         </div>
-                      </div>
-                      <div className="md:col-span-2 rounded-xl border border-primary/20 bg-primary/[0.035] p-4">
-                        <div className="mb-3">
-                          <p className="font-semibold">صفحات النظام المسموح بها</p>
+                      </details>
+                      <details open className="md:col-span-2 rounded-xl border border-primary/20 bg-primary/[0.035] p-4">
+                        <summary className="cursor-pointer font-semibold">صفحات النظام المسموح بها</summary>
+                        <div className="mt-3">
                           <p className="text-xs text-muted-foreground">اختر نطاق بيانات الأقسام والواجهات التي تظهر للحساب. ترك الصفحات فارغة يتيح الصفحات المسموحة بحسب الدور.</p>
+                          <p className="mb-2 mt-3 text-sm font-medium">صفحات النظام</p>
+                          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                            {SECTION_OPTIONS.map((section) => (
+                              <label key={section.to} className="flex cursor-pointer items-center gap-2 rounded-lg border bg-background p-2.5 text-sm">
+                                <Checkbox
+                                  disabled={hasRole(profile.id, "engineer")}
+                                  checked={editingAllowedSections.includes(section.to)}
+                                  onCheckedChange={(checked) => setEditingAllowedSections((current) =>
+                                    checked === true
+                                      ? [...new Set([...current, section.to])]
+                                      : current.filter((path) => path !== section.to),
+                                  )}
+                                />
+                                {section.label}
+                              </label>
+                            ))}
+                          </div>
+                          {hasRole(profile.id, "engineer") && <p className="mt-2 text-xs text-muted-foreground">حساب المهندس مقيد تلقائياً بواجهة خطط المشاريع.</p>}
+                          <Button className="mt-4" size="sm" disabled={actionBusy} onClick={() => saveDepartments(profile.id)}>
+                            <Save className="ml-2 h-4 w-4" /> حفظ الأقسام والصفحات
+                          </Button>
                         </div>
-                        <p className="mb-2 text-sm font-medium">صفحات النظام</p>
-                        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                          {SECTION_OPTIONS.map((section) => (
-                            <label key={section.to} className="flex cursor-pointer items-center gap-2 rounded-lg border bg-background p-2.5 text-sm">
-                              <Checkbox
-                                disabled={hasRole(profile.id, "engineer")}
-                                checked={editingAllowedSections.includes(section.to)}
-                                onCheckedChange={(checked) => setEditingAllowedSections((current) =>
-                                  checked === true
-                                    ? [...new Set([...current, section.to])]
-                                    : current.filter((path) => path !== section.to),
-                                )}
-                              />
-                              {section.label}
-                            </label>
-                          ))}
-                        </div>
-                        {hasRole(profile.id, "engineer") && <p className="mt-2 text-xs text-muted-foreground">حساب المهندس مقيد تلقائياً بواجهة خطط المشاريع.</p>}
-                        <Button className="mt-4" size="sm" disabled={actionBusy} onClick={() => saveDepartments(profile.id)}>
-                          <Save className="ml-2 h-4 w-4" /> حفظ الأقسام والصفحات
-                        </Button>
-                      </div>
+                      </details>
                       <PlanPermissionsEditor userId={profile.id} />
                     </div>
                   )}
