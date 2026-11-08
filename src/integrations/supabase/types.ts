@@ -3766,6 +3766,7 @@ export type Database = {
       }
       plan_staffing_permissions: {
         Row: {
+          can_approve: boolean
           can_request: boolean
           can_staff_all: boolean
           specialties: string[]
@@ -3773,6 +3774,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          can_approve?: boolean
           can_request?: boolean
           can_staff_all?: boolean
           specialties?: string[]
@@ -3780,6 +3782,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          can_approve?: boolean
           can_request?: boolean
           can_staff_all?: boolean
           specialties?: string[]
@@ -5166,6 +5169,10 @@ export type Database = {
         Returns: boolean
       }
       can_access_work_task: { Args: { _task_id: string }; Returns: boolean }
+      can_approve_plans_by_grant: {
+        Args: { _user_id?: string }
+        Returns: boolean
+      }
       can_manage_employee_goal: { Args: { _goal_id: string }; Returns: boolean }
       can_manage_stock: { Args: { _uid: string }; Returns: boolean }
       can_manage_work_task: { Args: { _task_id: string }; Returns: boolean }
