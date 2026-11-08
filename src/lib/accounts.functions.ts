@@ -43,6 +43,8 @@ const createAccountSchema = z.object({
   role: roleSchema,
   departmentIds: z.array(z.string().uuid()).optional(),
   allowedSections: z.array(z.string().max(60)).max(40).optional(),
+  planCanRequest: z.boolean().optional(),
+  planCanApprove: z.boolean().optional(),
 });
 
 const updatePasswordSchema = z.object({
@@ -166,6 +168,16 @@ export const createAccount = createServerFn({ method: "POST" })
         await supabaseAdmin.auth.admin.deleteUser(created.user.id);
         throw new Error(`تم التراجع عن إنشاء الحساب: ${error.message}`);
       }
+    }
+    if (data.planCanRequest || data.planCanApprove) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabaseAdmin as SupabaseClient<any>).from("plan_staffing_permissions").upsert({
+        user_id: created.user.id,
+        can_request: !!data.planCanRequest,
+        can_approve: !!data.planCanApprove,
+        can_staff_all: false,
+        specialties: [],
+      });
     }
     return { userId: created.user.id };
   });

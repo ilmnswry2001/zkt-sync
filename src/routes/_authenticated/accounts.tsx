@@ -104,6 +104,8 @@ function AccountsPage() {
     role: "data_entry" as Role,
     departmentIds: [] as string[],
     allowedSections: [] as string[],
+    planCanRequest: false,
+    planCanApprove: false,
   });
   const [resetUserId, setResetUserId] = useState<string | null>(null);
   const [resetPassword, setResetPassword] = useState("");
@@ -233,6 +235,8 @@ function AccountsPage() {
           role: createForm.role,
           departmentIds: createForm.departmentIds,
           allowedSections: createForm.allowedSections,
+          planCanRequest: createForm.planCanRequest,
+          planCanApprove: createForm.planCanApprove,
         },
       });
       setCreateForm({
@@ -242,6 +246,8 @@ function AccountsPage() {
         role: "data_entry",
         departmentIds: [],
         allowedSections: [],
+        planCanRequest: false,
+        planCanApprove: false,
       });
       setShowCreateForm(false);
       await Promise.all([
@@ -404,9 +410,30 @@ function AccountsPage() {
                   ))}
                 </select>
               </div>
+              <div className="md:col-span-2 rounded-lg border bg-background p-3">
+                <p className="mb-2 text-sm font-semibold">صلاحيات خطط العمل</p>
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={createForm.planCanRequest}
+                      onCheckedChange={(v) => setCreateForm((c) => ({ ...c, planCanRequest: v === true }))}
+                    />
+                    يستطيع طلب خطة
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={createForm.planCanApprove}
+                      onCheckedChange={(v) => setCreateForm((c) => ({ ...c, planCanApprove: v === true }))}
+                    />
+                    يستطيع الموافقة على الخطط {createForm.role === "planning_officer" && <Badge variant="secondary">مقترح لمسؤول التخطيط</Badge>}
+                  </label>
+                </div>
+              </div>
               {createForm.role !== "engineer" && createForm.role !== "admin" && (
-                <div className="md:col-span-2">
-                  <Label>أقسام النظام المتاحة له (اتركها فارغة لإتاحة الكل)</Label>
+                <details className="md:col-span-2 rounded-lg border bg-background p-3">
+                  <summary className="cursor-pointer text-sm font-semibold">
+                    صفحات النظام المتاحة ({createForm.allowedSections.length || "الكل"})
+                  </summary>
                   <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg border p-3 md:grid-cols-4">
                     {SECTION_OPTIONS.map((section) => (
                       <label key={section.to} className="flex items-center gap-2 text-sm">
