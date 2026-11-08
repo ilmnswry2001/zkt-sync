@@ -1529,6 +1529,7 @@ function PlanningPage() {
               label: "بانتظار توزيع الكوادر",
               value: planningApprovedPlans.length.toLocaleString("ar-IQ"),
               tone: "text-sky-200",
+              onClick: () => setActiveWorkPlanTab("management"),
             },
             {
               label: "خطط نهائية",
@@ -1536,15 +1537,17 @@ function PlanningPage() {
               tone: "text-emerald-200",
             },
           ].map((item) => (
-            <div
+            <button
               key={item.label}
-              className="rounded-xl border border-white/10 bg-white/[0.07] px-3 py-2.5"
+              type="button"
+              onClick={item.onClick}
+              className="rounded-xl border border-white/10 bg-white/[0.07] px-3 py-2.5 text-right transition hover:bg-white/[0.1]"
             >
               <p className="text-xs text-white/60">{item.label}</p>
               <p className={`mt-1 text-lg font-extrabold tabular-nums ${item.tone}`}>
                 {item.value}
               </p>
-            </div>
+            </button>
           ))}
         </div>
       </section>
@@ -1602,7 +1605,7 @@ function PlanningPage() {
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="sticky top-0 z-20 -mx-6 flex snap-x gap-2 overflow-x-auto border-b bg-card px-4 py-2 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
-            {(["requested", "final"] as WorkPlanTab[]).map((tab) => (
+            {(["requested", "management", "final"] as WorkPlanTab[]).map((tab) => (
               <Button
                 key={tab}
                 type="button"
@@ -1613,6 +1616,7 @@ function PlanningPage() {
               >
                 {tab === "request" && "طلب خطة"}
                 {tab === "requested" && "الخطط المطلوبة"}
+                {tab === "management" && "توزيع الكوادر"}
                 {tab === "final" && "مراجعة التوزيع والخطة النهائية"}
                 <Badge
                   variant={activeWorkPlanTab === tab ? "secondary" : "outline"}
