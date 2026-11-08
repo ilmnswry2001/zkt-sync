@@ -30,6 +30,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -233,7 +234,9 @@ function normalizeArabicSearch(value: string) {
     .toLocaleLowerCase("ar")
     .replace(/[أإآ]/g, "ا")
     .replace(/ة/g, "ه")
-    .replace(/ى/g, "ي");
+    .replace(/ى/g, "ي")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function getPlanCoverage(plan: SiteWorkPlan, search = "") {
@@ -823,6 +826,8 @@ function PlanningPage() {
   const [managementNote, setManagementNote] = useState<Record<string, string>>({});
   const assignmentSaveQueue = useRef(new Map<string, Promise<void>>());
   const [openStaffSelector, setOpenStaffSelector] = useState<string | null>(null);
+  const [staffSearch, setStaffSearch] = useState("");
+  const [matchSpecialtyOnly, setMatchSpecialtyOnly] = useState(false);
   const [finalPlanTitle, setFinalPlanTitle] = useState<Record<string, string>>({});
   const [finalPlanNotes, setFinalPlanNotes] = useState<Record<string, string>>({});
 
@@ -2108,9 +2113,15 @@ function PlanningPage() {
 
                               <Popover
                                 open={openStaffSelector === inputKey}
-                                onOpenChange={(isOpen) =>
-                                  setOpenStaffSelector(isOpen ? inputKey : null)
-                                }
+                                onOpenChange={(isOpen) => {
+                                  if (isOpen) {
+                                    setStaffSearch("");
+                                    setMatchSpecialtyOnly(false);
+                                    setOpenStaffSelector(inputKey);
+                                  } else {
+                                    setOpenStaffSelector(null);
+                                  }
+                                }}
                               >
                                 <PopoverTrigger asChild>
                                   <Button
@@ -2123,16 +2134,21 @@ function PlanningPage() {
                                   </Button>
                                 </PopoverTrigger>
                                 <PopoverContent dir="rtl" align="start" className="w-[min(25rem,calc(100vw-2rem))] p-0">
-                                  <Command
-                                    filter={(value, search) =>
-                                      Number(
-                                        normalizeArabicSearch(value).includes(
-                                          normalizeArabicSearch(search),
-                                        ),
-                                      )
-                                    }
-                                  >
-                                    <CommandInput placeholder="ابحث بالاسم أو الرقم أو التخصص..." />
+                                  <Command shouldFilter={false}>
+                                    <CommandInput
+                                      value={staffSearch}
+                                      onValueChange={setStaffSearch}
+                                      placeholder="ابحث بالاسم أو الرقم الوظيفي أو المسمى أو القسم..."
+                                    />
+                                    <label className="flex min-h-10 cursor-pointer items-center gap-2 border-b px-3 text-sm">
+                                      <Checkbox
+                                        checked={matchSpecialtyOnly}
+                                        onCheckedChange={(checked) =>
+                                          setMatchSpecialtyOnly(checked === true)
+                                        }
+                                      />
+                                      مطابقة حسب التخصص فقط
+                                    </label>
                                     <CommandList>
                                       <CommandEmpty>لا يوجد موظف مطابق للبحث.</CommandEmpty>
                                       {activeEmployeesError ? (
@@ -2141,16 +2157,22 @@ function PlanningPage() {
                                         </div>
                                       ) : (
                                         <CommandGroup>
-                                          {[...activeEmployees]
-                                            .sort((left, right) => {
-                                              const leftMatches = left.position
-                                                ?.toLocaleLowerCase("ar")
-                                                .includes(item.specialty.toLocaleLowerCase("ar"));
-                                              const rightMatches = right.position
-                                                ?.toLocaleLowerCase("ar")
-                                                .includes(item.specialty.toLocaleLowerCase("ar"));
-                                              return Number(Boolean(rightMatches)) - Number(Boolean(leftMatches));
+                                          {activeEmployees
+                                            .filter((employee) => {
+                                              const searchableValue = normalizeArabicSearch(
+                                                `${employee.full_name} ${employee.employee_no} ${employee.position || ""} ${employee.department_name || ""}`,
+                                              );
+                                              const specialtyMatches = normalizeArabicSearch(
+                                                employee.position ?? "",
+                                              ).includes(normalizeArabicSearch(item.specialty));
+                                              return (
+                                                (!matchSpecialtyOnly || specialtyMatches) &&
+                                                searchableValue.includes(
+                                                  normalizeArabicSearch(staffSearch),
+                                                )
+                                              );
                                             })
+                                            .slice(0, 50)
                                             .map((employee) => {
                                               const assignedAlready = plan.assigned_staff.some(
                                                 (group) =>
@@ -2164,7 +2186,7 @@ function PlanningPage() {
                                               return (
                                                 <CommandItem
                                                   key={employee.id}
-                                                  value={`${employee.full_name} ${employee.employee_no} ${employee.position ?? ""} ${employee.department_name ?? ""}`}
+                                                  value={normalizeArabicSearch(`${employee.full_name} ${employee.employee_no} ${employee.position || ""} ${employee.department_name || ""}`)}
                                                   disabled={assignedAlready}
                                                   onSelect={() =>
                                                     addManagementEmployee(plan.id, item.specialty, employee)
