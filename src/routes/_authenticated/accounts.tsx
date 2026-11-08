@@ -104,6 +104,8 @@ function AccountsPage() {
     role: "data_entry" as Role,
     departmentIds: [] as string[],
     allowedSections: [] as string[],
+    planCanRequest: false,
+    planCanApprove: false,
   });
   const [resetUserId, setResetUserId] = useState<string | null>(null);
   const [resetPassword, setResetPassword] = useState("");
@@ -233,6 +235,8 @@ function AccountsPage() {
           role: createForm.role,
           departmentIds: createForm.departmentIds,
           allowedSections: createForm.allowedSections,
+          planCanRequest: createForm.planCanRequest,
+          planCanApprove: createForm.planCanApprove,
         },
       });
       setCreateForm({
@@ -242,6 +246,8 @@ function AccountsPage() {
         role: "data_entry",
         departmentIds: [],
         allowedSections: [],
+        planCanRequest: false,
+        planCanApprove: false,
       });
       setShowCreateForm(false);
       await Promise.all([
