@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { StaffNameChips } from "@/components/StaffNameChips";
+import { PlanBiometricMatch } from "@/components/PlanBiometricMatch";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -2057,6 +2058,10 @@ function PlanningPage() {
                       </div>
                     </summary>
                     <div className="space-y-4 border-t p-4">
+                      <PlanBiometricMatch
+                        planDate={plan.request_date}
+                        assignments={plan.assigned_staff}
+                      />
                       <div className="space-y-3">
                         {(plan.specialties ?? []).map((item) => {
                           const names =
@@ -2149,8 +2154,27 @@ function PlanningPage() {
                                                     <p className="truncate font-semibold">{employee.full_name}</p>
                                                     <p className="truncate text-xs text-muted-foreground">
                                                       {employee.employee_no} · {employee.position || "بدون مسمى"}
+                                                      {employee.department_name ? ` · ${employee.department_name}` : ""}
                                                       {assignedAlready ? " · مسكّن في الخطة" : ""}
                                                     </p>
+                                                    <p dir="ltr" className="truncate text-right text-xs text-primary">
+                                                      {employee.phone || "بلا هاتف"}
+                                                    </p>
+                                                    {(() => {
+                                                      const other = workPlans.find(
+                                                        (p) =>
+                                                          p.id !== plan.id &&
+                                                          p.request_date === plan.request_date &&
+                                                          p.assigned_staff.some((g) =>
+                                                            g.employees.some((a) => a.id === employee.id),
+                                                          ),
+                                                      );
+                                                      return other ? (
+                                                        <p className="text-xs text-amber-700 dark:text-amber-300">
+                                                          مسكّن بخطة {other.site_name} لنفس اليوم
+                                                        </p>
+                                                      ) : null;
+                                                    })()}
                                                   </div>
                                                   {assignedAlready && <Check className="h-4 w-4 text-primary" />}
                                                 </CommandItem>
