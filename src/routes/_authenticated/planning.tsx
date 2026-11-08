@@ -228,6 +228,14 @@ function planCreatorLabel(plan: SiteWorkPlan) {
   return plan.requested_by_name?.trim() || "حساب غير محدد";
 }
 
+function normalizeArabicSearch(value: string) {
+  return value
+    .toLocaleLowerCase("ar")
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ة/g, "ه")
+    .replace(/ى/g, "ي");
+}
+
 function getPlanCoverage(plan: SiteWorkPlan, search = "") {
   const specialties = plan.final_plan?.specialties ?? plan.specialties ?? [];
   const allRows = specialties.map((item) => {
@@ -724,7 +732,7 @@ function PlanningPage() {
         .select("id, full_name, employee_no, phone1, position, department_name")
         .eq("status", "active")
         .order("full_name")
-        .limit(2000);
+        .limit(3000);
       if (error) throw error;
       return (data ?? []).map((employee) => ({
         id: employee.id,
@@ -743,8 +751,8 @@ function PlanningPage() {
         .from("employees")
         .select("id, full_name, employee_no, position, site_id")
         .eq("status", "active")
-        .ilike("position", "%مهندس%")
-        .order("full_name");
+        .order("full_name")
+        .limit(3000);
       if (error) throw error;
       // لا نرشح حسب المسمى؛ قاعدة البيانات لا تضمن أن كلمة إداري موجودة في position.
       // كل موظف نشط يمكن تعيينه كإداري موقع، ثم يُحفظ UUID الخاص به في sites.
@@ -2115,7 +2123,15 @@ function PlanningPage() {
                                   </Button>
                                 </PopoverTrigger>
                                 <PopoverContent dir="rtl" align="start" className="w-[min(25rem,calc(100vw-2rem))] p-0">
-                                  <Command>
+                                  <Command
+                                    filter={(value, search) =>
+                                      Number(
+                                        normalizeArabicSearch(value).includes(
+                                          normalizeArabicSearch(search),
+                                        ),
+                                      )
+                                    }
+                                  >
                                     <CommandInput placeholder="ابحث بالاسم أو الرقم أو التخصص..." />
                                     <CommandList>
                                       <CommandEmpty>لا يوجد موظف مطابق للبحث.</CommandEmpty>

@@ -349,8 +349,8 @@ export function PlanningPage() {
         .from("employees")
         .select("id, full_name, employee_no, position, site_id")
         .eq("status", "active")
-        .ilike("position", "%مهندس%")
-        .order("full_name");
+        .order("full_name")
+        .limit(3000);
       if (error) throw error;
       // لا نرشح حسب المسمى؛ قاعدة البيانات لا تضمن أن كلمة إداري موجودة في position.
       // كل موظف نشط يمكن تعيينه كإداري موقع، ثم يُحفظ UUID الخاص به في sites.
