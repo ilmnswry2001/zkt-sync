@@ -6,7 +6,34 @@ import {
   normalizePersonName,
   normalizeStaffAssignments,
   removeStaffEmployee,
+  suggestStaffEmployees,
+  isStaffEmployeeAssigned,
 } from "./planning-staff.ts";
+
+const staffFixture = (id: string, name: string, position = "عامل") => ({ id, full_name: name, employee_no: id, phone: null, position, department_name: null });
+
+test("suggests exactly 50 employees with specialty matches first", () => {
+  const employees = Array.from({ length: 70 }, (_, i) => staffFixture(String(i), `موظف ${i}`));
+  employees.push(staffFixture("6358", "عماد وليد", "اداري موقع"));
+  const result = suggestStaffEmployees(employees, "إداري موقع");
+  assert.equal(result.length, 50);
+  assert.equal(result[0].employee_no, "6358");
+});
+
+test("searches beyond the first 50 and allows unrelated specialties", () => {
+  const employees = Array.from({ length: 1600 }, (_, i) => staffFixture(String(i), `موظف ${i}`, "ريكر"));
+  employees.push(staffFixture("6358", "عِماد وليد عبدالعالي الحميدي", "اداري موقع"));
+  assert.equal(suggestStaffEmployees(employees, "ريكر", "عماد وليد")[0]?.employee_no, "6358");
+  assert.equal(suggestStaffEmployees(employees, "ريكر", "6358", true)[0]?.employee_no, "6358");
+});
+
+test("distinct employees with the same name can both be assigned", () => {
+  const first = staffFixture("1", "محمد كامل");
+  const second = staffFixture("2", "محمد كامل");
+  const assigned = appendStaffEmployee([], "ريكر", first).assignments;
+  assert.equal(isStaffEmployeeAssigned(assigned, second), false);
+  assert.equal(appendStaffEmployee(assigned, "ريكر", second).duplicate, false);
+});
 
 test("normalizes only the edges and repeated whitespace of a name", () => {
   assert.equal(normalizePersonName("علي عماد"), "علي عماد");

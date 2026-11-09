@@ -13,6 +13,36 @@ export type StaffAssignmentGroup = {
   employees: AssignedStaffEmployee[];
 };
 
+export function normalizeStaffSearch(value: string): string {
+  return value.toLocaleLowerCase("ar").replace(/[أإآٱ]/g, "ا")
+    .replace(/ة/g, "ه").replace(/ى/g, "ي").replace(/[\u064B-\u065F\u0670ـ]/g, "")
+    .replace(/\s+/g, " ").trim();
+}
+
+export function suggestStaffEmployees(
+  employees: AssignedStaffEmployee[], specialty: string, search = "", specialtyOnly = false,
+): AssignedStaffEmployee[] {
+  const query = normalizeStaffSearch(search).split(" ").filter(Boolean);
+  const target = normalizeStaffSearch(specialty);
+  const score = (employee: AssignedStaffEmployee) => {
+    const position = normalizeStaffSearch(employee.position ?? "");
+    if (!position || !target) return 0;
+    if (position === target) return 3;
+    if (position.includes(target) || target.includes(position)) return 2;
+    return target.split(" ").filter((word) => word.length > 2 && position.includes(word)).length ? 1 : 0;
+  };
+  return employees.filter((employee) => {
+    const text = normalizeStaffSearch(`${employee.full_name} ${employee.employee_no} ${employee.position ?? ""} ${employee.department_name ?? ""}`);
+    return query.every((word) => text.includes(word)) && (!specialtyOnly || query.length > 0 || score(employee) > 0);
+  }).sort((a, b) => score(b) - score(a) || a.full_name.localeCompare(b.full_name, "ar")).slice(0, 50);
+}
+
+export function isStaffEmployeeAssigned(assignments: StaffAssignmentGroup[], employee: AssignedStaffEmployee): boolean {
+  return assignments.some((group) => group.employees.some((assigned) => assigned.id === employee.id) ||
+    group.names.some((name) => normalizeStaffSearch(name) === normalizeStaffSearch(employee.full_name) &&
+      !group.employees.some((assigned) => normalizeStaffSearch(assigned.full_name) === normalizeStaffSearch(name))));
+}
+
 export function normalizePersonName(value: string): string {
   return value.trim().replace(/\s+/g, " ");
 }
@@ -129,11 +159,7 @@ export function appendStaffEmployee(
 ): { assignments: StaffAssignmentGroup[]; duplicate: boolean } {
   const specialty = normalizePersonName(specialtyValue);
   const employeeName = normalizePersonName(employee.full_name);
-  const duplicate = assignments.some(
-    (group) =>
-      group.employees.some((assigned) => assigned.id === employee.id) ||
-      group.names.some((name) => name.toLocaleLowerCase() === employeeName.toLocaleLowerCase()),
-  );
+  const duplicate = isStaffEmployeeAssigned(assignments, employee);
   if (duplicate) return { assignments, duplicate: true };
 
   const nextAssignments = assignments.map((group) => ({
