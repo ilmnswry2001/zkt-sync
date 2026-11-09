@@ -21,16 +21,6 @@ import {
 } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -40,7 +30,9 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { StaffNameChips } from "@/components/StaffNameChips";
+import { PlanEmployeePicker } from "@/components/PlanEmployeePicker";
 import { PlanBiometricMatch } from "@/components/PlanBiometricMatch";
+import { finalPlanReportMarkup } from "@/lib/operational-report-markup";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -229,16 +221,6 @@ function planCreatorLabel(plan: SiteWorkPlan) {
   return plan.requested_by_name?.trim() || "حساب غير محدد";
 }
 
-function normalizeArabicSearch(value: string) {
-  return value
-    .toLocaleLowerCase("ar")
-    .replace(/[أإآ]/g, "ا")
-    .replace(/ة/g, "ه")
-    .replace(/ى/g, "ي")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 function getPlanCoverage(plan: SiteWorkPlan, search = "") {
   const specialties = plan.final_plan?.specialties ?? plan.specialties ?? [];
   const allRows = specialties.map((item) => {
@@ -268,55 +250,6 @@ function getPlanCoverage(plan: SiteWorkPlan, search = "") {
     ? Math.min(100, Math.round((assignedTotal / requiredTotal) * 100))
     : 100;
   return { specialties, allRows, rows, requiredTotal, assignedTotal, remainingTotal, progress };
-}
-
-function planPdfMarkup(plan: SiteWorkPlan, site?: Site) {
-  const coverage = getPlanCoverage(plan);
-  const rows = coverage.allRows
-    .map((row) => {
-      const color = row.item.color || "#0f766e";
-      const extras = [
-        row.item.heavy_equipment ? `آلية: ${escapeHtml(row.item.equipment_name || "مطلوبة")} · العدد ${Math.max(1, Number(row.item.equipment_quantity) || 1)}` : "",
-        row.item.notes ? escapeHtml(row.item.notes) : "",
-      ]
-        .filter(Boolean)
-        .join(" · ");
-      return `<tr>
-        <td style="border-right:4px solid ${escapeHtml(color)}"><strong>${escapeHtml(row.item.specialty)}</strong>${extras ? `<div class="plan-sub">${extras}</div>` : ""}</td>
-        <td class="num">${row.required}</td>
-        <td class="num">${row.assigned}</td>
-        <td class="num">${row.missing}</td>
-        <td>${row.complete ? "مكتمل" : `نقص ${row.missing}`}</td>
-        <td>${row.names.length ? `<ol class="plan-names">${row.names.map((name) => `<li>${escapeHtml(name)}</li>`).join("")}</ol>` : '<span class="plan-empty">لم يُسند أحد</span>'}</td>
-      </tr>`;
-    })
-    .join("");
-
-  return `<style>.plan-names{margin:0;padding:0 18px 0 0;columns:2;column-gap:18px;font-size:12px}.plan-names li{break-inside:avoid;padding:2px 0;border-bottom:1px dotted #d4dcd7}.plan-table td:last-child{width:45%}.plan-table thead{display:table-header-group}.plan-table tr{break-inside:avoid}.plan-signs{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin:26px 18px 8px;break-inside:avoid}.plan-signs div{text-align:center;font-size:11px;color:#475569}.plan-signs i{display:block;height:44px;border-bottom:1px solid #94a3b8}.plan-sheet{break-inside:auto!important;page-break-inside:auto!important}</style><section class="plan-sheet">
-    <header class="plan-header">
-      <div>
-        <div class="eyebrow">وثيقة توزيع تشغيلية${site?.ctr_code ? ` · ${escapeHtml(site.ctr_code)}` : ""}</div>
-        <h2>${escapeHtml(plan.final_plan?.title || `الخطة النهائية - ${plan.site_name}`)}</h2>
-        <p>${escapeHtml(plan.site_name)}${site?.location ? ` · ${escapeHtml(site.location)}` : ""}</p>
-      </div>
-      <div class="status">${escapeHtml(planStatusLabel[plan.status])}</div>
-    </header>
-    <div class="meta-grid">
-      <div><span>تاريخ التشغيل</span><strong>${escapeHtml(plan.request_date)}</strong></div>
-      <div><span>منشئ الطلب</span><strong>${escapeHtml(planCreatorLabel(plan))}</strong></div>
-      <div><span>طالب الخطة</span><strong>${escapeHtml(plan.applicant_name || "غير محدد")}</strong></div>
-      <div><span>الاحتياج</span><strong>${coverage.requiredTotal}</strong></div>
-      <div><span>الموزَّع / المتبقي</span><strong>${coverage.assignedTotal} / ${coverage.remainingTotal}</strong></div>
-    </div>
-    <table class="plan-table">
-      <thead><tr><th>التخصص</th><th>المطلوب</th><th>الموزَّع</th><th>المتبقي</th><th>الحالة</th><th>كشف الأسماء</th></tr></thead>
-      <tbody>${rows || `<tr><td colspan="6">لا توجد تخصصات في هذه الخطة</td></tr>`}</tbody>
-    </table>
-    <div class="note"><strong>ملاحظات المهندس</strong><p>${escapeHtml(plan.engineer_notes || "لا توجد ملاحظات")}</p></div>
-    <div class="note"><strong>ملاحظات الخطة</strong><p>${escapeHtml(plan.final_plan?.notes || plan.management_notes || plan.planning_notes || "لا توجد ملاحظات إضافية")}</p></div>
-    <div class="plan-signs"><div><span>المهندس / طالب الخطة</span><i></i></div><div><span>قسم التخطيط</span><i></i></div><div><span>الإدارة / الاعتماد</span><i></i></div></div>
-    <footer class="plan-footer"><span>كشف توزيع معتمد · منظومة إدارة المشاريع</span><span>${new Date().toLocaleDateString("ar-IQ")}</span></footer>
-  </section>`;
 }
 
 function newPlanSpecialty(index = 0): WorkPlanSpecialty {
@@ -727,26 +660,6 @@ function PlanningPage() {
       return map;
     },
   });
-  const { data: activeEmployees = [], error: activeEmployeesError } = useQuery({
-    queryKey: ["planning-active-employees"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("employees")
-        .select("id, full_name, employee_no, phone1, position, department_name")
-        .eq("status", "active")
-        .order("full_name")
-        .limit(3000);
-      if (error) throw error;
-      return (data ?? []).map((employee) => ({
-        id: employee.id,
-        full_name: employee.full_name,
-        employee_no: employee.employee_no,
-        phone: employee.phone1,
-        position: employee.position,
-        department_name: employee.department_name,
-      })) satisfies AssignedStaffEmployee[];
-    },
-  });
   const { data: siteAdmins = [], error: siteAdminsError } = useQuery({
     queryKey: ["site-administrators"],
     queryFn: async () => {
@@ -825,9 +738,6 @@ function PlanningPage() {
   const [draftSpecialties, setDraftSpecialties] = useState<WorkPlanSpecialty[]>([]);
   const [managementNote, setManagementNote] = useState<Record<string, string>>({});
   const assignmentSaveQueue = useRef(new Map<string, Promise<void>>());
-  const [openStaffSelector, setOpenStaffSelector] = useState<string | null>(null);
-  const [staffSearch, setStaffSearch] = useState("");
-  const [matchSpecialtyOnly, setMatchSpecialtyOnly] = useState(false);
   const [finalPlanTitle, setFinalPlanTitle] = useState<Record<string, string>>({});
   const [finalPlanNotes, setFinalPlanNotes] = useState<Record<string, string>>({});
 
@@ -948,7 +858,7 @@ function PlanningPage() {
   const exportPlanPdf = (plan: SiteWorkPlan) => {
     const ok = printReport(
       `الخطة النهائية - ${plan.site_name}`,
-      `<div class="pdf-report">${planPdfMarkup(
+      `<div class="pdf-report">${finalPlanReportMarkup(
         plan,
         sites.find((site) => site.id === plan.site_id),
       )}</div>`,
@@ -965,7 +875,7 @@ function PlanningPage() {
       "الخطط النهائية المعتمدة",
       `<div class="pdf-report">${finalPlans
         .map((plan) =>
-          planPdfMarkup(
+          finalPlanReportMarkup(
             plan,
             sites.find((site) => site.id === plan.site_id),
           ),
@@ -1204,7 +1114,6 @@ function PlanningPage() {
       toast.error(`لا تملك صلاحية إدراج كوادر تخصص ${specialtyName}`);
       return;
     }
-    setOpenStaffSelector(null);
     queueStaffAssignmentUpdate(
       planId,
       (current) => {
@@ -2086,7 +1995,6 @@ function PlanningPage() {
                               ?.names ?? [];
                           const required = Number(item.quantity) || 0;
                           const complete = names.length >= required;
-                          const inputKey = `${plan.id}::${item.specialty}`;
 
                           return (
                             <div
@@ -2111,129 +2019,13 @@ function PlanningPage() {
                                 </Badge>
                               </div>
 
-                              <Popover
-                                open={openStaffSelector === inputKey}
-                                onOpenChange={(isOpen) => {
-                                  if (isOpen) {
-                                    setStaffSearch("");
-                                    setMatchSpecialtyOnly(false);
-                                    setOpenStaffSelector(inputKey);
-                                  } else {
-                                    setOpenStaffSelector(null);
-                                  }
-                                }}
-                              >
-                                <PopoverTrigger asChild>
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="min-h-11 w-full justify-start"
-                                    aria-label={`اختيار موظف لتخصص ${item.specialty}`}
-                                  >
-                                    <Search className="ml-2 h-4 w-4" /> اختر موظفاً مسجلاً
-                                  </Button>
-                                </PopoverTrigger>
-                                <PopoverContent dir="rtl" align="start" className="w-[min(25rem,calc(100vw-2rem))] p-0">
-                                  <Command shouldFilter={false}>
-                                    <CommandInput
-                                      value={staffSearch}
-                                      onValueChange={setStaffSearch}
-                                      placeholder="ابحث بالاسم أو الرقم الوظيفي أو المسمى أو القسم..."
-                                    />
-                                    <label className="flex min-h-10 cursor-pointer items-center gap-2 border-b px-3 text-sm">
-                                      <Checkbox
-                                        checked={matchSpecialtyOnly}
-                                        onCheckedChange={(checked) =>
-                                          setMatchSpecialtyOnly(checked === true)
-                                        }
-                                      />
-                                      مطابقة حسب التخصص فقط
-                                    </label>
-                                    <CommandList>
-                                      <CommandEmpty>لا يوجد موظف مطابق للبحث.</CommandEmpty>
-                                      {activeEmployeesError ? (
-                                        <div className="p-3 text-sm text-destructive">
-                                          تعذر تحميل الموظفين النشطين.
-                                        </div>
-                                      ) : (
-                                        <CommandGroup>
-                                          {activeEmployees
-                                            .filter((employee) => {
-                                              const searchableValue = normalizeArabicSearch(
-                                                `${employee.full_name} ${employee.employee_no} ${employee.position || ""} ${employee.department_name || ""}`,
-                                              );
-                                              const specialtyMatches = normalizeArabicSearch(
-                                                employee.position ?? "",
-                                              ).includes(normalizeArabicSearch(item.specialty));
-                                              return (
-                                                (!matchSpecialtyOnly || specialtyMatches) &&
-                                                searchableValue.includes(
-                                                  normalizeArabicSearch(staffSearch),
-                                                )
-                                              );
-                                            })
-                                            .slice(0, 50)
-                                            .map((employee) => {
-                                              const assignedAlready = plan.assigned_staff.some(
-                                                (group) =>
-                                                  group.employees.some((assigned) => assigned.id === employee.id) ||
-                                                  group.names.some(
-                                                    (name) =>
-                                                      name.toLocaleLowerCase("ar") ===
-                                                      employee.full_name.toLocaleLowerCase("ar"),
-                                                  ),
-                                              );
-                                              return (
-                                                <CommandItem
-                                                  key={employee.id}
-                                                  value={normalizeArabicSearch(`${employee.full_name} ${employee.employee_no} ${employee.position || ""} ${employee.department_name || ""}`)}
-                                                  disabled={assignedAlready}
-                                                  onSelect={() =>
-                                                    addManagementEmployee(plan.id, item.specialty, employee)
-                                                  }
-                                                >
-                                                  <div className="min-w-0 flex-1 text-right">
-                                                    <p className="truncate font-semibold">{employee.full_name}</p>
-                                                    <p className="truncate text-xs text-muted-foreground">
-                                                      {employee.employee_no} · {employee.position || "بدون مسمى"}
-                                                      {employee.department_name ? ` · ${employee.department_name}` : ""}
-                                                      {assignedAlready ? " · مسكّن في الخطة" : ""}
-                                                    </p>
-                                                    <p dir="ltr" className="truncate text-right text-xs text-primary">
-                                                      {employee.phone || "بلا هاتف"}
-                                                    </p>
-                                                    {(() => {
-                                                      const other = workPlans.find(
-                                                        (p) =>
-                                                          p.id !== plan.id &&
-                                                          p.request_date === plan.request_date &&
-                                                          p.assigned_staff.some((g) =>
-                                                            g.employees.some((a) => a.id === employee.id),
-                                                          ),
-                                                      );
-                                                      return other ? (
-                                                        <p className="text-xs text-amber-700 dark:text-amber-300">
-                                                          مسكّن بخطة {other.site_name} لنفس اليوم
-                                                        </p>
-                                                      ) : null;
-                                                    })()}
-                                                  </div>
-                                                  {assignedAlready && <Check className="h-4 w-4 text-primary" />}
-                                                </CommandItem>
-                                              );
-                                            })}
-                                        </CommandGroup>
-                                      )}
-                                    </CommandList>
-                                  </Command>
-                                </PopoverContent>
-                              </Popover>
-
-                              {activeEmployeesError && (
-                                <p className="mt-2 text-xs text-destructive">
-                                  تعذر تحميل دليل الموظفين. أعد المحاولة لاحقاً.
-                                </p>
-                              )}
+                              <PlanEmployeePicker
+                                specialty={item.specialty}
+                                assignments={plan.assigned_staff}
+                                onSelect={(employee) =>
+                                  addManagementEmployee(plan.id, item.specialty, employee)
+                                }
+                              />
 
                               {names.length > 0 ? (
                                 <div className="mt-3 space-y-2">
