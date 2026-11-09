@@ -43,6 +43,12 @@
 }
 
 :root {
+  --report-paper: #ffffff;
+  --report-ink: #172c35;
+  --report-muted: #596b72;
+  --report-accent: #176a68;
+  --report-line: #d5dfe2;
+  --report-tint: #f2f6f6;
   color-scheme: light;
   --radius: 0.75rem;
   --background: oklch(0.975 0.008 220);
