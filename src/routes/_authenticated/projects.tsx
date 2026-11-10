@@ -227,7 +227,7 @@ function ProjectsPage() {
             countedEmployees.add(employeeKey);
             assignedSpecialties.set(name, (assignedSpecialties.get(name) ?? 0) + 1);
           });
-        const specialtyCosts = siteCrewAssignments.length > 0
+        const specialtyCosts = !report?.notes?.includes("تم الاعتماد آلياً من مطابقة البصمة") && siteCrewAssignments.length > 0
           ? Array.from(assignedSpecialties, ([name, count]) => {
               const wage = wageByTitle.get(name);
               const fallback = getDefaultWage(name);

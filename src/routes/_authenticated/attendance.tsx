@@ -23,6 +23,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  ShieldCheck,
+  Loader2,
   ClipboardList,
   ClipboardCheck,
   AlertTriangle,
@@ -41,7 +43,8 @@ import { toast } from "sonner";
 import { readLocalCatalog, type CatalogItem, type CatalogKind } from "@/lib/report-catalog";
 import { normalizeStaffAssignments } from "@/lib/planning-staff";
 import { DailyWorkshopInventory } from "@/components/DailyWorkshopInventory";
-import { PlanBiometricMatch } from "@/components/PlanBiometricMatch";
+import { getDefaultWage } from "@/lib/wage-defaults";
+import { PlanBiometricMatch, type BiometricMatchResults } from "@/components/PlanBiometricMatch";
 
 export const Route = createFileRoute("/_authenticated/attendance")({
   head: () => ({ meta: [{ title: "التقارير اليومية" }] }),
@@ -119,6 +122,8 @@ function AttendancePage() {
   const [responsibleSearch, setResponsibleSearch] = useState("");
   const [responsibleEmployeeId, setResponsibleEmployeeId] = useState("");
   const [savingDeduction, setSavingDeduction] = useState(false);
+  const [matchState, setMatchState] = useState<{ key: string; results: BiometricMatchResults } | null>(null);
+  const [approvingBiometric, setApprovingBiometric] = useState(false);
   const queryClient = useQueryClient();
   const fn = useServerFn(getDailyReport);
   const responsibleEmployeesQuery = useQuery<ResponsibleEmployee[]>({
@@ -259,6 +264,29 @@ function AttendancePage() {
     },
     enabled: activeTab === "publish" && !!siteId,
   });
+  const matchKey = JSON.stringify([siteId, date, finalizedPlanQuery.data?.id, finalizedPlanQuery.data?.assigned_staff]);
+  const biometricMatch = matchState?.key === matchKey ? matchState.results : null;
+  const onMatchChange = useCallback((results: BiometricMatchResults | null) => {
+    setMatchState(results ? { key: matchKey, results } : null);
+  }, [matchKey]);
+  const approveBiometric = async () => {
+    if (!biometricMatch || !finalizedPlanQuery.data || approvingBiometric) return;
+    setApprovingBiometric(true);
+    try {
+      const { error } = await supabase.rpc("approve_site_report_from_biometrics", {
+        p_plan_id: finalizedPlanQuery.data.id, p_report_date: date,
+      });
+      if (error) throw error;
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["site-daily-reports"] }),
+        queryClient.invalidateQueries({ queryKey: ["projects-dashboard"] }),
+        queryClient.invalidateQueries({ queryKey: ["plan-biometric-match"] }),
+      ]);
+      toast.success("تم اعتماد التقرير اليومي من البصمة وتحديث تكلفة المشروع");
+    } catch (error) {
+      toast.error(formatErrorMessage(error, "تعذر اعتماد التقرير من البصمة"));
+    } finally { setApprovingBiometric(false); }
+  };
   const dailyCrewQuery = useQuery<DailyCrewAssignment[]>({
     queryKey: ["daily-crew-assignments", date],
     queryFn: async () => {
@@ -472,7 +500,7 @@ function AttendancePage() {
       const requestedCount = Number(item.quantity ?? 0);
       const specialty = item.specialty?.trim() ?? item.name?.trim() ?? "";
       const assignments = assignedBySpecialty.get(normalizeSpecialty(specialty)) ?? [];
-      const reportedCount = assignments.length > 0
+      const reportedCount = biometricMatch ? biometricMatch.presentBySpecialty.get(specialty) ?? 0 : existingReport?.notes?.includes("تم الاعتماد آلياً من مطابقة البصمة") ? totalsByName.get(specialty) ?? 0 : assignments.length > 0
         ? assignments.length
         : totalsByName.get(specialty) ?? 0;
       return {
@@ -484,7 +512,7 @@ function AttendancePage() {
         idle: 0,
         missing: Math.max(0, requestedCount - reportedCount),
         color: item.color ?? "#ef4444",
-        excessAssignments: assignments.length > 0
+        excessAssignments: !biometricMatch && assignments.length > 0
           ? assignments.slice(requestedCount).map((assignment) => ({
               ...assignment,
               alreadyDeducted: (deductionSourcesQuery.data ?? []).includes(assignment.id),
@@ -492,7 +520,14 @@ function AttendancePage() {
           : [],
       };
     });
-    if (assignedBySpecialty.size > 0) {
+    if (biometricMatch) {
+      for (const [specialty, count] of biometricMatch.presentBySpecialty) {
+        if (!summary.some((item: PublishSummaryItem) => item.specialty.trim() === specialty)) {
+          summary.push({ kind: "worker_specialty", specialty, quantity: 0, reported: count, working: count, idle: 0, missing: 0, color: "", excessAssignments: [] });
+        }
+      }
+    }
+    if (!biometricMatch && !existingReport?.notes?.includes("تم الاعتماد آلياً من مطابقة البصمة") && assignedBySpecialty.size > 0) {
       const known = new Set(requiredItems.map((item: any) => normalizeSpecialty(item.specialty?.trim() ?? item.name?.trim() ?? "")));
       for (const [specialtyKey, assignments] of assignedBySpecialty) {
         if (!known.has(specialtyKey)) {
@@ -560,7 +595,7 @@ function AttendancePage() {
       });
     }
     return summary;
-  }, [dailyCrewQuery.data, deductionSourcesQuery.data, existingReport, finalizedPlanQuery.data, siteId]);
+  }, [dailyCrewQuery.data, deductionSourcesQuery.data, existingReport, finalizedPlanQuery.data, siteId, biometricMatch]);
   const wageByTitle = useMemo(
     () => new Map((deductionWagesQuery.data ?? []).map((wage) => [wage.title.trim().toLocaleLowerCase("ar"), wage])),
     [deductionWagesQuery.data],
@@ -820,21 +855,32 @@ function AttendancePage() {
                 </div>
 
                 <PlanBiometricMatch
+                  key={matchKey}
+                  onMatchChange={onMatchChange}
                   planDate={date}
                   assignments={finalizedPlanQuery.data.assigned_staff}
                   autoLoad
                 />
 
                 {(() => {
-                  const req = publishSummary.reduce((s, i) => s + i.quantity, 0);
-                  const rep = publishSummary.reduce(
+                  const comparisonWorkers = publishSummary.filter((item) => item.kind === "worker_specialty");
+                  const req = comparisonWorkers.reduce((s, i) => s + i.quantity, 0);
+                  const rep = comparisonWorkers.reduce(
                     (s, i) => s + Math.min(i.reported, i.quantity),
                     0,
                   );
-                  const extra = publishSummary.reduce(
+                  const extra = comparisonWorkers.reduce(
                     (s, i) => s + Math.max(0, i.reported - i.quantity),
                     0,
                   );
+                  const dailyRate = (name: string) => {
+                    const wage = wageByTitle.get(name.trim().toLocaleLowerCase("ar"));
+                    return Number(wage?.daily_rate) > 0 ? Number(wage?.daily_rate) : Number(wage?.monthly_rate) > 0 ? Number(wage?.monthly_rate) / 26 : getDefaultWage(name).daily_rate;
+                  };
+                  const plannedCost = comparisonWorkers.reduce((s, i) => s + i.quantity * dailyRate(i.specialty), 0);
+                  const actualCost = comparisonWorkers.reduce((s, i) => s + i.reported * dailyRate(i.specialty), 0);
+                  const variance = plannedCost - actualCost;
+                  const money = (value: number) => `${value.toLocaleString("ar-IQ", { maximumFractionDigits: 0 })} د.ع`;
                   const pct = req ? Math.round((rep / req) * 100) : 0;
                   return (
                     <div className="rounded-2xl border bg-card p-4 shadow-sm">
@@ -881,6 +927,26 @@ function AttendancePage() {
                             </Badge>
                           </div>
                         </div>
+                      </div>
+                      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
+                        {[
+                          ["الكادر المطلوب", req],
+                          [biometricMatch ? "الحاضر بالبصمة" : "الحضور المبلغ", comparisonWorkers.reduce((s, i) => s + i.reported, 0)],
+                          ["النقص", comparisonWorkers.reduce((s, i) => s + i.missing, 0)],
+                          ["الالتزام بالخطة", `${pct}%`],
+                          [biometricMatch ? "التكلفة الفعلية بالبصمة" : "تكلفة التقرير", money(actualCost)],
+                        ].map(([label, value]) => <div key={label} className="rounded-xl border bg-primary/5 p-4"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-2 text-xl font-bold">{value}</p></div>)}
+                      </div>
+                      <div className="mb-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-muted/30 p-4">
+                        <div className="space-y-1 text-sm">
+                          <p>التكلفة المخططة: <b>{money(plannedCost)}</b></p>
+                          <p className={variance > 0 ? "text-success" : variance < 0 ? "text-destructive" : "text-muted-foreground"}>{variance > 0 ? "وفر" : variance < 0 ? "زيادة" : "تطابق الميزانية"}: {money(Math.abs(variance))}</p>
+                          <p className="text-xs text-muted-foreground">أجور يومية حسب التخصص؛ عند غياب الأجر يستخدم الأجر الافتراضي. المطابقة تشمل كوادر الخطة المسماة فقط.</p>
+                        </div>
+                        <Button onClick={approveBiometric} disabled={!biometricMatch || approvingBiometric || deductionWagesQuery.isPending || deductionWagesQuery.isError}>
+                          {approvingBiometric ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="ml-2 h-4 w-4" />}
+                          {approvingBiometric ? "جارٍ اعتماد التقرير..." : "اعتماد التقرير الميداني من البصمة"}
+                        </Button>
                       </div>
                       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                         {publishSummary.map((item) => {
@@ -931,10 +997,11 @@ function AttendancePage() {
                                   الخطة: <b className="text-foreground">{item.quantity}</b>
                                 </span>
                                 <span>
-                                  المرفوع: <b className="text-foreground">{item.reported}</b>
+                                  {biometricMatch && item.kind === "worker_specialty" ? "بالبصمة" : "المرفوع"}: <b className="text-foreground">{item.reported}</b>
                                 </span>
                                 <span>{p}%</span>
                               </div>
+                              {item.kind === "worker_specialty" && <p className="mt-2 text-xs text-muted-foreground">تكلفة البند: {money(item.reported * dailyRate(item.specialty))} · النقص: {item.missing}</p>}
                               {item.kind === "equipment_type" && (
                                 <div className="mt-2 flex gap-3 rounded-md bg-muted/40 px-2 py-1.5 text-xs text-muted-foreground">
                                   <span>عاملة: <b className="text-foreground">{item.working}</b></span>

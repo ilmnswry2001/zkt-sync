@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Fingerprint } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { StaffAssignmentGroup } from "@/lib/planning-staff";
+import { summarizeBiometricMatch, type BiometricMatchResults } from "@/lib/biometric-match";
 
 type Punch = {
   employee_id: string | null;
@@ -14,19 +15,23 @@ type Punch = {
   is_suspicious: boolean | null;
 };
 
+export type { BiometricMatchResults } from "@/lib/biometric-match";
+
 /** Read-only comparison of plan staff against fingerprint punches on the plan day. */
 export function PlanBiometricMatch({
   planDate,
   assignments,
   autoLoad = false,
+  onMatchChange,
 }: {
   planDate: string;
   assignments: StaffAssignmentGroup[];
   autoLoad?: boolean;
+  onMatchChange?: (results: BiometricMatchResults | null) => void;
 }) {
   const [enabled, setEnabled] = useState(autoLoad);
   const employees = useMemo(
-    () => assignments.flatMap((g) => g.employees.map((e) => ({ ...e, specialty: g.specialty }))),
+    () => Array.from(new Map(assignments.flatMap((g) => g.employees.map((e) => [e.id, { ...e, specialty: g.specialty }] as const))).values()),
     [assignments],
   );
   const ids = employees.map((e) => e.id);
@@ -37,17 +42,20 @@ export function PlanBiometricMatch({
     queryFn: async () => {
       const start = new Date(`${planDate.slice(0, 10)}T00:00:00+03:00`);
       const end = new Date(start.getTime() + 86_400_000);
-      const [{ data, error }, devices] = await Promise.all([
-        (supabase as any)
-          .from("attendance_logs")
-          .select("employee_id, employee_no, verify_time, device_id, is_suspicious")
-          .in("employee_id", ids)
-          .gte("verify_time", start.toISOString())
-          .lt("verify_time", end.toISOString())
-          .order("verify_time"),
-        supabase.from("devices").select("id, name"),
-      ]);
-      if (error) throw error;
+      const data: Punch[] = [];
+      for (let offset = 0; offset < ids.length; offset += 100) {
+        for (let from = 0; ; from += 1000) {
+          const page = await supabase.from("attendance_logs")
+            .select("employee_id, employee_no, verify_time, device_id, is_suspicious")
+            .in("employee_id", ids.slice(offset, offset + 100))
+            .gte("verify_time", start.toISOString()).lt("verify_time", end.toISOString())
+            .order("verify_time").order("id").range(from, from + 999);
+          if (page.error) throw page.error;
+          data.push(...(page.data as Punch[]));
+          if (page.data.length < 1000) break;
+        }
+      }
+      const devices = await supabase.from("devices").select("id, name");
       const names = new Map((devices.data ?? []).map((d: any) => [d.id, d.name as string]));
       const first = new Map<string, { time: string; device: string }>();
       for (const p of (data ?? []) as Punch[]) {
@@ -64,6 +72,14 @@ export function PlanBiometricMatch({
       return first;
     },
   });
+
+  useEffect(() => {
+    if (!query.data || query.isFetching || query.isError || !employees.length) {
+      onMatchChange?.(null);
+      return;
+    }
+    onMatchChange?.(summarizeBiometricMatch(employees, new Set(query.data.keys())));
+  }, [query.data, query.isFetching, query.isError, employees, onMatchChange]);
 
   if (!employees.length) return null;
   const present = query.data ? employees.filter((e) => query.data!.has(e.id)).length : 0;

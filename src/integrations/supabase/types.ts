@@ -5150,6 +5150,11 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      approve_site_report_from_biometrics: {
+        Args: { p_plan_id: string; p_report_date: string }
+        Returns: string
+      }
+
       approve_self_attendance_early_exit: {
         Args: { p_form_id: string }
         Returns: undefined
