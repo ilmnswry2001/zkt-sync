@@ -1,13 +1,31 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { certificationDb as db, loadCenter, copyForm } from "@/lib/certification-center";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
+import { CertificationFormsDialog } from "@/components/CertificationFormsDialog";
 import { useMemo, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
@@ -25,101 +43,6 @@ import {
   TicketCheck,
   UserRound,
 } from "lucide-react";
-
-type CourseType = {
-  id: string;
-  name_ar: string;
-  code: string;
-  default_validity_months: number;
-  department_id: string;
-  is_active: boolean;
-};
-
-type CertificationRow = {
-  id: string;
-  employee_name: string;
-  employee_no: string;
-  department: string;
-  specialty: string;
-  course_type: string;
-  issue_date: string;
-  expiry_date: string;
-  days_remaining: number;
-  status: "active" | "expiring_soon" | "expired";
-  attachment_url: string;
-};
-
-type TrainingRequest = {
-  id: string;
-  employee_name: string;
-  employee_no: string;
-  course_type: string;
-  request_type: "new" | "renewal";
-  approver: string;
-  status: "pending_approval" | "approved" | "rejected" | "completed";
-  notes: string;
-  created_at: string;
-};
-
-type FormTemplate = {
-  id: string;
-  title: string;
-  category: string;
-  description: string;
-  audience: string;
-};
-
-type FormSubmission = {
-  id: string;
-  employee_name: string;
-  template: string;
-  status: "pending_review" | "approved" | "rejected";
-  submitted_at: string;
-};
-
-const courseTypes: CourseType[] = [
-  { id: "1", name_ar: "ريكر", code: "RCR", default_validity_months: 12, department_id: "1", is_active: true },
-  { id: "2", name_ar: "مسعف", code: "EMS", default_validity_months: 12, department_id: "2", is_active: true },
-  { id: "3", name_ar: "إطفائي", code: "FIR", default_validity_months: 12, department_id: "3", is_active: true },
-  { id: "4", name_ar: "إنقاذ أماكن مرتفعة", code: "HEI", default_validity_months: 6, department_id: "4", is_active: true },
-  { id: "5", name_ar: "إنقاذ أماكن مغلقة", code: "CON", default_validity_months: 6, department_id: "5", is_active: true },
-];
-
-const initialCertifications: CertificationRow[] = [
-  { id: "c1", employee_name: "أحمد علي محمد", employee_no: "EMP-101", department: "العمليات", specialty: "أمن وسلامة", course_type: "ريكر", issue_date: "2024-02-15", expiry_date: "2026-02-15", days_remaining: 120, status: "active", attachment_url: "https://example.com/cert/rcr-101.pdf" },
-  { id: "c2", employee_name: "سارة ياسين", employee_no: "EMP-204", department: "السلامة", specialty: "السلامة المهنية", course_type: "مسعف", issue_date: "2024-11-01", expiry_date: "2025-11-01", days_remaining: 18, status: "expiring_soon", attachment_url: "https://example.com/cert/ems-204.pdf" },
-  { id: "c3", employee_name: "محمود خالد", employee_no: "EMP-312", department: "الإنشاءات", specialty: "إطفاء", course_type: "إطفائي", issue_date: "2023-08-20", expiry_date: "2025-08-20", days_remaining: -12, status: "expired", attachment_url: "https://example.com/cert/fire-312.pdf" },
-  { id: "c4", employee_name: "سلمان زايد", employee_no: "EMP-421", department: "الإدارة", specialty: "شؤون الموظفين", course_type: "إنقاذ أماكن مرتفعة", issue_date: "2025-01-05", expiry_date: "2025-07-05", days_remaining: 28, status: "expiring_soon", attachment_url: "https://example.com/cert/high-421.pdf" },
-  { id: "c5", employee_name: "أسيل فرح", employee_no: "EMP-550", department: "الصيانة", specialty: "صيانة المرافق", course_type: "إنقاذ أماكن مغلقة", issue_date: "2025-03-01", expiry_date: "2027-03-01", days_remaining: 430, status: "active", attachment_url: "https://example.com/cert/confined-550.pdf" },
-];
-
-const initialRequests: TrainingRequest[] = [
-  { id: "r1", employee_name: "محمود خالد", employee_no: "EMP-312", course_type: "إطفائي", request_type: "renewal", approver: "إدارة السلامة", status: "pending_approval", notes: "تجديد شهادة إطفاء نظراً لصلاحية الشهادة المنتهية خلال 3 أسابيع.", created_at: "2026-11-04" },
-  { id: "r2", employee_name: "سارة ياسين", employee_no: "EMP-204", course_type: "مسعف", request_type: "new", approver: "مدير الموارد البشرية", status: "approved", notes: "تمت الموافقة على التسجيل في الدورة وتكليفها بالقسم المختص.", created_at: "2026-11-03" },
-  { id: "r3", employee_name: "أحمد علي محمد", employee_no: "EMP-101", course_type: "ريكر", request_type: "new", approver: "إدارة التشغيل", status: "completed", notes: "تمت استلام الشهادة وتحديث السجل خلال اليوم.", created_at: "2026-10-30" },
-];
-
-const digitalFormTemplates: FormTemplate[] = [
-  { id: "t1", title: "تحديث المستمسكات", category: "الهوية", description: "تحديث بيانات المستمسكات الشخصية والصادرة", audience: "جميع الموظفين" },
-  { id: "t2", title: "الحساب المصرفي", category: "المالية", description: "تحديث بيانات الحساب البنكي وإشعار الرواتب", audience: "جميع الموظفين" },
-  { id: "t3", title: "السكن وأرقام الطوارئ", category: "الملف الشخصي", description: "إدخال عنوان السكن وأرقام الطوارئ", audience: "جميع الموظفين" },
-  { id: "t4", title: "استبيان السلامة", category: "السلامة", description: "تقييم المخاطر والقيود التشغيلية", audience: "الطاقم الميداني" },
-];
-
-const digitalFormSubmissions: FormSubmission[] = [
-  { id: "s1", employee_name: "حسن زيد", template: "الحساب المصرفي", status: "pending_review", submitted_at: "2026-11-05" },
-  { id: "s2", employee_name: "ليلى ناصر", template: "السكن وأرقام الطوارئ", status: "approved", submitted_at: "2026-11-04" },
-  { id: "s3", employee_name: "أكرم فهد", template: "استبيان السلامة", status: "rejected", submitted_at: "2026-11-02" },
-];
-
-const approvers = [
-  "إدارة السلامة",
-  "مدير الموارد البشرية",
-  "إدارة التشغيل",
-  "المدير التنفيذي",
-  "قسم الرفع",
-  "قسم الصيانة",
-];
 
 const statusTone: Record<string, string> = {
   active: "bg-emerald-600 text-white hover:bg-emerald-600",
@@ -141,7 +64,17 @@ const statusLabel: Record<string, string> = {
   completed: "مكتمل",
 };
 
-function StatCard({ title, value, icon: Icon, tone }: { title: string; value: string | number; icon: typeof Award; tone: string }) {
+function StatCard({
+  title,
+  value,
+  icon: Icon,
+  tone,
+}: {
+  title: string;
+  value: string | number;
+  icon: typeof Award;
+  tone: string;
+}) {
   return (
     <Card>
       <CardContent className="flex items-center gap-3 p-4">
@@ -161,47 +94,99 @@ export const Route = createFileRoute("/_authenticated/certifications")({
   head: () => ({
     meta: [
       { title: "الشهادات والدورات — مركز التدريب والتأهيل" },
-      { name: "description", content: "إدارة الشهادات والدورات التدريبية، طلبات الاعتماد، ومركز النماذج الرقمية." },
+      {
+        name: "description",
+        content: "إدارة الشهادات والدورات التدريبية، طلبات الاعتماد، ومركز النماذج الرقمية.",
+      },
     ],
   }),
   component: CertificationsPage,
 });
 
 function CertificationsPage() {
-  const [certifications, setCertifications] = useState<CertificationRow[]>(initialCertifications);
-  const [requests, setRequests] = useState<TrainingRequest[]>(initialRequests);
-  const [submissions, setSubmissions] = useState<FormSubmission[]>(digitalFormSubmissions);
+  const { user, isHR, isCompanyManager } = useAuth();
+  const canManage = isHR || isCompanyManager;
+  const center = useQuery({
+    queryKey: ["certification-center", user?.id],
+    queryFn: loadCenter,
+    enabled: !!user,
+  });
+  const {
+    certifications = [],
+    requests = [],
+    submissions = [],
+    templates = [],
+    courses = [],
+    departments = [],
+  } = center.data ?? {};
+  const profile = useQuery({
+    queryKey: ["certification-profile", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await db
+        .from("profiles")
+        .select("employee_id")
+        .eq("id", user!.id)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.employee_id as string | null;
+    },
+  });
+  const [dialog, setDialog] = useState("");
+  const [term, setTerm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [employeeLabel, setEmployeeLabel] = useState("");
+  const people = useQuery({
+    queryKey: ["training-employees", user?.id, term],
+    enabled: !!user && !!term.trim(),
+    queryFn: async () => {
+      const pattern = '"%' + term.trim().replace(/["\\%_*]/g, " ") + '%"';
+      const { data, error } = await supabase
+        .from("employees")
+        .select("id,full_name,employee_no,department_name,departments(name)")
+        .eq("status", "active")
+        .or("full_name.ilike." + pattern + ",employee_no.ilike." + pattern)
+        .order("full_name")
+        .limit(40);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
   const [search, setSearch] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("all");
   const [specialtyFilter, setSpecialtyFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [selectedEmployee, setSelectedEmployee] = useState("EMP-101");
-  const [selectedCourse, setSelectedCourse] = useState(courseTypes[0].id);
+  const [selectedEmployee, setSelectedEmployee] = useState("");
+  const [selectedCourse, setSelectedCourse] = useState("");
   const [requestType, setRequestType] = useState<"new" | "renewal">("new");
-  const [approver, setApprover] = useState(approvers[0]);
+  const [approver, setApprover] = useState("");
   const [requestNote, setRequestNote] = useState("");
-  const [selectedRequestId, setSelectedRequestId] = useState(initialRequests[0]?.id ?? "");
+  const [selectedRequestId, setSelectedRequestId] = useState("");
   const [completion, setCompletion] = useState({
     certificateNo: "",
-    issueDate: "2026-11-10",
-    expiryDate: "2027-11-10",
+    issueDate: "",
+    expiryDate: "",
     renewalDate: "",
     attachmentUrl: "",
   });
-  const [selectedTemplate, setSelectedTemplate] = useState(digitalFormTemplates[0].id);
+  const [selectedTemplate, setSelectedTemplate] = useState("");
 
   const certificationStats = useMemo(() => {
     const total = certifications.length;
     const active = certifications.filter((row) => row.status === "active").length;
     const expired = certifications.filter((row) => row.status === "expired").length;
     const expiringSoon = certifications.filter((row) => row.status === "expiring_soon").length;
-    const inProgress = requests.filter((row) => row.status === "approved" || row.status === "pending_approval").length;
+    const inProgress = requests.filter(
+      (row) => row.status === "approved" || row.status === "pending_approval",
+    ).length;
     return { total, active, expired, expiringSoon, inProgress };
   }, [certifications, requests]);
 
   const filteredCertifications = useMemo(() => {
     return certifications.filter((row) => {
-      const matchesEmployee = row.employee_name.toLowerCase().includes(search.toLowerCase()) || row.employee_no.toLowerCase().includes(search.toLowerCase());
+      const matchesEmployee =
+        row.employee_name.toLowerCase().includes(search.toLowerCase()) ||
+        row.employee_no.toLowerCase().includes(search.toLowerCase());
       const matchesDepartment = departmentFilter === "all" || row.department === departmentFilter;
       const matchesSpecialty = specialtyFilter === "all" || row.specialty === specialtyFilter;
       const matchesStatus = statusFilter === "all" || row.status === statusFilter;
@@ -211,76 +196,109 @@ function CertificationsPage() {
 
   const selectedRequest = requests.find((request) => request.id === selectedRequestId) ?? null;
 
-  const handleCreateRequest = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const courseName = courseTypes.find((course) => course.id === selectedCourse)?.name_ar ?? "دورة";
-    const employeeName = ["أحمد علي محمد", "سارة ياسين", "محمود خالد", "أسيل فرح"][Number(selectedEmployee.replace("EMP-", "")) % 4] ?? "موظف";
-    const newRequest: TrainingRequest = {
-      id: `req-${Date.now()}`,
-      employee_name: employeeName,
-      employee_no: selectedEmployee,
-      course_type: courseName,
-      request_type,
-      approver,
-      status: "pending_approval",
-      notes: requestNote || "طلب دورة تدريبية جديد",
-      created_at: new Date().toISOString().slice(0, 10),
-    };
-    setRequests((prev) => [newRequest, ...prev]);
-    setRequestNote("");
-    setSelectedRequestId(newRequest.id);
-    toast.success("تم إرسال الطلب بنجاح إلى جهة الاعتماد");
-  };
-
-  const handleDecision = (id: string, decision: "approve" | "reject", note?: string) => {
-    setRequests((prev) =>
-      prev.map((request) => {
-        if (request.id !== id) return request;
-        return {
-          ...request,
+  const selected = templates.find((t) => t.id === selectedTemplate);
+  const assigned = departments.filter((d) => d.manager_user_id);
+  function close() {
+    setDialog("");
+  }
+  async function save(
+    action: () => PromiseLike<{ error: { message: string } | null }>,
+    after?: () => void,
+  ) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const { error } = await action();
+      if (error) throw Error(error.message);
+      after?.();
+      await center.refetch();
+      toast.success("تم الحفظ");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "تعذر الحفظ");
+    } finally {
+      setBusy(false);
+    }
+  }
+  function handleCreateRequest(e: FormEvent) {
+    e.preventDefault();
+    if (!selectedEmployee || !selectedCourse || !approver)
+      return toast.error("اختر الموظف والدورة وجهة الاعتماد");
+    void save(
+      () =>
+        db
+          .from("training_requests")
+          .insert({
+            employee_id: selectedEmployee,
+            course_type_id: selectedCourse,
+            target_department_id: approver,
+            request_type: requestType,
+            notes: requestNote,
+            requested_by: user?.id,
+          }),
+      () => {
+        setRequestNote("");
+        setSelectedEmployee("");
+        setEmployeeLabel("");
+        setTerm("");
+      },
+    );
+  }
+  function handleDecision(id: string, decision: string, note: string) {
+    void save(() =>
+      db
+        .from("training_requests")
+        .update({
           status: decision === "approve" ? "approved" : "rejected",
-          notes: note ? `${request.notes} | ${note}` : request.notes,
-        };
-      }),
+          approved_by: user?.id,
+          approved_at: new Date().toISOString(),
+          rejection_reason: decision === "reject" ? note : null,
+        })
+        .eq("id", id)
+        .eq("status", "pending_approval")
+        .select("id")
+        .single(),
     );
-    toast.success(decision === "approve" ? "تمت الموافقة على الطلب وقيد التدريب" : "تم رفض الطلب مع حفظ الملاحظة");
-  };
-
-  const handleCompletion = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  }
+  function handleCompletion(e: FormEvent) {
+    e.preventDefault();
     if (!selectedRequest) return;
-
-    const nextCertification: CertificationRow = {
-      id: `cert-${Date.now()}`,
-      employee_name: selectedRequest.employee_name,
-      employee_no: selectedRequest.employee_no,
-      department: "العمليات",
-      specialty: selectedRequest.request_type === "renewal" ? "تجديد دورة" : "تدريب",
-      course_type: selectedRequest.course_type,
-      issue_date: requestType === "renewal" ? completion.renewalDate || completion.issueDate : completion.issueDate,
-      expiry_date: completion.expiryDate,
-      days_remaining: Math.max(0, Math.ceil((new Date(completion.expiryDate).getTime() - Date.now()) / 86400000)),
-      status: "active",
-      attachment_url: completion.attachmentUrl || "https://example.com/attachment.pdf",
-    };
-
-    setCertifications((prev) => [nextCertification, ...prev]);
-    setRequests((prev) =>
-      prev.map((request) =>
-        request.id === selectedRequest.id ? { ...request, status: "completed", notes: "تم إكمال البرنامج وتحديث الشهادة" } : request,
-      ),
+    void save(
+      () =>
+        db.rpc("complete_training_request", {
+          p_request: selectedRequest.id,
+          p_number: completion.certificateNo,
+          p_issue: completion.renewalDate || completion.issueDate,
+          p_expiry: completion.expiryDate,
+          p_renewal: completion.renewalDate || null,
+          p_attachment: completion.attachmentUrl || null,
+        }),
+      () => setSelectedRequestId(""),
     );
-    toast.success("تم تحديث الشهادة والسجل الشخصي للموظف بنجاح");
-  };
-
-  const handleSubmissionDecision = (id: string, decision: "approved" | "rejected") => {
-    setSubmissions((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, status: decision === "approved" ? "approved" : "rejected" } : item)),
+  }
+  function handleSubmissionDecision(id: string, status: string) {
+    void save(() =>
+      db
+        .from("digital_form_submissions")
+        .update({ status, reviewer_id: user?.id, reviewed_at: new Date().toISOString() })
+        .eq("id", id)
+        .eq("status", "pending_review")
+        .select("id")
+        .single(),
     );
-    toast.success(decision === "approved" ? "تم اعتماد النموذج وتحديث بيانات الموظف تلقائياً" : "تم رفض النموذج مع حفظ الملاحظة");
-  };
-
-  const selectedTemplateTitle = digitalFormTemplates.find((template) => template.id === selectedTemplate)?.title ?? "النموذج";
+  }
+  if (center.error)
+    return (
+      <Card dir="rtl" className="p-6">
+        تعذر تحميل مركز الشهادات · {center.error.message}{" "}
+        <Button onClick={() => center.refetch()}>إعادة المحاولة</Button>
+      </Card>
+    );
+  if (!center.data)
+    return (
+      <p dir="rtl" className="p-6">
+        جارٍ تحميل مركز الشهادات…
+      </p>
+    );
 
   return (
     <div className="space-y-6 p-4 md:p-6" dir="rtl">
@@ -289,40 +307,97 @@ function CertificationsPage() {
           <p className="text-sm text-muted-foreground">إدارة الموارد البشرية والتأهيل</p>
           <h1 className="text-3xl font-bold">الشهادات والدورات</h1>
         </div>
-        <Button variant="outline">
+        <Button variant="outline" onClick={() => setDialog("quick")}>
           <QrCode className="ml-2 h-4 w-4" />
           رابط النموذج السريع
         </Button>
       </div>
 
       <Tabs defaultValue="overview" className="space-y-5">
-        <TabsList className="grid h-auto w-full grid-cols-2 gap-2 bg-transparent md:grid-cols-5">
-          <TabsTrigger value="overview">سجل الشهادات</TabsTrigger>
-          <TabsTrigger value="request">طلب دورة</TabsTrigger>
-          <TabsTrigger value="approvals">الطلبات المحالة</TabsTrigger>
-          <TabsTrigger value="forms">مركز النماذج</TabsTrigger>
-          <TabsTrigger value="settings">الإعدادات</TabsTrigger>
+        <TabsList className="grid rounded-none h-auto w-full grid-cols-2 gap-2 bg-transparent md:grid-cols-5">
+          <TabsTrigger
+            className="rounded-none border data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            value="overview"
+          >
+            سجل الشهادات
+          </TabsTrigger>
+          <TabsTrigger
+            className="rounded-none border data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            value="request"
+          >
+            طلب دورة
+          </TabsTrigger>
+          <TabsTrigger
+            className="rounded-none border data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            value="approvals"
+          >
+            الطلبات المحالة
+          </TabsTrigger>
+          <TabsTrigger
+            className="rounded-none border data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            value="forms"
+          >
+            مركز النماذج
+          </TabsTrigger>
+          <TabsTrigger
+            className="rounded-none border data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            value="settings"
+          >
+            الإعدادات
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
           <div className="grid gap-3 md:grid-cols-5">
-            <StatCard title="إجمالي الشهادات" value={certificationStats.total} icon={Award} tone="bg-primary" />
-            <StatCard title="السارية" value={certificationStats.active} icon={CheckCircle2} tone="bg-emerald-600" />
-            <StatCard title="المنتهية" value={certificationStats.expired} icon={ShieldCheck} tone="bg-rose-600" />
-            <StatCard title="قريبة من الانتهاء" value={certificationStats.expiringSoon} icon={Clock3} tone="bg-amber-500" />
-            <StatCard title="الدورات الجارية" value={certificationStats.inProgress} icon={GraduationCap} tone="bg-indigo-600" />
+            <StatCard
+              title="إجمالي الشهادات"
+              value={certificationStats.total}
+              icon={Award}
+              tone="bg-primary"
+            />
+            <StatCard
+              title="السارية"
+              value={certificationStats.active}
+              icon={CheckCircle2}
+              tone="bg-emerald-600"
+            />
+            <StatCard
+              title="المنتهية"
+              value={certificationStats.expired}
+              icon={ShieldCheck}
+              tone="bg-rose-600"
+            />
+            <StatCard
+              title="قريبة من الانتهاء"
+              value={certificationStats.expiringSoon}
+              icon={Clock3}
+              tone="bg-amber-500"
+            />
+            <StatCard
+              title="الدورات الجارية"
+              value={certificationStats.inProgress}
+              icon={GraduationCap}
+              tone="bg-indigo-600"
+            />
           </div>
 
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Funnel className="h-4 w-4" /> المرشحات</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Funnel className="h-4 w-4" /> المرشحات
+              </CardTitle>
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-5">
               <div className="space-y-2 md:col-span-2">
                 <Label>بحث</Label>
                 <div className="relative">
                   <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="اسم الموظف أو الرقم" className="pr-10" />
+                  <Input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="اسم الموظف أو الرقم"
+                    className="pr-10"
+                  />
                 </div>
               </div>
 
@@ -334,10 +409,11 @@ function CertificationsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">الكل</SelectItem>
-                    <SelectItem value="العمليات">العمليات</SelectItem>
-                    <SelectItem value="السلامة">السلامة</SelectItem>
-                    <SelectItem value="الإنشاءات">الإنشاءات</SelectItem>
-                    <SelectItem value="الإدارة">الإدارة</SelectItem>
+                    {Array.from(new Set(certifications.map((c) => c.department))).map((d) => (
+                      <SelectItem key={d} value={d}>
+                        {d}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -350,10 +426,11 @@ function CertificationsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">الكل</SelectItem>
-                    <SelectItem value="أمن وسلامة">أمن وسلامة</SelectItem>
-                    <SelectItem value="السلامة المهنية">السلامة المهنية</SelectItem>
-                    <SelectItem value="إطفاء">إطفاء</SelectItem>
-                    <SelectItem value="شؤون الموظفين">شؤون الموظفين</SelectItem>
+                    {Array.from(new Set(certifications.map((c) => c.specialty))).map((d) => (
+                      <SelectItem key={d} value={d}>
+                        {d}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -407,19 +484,36 @@ function CertificationsPage() {
                       <TableCell>{row.issue_date}</TableCell>
                       <TableCell>{row.expiry_date}</TableCell>
                       <TableCell>
-                        {row.days_remaining > 0 ? `${row.days_remaining} يوم` : `${Math.abs(row.days_remaining)} يوم متأخرة`}
+                        {row.days_remaining === null
+                          ? "—"
+                          : row.days_remaining > 0
+                            ? `${row.days_remaining} يوم`
+                            : `${Math.abs(row.days_remaining)} يوم متأخرة`}
                       </TableCell>
                       <TableCell>
                         <Badge className={statusTone[row.status]}>{statusLabel[row.status]}</Badge>
                       </TableCell>
                       <TableCell>
-                        <Button size="sm" variant="outline" onClick={() => window.open(row.attachment_url, "_blank")}>معاينة</Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={
+                            !row.attachment_url || !/^https?:\/\//i.test(row.attachment_url)
+                          }
+                          onClick={() =>
+                            window.open(row.attachment_url ?? "", "_blank", "noopener,noreferrer")
+                          }
+                        >
+                          معاينة
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
                   {!filteredCertifications.length && (
                     <TableRow>
-                      <TableCell colSpan={8} className="h-20 text-center text-muted-foreground">لا توجد شهادات مطابقة للفلتر الحالي.</TableCell>
+                      <TableCell colSpan={8} className="h-20 text-center text-muted-foreground">
+                        لا توجد شهادات مطابقة للفلتر الحالي.
+                      </TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -431,23 +525,59 @@ function CertificationsPage() {
         <TabsContent value="request" className="grid gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2"><GraduationCap className="h-4 w-4" /> طلب دورة تدريبية</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <GraduationCap className="h-4 w-4" /> طلب دورة تدريبية
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <form className="space-y-4" onSubmit={handleCreateRequest}>
                 <div className="space-y-2">
                   <Label>الموظف</Label>
-                  <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="اختر الموظف" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="EMP-101">أحمد علي محمد</SelectItem>
-                      <SelectItem value="EMP-204">سارة ياسين</SelectItem>
-                      <SelectItem value="EMP-312">محمود خالد</SelectItem>
-                      <SelectItem value="EMP-550">أسيل فرح</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    aria-label="بحث الموظفين"
+                    placeholder="ابحث بالاسم أو الرقم الوظيفي"
+                    value={term}
+                    onChange={(e) => {
+                      setTerm(e.target.value);
+                      setSelectedEmployee("");
+                      setEmployeeLabel("");
+                    }}
+                  />
+                  {!selectedEmployee && term && (
+                    <div className="max-h-52 overflow-auto">
+                      {people.isFetching
+                        ? "جارٍ البحث…"
+                        : people.error
+                          ? "تعذر البحث"
+                          : !people.data?.length
+                            ? "لا توجد نتائج"
+                            : people.data.map((p) => {
+                                const label = [
+                                  p.full_name,
+                                  p.employee_no,
+                                  p.departments?.name ?? p.department_name,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ");
+                                return (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    key={p.id}
+                                    className="block"
+                                    onClick={() => {
+                                      setSelectedEmployee(p.id);
+                                      setEmployeeLabel(label);
+                                      setTerm("");
+                                    }}
+                                  >
+                                    {label}
+                                  </Button>
+                                );
+                              })}
+                    </div>
+                  )}
+                  {employeeLabel}
                 </div>
 
                 <div className="space-y-2">
@@ -457,16 +587,23 @@ function CertificationsPage() {
                       <SelectValue placeholder="اختر الدورة" />
                     </SelectTrigger>
                     <SelectContent>
-                      {courseTypes.map((course) => (
-                        <SelectItem key={course.id} value={course.id}>{course.name_ar}</SelectItem>
-                      ))}
+                      {courses
+                        .filter((c) => c.is_active)
+                        .map((course) => (
+                          <SelectItem key={course.id} value={course.id}>
+                            {course.name_ar}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2">
                   <Label>نوع الطلب</Label>
-                  <Select value={requestType} onValueChange={(value) => setRequestType(value as "new" | "renewal")}>
+                  <Select
+                    value={requestType}
+                    onValueChange={(value) => setRequestType(value as "new" | "renewal")}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -484,8 +621,10 @@ function CertificationsPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {approvers.map((item) => (
-                        <SelectItem key={item} value={item}>{item}</SelectItem>
+                      {assigned.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.name}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -493,10 +632,19 @@ function CertificationsPage() {
 
                 <div className="space-y-2">
                   <Label>ملاحظات الطلب</Label>
-                  <Textarea value={requestNote} onChange={(e) => setRequestNote(e.target.value)} rows={4} placeholder="أدخل تفاصيل الطلب أو سبب التحديث" />
+                  <Textarea
+                    value={requestNote}
+                    onChange={(e) => setRequestNote(e.target.value)}
+                    rows={4}
+                    placeholder="أدخل تفاصيل الطلب أو سبب التحديث"
+                  />
                 </div>
 
-                <Button className="w-full" type="submit">
+                <Button
+                  disabled={busy || !selectedEmployee || !approver || !selectedCourse}
+                  className="w-full"
+                  type="submit"
+                >
                   <BellRing className="ml-2 h-4 w-4" />
                   إرسال الطلب
                 </Button>
@@ -511,10 +659,10 @@ function CertificationsPage() {
             <CardContent className="space-y-3 text-sm text-muted-foreground">
               <div className="rounded-xl bg-muted/30 p-3">
                 <p className="font-semibold text-foreground">معلومات الطلب</p>
-                <p className="mt-2">العضو: {selectedEmployee}</p>
-                <p>الدورة: {courseTypes.find((course) => course.id === selectedCourse)?.name_ar}</p>
+                <p className="mt-2">العضو: {employeeLabel}</p>
+                <p>الدورة: {courses.find((course) => course.id === selectedCourse)?.name_ar}</p>
                 <p>نوع الطلب: {requestType === "new" ? "جديد" : "تجديد"}</p>
-                <p>جهة الاعتماد: {approver}</p>
+                <p>جهة الاعتماد: {departments.find((d) => d.id === approver)?.name}</p>
               </div>
               <div className="rounded-xl border border-dashed p-3">
                 <p className="font-medium text-foreground">التدفق المتاح</p>
@@ -531,58 +679,80 @@ function CertificationsPage() {
         <TabsContent value="approvals" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2"><FileCheck2 className="h-4 w-4" /> الطلبات المحالة وقيد التدريب</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <FileCheck2 className="h-4 w-4" /> الطلبات المحالة وقيد التدريب
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              {!requests.length && <p>لا توجد طلبات دورات.</p>}
               {requests.map((request) => (
                 <div key={request.id} className="rounded-xl border p-4">
                   <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
-                      <p className="font-semibold">{request.employee_name} · {request.employee_no}</p>
-                      <p className="text-sm text-muted-foreground">{request.course_type} · {request.request_type === "new" ? "طلب جديد" : "تجديد"}</p>
+                      <p className="font-semibold">
+                        {request.employee_name} · {request.employee_no}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {request.course_type} ·{" "}
+                        {request.request_type === "new" ? "طلب جديد" : "تجديد"}
+                      </p>
                     </div>
-                    <Badge className={statusTone[request.status as keyof typeof statusTone] ?? "bg-slate-500 text-white"}>{statusLabel[request.status] ?? request.status}</Badge>
+                    <Badge
+                      className={
+                        statusTone[request.status as keyof typeof statusTone] ??
+                        "bg-slate-500 text-white"
+                      }
+                    >
+                      {statusLabel[request.status] ?? request.status}
+                    </Badge>
                   </div>
-                  <p className="mt-3 text-sm text-muted-foreground">جهة الاعتماد: {request.approver}</p>
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    جهة الاعتماد: {request.approver}
+                  </p>
                   <p className="mt-1 text-sm text-muted-foreground">ملاحظات: {request.notes}</p>
 
-                  {request.status === "pending_approval" && (
-                    <div className="mt-4 flex gap-2">
-                      <Button size="sm" onClick={() => handleDecision(request.id, "approve", "تمت الموافقة من جهة الاعتماد")}>موافقة</Button>
-                      <Button size="sm" variant="outline" onClick={() => handleDecision(request.id, "reject", "تم الرفض لعدم استيفاء الشروط")}>رفض</Button>
-                    </div>
-                  )}
-
-                  {request.status === "approved" && (
-                    <div className="mt-4 rounded-lg border border-dashed p-3">
-                      <p className="mb-3 font-medium">إدخال بيانات الإنجاز</p>
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <div className="space-y-2">
-                          <Label>رقم الشهادة</Label>
-                          <Input value={completion.certificateNo} onChange={(e) => setCompletion((prev) => ({ ...prev, certificateNo: e.target.value }))} placeholder="CERT-0001" />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>تاريخ الإصدار</Label>
-                          <Input type="date" value={completion.issueDate} onChange={(e) => setCompletion((prev) => ({ ...prev, issueDate: e.target.value }))} />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>تاريخ الانتهاء</Label>
-                          <Input type="date" value={completion.expiryDate} onChange={(e) => setCompletion((prev) => ({ ...prev, expiryDate: e.target.value }))} />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>تاريخ التجديد</Label>
-                          <Input type="date" value={completion.renewalDate} onChange={(e) => setCompletion((prev) => ({ ...prev, renewalDate: e.target.value }))} />
-                        </div>
-                        <div className="space-y-2 md:col-span-2">
-                          <Label>رابط المرفق</Label>
-                          <Input value={completion.attachmentUrl} onChange={(e) => setCompletion((prev) => ({ ...prev, attachmentUrl: e.target.value }))} placeholder="https://..." />
-                        </div>
+                  {request.status === "pending_approval" &&
+                    (canManage ||
+                      (profile.data === request.target_approver_id && !!profile.data)) && (
+                      <div className="mt-4 flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            handleDecision(request.id, "approve", "تمت الموافقة من جهة الاعتماد")
+                          }
+                        >
+                          موافقة
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            handleDecision(request.id, "reject", "تم الرفض لعدم استيفاء الشروط")
+                          }
+                        >
+                          رفض
+                        </Button>
                       </div>
-                      <Button className="mt-3" size="sm" onClick={() => setSelectedRequestId(request.id)}>
-                        <TicketCheck className="ml-2 h-4 w-4" />
-                        ترحيل الشهادة
-                      </Button>
-                    </div>
+                    )}
+
+                  {canManage && request.status === "approved" && (
+                    <Button
+                      className="mt-3"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedRequestId(request.id);
+                        setCompletion({
+                          certificateNo: "",
+                          issueDate: "",
+                          renewalDate: "",
+                          expiryDate: "",
+                          attachmentUrl: "",
+                        });
+                      }}
+                    >
+                      <TicketCheck className="ml-2 h-4 w-4" />
+                      ترحيل الشهادة
+                    </Button>
                   )}
                 </div>
               ))}
@@ -599,22 +769,56 @@ function CertificationsPage() {
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label>رقم الشهادة</Label>
-                      <Input value={completion.certificateNo} onChange={(e) => setCompletion((prev) => ({ ...prev, certificateNo: e.target.value }))} />
+                      <Input
+                        value={completion.certificateNo}
+                        onChange={(e) =>
+                          setCompletion((prev) => ({ ...prev, certificateNo: e.target.value }))
+                        }
+                      />
                     </div>
                     <div className="space-y-2">
-                      <Label>{selectedRequest.request_type === "new" ? "تاريخ الإصدار" : "تاريخ التجديد"}</Label>
-                      <Input type="date" value={selectedRequest.request_type === "new" ? completion.issueDate : completion.renewalDate || completion.issueDate} onChange={(e) => setCompletion((prev) => ({ ...prev, [selectedRequest.request_type === "new" ? "issueDate" : "renewalDate"]: e.target.value }))} />
+                      <Label>
+                        {selectedRequest.request_type === "new" ? "تاريخ الإصدار" : "تاريخ التجديد"}
+                      </Label>
+                      <Input
+                        required
+                        type="date"
+                        value={
+                          selectedRequest.request_type === "new"
+                            ? completion.issueDate
+                            : completion.renewalDate || completion.issueDate
+                        }
+                        onChange={(e) =>
+                          setCompletion((prev) => ({
+                            ...prev,
+                            [selectedRequest.request_type === "new" ? "issueDate" : "renewalDate"]:
+                              e.target.value,
+                          }))
+                        }
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>تاريخ الانتهاء</Label>
-                      <Input type="date" value={completion.expiryDate} onChange={(e) => setCompletion((prev) => ({ ...prev, expiryDate: e.target.value }))} />
+                      <Input
+                        required
+                        type="date"
+                        value={completion.expiryDate}
+                        onChange={(e) =>
+                          setCompletion((prev) => ({ ...prev, expiryDate: e.target.value }))
+                        }
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>رابط المرفق</Label>
-                      <Input value={completion.attachmentUrl} onChange={(e) => setCompletion((prev) => ({ ...prev, attachmentUrl: e.target.value }))} />
+                      <Input
+                        value={completion.attachmentUrl}
+                        onChange={(e) =>
+                          setCompletion((prev) => ({ ...prev, attachmentUrl: e.target.value }))
+                        }
+                      />
                     </div>
                   </div>
-                  <Button type="submit" className="w-full">
+                  <Button disabled={busy} type="submit" className="w-full">
                     <CheckCircle2 className="ml-2 h-4 w-4" />
                     حفظ وإنهاء الطلب
                   </Button>
@@ -625,11 +829,37 @@ function CertificationsPage() {
         </TabsContent>
 
         <TabsContent value="forms" className="space-y-4">
+          {isHR && <Button onClick={() => setDialog("new")}>+ إضافة نوع استمارة جديدة</Button>}
           <div className="grid gap-4 md:grid-cols-4">
-            <StatCard title="إجمالي القوالب" value={digitalFormTemplates.length} icon={FileText} tone="bg-sky-600" />
-            <StatCard title="قيد المراجعة" value={submissions.filter((row) => row.status === "pending_review").length} icon={Clock3} tone="bg-amber-500" />
-            <StatCard title="معتمدة" value={submissions.filter((row) => row.status === "approved").length} icon={CheckCircle2} tone="bg-emerald-600" />
-            <StatCard title="نسبة الإنجاز" value="76%" icon={Award} tone="bg-violet-600" />
+            <StatCard
+              title="إجمالي القوالب"
+              value={templates.length}
+              icon={FileText}
+              tone="bg-sky-600"
+            />
+            <StatCard
+              title="قيد المراجعة"
+              value={submissions.filter((row) => row.status === "pending_review").length}
+              icon={Clock3}
+              tone="bg-amber-500"
+            />
+            <StatCard
+              title="معتمدة"
+              value={submissions.filter((row) => row.status === "approved").length}
+              icon={CheckCircle2}
+              tone="bg-emerald-600"
+            />
+            <StatCard
+              title="نسبة الإنجاز"
+              value={
+                Math.round(
+                  (100 * submissions.filter((s) => s.status !== "pending_review").length) /
+                    (submissions.length || 1),
+                ) + "%"
+              }
+              icon={Award}
+              tone="bg-violet-600"
+            />
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
@@ -638,14 +868,21 @@ function CertificationsPage() {
                 <CardTitle>قوالب النماذج الرقمية</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {digitalFormTemplates.map((template) => (
+                {!templates.length && <p>لا توجد قوالب نشطة.</p>}
+                {templates.map((template) => (
                   <div key={template.id} className="rounded-xl border p-3">
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="font-semibold">{template.title}</p>
-                        <p className="text-xs text-muted-foreground">{template.category} · {template.audience}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {template.category} · {template.target_audience}
+                        </p>
                       </div>
-                      <Button size="sm" variant="outline" onClick={() => setSelectedTemplate(template.id)}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setSelectedTemplate(template.id)}
+                      >
                         اختر
                       </Button>
                     </div>
@@ -662,10 +899,23 @@ function CertificationsPage() {
               <CardContent className="space-y-4">
                 <div className="rounded-xl bg-muted/30 p-4 text-sm">
                   <p className="font-semibold">النموذج المختار</p>
-                  <p className="mt-2">{selectedTemplateTitle}</p>
+                  <p className="mt-2">{selected?.title ?? "اختر استمارة"}</p>
                 </div>
-                <Button className="w-full"><QrCode className="ml-2 h-4 w-4" /> إنشاء رابط مباشر</Button>
-                <Button className="w-full" variant="outline"><QrCode className="ml-2 h-4 w-4" /> إنشاء رمز QR</Button>
+                <Button
+                  disabled={!selected}
+                  onClick={() => copyForm(selectedTemplate)}
+                  className="w-full"
+                >
+                  <QrCode className="ml-2 h-4 w-4" /> إنشاء رابط مباشر
+                </Button>
+                <Button
+                  disabled={!selected}
+                  onClick={() => setDialog("qr")}
+                  className="w-full"
+                  variant="outline"
+                >
+                  <QrCode className="ml-2 h-4 w-4" /> إنشاء رمز QR
+                </Button>
               </CardContent>
             </Card>
           </div>
@@ -675,19 +925,43 @@ function CertificationsPage() {
               <CardTitle>طلبات المراجعة</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              {!submissions.length && <p>لا توجد استمارات مرسلة للمراجعة.</p>}
               {submissions.map((submission) => (
                 <div key={submission.id} className="rounded-xl border p-3">
                   <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                     <div>
                       <p className="font-semibold">{submission.employee_name}</p>
-                      <p className="text-sm text-muted-foreground">{submission.template} · {submission.submitted_at}</p>
+                      <dl>
+                        {Object.entries(submission.form_data ?? {}).map(([key, v]) => (
+                          <div key={key}>
+                            <dt>{key}</dt>
+                            <dd>{String(v)}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                      <p className="text-sm text-muted-foreground">
+                        {submission.template} · {submission.submitted_at}
+                      </p>
                     </div>
-                    <Badge className={statusTone[submission.status] ?? "bg-slate-500 text-white"}>{statusLabel[submission.status] ?? submission.status}</Badge>
+                    <Badge className={statusTone[submission.status] ?? "bg-slate-500 text-white"}>
+                      {statusLabel[submission.status] ?? submission.status}
+                    </Badge>
                   </div>
-                  {submission.status === "pending_review" && (
+                  {canManage && submission.status === "pending_review" && (
                     <div className="mt-3 flex gap-2">
-                      <Button size="sm" onClick={() => handleSubmissionDecision(submission.id, "approved")}>اعتماد</Button>
-                      <Button size="sm" variant="outline" onClick={() => handleSubmissionDecision(submission.id, "rejected")}>رفض مع ملاحظة</Button>
+                      <Button
+                        size="sm"
+                        onClick={() => handleSubmissionDecision(submission.id, "approved")}
+                      >
+                        اعتماد
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleSubmissionDecision(submission.id, "rejected")}
+                      >
+                        رفض
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -702,13 +976,95 @@ function CertificationsPage() {
               <CardTitle>أنواع الدورات وفترات الصلاحية</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {courseTypes.map((course) => (
-                <div key={course.id} className="flex items-center justify-between rounded-xl border p-3">
+              {canManage && (
+                <form
+                  className="grid gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const f = e.currentTarget;
+                    const values = Object.fromEntries(new FormData(f));
+                    void save(
+                      () =>
+                        db
+                          .from("training_course_types")
+                          .insert({
+                            ...values,
+                            default_validity_months: Number(values.default_validity_months),
+                          }),
+                      () => f.reset(),
+                    );
+                  }}
+                >
+                  <Input name="name_ar" placeholder="اسم الدورة بالعربية" required />
+                  <Input name="code" placeholder="رمز الدورة" required />
+                  <label>
+                    الصلاحية بالأشهر
+                    <Input type="number" name="default_validity_months" min="1" required />
+                  </label>
+                  <select required name="department_id" aria-label="القسم">
+                    <option value="">اختر القسم</option>
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </select>
+                  <Button disabled={busy}>إضافة نوع دورة</Button>
+                </form>
+              )}
+              {!courses.length && <p>لا توجد أنواع دورات مسجلة.</p>}
+              {courses.map((course) => (
+                <div
+                  key={course.id}
+                  className="flex items-center justify-between rounded-xl border p-3"
+                >
                   <div>
                     <p className="font-semibold">{course.name_ar}</p>
-                    <p className="text-sm text-muted-foreground">الرمز: {course.code} · {course.default_validity_months} شهر</p>
+                    <p className="text-sm text-muted-foreground">
+                      الرمز: {course.code} · {course.default_validity_months} شهر
+                    </p>
                   </div>
-                  <Badge className={course.is_active ? "bg-emerald-600 text-white" : "bg-slate-500 text-white"}>{course.is_active ? "نشط" : "غير نشط"}</Badge>
+                  <Badge
+                    className={
+                      course.is_active ? "bg-emerald-600 text-white" : "bg-slate-500 text-white"
+                    }
+                  >
+                    {course.is_active ? "نشط" : "غير نشط"}
+                  </Badge>
+                  {canManage && (
+                    <form
+                      className="flex gap-2"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const f = new FormData(e.currentTarget);
+                        void save(() =>
+                          db
+                            .from("training_course_types")
+                            .update({
+                              default_validity_months: Number(f.get("months")),
+                              is_active: f.has("active"),
+                            })
+                            .eq("id", course.id)
+                            .select("id")
+                            .single(),
+                        );
+                      }}
+                    >
+                      <Input
+                        aria-label="مدة الصلاحية بالأشهر"
+                        type="number"
+                        name="months"
+                        min="1"
+                        required
+                        defaultValue={course.default_validity_months}
+                      />
+                      <label>
+                        <input name="active" type="checkbox" defaultChecked={course.is_active} />
+                        نشط
+                      </label>
+                      <Button disabled={busy}>حفظ</Button>
+                    </form>
+                  )}
                 </div>
               ))}
             </CardContent>
@@ -735,6 +1091,16 @@ function CertificationsPage() {
           </Card>
         </TabsContent>
       </Tabs>
+      <CertificationFormsDialog
+        mode={dialog}
+        busy={busy}
+        selected={selected}
+        templates={templates}
+        close={close}
+        saveTemplate={(values) =>
+          void save(() => db.from("digital_form_templates").insert(values), close)
+        }
+      />
     </div>
   );
 }

@@ -146,7 +146,7 @@ CREATE TRIGGER trg_employee_certifications_updated_at BEFORE UPDATE ON public.em
 
 INSERT INTO public.training_course_types (name_ar, code, default_validity_months, department_id, is_active)
 SELECT * FROM (VALUES
-  ('ريكر', 'RCR', 12, NULL, true),
+  ('ريكر', 'RCR', 12, NULL::uuid, true),
   ('مسعف', 'EMS', 12, NULL, true),
   ('إطفائي', 'FIR', 12, NULL, true),
   ('إنقاذ أماكن مرتفعة', 'HEI', 6, NULL, true),

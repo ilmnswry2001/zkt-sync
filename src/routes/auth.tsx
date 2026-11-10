@@ -24,11 +24,15 @@ import {
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/auth")({
+  validateSearch: (s: Record<string, unknown>) => ({
+    ...(typeof s.form === "string" ? { form: s.form } : {}),
+  }),
   head: () => ({ meta: [{ title: "تسجيل الدخول — نظام الحضور" }] }),
   component: AuthPage,
 });
 
 function AuthPage() {
+  const { form } = Route.useSearch();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -37,9 +41,10 @@ function AuthPage() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/dashboard" });
+      if (data.session)
+        navigate(form ? { to: "/digital-form/$id", params: { id: form } } : { to: "/dashboard" });
     });
-  }, [navigate]);
+  }, [navigate, form]);
 
   const signIn = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -51,7 +56,7 @@ function AuthPage() {
         return;
       }
       toast.success("مرحباً بك");
-      navigate({ to: "/dashboard" });
+      navigate(form ? { to: "/digital-form/$id", params: { id: form } } : { to: "/dashboard" });
     } catch {
       toast.error("تعذر الاتصال بالنظام. تحقق من الاتصال ثم حاول مجدداً.");
     } finally {
@@ -63,7 +68,9 @@ function AuthPage() {
     setBusy(true);
     try {
       const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin,
+        redirect_uri: form
+          ? new URL("/digital-form/" + encodeURIComponent(form), window.location.origin).href
+          : window.location.origin,
       });
       if (result.error) toast.error("فشل تسجيل الدخول بـ Google");
     } catch {
@@ -161,7 +168,11 @@ function AuthPage() {
                     aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
                     className="absolute left-3.5 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-400 transition-colors hover:text-slate-700"
                   >
-                    {showPassword ? <EyeOff className="h-[18px] w-[18px]" /> : <Eye className="h-[18px] w-[18px]" />}
+                    {showPassword ? (
+                      <EyeOff className="h-[18px] w-[18px]" />
+                    ) : (
+                      <Eye className="h-[18px] w-[18px]" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -173,7 +184,9 @@ function AuthPage() {
               >
                 {busy ? <LoaderCircle className="ml-2 h-5 w-5 animate-spin" /> : null}
                 {busy ? "جارٍ تسجيل الدخول..." : "تسجيل الدخول"}
-                {!busy ? <ArrowLeft className="mr-2 h-4 w-4 transition-transform group-hover:-translate-x-1" /> : null}
+                {!busy ? (
+                  <ArrowLeft className="mr-2 h-4 w-4 transition-transform group-hover:-translate-x-1" />
+                ) : null}
               </Button>
             </form>
 
@@ -201,9 +214,18 @@ function AuthPage() {
         </div>
 
         <aside className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-[#0b3042] via-[#0b4e55] to-[#087b70] p-10 text-white lg:flex xl:p-14">
-          <div aria-hidden="true" className="pointer-events-none absolute -left-28 -top-28 h-96 w-96 rounded-full border border-white/10" />
-          <div aria-hidden="true" className="pointer-events-none absolute -left-12 -top-12 h-64 w-64 rounded-full border border-white/10" />
-          <div aria-hidden="true" className="pointer-events-none absolute -bottom-28 -right-24 h-80 w-80 rounded-full bg-teal-300/10 blur-2xl" />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -left-28 -top-28 h-96 w-96 rounded-full border border-white/10"
+          />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -left-12 -top-12 h-64 w-64 rounded-full border border-white/10"
+          />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -bottom-28 -right-24 h-80 w-80 rounded-full bg-teal-300/10 blur-2xl"
+          />
 
           <div className="relative z-10 flex items-center gap-3">
             <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/15 bg-white/10 backdrop-blur">
@@ -220,11 +242,13 @@ function AuthPage() {
               <Sparkles className="h-3.5 w-3.5" /> إدارة أوضح، قرارات أسرع
             </div>
             <h2 className="text-4xl font-black leading-[1.35] tracking-tight xl:text-5xl">
-              كل تفاصيل فريقك،<br />
+              كل تفاصيل فريقك،
+              <br />
               <span className="text-teal-200">في لوحة واحدة.</span>
             </h2>
             <p className="mt-5 max-w-md text-base leading-8 text-white/65">
-              تابع الحضور والمهام والمواقع وتكاليف المشاريع ضمن تجربة موحدة مصممة لاحتياجات العمل اليومية.
+              تابع الحضور والمهام والمواقع وتكاليف المشاريع ضمن تجربة موحدة مصممة لاحتياجات العمل
+              اليومية.
             </p>
           </div>
 
@@ -234,14 +258,21 @@ function AuthPage() {
               { icon: UsersRound, label: "إدارة الفرق" },
               { icon: ShieldCheck, label: "صلاحيات آمنة" },
             ].map(({ icon: Icon, label }) => (
-              <div key={label} className="rounded-2xl border border-white/10 bg-white/[.07] p-4 backdrop-blur-sm">
+              <div
+                key={label}
+                className="rounded-2xl border border-white/10 bg-white/[.07] p-4 backdrop-blur-sm"
+              >
                 <Icon className="mb-3 h-5 w-5 text-teal-200" />
                 <p className="text-xs font-semibold text-white/85">{label}</p>
-                <div className="mt-3 flex items-center gap-1 text-[10px] text-teal-100/70"><Check className="h-3 w-3" /> ضمن منظومة واحدة</div>
+                <div className="mt-3 flex items-center gap-1 text-[10px] text-teal-100/70">
+                  <Check className="h-3 w-3" /> ضمن منظومة واحدة
+                </div>
               </div>
             ))}
           </div>
-          <p className="relative z-10 mt-8 text-[11px] text-white/35">دخول آمن ومخصص لمستخدمي المؤسسة</p>
+          <p className="relative z-10 mt-8 text-[11px] text-white/35">
+            دخول آمن ومخصص لمستخدمي المؤسسة
+          </p>
         </aside>
       </section>
     </main>

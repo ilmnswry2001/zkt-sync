@@ -48,6 +48,7 @@ import { Route as AuthenticatedVehiclesRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedWagesRouteImport } from './routes/_authenticated/wages'
 import { Route as AuthenticatedWarehousesRouteImport } from './routes/_authenticated/warehouses'
 import { Route as AuthenticatedWorkCenterRouteImport } from './routes/_authenticated/work-center'
+import { Route as DigitalFormIdRouteImport } from './routes/digital-form.$id'
 import { Route as AuthenticatedEmployeesEmployeeIdRouteImport } from './routes/_authenticated/employees.$employeeId'
 import { Route as ApiPublicAttendanceRemindersRouteImport } from './routes/api/public/attendance-reminders'
 import { Route as ApiPublicZkSyncRouteImport } from './routes/api/public/zk-sync'
@@ -257,6 +258,11 @@ const AuthenticatedWorkCenterRoute = AuthenticatedWorkCenterRouteImport.update({
   path: '/work-center',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const DigitalFormIdRoute = DigitalFormIdRouteImport.update({
+  id: '/digital-form/$id',
+  path: '/digital-form/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedEmployeesEmployeeIdRoute =
   AuthenticatedEmployeesEmployeeIdRouteImport.update({
     id: '/$employeeId',
@@ -324,6 +330,7 @@ export interface FileRoutesByFullPath {
   '/wages': typeof AuthenticatedWagesRoute
   '/warehouses': typeof AuthenticatedWarehousesRoute
   '/work-center': typeof AuthenticatedWorkCenterRoute
+  '/digital-form/$id': typeof DigitalFormIdRoute
   '/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
   '/api/public/attendance-reminders': typeof ApiPublicAttendanceRemindersRoute
   '/api/public/zk-sync': typeof ApiPublicZkSyncRoute
@@ -369,6 +376,7 @@ export interface FileRoutesByTo {
   '/wages': typeof AuthenticatedWagesRoute
   '/warehouses': typeof AuthenticatedWarehousesRoute
   '/work-center': typeof AuthenticatedWorkCenterRoute
+  '/digital-form/$id': typeof DigitalFormIdRoute
   '/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
   '/api/public/attendance-reminders': typeof ApiPublicAttendanceRemindersRoute
   '/api/public/zk-sync': typeof ApiPublicZkSyncRoute
@@ -416,6 +424,7 @@ export interface FileRoutesById {
   '/_authenticated/wages': typeof AuthenticatedWagesRoute
   '/_authenticated/warehouses': typeof AuthenticatedWarehousesRoute
   '/_authenticated/work-center': typeof AuthenticatedWorkCenterRoute
+  '/digital-form/$id': typeof DigitalFormIdRoute
   '/_authenticated/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
   '/api/public/attendance-reminders': typeof ApiPublicAttendanceRemindersRoute
   '/api/public/zk-sync': typeof ApiPublicZkSyncRoute
@@ -463,6 +472,7 @@ export interface FileRouteTypes {
     | '/wages'
     | '/warehouses'
     | '/work-center'
+    | '/digital-form/$id'
     | '/employees/$employeeId'
     | '/api/public/attendance-reminders'
     | '/api/public/zk-sync'
@@ -508,6 +518,7 @@ export interface FileRouteTypes {
     | '/wages'
     | '/warehouses'
     | '/work-center'
+    | '/digital-form/$id'
     | '/employees/$employeeId'
     | '/api/public/attendance-reminders'
     | '/api/public/zk-sync'
@@ -554,6 +565,7 @@ export interface FileRouteTypes {
     | '/_authenticated/wages'
     | '/_authenticated/warehouses'
     | '/_authenticated/work-center'
+    | '/digital-form/$id'
     | '/_authenticated/employees/$employeeId'
     | '/api/public/attendance-reminders'
     | '/api/public/zk-sync'
@@ -565,6 +577,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  DigitalFormIdRoute: typeof DigitalFormIdRoute
   ApiPublicAttendanceRemindersRoute: typeof ApiPublicAttendanceRemindersRoute
   ApiPublicZkSyncRoute: typeof ApiPublicZkSyncRoute
   ApiPublicZkSyncCommandRoute: typeof ApiPublicZkSyncCommandRoute
@@ -846,6 +859,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedWorkCenterRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/digital-form/$id': {
+      id: '/digital-form/$id'
+      path: '/digital-form/$id'
+      fullPath: '/digital-form/$id'
+      preLoaderRoute: typeof DigitalFormIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/employees/$employeeId': {
       id: '/_authenticated/employees/$employeeId'
       path: '/$employeeId'
@@ -984,6 +1004,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  DigitalFormIdRoute: DigitalFormIdRoute,
   ApiPublicAttendanceRemindersRoute: ApiPublicAttendanceRemindersRoute,
   ApiPublicZkSyncRoute: ApiPublicZkSyncRoute,
   ApiPublicZkSyncCommandRoute: ApiPublicZkSyncCommandRoute,
