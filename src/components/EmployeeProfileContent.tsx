@@ -558,6 +558,15 @@ export function EmployeeProfileContent({
     });
   }, [data, month]);
 
+  const certificationRows = useMemo(
+    () => [
+      { id: "cert-1", type: "ريكر", issue_date: "2024-02-15", expiry_date: "2026-02-15", days_left: 120, status: "active", issuer: "مركز التدريب" },
+      { id: "cert-2", type: "مسعف", issue_date: "2024-11-01", expiry_date: "2025-11-01", days_left: 18, status: "expiring_soon", issuer: "مركز السلامة" },
+      { id: "cert-3", type: "إطفائي", issue_date: "2023-08-20", expiry_date: "2025-08-20", days_left: -12, status: "expired", issuer: "الهيئة التدريبية" },
+    ],
+    [],
+  );
+
   async function saveEmployeeProfile(formData: FormData) {
     if (!employee || !canEditEmployee) return;
     setSavingEmployee(true);
@@ -733,6 +742,9 @@ export function EmployeeProfileContent({
           <TabsTrigger value="leave" className="min-h-11 rounded-xl border">
             الإجازات والعقوبات
           </TabsTrigger>
+          <TabsTrigger value="certifications" className="min-h-11 rounded-xl border">
+            الشهادات والتأهيل
+          </TabsTrigger>
           <TabsTrigger value="tasks" className="min-h-11 rounded-xl border">
             المهام
           </TabsTrigger>
@@ -853,6 +865,48 @@ export function EmployeeProfileContent({
             ])}
             empty="لا توجد عقوبات مسجلة لهذا الموظف."
           />
+        </TabsContent>
+        <TabsContent value="certifications" className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-3">
+            <Metric label="الشهادات السارية" value={certificationRows.filter((row) => row.status === "active").length} icon={CheckCircle2} tone="bg-emerald-600" />
+            <Metric label="قريبة من الانتهاء" value={certificationRows.filter((row) => row.status === "expiring_soon").length} icon={Clock3} tone="bg-amber-500" />
+            <Metric label="منتهية" value={certificationRows.filter((row) => row.status === "expired").length} icon={ShieldAlert} tone="bg-rose-600" />
+          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>الشهادات والتأهيل</CardTitle>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>نوع الدورة</TableHead>
+                    <TableHead>جهة الإصدار</TableHead>
+                    <TableHead>تاريخ الإصدار</TableHead>
+                    <TableHead>تاريخ الانتهاء</TableHead>
+                    <TableHead>الأيام المتبقية</TableHead>
+                    <TableHead>الحالة</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {certificationRows.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell>{row.type}</TableCell>
+                      <TableCell>{row.issuer}</TableCell>
+                      <TableCell>{row.issue_date}</TableCell>
+                      <TableCell>{row.expiry_date}</TableCell>
+                      <TableCell>{row.days_left > 0 ? `${row.days_left} يوم` : `${Math.abs(row.days_left)} يوم متأخرة`}</TableCell>
+                      <TableCell>
+                        <Badge className={statusText[row.status] === "سارية" ? "bg-emerald-600 text-white" : statusText[row.status] === "قريبة من الانتهاء" ? "bg-amber-500 text-white" : "bg-rose-600 text-white"}>
+                          {statusText[row.status] || row.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
         </TabsContent>
         <TabsContent value="tasks">
           <DataCard
