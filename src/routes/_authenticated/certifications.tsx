@@ -1098,7 +1098,7 @@ function CertificationsPage() {
         templates={templates}
         close={close}
         saveTemplate={(values) =>
-          void save(() => db.from("digital_form_templates").insert(values), close)
+          void save(() => db.from("digital_form_templates").insert(values as never), close)
         }
       />
     </div>
