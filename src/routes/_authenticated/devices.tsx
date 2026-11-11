@@ -1,7 +1,7 @@
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createZktecoSyncKey, getZktecoSyncStatus, requestZktecoSync, revokeZktecoSyncKey, reprocessZktecoSyncRecords } from "@/lib/zkteco-sync.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -45,6 +45,12 @@ function DevicesPage() {
     },
   });
 
+  useEffect(() => {
+    const target = window.location.hash.slice(1);
+    if (devices.some(device => target === `device-${device.id}`)) {
+      document.getElementById(target)?.scrollIntoView({ block: "center" });
+    }
+  }, [devices]);
   const { data: syncStatuses = [], error: syncStatusError } = useQuery({
     queryKey: ["zkteco-sync-status"],
     queryFn: () => getZktecoSyncStatus(),
@@ -305,7 +311,7 @@ function DevicesPage() {
             </TableHeader>
             <TableBody>
               {devices.map((d) => (
-                <TableRow key={d.id}>
+                <TableRow key={d.id} id={`device-${d.id}`} className="target:bg-accent">
                   <TableCell className="font-medium">
                     {(() => {
                       const sync = syncByDevice.get(d.id);

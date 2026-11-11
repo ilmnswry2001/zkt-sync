@@ -1,3 +1,4 @@
+import { OperationsOverview } from "@/components/OperationsOverview";
 import { createFileRoute, redirect, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -28,14 +29,10 @@ import {
   FileSignature,
   Fingerprint,
   MapPinned,
-  Building2,
-  CalendarDays,
-  ClipboardList,
   RefreshCw,
   ShieldAlert,
   Users,
   UserCheck,
-  Radar,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -125,7 +122,6 @@ function Dashboard() {
   const dailyFn = useServerFn(getDailyReport);
   const monthlyFn = useServerFn(getMonthlySheet);
   const [now, setNow] = useState(() => new Date());
-  const [showDesignProposals, setShowDesignProposals] = useState(false);
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 60_000);
     return () => window.clearInterval(timer);
@@ -175,9 +171,17 @@ function Dashboard() {
     enabled: canView,
     refetchInterval: refreshInterval,
   });
+  async function readMonth(month: string) {
+    const result = await monthlyFn({ data: { month, page: 0 } });
+    for (let page = 1; page * 50 < result.totalRows; page++) {
+      const next = await monthlyFn({ data: { month, page } });
+      result.rows.push(...next.rows);
+    }
+    return result;
+  }
   const monthlyQuery = useQuery({
-    queryKey: ["monthly", "sheet", month],
-    queryFn: () => monthlyFn({ data: { month } }),
+    queryKey: ["executive-dashboard", "monthly", month],
+    queryFn: () => readMonth(month),
     enabled: canView,
     refetchInterval: refreshInterval,
   });
@@ -186,8 +190,8 @@ function Dashboard() {
     .slice(0, 7);
   const needsPreviousMonth = Number(today.slice(8, 10)) <= 6;
   const previousMonthQuery = useQuery({
-    queryKey: ["monthly", "sheet", previousMonth],
-    queryFn: () => monthlyFn({ data: { month: previousMonth } }),
+    queryKey: ["executive-dashboard", "monthly", previousMonth],
+    queryFn: () => readMonth(previousMonth),
     enabled: canView && needsPreviousMonth,
     refetchInterval: refreshInterval,
   });
@@ -207,14 +211,20 @@ function Dashboard() {
         const dayIndex = report?.dates.indexOf(date) ?? -1;
         const activeRows = report?.rows.filter((row) => row.employee.status === "active") ?? [];
         const present = activeRows.filter((row) => row.days[dayIndex]?.status === "present").length;
+        const hasData = activeRows.some(
+          (r) => r.days[dayIndex]?.punches || r.days[dayIndex]?.manual,
+        );
         return {
+          date,
+          present,
+          total: activeRows.length,
           day: new Date(`${date}T00:00:00Z`).toLocaleDateString("ar-IQ", {
             weekday: "short",
             day: "numeric",
             timeZone: "UTC",
           }),
-          rate: activeRows.length ? Math.round((present / activeRows.length) * 100) : 0,
-          hasData: dayIndex >= 0 && activeRows.some((row) => row.days[dayIndex]?.status !== null),
+          rate: hasData ? Math.round((present / activeRows.length) * 100) : null,
+          hasData,
         };
       }),
     [month, monthlyQuery.data, previousMonthQuery.data, trendDates],
@@ -225,7 +235,7 @@ function Dashboard() {
     queryKey: ["executive-dashboard", "sites-reports", today],
     queryFn: async () => {
       const [sitesResult, reportsResult] = await Promise.all([
-        supabase.from("sites").select("id").eq("status", "active"),
+        supabase.from("sites").select("id,name").eq("status", "active"),
         supabase.from("site_daily_reports").select("site_id").eq("report_date", today),
       ]);
       if (sitesResult.error) throw sitesResult.error;
@@ -238,6 +248,7 @@ function Dashboard() {
       );
       return {
         active: activeIds.size,
+        outstanding: (sitesResult.data ?? []).filter((site) => !reportedIds.has(site.id)),
         reported: reportedIds.size,
         missing: Math.max(0, activeIds.size - reportedIds.size),
       };
@@ -334,7 +345,7 @@ function Dashboard() {
   );
   const connectedDevices = activeDevices.length - staleDevices.length;
   const inactiveDevices = (devicesQuery.data ?? []).length - activeDevices.length;
-  const dailyRows = dailyQuery.data?.rows ?? [];
+  const dailyRows = dailyQuery.data?.rows.filter(row => row.active) ?? [];
   const presentToday = dailyRows.filter((row) => row.status === "present").length;
   const absentToday = dailyRows.filter((row) => row.status === "absent").length;
   const lateToday = dailyRows.filter((row) => row.late).length;
@@ -371,113 +382,31 @@ function Dashboard() {
   }
 
   return (
-    <div dir="rtl" className="space-y-6 pb-6">
-      <ExecutiveIntelligenceCard />
-      {showDesignProposals && (
-        <section className="fixed inset-0 z-50 overflow-y-auto bg-background p-4 sm:p-8">
-          <div className="mx-auto max-w-7xl space-y-5">
-            <div className="flex items-center justify-between">
-              <div><h1 className="text-2xl font-bold">مقترحات لوحة التحكم</h1><p className="text-sm text-muted-foreground">كل النماذج تعرض مؤشرات المشروع الحالية نفسها.</p></div>
-              <Button variant="outline" onClick={() => setShowDesignProposals(false)}>العودة للوحة الحالية</Button>
-            </div>
-            {["مؤسسي هادئ", "تنفيذي فاخر", "تشغيلي حديث"].map((design, index) => (
-              <Card key={design} className={index === 1 ? "border-amber-700/30 bg-amber-50/30" : index === 2 ? "border-sky-700/30 bg-sky-50/30" : ""}>
-                <CardHeader><CardTitle>{index + 1}. {design}</CardTitle></CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <StatCard title="الموظفون النشطون" value={formatCount(activeEmployeesQuery.data?.total ?? 0)} icon={Users} loading={activeEmployeesQuery.isLoading} detail={<span>شهري: {formatCount(activeEmployeesQuery.data?.monthly ?? 0)} · يومي: {formatCount(activeEmployeesQuery.data?.daily ?? 0)}</span>} />
-                    <StatCard title="حضور اليوم" value={formatCount(presentToday)} icon={UserCheck} loading={dailyQuery.isLoading} detail={<span>غائب: {formatCount(absentToday)} · متأخر: {formatCount(lateToday)}</span>} />
-                    <StatCard title="المواقع النشطة" value={formatCount(sitesQuery.data?.active ?? 0)} icon={MapPinned} loading={sitesQuery.isLoading} detail={<span>تقارير مرفوعة: {formatCount(sitesQuery.data?.reported ?? 0)} · ناقصة: {formatCount(sitesQuery.data?.missing ?? 0)}</span>} />
-                    <StatCard title="التكلفة الشهرية التقديرية" value={formatIQD(activeEmployeesQuery.data?.monthlySiteCost ?? 0)} icon={CircleDollarSign} loading={activeEmployeesQuery.isLoading} />
-                  </div>
-                  <div className="grid gap-3 lg:grid-cols-3">
-                    <Card><CardHeader><CardTitle className="text-base">اتجاه الحضور · آخر 7 أيام</CardTitle></CardHeader><CardContent className="h-48">{trendHasData ? <ResponsiveContainer width="100%" height="100%"><LineChart data={trend}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="day" /><YAxis domain={[0,100]} tickFormatter={(value) => `${value}%`} /><Tooltip formatter={(value) => [`${value}%`, "الحضور"]} /><Line dataKey="rate" stroke="var(--primary)" strokeWidth={2} /></LineChart></ResponsiveContainer> : <p className="text-sm text-muted-foreground">{trendIsLoading ? "جارٍ تحميل الحضور" : "لا توجد بيانات حضور للفترة"}</p>}</CardContent></Card>
-                    <Card><CardHeader><CardTitle className="text-base">التشغيل اليوم</CardTitle></CardHeader><CardContent className="space-y-2 text-sm"><p>الوقت الإضافي هذا الشهر: {overtimeThisMonth.toLocaleString("ar-IQ")} ساعة</p><p>المهام: {formatCount(tasksQuery.data?.total ?? 0)} · المنجز: {formatCount(tasksQuery.data?.completed ?? 0)}</p><p>استمارات بانتظار التنفيذ: {formatCount(formsQuery.data ?? 0)}</p></CardContent></Card>
-                    <Card><CardHeader><CardTitle className="text-base">الأجهزة والعقوبات</CardTitle></CardHeader><CardContent className="space-y-2 text-sm"><p>أجهزة متصلة: {formatCount(connectedDevices)}</p><p>تحتاج مزامنة: {formatCount(staleDevices.length)}</p><p>عقوبات الشهر: {formatCount(penaltiesQuery.data?.total ?? 0)} · غير منفذة: {formatCount(penaltiesQuery.data?.pending ?? 0)}</p></CardContent></Card>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </section>
-      )}
-      <header className="relative isolate overflow-hidden rounded-3xl bg-gradient-to-l from-[#102b46] via-[#12465a] to-[#087d78] px-5 py-6 text-white shadow-xl shadow-teal-950/10 sm:px-8 sm:py-8">
-        <div
-          aria-hidden="true"
-          className="absolute -left-16 -top-24 -z-10 h-64 w-64 rounded-full border-[38px] border-white/5"
-        />
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-teal-100">
-              <Activity className="h-3.5 w-3.5" /> مركز القيادة
-            </div>
-            <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
-              نظرة شاملة على النظام
-            </h1>
-            <p className="mt-2 text-sm text-white/70">ملخص تشغيلي محدث للحضور والموارد والمواقع</p>
-          </div>
-          <div className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-xs text-white/80 backdrop-blur">
-            <RefreshCw className="h-4 w-4 text-teal-200" /> آخر تحديث:{" "}
-            {updatedAt ? formatDateTime(new Date(updatedAt).toISOString()) : "جارٍ التحميل"}
-          </div>
-          <Button variant="secondary" onClick={() => setShowDesignProposals(true)}>معاينة 3 تصاميم</Button>
-        </div>
-      </header>
-
-      {canAccessSection("/command-center") && (
-        <Link
-          to="/command-center"
-          className="group flex flex-col justify-between gap-4 overflow-hidden rounded-2xl border border-cyan-300/20 bg-gradient-to-l from-[#082b3b] via-[#0d3543] to-[#122438] p-5 text-white shadow-lg shadow-cyan-950/10 transition hover:border-cyan-200/40 hover:shadow-cyan-950/20 sm:flex-row sm:items-center"
-        >
-          <span className="flex items-center gap-4">
-            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-cyan-300/10 text-cyan-200">
-              <Radar className="h-6 w-6 transition-transform duration-500 group-hover:rotate-45" />
-            </span>
-            <span>
-              <span className="block text-lg font-bold">مركز العمليات الحي</span>
-              <span className="mt-1 block text-sm text-cyan-50/70">
-                مراقبة حضور الكادر الميداني، جرد الورش، ولوحة الشرف
-              </span>
-            </span>
-          </span>
-          <span className="rounded-lg border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold">
-            فتح مركز العمليات
-          </span>
-        </Link>
-      )}
-
-      <section aria-label="أقسام النظام" className="space-y-3">
-        <div className="flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h2 className="text-lg font-bold">أقسام النظام</h2>
-            <p className="text-sm text-muted-foreground">وصول سريع إلى الوحدات التشغيلية المتاحة لحسابك</p>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {[
-            { to: "/work-center", title: "مركز العمل", description: "المهام والتوجيهات والأهداف ومتابعة الإنجاز", icon: ClipboardCheck, tone: "text-teal-700 bg-teal-500/10" },
-            { to: "/employees", title: "الموظفون", description: "ملفات الموظفين والبيانات الوظيفية", icon: Users, tone: "text-blue-700 bg-blue-500/10" },
-            { to: "/departments", title: "الأقسام", description: "الهيكل التنظيمي والأقسام", icon: Building2, tone: "text-violet-700 bg-violet-500/10" },
-            { to: "/attendance", title: "الحضور والتقارير", description: "الحضور اليومي ومؤشرات الدوام", icon: CalendarDays, tone: "text-amber-700 bg-amber-500/10" },
-            { to: "/tasks", title: "المهام اليومية", description: "تنفيذ المهام ومراجعة حالاتها", icon: ClipboardCheck, tone: "text-cyan-700 bg-cyan-500/10" },
-            { to: "/planning", title: "الخطط والمواقع", description: "خطط العمل ومتابعة المواقع", icon: MapPinned, tone: "text-emerald-700 bg-emerald-500/10" },
-            { to: "/requests", title: "الطلبات", description: "متابعة الطلبات والإجراءات", icon: ClipboardList, tone: "text-orange-700 bg-orange-500/10" },
-            { to: "/devices", title: "أجهزة البصمة", description: "حالة الأجهزة وآخر عمليات المزامنة", icon: Fingerprint, tone: "text-rose-700 bg-rose-500/10" },
-          ].filter((section) => canAccessSection(section.to)).map(({ to, title, description, icon: Icon, tone }) => (
-            <Link key={to} to={to as any} className="group rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              <Card className="h-full border-border/70 transition-all duration-200 group-hover:-translate-y-0.5 group-hover:border-primary/40 group-hover:shadow-lg">
-                <CardContent className="flex min-h-28 items-start gap-3 p-4">
-                  <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${tone}`}><Icon className="h-5 w-5" /></span>
-                  <span className="min-w-0">
-                    <span className="block font-bold text-foreground">{title}</span>
-                    <span className="mt-1 block text-sm leading-6 text-muted-foreground">{description}</span>
-                  </span>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      </section>
+    <div dir="rtl" className="space-y-5 rounded-2xl bg-muted/35 p-3 sm:p-6">
+      <OperationsOverview
+        today={today}
+        updatedAt={updatedAt}
+        refresh={() =>
+          queryList.forEach((q) => {
+            if (q.isEnabled) void q.refetch();
+          })
+        }
+        fetching={queryList.some((q) => q.isFetching)}
+        attendance={
+          dailyQuery.data && {
+            present: presentToday,
+            absent: absentToday,
+            late: lateToday,
+            incomplete: dailyRows.filter((r) => r.status === "incomplete").length,
+          }
+        }
+        trend={trend}
+        devices={devicesQuery.data && staleDevices}
+        sites={sitesQuery.data}
+        overtime={monthlyQuery.data && overtimeThisMonth}
+        tasks={tasksQuery.data}
+        forms={formsQuery.data}
+      />
 
       {hasQueryError && (
         <Card role="alert" className="border-destructive/40 bg-destructive/5">
@@ -492,331 +421,360 @@ function Dashboard() {
         </Card>
       )}
 
-      <section
-        aria-label="إحصاءات سريعة"
-        className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"
-      >
-        <StatCard
-          title="الموظفون النشطون"
-          value={formatCount(activeEmployeesQuery.data?.total ?? 0)}
-          icon={Users}
-          loading={activeEmployeesQuery.isLoading}
-          detail={
-            <div className="flex flex-wrap gap-2 text-xs">
-              <Badge variant="outline">
-                شهري: {formatCount(activeEmployeesQuery.data?.monthly ?? 0)}
-              </Badge>
-              <Badge variant="outline">
-                أجر يومي: {formatCount(activeEmployeesQuery.data?.daily ?? 0)}
-              </Badge>
-            </div>
-          }
-        />
-        <StatCard
-          title="حضور اليوم"
-          value={formatCount(presentToday)}
-          icon={UserCheck}
-          loading={dailyQuery.isLoading}
-          detail={
-            <div className="flex flex-wrap gap-2 text-xs">
-              <Badge className="bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200">
-                غائب: {formatCount(absentToday)}
-              </Badge>
-              <Badge className="bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200">
-                متأخر: {formatCount(lateToday)}
-              </Badge>
-              <Badge variant="outline">البصمة: {formatCount(dailyQuery.data?.sourceCounts?.device ?? 0)}</Badge>
-              <Badge variant="outline">الهاتف: {formatCount(dailyQuery.data?.sourceCounts?.mobile_self ?? 0)}</Badge>
-              <Badge variant="outline">الوكيل المحلي: {formatCount(dailyQuery.data?.sourceCounts?.zk_agent ?? 0)}</Badge>
-              {(dailyQuery.data?.suspiciousCount ?? 0) > 0 && <Badge variant="destructive">مشبوهة: {formatCount(dailyQuery.data?.suspiciousCount ?? 0)}</Badge>}
-            </div>
-          }
-        />
-        <StatCard
-          title="المواقع النشطة"
-          value={formatCount(sitesQuery.data?.active ?? 0)}
-          icon={MapPinned}
-          loading={sitesQuery.isLoading}
-          detail={
-            <div className="space-y-1 text-xs text-muted-foreground">
-              <p>رفع تقرير اليوم: {formatCount(sitesQuery.data?.reported ?? 0)}</p>
-              <p>لم ترفع: {formatCount(sitesQuery.data?.missing ?? 0)}</p>
-            </div>
-          }
-        />
-        <StatCard
-          title="التكلفة الشهرية التقديرية"
-          value={formatIQD(activeEmployeesQuery.data?.monthlySiteCost ?? 0)}
-          icon={CircleDollarSign}
-          loading={activeEmployeesQuery.isLoading}
-          detail={
-            <span className="text-xs text-muted-foreground">
-              بنفس أساس الأجر في التخطيط والمواقع
-            </span>
-          }
-        />
-      </section>
-
-      <section
-        className="grid grid-cols-1 gap-4 xl:grid-cols-[1.6fr_1fr]"
-        aria-label="الحضور والأداء"
-      >
-        <Card className="min-w-0">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Activity className="h-5 w-5 text-primary" /> نسبة الحضور · آخر 7 أيام
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="h-72">
-            {trendIsLoading ? (
-              <div className="h-full animate-pulse rounded-lg bg-muted/40" />
-            ) : trendHasData ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={trend} margin={{ top: 12, right: 8, left: -18, bottom: 4 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis dataKey="day" tick={{ fontSize: 12 }} />
-                  <YAxis
-                    domain={[0, 100]}
-                    tickFormatter={(value) => `${value}%`}
-                    tick={{ fontSize: 12 }}
-                  />
-                  <Tooltip formatter={(value) => [`${value}%`, "الحضور"]} />
-                  <Line
-                    type="monotone"
-                    dataKey="rate"
-                    name="الحضور"
-                    stroke="var(--primary)"
-                    strokeWidth={3}
-                    dot={{ r: 4, fill: "var(--primary)" }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                لا توجد سجلات حضور خلال آخر 7 أيام.
-              </div>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <CalendarClock className="h-5 w-5 text-primary" /> الوقت الإضافي هذا الشهر
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {monthlyQuery.isLoading ? (
-              <div className="h-14 w-28 animate-pulse rounded bg-muted/40" />
-            ) : overtimeThisMonth > 0 ? (
-              <>
-                <p className="text-4xl font-bold tabular-nums">
-                  {overtimeThisMonth.toLocaleString("ar-IQ")}{" "}
-                  <span className="text-lg font-medium">ساعة</span>
-                </p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  مجموع التقرير الشهري المحسوب من البصمات والاعتمادات لهذا الشهر.
-                </p>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">لا توجد ساعات إضافية مسجلة هذا الشهر.</p>
-            )}
-          </CardContent>
-        </Card>
-      </section>
-
-      <section aria-label="الأجهزة" className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold">الأجهزة</h2>
-          <Link to="/devices" className="text-sm font-medium text-primary hover:underline">
-            إدارة الأجهزة
+      <details className="space-y-4 rounded-xl border bg-card p-4">
+        <summary className="cursor-pointer font-bold">تفاصيل الإدارة والتشغيل</summary>
+        <ExecutiveIntelligenceCard />
+        {canAccessSection("/command-center") && (
+          <Link to="/command-center" className="text-primary underline">
+            فتح مركز العمليات الحي
           </Link>
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        )}
+        <section
+          aria-label="إحصاءات سريعة"
+          className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"
+        >
           <StatCard
-            title="متصلة خلال آخر 24 ساعة"
-            value={formatCount(connectedDevices)}
-            icon={Fingerprint}
-            loading={devicesQuery.isLoading}
-            detail={<span className="text-xs text-muted-foreground">حالة نشطة ومزامنة حديثة</span>}
+            title="الموظفون النشطون"
+            value={formatCount(activeEmployeesQuery.data?.total ?? 0)}
+            icon={Users}
+            loading={activeEmployeesQuery.isLoading}
+            detail={
+              <div className="flex flex-wrap gap-2 text-xs">
+                <Badge variant="outline">
+                  شهري: {formatCount(activeEmployeesQuery.data?.monthly ?? 0)}
+                </Badge>
+                <Badge variant="outline">
+                  أجر يومي: {formatCount(activeEmployeesQuery.data?.daily ?? 0)}
+                </Badge>
+              </div>
+            }
           />
           <StatCard
-            title="نشطة ولم تزامن خلال 24 ساعة"
-            value={formatCount(staleDevices.length)}
-            icon={AlertTriangle}
-            loading={devicesQuery.isLoading}
+            title="حضور اليوم"
+            value={formatCount(presentToday)}
+            icon={UserCheck}
+            loading={dailyQuery.isLoading}
+            detail={
+              <div className="flex flex-wrap gap-2 text-xs">
+                <Badge className="bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200">
+                  غائب: {formatCount(absentToday)}
+                </Badge>
+                <Badge className="bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                  متأخر: {formatCount(lateToday)}
+                </Badge>
+                <Badge variant="outline">
+                  البصمة: {formatCount(dailyQuery.data?.sourceCounts?.device ?? 0)}
+                </Badge>
+                <Badge variant="outline">
+                  الهاتف: {formatCount(dailyQuery.data?.sourceCounts?.mobile_self ?? 0)}
+                </Badge>
+                <Badge variant="outline">
+                  الوكيل المحلي: {formatCount(dailyQuery.data?.sourceCounts?.zk_agent ?? 0)}
+                </Badge>
+                {(dailyQuery.data?.suspiciousCount ?? 0) > 0 && (
+                  <Badge variant="destructive">
+                    مشبوهة: {formatCount(dailyQuery.data?.suspiciousCount ?? 0)}
+                  </Badge>
+                )}
+              </div>
+            }
+          />
+          <StatCard
+            title="المواقع النشطة"
+            value={formatCount(sitesQuery.data?.active ?? 0)}
+            icon={MapPinned}
+            loading={sitesQuery.isLoading}
+            detail={
+              <div className="space-y-1 text-xs text-muted-foreground">
+                <p>رفع تقرير اليوم: {formatCount(sitesQuery.data?.reported ?? 0)}</p>
+                <p>لم ترفع: {formatCount(sitesQuery.data?.missing ?? 0)}</p>
+              </div>
+            }
+          />
+          <StatCard
+            title="التكلفة الشهرية التقديرية"
+            value={formatIQD(activeEmployeesQuery.data?.monthlySiteCost ?? 0)}
+            icon={CircleDollarSign}
+            loading={activeEmployeesQuery.isLoading}
             detail={
               <span className="text-xs text-muted-foreground">
-                أجهزة غير نشطة: {formatCount(inactiveDevices)}
+                بنفس أساس الأجر في التخطيط والمواقع
               </span>
             }
           />
-        </div>
-        {devicesQuery.data?.length === 0 && !devicesQuery.isLoading ? (
-          <Card>
-            <CardContent className="p-4 text-sm text-muted-foreground">
-              لا توجد أجهزة مسجلة بعد.
+        </section>
+
+        <section
+          className="grid grid-cols-1 gap-4 xl:grid-cols-[1.6fr_1fr]"
+          aria-label="الحضور والأداء"
+        >
+          <Card className="min-w-0">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Activity className="h-5 w-5 text-primary" /> نسبة الحضور · آخر 7 أيام
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="h-72">
+              {trendIsLoading ? (
+                <div className="h-full animate-pulse rounded-lg bg-muted/40" />
+              ) : trendHasData ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={trend} margin={{ top: 12, right: 8, left: -18, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="day" tick={{ fontSize: 12 }} />
+                    <YAxis
+                      domain={[0, 100]}
+                      tickFormatter={(value) => `${value}%`}
+                      tick={{ fontSize: 12 }}
+                    />
+                    <Tooltip formatter={(value) => [`${value}%`, "الحضور"]} />
+                    <Line
+                      type="monotone"
+                      dataKey="rate"
+                      name="الحضور"
+                      stroke="var(--primary)"
+                      strokeWidth={3}
+                      dot={{ r: 4, fill: "var(--primary)" }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                  لا توجد سجلات حضور خلال آخر 7 أيام.
+                </div>
+              )}
             </CardContent>
           </Card>
-        ) : (
-          staleDevices.length > 0 && (
-            <Card className="border-amber-400/60 bg-amber-50/70 dark:bg-amber-950/20">
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-base text-amber-900 dark:text-amber-200">
-                  <AlertTriangle className="h-5 w-5" /> أجهزة لم تزامن منذ أكثر من 24 ساعة
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {staleDevices.map((device) => (
-                  <div
-                    key={device.id}
-                    className="flex flex-col justify-between gap-1 border-b border-amber-200/70 pb-2 last:border-0 sm:flex-row sm:items-center"
-                  >
-                    <span className="font-medium">{device.name}</span>
-                    <span className="text-sm text-muted-foreground">
-                      آخر مزامنة: {formatDateTime(device.last_sync_at)}
-                    </span>
-                  </div>
-                ))}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <CalendarClock className="h-5 w-5 text-primary" /> الوقت الإضافي هذا الشهر
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {monthlyQuery.isLoading ? (
+                <div className="h-14 w-28 animate-pulse rounded bg-muted/40" />
+              ) : overtimeThisMonth > 0 ? (
+                <>
+                  <p className="text-4xl font-bold tabular-nums">
+                    {overtimeThisMonth.toLocaleString("ar-IQ")}{" "}
+                    <span className="text-lg font-medium">ساعة</span>
+                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    مجموع التقرير الشهري المحسوب من البصمات والاعتمادات لهذا الشهر.
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  لا توجد ساعات إضافية مسجلة هذا الشهر.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </section>
+
+        <section aria-label="الأجهزة" className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold">الأجهزة</h2>
+            <Link to="/devices" className="text-sm font-medium text-primary hover:underline">
+              إدارة الأجهزة
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <StatCard
+              title="متصلة خلال آخر 24 ساعة"
+              value={formatCount(connectedDevices)}
+              icon={Fingerprint}
+              loading={devicesQuery.isLoading}
+              detail={
+                <span className="text-xs text-muted-foreground">حالة نشطة ومزامنة حديثة</span>
+              }
+            />
+            <StatCard
+              title="نشطة ولم تزامن خلال 24 ساعة"
+              value={formatCount(staleDevices.length)}
+              icon={AlertTriangle}
+              loading={devicesQuery.isLoading}
+              detail={
+                <span className="text-xs text-muted-foreground">
+                  أجهزة غير نشطة: {formatCount(inactiveDevices)}
+                </span>
+              }
+            />
+          </div>
+          {devicesQuery.data?.length === 0 && !devicesQuery.isLoading ? (
+            <Card>
+              <CardContent className="p-4 text-sm text-muted-foreground">
+                لا توجد أجهزة مسجلة بعد.
               </CardContent>
             </Card>
-          )
-        )}
-        {(devicesQuery.data?.length ?? 0) > 0 && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">حالة المزامنة لكل جهاز</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {(devicesQuery.data ?? []).map((device) => {
-                const isConnected = isDeviceConnected(
-                  device.status,
-                  device.last_sync_at,
-                  now.getTime(),
-                );
-                const isStale = staleDevices.some((staleDevice) => staleDevice.id === device.id);
-                return (
-                  <div
-                    key={device.id}
-                    className={`flex flex-col justify-between gap-2 rounded-lg border p-3 sm:flex-row sm:items-center ${isStale ? "border-amber-300 bg-amber-50/70 dark:border-amber-900 dark:bg-amber-950/20" : "bg-card"}`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Badge variant={isConnected ? "default" : "secondary"}>
-                        {isConnected ? "متصل" : device.status === "active" ? "غير متصل" : "غير نشط"}
-                      </Badge>
+          ) : (
+            staleDevices.length > 0 && (
+              <Card className="border-amber-400/60 bg-amber-50/70 dark:bg-amber-950/20">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base text-amber-900 dark:text-amber-200">
+                    <AlertTriangle className="h-5 w-5" /> أجهزة لم تزامن منذ أكثر من 24 ساعة
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {staleDevices.map((device) => (
+                    <div
+                      key={device.id}
+                      className="flex flex-col justify-between gap-1 border-b border-amber-200/70 pb-2 last:border-0 sm:flex-row sm:items-center"
+                    >
                       <span className="font-medium">{device.name}</span>
+                      <span className="text-sm text-muted-foreground">
+                        آخر مزامنة: {formatDateTime(device.last_sync_at)}
+                      </span>
                     </div>
-                    <span className="text-sm text-muted-foreground">
-                      آخر مزامنة: {formatDateTime(device.last_sync_at)}
-                    </span>
+                  ))}
+                </CardContent>
+              </Card>
+            )
+          )}
+          {(devicesQuery.data?.length ?? 0) > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">حالة المزامنة لكل جهاز</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {(devicesQuery.data ?? []).map((device) => {
+                  const isConnected = isDeviceConnected(
+                    device.status,
+                    device.last_sync_at,
+                    now.getTime(),
+                  );
+                  const isStale = staleDevices.some((staleDevice) => staleDevice.id === device.id);
+                  return (
+                    <div
+                      key={device.id}
+                      className={`flex flex-col justify-between gap-2 rounded-lg border p-3 sm:flex-row sm:items-center ${isStale ? "border-amber-300 bg-amber-50/70 dark:border-amber-900 dark:bg-amber-950/20" : "bg-card"}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Badge variant={isConnected ? "default" : "secondary"}>
+                          {isConnected
+                            ? "متصل"
+                            : device.status === "active"
+                              ? "غير متصل"
+                              : "غير نشط"}
+                        </Badge>
+                        <span className="font-medium">{device.name}</span>
+                      </div>
+                      <span className="text-sm text-muted-foreground">
+                        آخر مزامنة: {formatDateTime(device.last_sync_at)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          )}
+        </section>
+
+        <section className="grid grid-cols-1 gap-4 xl:grid-cols-2" aria-label="العقوبات والموافقات">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <AlertTriangle className="h-5 w-5 text-primary" /> العقوبات والتغييب · هذا الشهر
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {penaltiesQuery.isLoading ? (
+                <div className="h-20 animate-pulse rounded bg-muted/40" />
+              ) : penaltiesQuery.data?.total ? (
+                <>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="rounded-lg bg-muted/50 p-3">
+                      <p className="text-xs text-muted-foreground">استقطاع</p>
+                      <p className="mt-1 text-xl font-bold">
+                        {formatCount(penaltiesQuery.data.deduction)}
+                      </p>
+                    </div>
+                    <div className="rounded-lg bg-muted/50 p-3">
+                      <p className="text-xs text-muted-foreground">غياب</p>
+                      <p className="mt-1 text-xl font-bold">
+                        {formatCount(penaltiesQuery.data.absence)}
+                      </p>
+                    </div>
+                    <div className="rounded-lg bg-muted/50 p-3">
+                      <p className="text-xs text-muted-foreground">إنذار</p>
+                      <p className="mt-1 text-xl font-bold">
+                        {formatCount(penaltiesQuery.data.warning)}
+                      </p>
+                    </div>
                   </div>
-                );
-              })}
+                  <div className="flex flex-wrap gap-2">
+                    <Badge className="bg-emerald-600 text-white">
+                      منفذة: {formatCount(penaltiesQuery.data.executed)}
+                    </Badge>
+                    <Badge variant="outline">
+                      غير منفذة: {formatCount(penaltiesQuery.data.pending)}
+                    </Badge>
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">لا توجد عقوبات هذا الشهر.</p>
+              )}
             </CardContent>
           </Card>
-        )}
-      </section>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <FileSignature className="h-5 w-5 text-primary" /> الاستمارات والموافقات
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {formsQuery.isLoading ? (
+                <div className="h-14 w-24 animate-pulse rounded bg-muted/40" />
+              ) : (formsQuery.data ?? 0) > 0 ? (
+                <>
+                  <p className="text-4xl font-bold tabular-nums">
+                    {formatCount(formsQuery.data ?? 0)}
+                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground">استمارة بانتظار التنفيذ</p>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">لا توجد استمارات بانتظار التنفيذ.</p>
+              )}
+            </CardContent>
+          </Card>
+        </section>
 
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-2" aria-label="العقوبات والموافقات">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <AlertTriangle className="h-5 w-5 text-primary" /> العقوبات والتغييب · هذا الشهر
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {penaltiesQuery.isLoading ? (
-              <div className="h-20 animate-pulse rounded bg-muted/40" />
-            ) : penaltiesQuery.data?.total ? (
-              <>
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div className="rounded-lg bg-muted/50 p-3">
-                    <p className="text-xs text-muted-foreground">استقطاع</p>
-                    <p className="mt-1 text-xl font-bold">
-                      {formatCount(penaltiesQuery.data.deduction)}
-                    </p>
+        <section className="grid grid-cols-1 gap-4" aria-label="مهام الفريق">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <ClipboardCheck className="h-5 w-5 text-primary" /> مهام الفريق اليوم
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {tasksQuery.isLoading ? (
+                <div className="h-14 w-24 animate-pulse rounded bg-muted/40" />
+              ) : tasksQuery.data?.total ? (
+                <div className="space-y-3">
+                  <div className="flex items-baseline gap-2">
+                    <strong className="text-4xl">{formatCount(tasksQuery.data.total)}</strong>
+                    <span className="text-sm text-muted-foreground">مهمة</span>
+                    <Badge variant="secondary">
+                      منجزة {formatCount(tasksQuery.data.completed)}
+                    </Badge>
                   </div>
-                  <div className="rounded-lg bg-muted/50 p-3">
-                    <p className="text-xs text-muted-foreground">غياب</p>
-                    <p className="mt-1 text-xl font-bold">
-                      {formatCount(penaltiesQuery.data.absence)}
-                    </p>
-                  </div>
-                  <div className="rounded-lg bg-muted/50 p-3">
-                    <p className="text-xs text-muted-foreground">إنذار</p>
-                    <p className="mt-1 text-xl font-bold">
-                      {formatCount(penaltiesQuery.data.warning)}
-                    </p>
-                  </div>
+                  <Progress
+                    value={
+                      tasksQuery.data.total
+                        ? (tasksQuery.data.completed / tasksQuery.data.total) * 100
+                        : 0
+                    }
+                    aria-label="نسبة إنجاز مهام اليوم"
+                  />
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Badge className="bg-emerald-600 text-white">
-                    منفذة: {formatCount(penaltiesQuery.data.executed)}
-                  </Badge>
-                  <Badge variant="outline">
-                    غير منفذة: {formatCount(penaltiesQuery.data.pending)}
-                  </Badge>
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">لا توجد عقوبات هذا الشهر.</p>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <FileSignature className="h-5 w-5 text-primary" /> الاستمارات والموافقات
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {formsQuery.isLoading ? (
-              <div className="h-14 w-24 animate-pulse rounded bg-muted/40" />
-            ) : (formsQuery.data ?? 0) > 0 ? (
-              <>
-                <p className="text-4xl font-bold tabular-nums">
-                  {formatCount(formsQuery.data ?? 0)}
-                </p>
-                <p className="mt-2 text-sm text-muted-foreground">استمارة بانتظار التنفيذ</p>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">لا توجد استمارات بانتظار التنفيذ.</p>
-            )}
-          </CardContent>
-        </Card>
-      </section>
-
-      <section className="grid grid-cols-1 gap-4" aria-label="مهام الفريق">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ClipboardCheck className="h-5 w-5 text-primary" /> مهام الفريق اليوم
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {tasksQuery.isLoading ? (
-              <div className="h-14 w-24 animate-pulse rounded bg-muted/40" />
-            ) : tasksQuery.data?.total ? (
-              <div className="space-y-3">
-                <div className="flex items-baseline gap-2">
-                  <strong className="text-4xl">{formatCount(tasksQuery.data.total)}</strong>
-                  <span className="text-sm text-muted-foreground">مهمة</span>
-                  <Badge variant="secondary">منجزة {formatCount(tasksQuery.data.completed)}</Badge>
-                </div>
-                <Progress
-                  value={
-                    tasksQuery.data.total
-                      ? (tasksQuery.data.completed / tasksQuery.data.total) * 100
-                      : 0
-                  }
-                  aria-label="نسبة إنجاز مهام اليوم"
-                />
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">لا توجد مهام مسجلة للفريق اليوم.</p>
-            )}
-          </CardContent>
-        </Card>
-      </section>
+              ) : (
+                <p className="text-sm text-muted-foreground">لا توجد مهام مسجلة للفريق اليوم.</p>
+              )}
+            </CardContent>
+          </Card>
+        </section>
+      </details>
     </div>
   );
 }

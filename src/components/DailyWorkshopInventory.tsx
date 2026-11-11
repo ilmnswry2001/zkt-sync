@@ -154,12 +154,12 @@ async function submitInventory(item: QueuedInventory) {
   if (error) throw error;
 }
 
-export function DailyWorkshopInventory() {
+export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId?:string}={}) {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState("inventory");
   const [date, setDate] = useState(todayInBaghdad());
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>(["all"]);
-  const [workshopId, setWorkshopId] = useState("");
+  const [workshopId, setWorkshopId] = useState(initialWorkshopId);
   const [additionalWorkshopId, setAdditionalWorkshopId] = useState("");
   const [workshopName, setWorkshopName] = useState("");
   const [employeeId, setEmployeeId] = useState("");

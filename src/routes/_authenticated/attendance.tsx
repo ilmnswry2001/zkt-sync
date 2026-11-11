@@ -47,6 +47,10 @@ import { getDefaultWage } from "@/lib/wage-defaults";
 import { PlanBiometricMatch, type BiometricMatchResults } from "@/components/PlanBiometricMatch";
 
 export const Route = createFileRoute("/_authenticated/attendance")({
+  validateSearch: (search: Record<string,unknown>): {workshop?:string;site?:string} => ({
+    workshop: typeof search.workshop==="string" ? search.workshop : undefined,
+    site: typeof search.site==="string" ? search.site : undefined,
+  }),
   head: () => ({ meta: [{ title: "التقارير اليومية" }] }),
   component: AttendancePage,
 });
@@ -112,9 +116,10 @@ type AttendanceRow = {
 const today = todayInBaghdad();
 
 function AttendancePage() {
-  const [activeTab, setActiveTab] = useState<"attendance" | "sites" | "publish" | "inventory">("sites");
+  const search=Route.useSearch();
+  const [activeTab, setActiveTab] = useState<"attendance" | "sites" | "publish" | "inventory">(search.workshop ? "inventory" : "sites");
   const [date, setDate] = useState(today);
-  const [siteId, setSiteId] = useState("");
+  const [siteId, setSiteId] = useState(search.site ?? "");
   const [notes, setNotes] = useState("");
   const [rows, setRows] = useState<ReportLine[]>([]);
   const [editingReportId, setEditingReportId] = useState<string | null>(null);
@@ -780,7 +785,7 @@ function AttendancePage() {
         </button>
       </div>
       {activeTab === "inventory" ? (
-        <DailyWorkshopInventory />
+        <DailyWorkshopInventory initialWorkshopId={search.workshop} />
       ) : activeTab === "publish" ? (
         <Card className="border-primary/20">
           <CardHeader>
