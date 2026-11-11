@@ -53,6 +53,7 @@ function EmployeesPage() {
   const { isAdmin } = useAuth();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Emp | null>(null);
+  const [blockedDeletion, setBlockedDeletion] = useState<{ employee: Emp; payroll: boolean } | null>(null);
   const [allowAllAttendanceSites, setAllowAllAttendanceSites] = useState(false);
   const [attendanceSiteIds, setAttendanceSiteIds] = useState<string[]>([]);
   const [checkInGraceHours, setCheckInGraceHours] = useState("0");
@@ -351,17 +352,27 @@ function EmployeesPage() {
     onError: (e: any) => toast.error(formatErrorMessage(e)),
   });
   const del = useMutation({
-    mutationFn: async (id: string) => { const { error } = await supabase.from("employees").delete().eq("id", id); if (error) throw error; },
+    mutationFn: async (employee: Emp) => {
+      const { error } = await supabase.from("employees").delete().eq("id", employee.id).select("id").single();
+      if (error) throw error;
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); qc.invalidateQueries({ queryKey: ["employees_count"] }); toast.success("تم الحذف"); },
-    onError: (e: any) => toast.error(formatErrorMessage(e)),
+    onError: (error: { code?: string; message: string }, employee) => {
+      if (error.code === "23503") {
+        setBlockedDeletion({ employee, payroll: error.message.includes("payroll_run_lines") });
+      } else toast.error(formatErrorMessage(error));
+    },
   });
   const updateStatus = useMutation({
     mutationFn: async ({ employeeId, status }: { employeeId: string; status: "active" | "inactive" | "terminated" }) => {
-      const { error } = await supabase.from("employees").update({ status }).eq("id", employeeId);
+      const { error } = await supabase.from("employees").update({ status }).eq("id", employeeId).select("id").single();
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["employees"] });
+      qc.invalidateQueries({ queryKey: ["employee-profile"] });
+      qc.invalidateQueries({ queryKey: ["employee-profile-search"] });
+      setBlockedDeletion(null);
       toast.success("تم تحديث حالة الموظف");
     },
     onError: (error: unknown) => toast.error(formatErrorMessage(error)),
@@ -371,6 +382,21 @@ function EmployeesPage() {
 
   return (
     <div className="space-y-6">
+      <Dialog open={!!blockedDeletion} onOpenChange={open => { if (!open && !updateStatus.isPending) setBlockedDeletion(null); }}>
+        <DialogContent dir="rtl">
+          <DialogHeader><DialogTitle>تعذّر حذف ملف الموظف</DialogTitle></DialogHeader>
+          {blockedDeletion && <>
+            <p className="font-medium">{blockedDeletion.employee.full_name} · الرقم الوظيفي {blockedDeletion.employee.employee_no}</p>
+            <p>{blockedDeletion.payroll ? "هذا الملف مرتبط بمسير رواتب محفوظ." : "هذا الملف مرتبط بسجلات أخرى في النظام."} إذا كان الملف مكرراً، يمكنك تعطيله مع الاحتفاظ بسجلاته.</p>
+            <div className="flex flex-wrap gap-2">
+              {blockedDeletion.employee.status === "active" && <Button disabled={updateStatus.isPending} onClick={() => updateStatus.mutate({employeeId:blockedDeletion.employee.id,status:"inactive"})}>
+                {updateStatus.isPending ? "جارٍ التعطيل…" : "تعطيل هذا الملف"}
+              </Button>}
+              <Button variant="outline" disabled={updateStatus.isPending} onClick={() => setBlockedDeletion(null)}>إغلاق</Button>
+            </div>
+          </>}
+        </DialogContent>
+      </Dialog>
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
         <TabsList className="grid h-auto w-full grid-cols-2 gap-2 bg-transparent sm:w-fit">
           <TabsTrigger value="directory" className="min-h-11 rounded-xl border">دليل الموظفين</TabsTrigger>
@@ -797,7 +823,7 @@ function EmployeesPage() {
                     <div className="flex gap-1">
                       <Button size="icon" variant="ghost" title="فتح التقرير الشخصي" aria-label="فتح التقرير الشخصي" onClick={() => openPersonalReport(e)}><UserRound className="w-4 h-4" /></Button>
                       <Button size="icon" variant="ghost" title="تعديل الموظف" aria-label="تعديل الموظف" onClick={() => { setEditing(e); setOpen(true); }}><Pencil className="w-4 h-4" /></Button>
-                      <Button size="icon" variant="ghost" onClick={() => { if (confirm("حذف؟")) del.mutate(e.id); }}><Trash2 className="w-4 h-4 text-destructive" /></Button>
+                      <Button size="icon" variant="ghost" disabled={del.isPending} aria-label={`حذف ملف ${e.full_name} رقم ${e.employee_no}`} onClick={() => { if (confirm(`حذف ملف ${e.full_name} ذي الرقم الوظيفي ${e.employee_no}؟`)) del.mutate(e); }}><Trash2 className="w-4 h-4 text-destructive" /></Button>
                     </div>
                   </TableCell>
                 </TableRow>
