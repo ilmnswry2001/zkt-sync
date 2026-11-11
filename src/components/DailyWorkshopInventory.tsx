@@ -598,6 +598,8 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
 
   const refreshData = async () => {
     await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["project-execution"] }),
+      queryClient.invalidateQueries({ queryKey: ["projects-dashboard"] }),
       queryClient.invalidateQueries({ queryKey: ["workshop-management"] }),
       queryClient.invalidateQueries({ queryKey: ["daily-workshops"] }),
       queryClient.invalidateQueries({ queryKey: ["daily-workshop-members"] }),
@@ -746,6 +748,8 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
       if (sent) {
         toast.success(`تمت مزامنة ${sent} جرد محفوظ دون اتصال`);
         await queryClient.invalidateQueries({ queryKey: ["daily-workshop-reports"] });
+        await queryClient.invalidateQueries({ queryKey: ["project-execution"] });
+        await queryClient.invalidateQueries({ queryKey: ["projects-dashboard"] });
       }
     };
     void flush();
@@ -777,6 +781,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
     await queryClient.invalidateQueries({ queryKey: ["projects-dashboard", date] });
     await queryClient.invalidateQueries({ queryKey: ["site-finalized-plan-follow-up"] });
     await queryClient.invalidateQueries({ queryKey: ["workshop-management"] });
+    await queryClient.invalidateQueries({ queryKey: ["project-execution"] });
     toast.success("تم تحديث مركز تكلفة الموظف لهذا اليوم");
   };
 

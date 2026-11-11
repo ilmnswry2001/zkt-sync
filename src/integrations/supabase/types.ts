@@ -5171,6 +5171,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      project_verified_execution: { Args: { p_date: string }; Returns: { employee_id: string; full_name: string; employee_no: string; site_id: string | null; specialty: string; assignment_source: string; first_punch: string; conflicting: boolean }[] }
+
       set_workshop_period_tasks: { Args: { p_ids: string[]; p_start: string; p_end: string; p_site: string | null; p_activity: string; p_apply?: boolean }; Returns: undefined }
 
       reorder_daily_workshops: { Args: { p_ids: string[] }; Returns: undefined }

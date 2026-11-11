@@ -1,3 +1,4 @@
+import { useProjectExecution } from "@/lib/use-project-execution";
 import { MetricCard, type MetricTone } from "@/components/MetricCard";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
@@ -120,6 +121,7 @@ function AttendancePage() {
   const search=Route.useSearch();
   const [activeTab, setActiveTab] = useState<"attendance" | "sites" | "publish" | "inventory">(search.workshop ? "inventory" : "sites");
   const [date, setDate] = useState(today);
+  const execution = useProjectExecution(date, activeTab === "publish");
   const [siteId, setSiteId] = useState(search.site ?? "");
   const [notes, setNotes] = useState("");
   const [rows, setRows] = useState<ReportLine[]>([]);
@@ -241,7 +243,7 @@ function AttendancePage() {
     (report) => report.site_id === siteId && report.report_date === date,
   );
   const finalizedPlanQuery = useQuery({
-    queryKey: ["site-finalized-plan-follow-up", siteId],
+    queryKey: ["site-finalized-plan-follow-up", siteId, date],
     queryFn: async () => {
       if (!siteId) return null;
       const { data, error } = await supabase
@@ -249,7 +251,10 @@ function AttendancePage() {
         .select("*")
         .eq("site_id", siteId)
         .eq("status", "finalized")
+        .lte("request_date", date)
         .order("request_date", { ascending: false })
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
         .limit(1);
       if (error) throw error;
       const row = data?.[0];
@@ -271,12 +276,26 @@ function AttendancePage() {
     enabled: activeTab === "publish" && !!siteId,
   });
   const matchKey = JSON.stringify([siteId, date, finalizedPlanQuery.data?.id, finalizedPlanQuery.data?.assigned_staff]);
-  const biometricMatch = matchState?.key === matchKey ? matchState.results : null;
+  const biometricMatch = useMemo<BiometricMatchResults | null>(() => {
+    if (execution.isError) return null;
+    if (!execution.isSuccess) return matchState?.key === matchKey ? matchState.results : null;
+    const people = (execution.data ?? []).filter((p) => p.site_id === siteId && !p.conflicting);
+    const presentBySpecialty = new Map<string, number>();
+    for (const person of people)
+      presentBySpecialty.set(person.specialty, (presentBySpecialty.get(person.specialty) ?? 0) + 1);
+    return {
+      presentIds: new Set(people.map((p) => p.employee_id)),
+      presentBySpecialty,
+      totalPresent: people.length,
+      totalPlanned:
+        finalizedPlanQuery.data?.assigned_staff.reduce((s, g) => s + g.employees.length, 0) ?? 0,
+    };
+  }, [execution.data, execution.isSuccess, execution.isError, matchState, matchKey, siteId, finalizedPlanQuery.data]);
   const onMatchChange = useCallback((results: BiometricMatchResults | null) => {
     setMatchState(results ? { key: matchKey, results } : null);
   }, [matchKey]);
   const approveBiometric = async () => {
-    if (!biometricMatch || !finalizedPlanQuery.data || approvingBiometric) return;
+    if (!execution.isSuccess || !biometricMatch || !finalizedPlanQuery.data || approvingBiometric) return;
     setApprovingBiometric(true);
     try {
       const { error } = await supabase.rpc("approve_site_report_from_biometrics", {
@@ -860,6 +879,7 @@ function AttendancePage() {
                   </div>
                 </div>
 
+                {execution.isError && <p role="alert" className="text-sm text-destructive">تعذر قراءة سجل التنفيذ الموحد. تحقق من تطبيق SQL التكامل قبل الاعتماد.</p>}
                 <PlanBiometricMatch
                   key={matchKey}
                   onMatchChange={onMatchChange}
@@ -947,9 +967,9 @@ function AttendancePage() {
                         <div className="space-y-1 text-sm">
                           <p>التكلفة المخططة: <b>{money(plannedCost)}</b></p>
                           <p className={variance > 0 ? "text-success" : variance < 0 ? "text-destructive" : "text-muted-foreground"}>{variance > 0 ? "وفر" : variance < 0 ? "زيادة" : "تطابق الميزانية"}: {money(Math.abs(variance))}</p>
-                          <p className="text-xs text-muted-foreground">أجور يومية حسب التخصص؛ عند غياب الأجر يستخدم الأجر الافتراضي. المطابقة تشمل كوادر الخطة المسماة فقط.</p>
+                          <p className="text-xs text-muted-foreground">أجور يومية حسب التخصص؛ عند غياب الأجر يستخدم الأجر الافتراضي. الحضور والتكلفة يشملان الأفراد المسندين للموقع في سجل البصمة الموحد، بما فيهم تكليفات الورش.</p>
                         </div>
-                        <Button onClick={approveBiometric} disabled={!biometricMatch || approvingBiometric || deductionWagesQuery.isPending || deductionWagesQuery.isError}>
+                        <Button onClick={approveBiometric} disabled={!execution.isSuccess || !biometricMatch || approvingBiometric || deductionWagesQuery.isPending || deductionWagesQuery.isError}>
                           {approvingBiometric ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="ml-2 h-4 w-4" />}
                           {approvingBiometric ? "جارٍ اعتماد التقرير..." : "اعتماد التقرير الميداني من البصمة"}
                         </Button>

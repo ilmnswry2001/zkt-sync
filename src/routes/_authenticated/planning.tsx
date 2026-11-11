@@ -1,3 +1,4 @@
+import { ProjectExecutionPanel } from "@/components/ProjectExecutionPanel";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useAuth } from "@/hooks/use-auth";
@@ -930,7 +931,8 @@ function PlanningPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["planning-project-plans"] });
-      qc.invalidateQueries({ queryKey: ["projects-dashboard"] });
+      qc.invalidateQueries({ queryKey: ["project-execution"] });
+      void qc.invalidateQueries({ queryKey: ["projects-dashboard"] });
       setActiveWorkPlanTab("requested");
       setRequestNotes("");
       setRequestDate(todayInBaghdad());
@@ -975,7 +977,8 @@ function PlanningPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["planning-project-plans"] });
-      qc.invalidateQueries({ queryKey: ["projects-dashboard"] });
+      qc.invalidateQueries({ queryKey: ["project-execution"] });
+      void qc.invalidateQueries({ queryKey: ["projects-dashboard"] });
       toast.success("تم تحديث حالة الخطة");
     },
     onError: (error: any) => toast.error(formatErrorMessage(error, "تعذر تحديث الخطة")),
@@ -987,6 +990,7 @@ function PlanningPage() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["planning-project-plans"] });
+      void qc.invalidateQueries({ queryKey: ["project-execution"] });
       void qc.invalidateQueries({ queryKey: ["projects-dashboard"] });
       toast.success("تم حذف خطة العمل");
     },
@@ -1042,7 +1046,8 @@ function PlanningPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["planning-project-plans"] });
-      qc.invalidateQueries({ queryKey: ["projects-dashboard"] });
+      qc.invalidateQueries({ queryKey: ["project-execution"] });
+      void qc.invalidateQueries({ queryKey: ["projects-dashboard"] });
       setActiveWorkPlanTab("final");
       toast.success("تم تأكيد الخطة النهائية واستعراضها في قسم الخطة النهائية");
     },
@@ -1093,7 +1098,8 @@ function PlanningPage() {
       })
       .catch((error: any) => {
         void qc.invalidateQueries({ queryKey: ["planning-project-plans"] });
-        void qc.invalidateQueries({ queryKey: ["projects-dashboard"] });
+        void qc.invalidateQueries({ queryKey: ["project-execution"] });
+      void qc.invalidateQueries({ queryKey: ["projects-dashboard"] });
         toast.error(formatErrorMessage(error, "تعذر حفظ الكوادر"));
       });
 
@@ -1412,20 +1418,20 @@ function PlanningPage() {
           تعذر تحميل المواقع: {(sitesError as any).message ?? "تحقق من اتصال قاعدة البيانات"}
         </div>
       )}
-      <section className="relative isolate overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-emerald-950 via-teal-900 to-cyan-950 p-6 text-white shadow-xl shadow-emerald-950/15 sm:p-8">
+      <section className="operations-banner relative isolate overflow-hidden rounded-2xl border bg-card p-6 text-foreground sm:p-8">
         <div className="pointer-events-none absolute -left-12 -top-20 -z-10 h-64 w-64 rounded-full border border-white/10" />
         <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-end">
           <div className="max-w-2xl">
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-100/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-emerald-100">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary">
               <Banknote className="h-4 w-4" /> مراجعة واعتماد الخطط
             </div>
             <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">الخطط</h1>
-            <p className="mt-2 text-sm leading-7 text-white/70 sm:text-base">
+            <p className="mt-2 text-sm leading-7 text-muted-foreground sm:text-base">
               راجع احتياج المشروع واعتمد الكميات، ثم وزّع الكوادر على الخطة التنفيذية.
             </p>
           </div>
           <Button
-            className="hidden min-h-11 shrink-0 border border-white/25 bg-white/10 text-white hover:bg-white/20 hover:text-white sm:inline-flex"
+            className="hidden min-h-11 shrink-0 sm:inline-flex"
             variant="outline"
             onClick={() => {
               setEditing(null);
@@ -1435,37 +1441,37 @@ function PlanningPage() {
             <Plus className="ml-2 h-4 w-4" /> إضافة موقع
           </Button>
         </div>
-        <div className="mt-6 grid grid-cols-2 gap-2 border-t border-white/10 pt-4 sm:grid-cols-4">
+        <div className="mt-6 grid grid-cols-2 gap-2 border-t border-border pt-4 sm:grid-cols-4">
           {[
             {
               label: "مواقع مسجلة",
               value: sites.length.toLocaleString("ar-IQ"),
-              tone: "text-white",
+              tone: "text-foreground",
             },
             {
               label: "بانتظار الاعتماد",
               value: requestedPlans.length.toLocaleString("ar-IQ"),
-              tone: "text-amber-200",
+              tone: "text-warning",
             },
             {
               label: "بانتظار توزيع الكوادر",
               value: planningApprovedPlans.length.toLocaleString("ar-IQ"),
-              tone: "text-sky-200",
+              tone: "text-primary",
               onClick: () => setActiveWorkPlanTab("management"),
             },
             {
               label: "خطط نهائية",
               value: finalPlans.length.toLocaleString("ar-IQ"),
-              tone: "text-emerald-200",
+              tone: "text-success",
             },
           ].map((item) => (
             <button
               key={item.label}
               type="button"
               onClick={item.onClick}
-              className="rounded-xl border border-white/10 bg-white/[0.07] px-3 py-2.5 text-right transition hover:bg-white/[0.1]"
+              className="rounded-xl border border-border bg-card/80 px-3 py-2.5 text-right transition hover:bg-accent"
             >
-              <p className="text-xs text-white/60">{item.label}</p>
+              <p className="text-xs text-muted-foreground">{item.label}</p>
               <p className={`mt-1 text-lg font-extrabold tabular-nums ${item.tone}`}>
                 {item.value}
               </p>
@@ -1473,6 +1479,8 @@ function PlanningPage() {
           ))}
         </div>
       </section>
+      <ProjectExecutionPanel sites={sites} />
+
 
       {isMobile ? (
         <Drawer

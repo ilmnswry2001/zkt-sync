@@ -167,6 +167,7 @@ export function WorkshopManagement({
   const invalidate = async () => {
     await Promise.all(
       [
+        "project-execution",
         "workshop-management",
         "daily-workshops",
         "daily-workshop-reports",
