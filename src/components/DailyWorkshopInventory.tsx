@@ -13,6 +13,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Check,
@@ -160,6 +167,10 @@ export function DailyWorkshopInventory() {
   const [drafts, setDrafts] = useState<
     Record<string, { attended: Record<string, boolean>; notes: string }>
   >({});
+  const [printOpen, setPrintOpen] = useState(false);
+  const [printIds, setPrintIds] = useState<string[]>([]);
+  const [selectedUnmatchedEmployeeIds, setSelectedUnmatchedEmployeeIds] = useState<string[]>([]);
+  const [bulkTargetWorkshopId, setBulkTargetWorkshopId] = useState("");
   const [saving, setSaving] = useState(false);
   const [dismissedPunchEmployees, setDismissedPunchEmployees] = useState<Set<string>>(
     () => new Set(),
@@ -169,6 +180,7 @@ export function DailyWorkshopInventory() {
   );
   useEffect(() => setDrafts({}), [date]);
   useEffect(() => {
+    setSelectedUnmatchedEmployeeIds([]);
     setDismissedPunchEmployees(new Set());
     setSelectedWorkshopByPunch({});
   }, [date, selectedDeviceIds]);
@@ -468,7 +480,7 @@ export function DailyWorkshopInventory() {
     });
   };
 
-  const markEmployeePresentInWorkshop = (targetWorkshopId: string, targetEmployeeId: string) => {
+  const markEmployeePresentInWorkshop = (targetWorkshopId: string, ids: string[]) => {
     const saved = reportQuery.data?.reports.find(
       (report) => report.workshop_id === targetWorkshopId,
     );
@@ -482,7 +494,7 @@ export function DailyWorkshopInventory() {
       [targetWorkshopId]: {
         attended: {
           ...(current[targetWorkshopId]?.attended ?? savedAttendance),
-          [targetEmployeeId]: true,
+          ...Object.fromEntries(ids.map((id) => [id, true])),
         },
         notes: current[targetWorkshopId]?.notes ?? saved?.notes ?? "",
       },
@@ -541,39 +553,40 @@ export function DailyWorkshopInventory() {
     );
   };
 
-  const assignUnmatchedPunch = async (employee: Employee, targetWorkshopId: string) => {
+  const assignUnmatchedPunch = async (employees: Employee[], targetWorkshopId: string) => {
     if (!targetWorkshopId) return toast.error("اختر الورشة أولاً");
     setSaving(true);
     try {
       const { data, error } = await supa
         .from("daily_workshop_members")
         .upsert(
-          {
+          employees.map((employee) => ({
             workshop_id: targetWorkshopId,
             employee_id: employee.id,
             role_label: employee.position,
             is_active: true,
-          },
+          })),
           { onConflict: "workshop_id,employee_id" },
         )
-        .select("id, workshop_id, employee_id, role_label, is_active")
-        .single();
+        .select("id, workshop_id, employee_id, role_label, is_active");
       if (error) throw error;
+      const ids = employees.map((employee) => employee.id);
       queryClient.setQueryData<Member[]>(
         ["daily-workshop-members", targetWorkshopId],
-        (current = []) => [...current.filter((member) => member.employee_id !== employee.id), data],
+        (current = []) => [
+          ...current.filter((member) => !ids.includes(member.employee_id)),
+          ...data,
+        ],
       );
-      markEmployeePresentInWorkshop(targetWorkshopId, employee.id);
-      setSelectedWorkshopByPunch((current) => ({ ...current, [employee.id]: "" }));
-      setDismissedPunchEmployees((current) => new Set(current).add(employee.id));
+      markEmployeePresentInWorkshop(targetWorkshopId, ids);
+      setSelectedUnmatchedEmployeeIds((current) => current.filter((id) => !ids.includes(id)));
+      setDismissedPunchEmployees((current) => new Set([...current, ...ids]));
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["daily-workshop-members"] }),
         queryClient.invalidateQueries({ queryKey: ["daily-workshop-all-active-members"] }),
       ]);
       toast.success(
-        targetWorkshopId === workshopId
-          ? `تمت إضافة ${employee.full_name} إلى الورشة وتأشيره حاضراً`
-          : `تمت إضافة ${employee.full_name} إلى الورشة`,
+        `تمت إضافة ${employees.length === 1 ? employees[0].full_name : employees.length + " موظفين"} إلى الورشة وتسجيل الحضور`,
       );
     } catch (error) {
       toast.error(formatErrorMessage(error, "تعذر إضافة الموظف إلى الورشة"));
@@ -785,10 +798,14 @@ export function DailyWorkshopInventory() {
     toast.success("تم تحديث مركز تكلفة الموظف لهذا اليوم");
   };
 
+  const selectedEmployees = unmatchedPunches
+    .map((row) => row.employee)
+    .filter((e) => selectedUnmatchedEmployeeIds.includes(e.id));
+  const reports = reportQuery.data?.reports ?? [];
   const printDailyReport = () => {
-    const savedReports = reportQuery.data?.reports ?? [];
+    const savedReports = reports.filter((report) => printIds.includes(report.id));
     const allLines = reportQuery.data?.lines ?? [];
-    if (!savedReports.length) return toast.error("لا توجد تقارير محفوظة لهذا التاريخ");
+    if (!savedReports.length) return toast.error("يرجى اختيار ورشة واحدة على الأقل");
     const content = savedReports
       .map((report) => {
         const workshop = workshops.find((item) => item.id === report.workshop_id);
@@ -803,7 +820,7 @@ export function DailyWorkshopInventory() {
       .join("");
     if (!printReport(`الجرد اليومي للورش — ${date}`, content)) {
       toast.error("اسمح بالنوافذ المنبثقة لطباعة التقرير");
-    }
+    } else setPrintOpen(false);
   };
 
   const allReportLines = reportQuery.data?.lines ?? [];
@@ -1058,6 +1075,63 @@ export function DailyWorkshopInventory() {
                       .
                     </p>
                   </div>
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <label className="flex gap-2 items-center">
+                      <Checkbox
+                        checked={
+                          selectedEmployees.length === unmatchedPunches.length
+                            ? true
+                            : selectedEmployees.length
+                              ? "indeterminate"
+                              : false
+                        }
+                        onCheckedChange={(checked) =>
+                          setSelectedUnmatchedEmployeeIds(
+                            checked ? unmatchedPunches.map((row) => row.employee.id) : [],
+                          )
+                        }
+                      />
+                      {selectedEmployees.length === unmatchedPunches.length
+                        ? "إلغاء التحديد"
+                        : "تحديد الكل"}{" "}
+                      ({unmatchedPunches.length})
+                    </label>
+                    <Badge variant="secondary">المحددون: {selectedEmployees.length}</Badge>
+                    <select
+                      className={inputClass}
+                      aria-label="الورشة المستهدفة"
+                      value={bulkTargetWorkshopId}
+                      onChange={(e) => setBulkTargetWorkshopId(e.target.value)}
+                    >
+                      <option value="">اختر الورشة المستهدفة</option>
+                      {workshops.map((w) => (
+                        <option key={w.id} value={w.id}>
+                          {w.name}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      disabled={saving || !selectedEmployees.length || !bulkTargetWorkshopId}
+                      onClick={() =>
+                        void assignUnmatchedPunch(selectedEmployees, bulkTargetWorkshopId)
+                      }
+                    >
+                      {saving ? "جارٍ الحفظ…" : "إضافة المحددين إلى الورشة"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      disabled={saving || !selectedEmployees.length}
+                      onClick={() => {
+                        setDismissedPunchEmployees(
+                          (current) => new Set([...current, ...selectedEmployees.map((e) => e.id)]),
+                        );
+                        setSelectedUnmatchedEmployeeIds([]);
+                        toast.success("تم إهمال الموظفين المحددين");
+                      }}
+                    >
+                      إهمال المحددين
+                    </Button>
+                  </div>
                   <div className="space-y-2">
                     {unmatchedPunches.map(({ employee, punch }) => {
                       const device = punch.device_id ? deviceById.get(punch.device_id) : undefined;
@@ -1066,6 +1140,17 @@ export function DailyWorkshopInventory() {
                           key={employee.id}
                           className="flex flex-col gap-3 rounded-lg border bg-background/70 p-3 sm:flex-row sm:items-center sm:justify-between"
                         >
+                          <Checkbox
+                            aria-label={`تحديد ${employee.full_name}`}
+                            checked={selectedUnmatchedEmployeeIds.includes(employee.id)}
+                            onCheckedChange={(checked) =>
+                              setSelectedUnmatchedEmployeeIds((ids) =>
+                                checked
+                                  ? [...ids, employee.id]
+                                  : ids.filter((id) => id !== employee.id),
+                              )
+                            }
+                          />
                           <div className="min-w-0">
                             <p className="font-medium">{employee.full_name}</p>
                             <p className="text-xs text-muted-foreground">
@@ -1106,7 +1191,7 @@ export function DailyWorkshopInventory() {
                               size="sm"
                               onClick={() =>
                                 void assignUnmatchedPunch(
-                                  employee,
+                                  [employee],
                                   selectedWorkshopByPunch[employee.id] ?? "",
                                 )
                               }
@@ -1354,12 +1439,62 @@ export function DailyWorkshopInventory() {
                   />
                   <Button
                     variant="outline"
-                    onClick={printDailyReport}
+                    onClick={() => {
+                      setPrintIds(reports.map((r) => r.id));
+                      setPrintOpen(true);
+                    }}
                     disabled={!reportQuery.data?.reports.length}
                   >
                     <Printer className="ml-2 h-4 w-4" />
                     طباعة التقرير
                   </Button>
+                  <Dialog open={printOpen} onOpenChange={setPrintOpen}>
+                    <DialogContent dir="rtl">
+                      <DialogHeader>
+                        <DialogTitle>تحديد الورش للطباعة</DialogTitle>
+                      </DialogHeader>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => setPrintIds(reports.map((r) => r.id))}
+                        >
+                          تحديد الكل
+                        </Button>
+                        <Button variant="outline" onClick={() => setPrintIds([])}>
+                          إلغاء التحديد
+                        </Button>
+                      </div>
+                      <div className="max-h-[50vh] overflow-y-auto space-y-2">
+                        {reports.map((report) => {
+                          const lines = allReportLines.filter((l) => l.report_id === report.id);
+                          return (
+                            <label key={report.id} className="flex gap-2 items-center">
+                              <Checkbox
+                                checked={printIds.includes(report.id)}
+                                onCheckedChange={(checked) =>
+                                  setPrintIds((ids) =>
+                                    checked
+                                      ? [...ids, report.id]
+                                      : ids.filter((id) => id !== report.id),
+                                  )
+                                }
+                              />
+                              {workshops.find((w) => w.id === report.workshop_id)?.name ?? "ورشة"}{" "}
+                              (حضور: {lines.filter((l) => l.attended).length} من {lines.length})
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <DialogFooter>
+                        <Button onClick={printDailyReport}>
+                          تأكيد وطباعة ({printIds.length} ورش)
+                        </Button>
+                        <Button variant="outline" onClick={() => setPrintOpen(false)}>
+                          إلغاء
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               </div>
             </CardHeader>
