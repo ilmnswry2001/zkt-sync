@@ -48,3 +48,6 @@ Report what changed, files changed, tests executed with actual results, and unre
 Do not implement additional features beyond the requested scope.
 
 - Uploaded device punches are ingested through the authenticated SQL chunk function into attendance_logs and device_sync_records atomically; retain duplicate and unmatched movements for audit without counting them as attendance.
+
+## Approved UI Design Standard
+- For all future UI designs and interface changes, read and follow [.cursor/rules/erp-ui-design.mdc](.cursor/rules/erp-ui-design.mdc). The latest workshop forms, CTR picker, and staff roster are the user-approved reference; apply within the requested scope.

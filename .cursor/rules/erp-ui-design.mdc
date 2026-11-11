@@ -1,0 +1,17 @@
+---
+description: User-approved ERP interface design standard, based on the workshop forms and roster.
+alwaysApply: true
+---
+
+# ERP interface design standard
+
+Apply this style to all future UI designs and requested interface changes in this project, unless the user explicitly requests another style. Apply it within the requested scope; do not redesign unrelated screens.
+
+- Use the latest workshop interface as the reference: `src/components/WorkshopManagement.tsx` and `src/components/WorkshopManagementFields.tsx`.
+- Use a restrained professional ERP layout with clear hierarchy, consistent spacing, meaningful statistics, and semantic theme colors. Preserve Arabic RTL, IQD, responsive behavior, and dark mode.
+- Separate form titles, labels, and controls visibly. Prefer vertical field groups (`flex flex-col gap-3 leading-6`) and generous section spacing; dialogs must scroll on small screens without overlapping fields or clipping actions.
+- Show full names and identifiers, especially the CTR code together with the project name. Use searchable pickers and wrapping text for long options and selected values.
+- Present large staff lists in dedicated searchable, filterable views with attendance and actual cost-center context. Use bounded scrolling and progressive display/pagination where appropriate.
+- Keep cards, tables, and controls consistent with existing Shadcn components. Provide clear loading, error, and empty states.
+- When drag-and-drop ordering is relevant, persist it and provide accessible button/keyboard alternatives.
+- Reuse these patterns according to the workflow; do not force every screen into identical cards or add unrelated functionality.
