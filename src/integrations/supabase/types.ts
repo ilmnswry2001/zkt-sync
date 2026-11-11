@@ -419,6 +419,8 @@ export type Database = {
       }
       daily_workshop_reports: {
         Row: {
+          work_site_id: string | null
+          work_activity: string
           created_at: string
           id: string
           notes: string | null
@@ -428,6 +430,8 @@ export type Database = {
           workshop_id: string
         }
         Insert: {
+          work_site_id?: string | null
+          work_activity?: string
           created_at?: string
           id?: string
           notes?: string | null
@@ -437,6 +441,8 @@ export type Database = {
           workshop_id: string
         }
         Update: {
+          work_site_id?: string | null
+          work_activity?: string
           created_at?: string
           id?: string
           notes?: string | null
@@ -457,6 +463,11 @@ export type Database = {
       }
       daily_workshops: {
         Row: {
+          home_site_id: string | null
+          supervisor_name: string
+          specialty: string
+          description: string
+          sort_order: number
           created_at: string
           created_by: string | null
           id: string
@@ -465,6 +476,11 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          home_site_id?: string | null
+          supervisor_name?: string
+          specialty?: string
+          description?: string
+          sort_order?: number
           created_at?: string
           created_by?: string | null
           id?: string
@@ -473,6 +489,11 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          home_site_id?: string | null
+          supervisor_name?: string
+          specialty?: string
+          description?: string
+          sort_order?: number
           created_at?: string
           created_by?: string | null
           id?: string
@@ -5150,6 +5171,9 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      reorder_daily_workshops: { Args: { p_ids: string[] }; Returns: undefined }
+      set_workshop_daily_tasks: { Args: { p_ids: string[]; p_date: string; p_site: string | null; p_activity: string; p_apply?: boolean }; Returns: undefined }
+
       approve_site_report_from_biometrics: {
         Args: { p_plan_id: string; p_report_date: string }
         Returns: string

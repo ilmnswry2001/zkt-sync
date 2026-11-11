@@ -1,3 +1,4 @@
+import { WorkshopManagement } from "@/components/WorkshopManagement";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -161,7 +162,6 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>(["all"]);
   const [workshopId, setWorkshopId] = useState(initialWorkshopId);
   const [additionalWorkshopId, setAdditionalWorkshopId] = useState("");
-  const [workshopName, setWorkshopName] = useState("");
   const [employeeId, setEmployeeId] = useState("");
   const [employeePickerOpen, setEmployeePickerOpen] = useState(false);
   const [roleLabel, setRoleLabel] = useState("");
@@ -212,7 +212,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
         .from("daily_workshops")
         .select("id, name, is_active")
         .eq("is_active", true)
-        .order("name")
+        .order("sort_order").order("name")
         .then(({ data, error }: any) => {
           if (error) throw error;
           return data ?? [];
@@ -444,7 +444,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
   };
 
   useEffect(() => {
-    if (!workshopId && workshops[0]) setWorkshopId(workshops[0].id);
+    if (!workshops.some(w => w.id === workshopId)) setWorkshopId(workshops[0]?.id ?? "");
   }, [workshopId, workshops]);
   const savedAttended = useMemo(
     () => Object.fromEntries(savedLines.map((line) => [line.employee_id, line.attended])),
@@ -598,33 +598,11 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
 
   const refreshData = async () => {
     await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["workshop-management"] }),
       queryClient.invalidateQueries({ queryKey: ["daily-workshops"] }),
       queryClient.invalidateQueries({ queryKey: ["daily-workshop-members"] }),
       queryClient.invalidateQueries({ queryKey: ["daily-workshop-reports"] }),
     ]);
-  };
-
-  const createWorkshop = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const name = workshopName.trim();
-    if (!name) return;
-    setSaving(true);
-    try {
-      const { data, error } = await supa
-        .from("daily_workshops")
-        .insert({ name })
-        .select("id")
-        .single();
-      if (error) throw error;
-      setWorkshopName("");
-      setWorkshopId(data.id);
-      await refreshData();
-      toast.success("تمت إضافة الورشة");
-    } catch (error) {
-      toast.error(formatErrorMessage(error, "تعذر إضافة الورشة"));
-    } finally {
-      setSaving(false);
-    }
   };
 
   const addMember = async (event: FormEvent<HTMLFormElement>) => {
@@ -798,6 +776,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
     await queryClient.invalidateQueries({ queryKey: ["daily-crew-assignments", date] });
     await queryClient.invalidateQueries({ queryKey: ["projects-dashboard", date] });
     await queryClient.invalidateQueries({ queryKey: ["site-finalized-plan-follow-up"] });
+    await queryClient.invalidateQueries({ queryKey: ["workshop-management"] });
     toast.success("تم تحديث مركز تكلفة الموظف لهذا اليوم");
   };
 
@@ -1265,30 +1244,9 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
           </Card>
         </TabsContent>
 
-        <TabsContent value="workshops" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>إضافة ورشة</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form
-                onSubmit={(event) => void createWorkshop(event)}
-                className="flex flex-col gap-3 sm:flex-row"
-              >
-                <Input
-                  value={workshopName}
-                  maxLength={120}
-                  onChange={(event) => setWorkshopName(event.target.value)}
-                  placeholder="مثال: ورشة عبدالجبار"
-                  required
-                />
-                <Button type="submit" disabled={saving || workshopName.trim().length < 2}>
-                  <Plus className="ml-2 h-4 w-4" />
-                  إضافة الورشة
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
+        <TabsContent value="workshops" className="space-y-6">
+          <WorkshopManagement date={date} onDateChange={setDate} onSelect={id => { setWorkshopId(id); document.getElementById("workshop-roster-management")?.scrollIntoView({ behavior: "smooth" }); }} />
+          <div id="workshop-roster-management" />
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">

@@ -1,3 +1,4 @@
+import { WorkshopManagement } from "@/components/WorkshopManagement";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -80,6 +81,7 @@ type Site = {
 
 function PlanningPage() {
   const qc = useQueryClient();
+  const [workshopSite, setWorkshopSite] = useState<Site | null>(null);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Site | null>(null);
   const [search, setSearch] = useState("");
@@ -500,6 +502,7 @@ function PlanningPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
+                <Button variant="outline" className="w-full justify-between" onClick={() => setWorkshopSite(site)}><span>الورش وفرق العمل التابعة والمكلّفة</span><Users className="h-4 w-4" /></Button>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="rounded-lg border p-3">
                     <p className="text-xs font-semibold text-muted-foreground">إحداثيات GPS</p>
@@ -622,6 +625,9 @@ function PlanningPage() {
           </Card>
         )}
       </div>
+      <Dialog open={!!workshopSite} onOpenChange={open => { if (!open) setWorkshopSite(null); }}>
+        <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-6xl"><DialogHeader><DialogTitle>ورش وعمليات {workshopSite?.name}</DialogTitle></DialogHeader>{workshopSite && <WorkshopManagement siteId={workshopSite.id} />}</DialogContent>
+      </Dialog>
     </div>
   );
 }
