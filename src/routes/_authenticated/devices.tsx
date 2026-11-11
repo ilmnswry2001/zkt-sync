@@ -385,32 +385,40 @@ function DevicesPage() {
   );
 }
 
-type SyncRecordStatus = "all" | "inserted" | "duplicate" | "unmatched" | "unprocessed";
+type SyncRecordStatus = "all" | "inserted" | "duplicate" | "unmatched" | "unprocessed" | "pending" | "error";
 function DeviceSyncRecords({ devices, canView, canDelete }: { devices: Device[]; canView: boolean; canDelete: boolean }) {
   const qc = useQueryClient();
   const [status, setStatus] = useState<SyncRecordStatus>("all");
   const [deviceId, setDeviceId] = useState("all");
   const [search, setSearch] = useState("");
   const [externalId, setExternalId] = useState("");
-  const [verifyType, setVerifyType] = useState("");
-  const [deviceStatus, setDeviceStatus] = useState("");
+  const [pair,setPair] = useState("");
+  const [extra,setExtra] = useState({employee:"", file:"", batch:"", error:"", receivedFrom:"", receivedUntil:""});
+  const normalized = pair.replace(/[٠-٩۰-۹]/g,c => String(c.charCodeAt(0)%16));
+  const parts = normalized.split("/").map(value => value.trim());
+  const [verifyType="", deviceStatus=""] = parts;
+  const validPair = parts.length <= 2 && parts.every(value => !value || value === "—" || (/^-?\d+$/.test(value) && Number(value) >= -2147483648 && Number(value) <= 2147483647));
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(0);
   const pageSize = 50;
-  const term = search.trim().replace(/[,()%\\]/g, " ");
-  const until = dateTo ? new Date(`${dateTo}T00:00:00`) : null;
-  if (until) until.setDate(until.getDate() + 1);
+  function boundary(value: string, end = false) {
+    if (!value) return undefined;
+    return new Date(new Date(`${value}T00:00:00+03:00`).getTime() + (end ? 86400000 : 0)).toISOString();
+  }
+  const filters = {
+    verify: verifyType === "—" ? null : verifyType || undefined,
+    status: deviceStatus === "—" ? null : deviceStatus || undefined,
+    processing: status === "all" ? undefined : status, device: deviceId === "all" ? undefined : deviceId,
+    search: search.trim() || undefined, external: externalId || undefined,
+    from: boundary(dateFrom), until: boundary(dateTo,true),
+    employee: extra.employee.trim() || undefined, file: extra.file.trim() || undefined,
+    error: extra.error.trim() || undefined, batch: extra.batch.trim() || undefined,
+    receivedFrom: boundary(extra.receivedFrom), receivedUntil: boundary(extra.receivedUntil,true),
+  };
   const archive = useMutation({
     mutationFn: async () => {
-      const { data, error } = await (supabase as any).rpc("archive_device_verification_records", {
-        p_verify_type: verifyType ? Number(verifyType) : null,
-        p_status: deviceStatus ? Number(deviceStatus) : null,
-        p_device: deviceId === "all" ? null : deviceId, p_processing: status,
-        p_search: term, p_external: externalId ? Number(externalId) : null,
-        p_from: dateFrom ? new Date(`${dateFrom}T00:00:00`).toISOString() : null,
-        p_until: until?.toISOString() ?? null,
-      });
+      const { data, error } = await (supabase as any).rpc("archive_filtered_verification_records", { f: filters });
       if (error) throw error;
       return data;
     },
@@ -430,23 +438,14 @@ function DeviceSyncRecords({ devices, canView, canDelete }: { devices: Device[];
     onError: (error: Error) => toast.error(formatErrorMessage(error)),
   });
   const query = useQuery({
-    queryKey: ["device-sync-records", status, deviceId, search, externalId, verifyType, deviceStatus, dateFrom, dateTo, page],
-    enabled: canView,
+    queryKey: ["device-sync-records", filters, page],
+    enabled: canView && validPair,
     refetchInterval: 15_000,
     queryFn: async () => {
       const db = supabase as any;
-      let request = db.from("device_sync_records")
-        .select("id, device_id, user_pin, employee_no, employee_id, verify_time, verify_type, status, external_log_id, processing_status, error_message, sync_batch_id, employee:employees(full_name), device:devices(name), batch:sync_batches(received_at), upload:uploaded_files(file_name)", { count: "exact" })
-        .is("archived_at", null).order("verify_time", { ascending: false }).order("id", { ascending: false });
-      if (deviceId !== "all") request = request.eq("device_id", deviceId);
-      if (status === "unprocessed") request = request.in("processing_status", ["pending", "error", "unmatched"]);
-      else if (status !== "all") request = request.eq("processing_status", status);
-      if (term) request = request.or(`user_pin.ilike.%${term}%,employee_no.ilike.%${term}%`);
-      if (externalId.trim()) request = request.eq("external_log_id", Number(externalId));
-      if (verifyType.trim()) request = request.eq("verify_type", Number(verifyType));
-      if (deviceStatus.trim()) request = request.eq("status", Number(deviceStatus));
-      if (dateFrom) request = request.gte("verify_time", new Date(`${dateFrom}T00:00:00`).toISOString());
-      if (until) request = request.lt("verify_time", until.toISOString());
+      const request = db.rpc("filtered_verification_records", { f: filters }, {count:"exact"})
+        .select("id, device_id, user_pin, employee_no, employee_id, verify_time, verify_type, status, external_log_id, processing_status, error_message, sync_batch_id, employee:employees(full_name), device:devices(name), batch:sync_batches(received_at), upload:uploaded_files(file_name)")
+        .order("verify_time", { ascending: false }).order("id", { ascending: false });
       const { data, error, count } = await request.range(page * pageSize, (page + 1) * pageSize - 1);
       if (error) throw error;
       return { rows: data ?? [], count: count ?? 0 };
@@ -454,7 +453,7 @@ function DeviceSyncRecords({ devices, canView, canDelete }: { devices: Device[];
   });
   const rows = query.data?.rows ?? [];
   const totalPages = Math.max(1, Math.ceil((query.data?.count ?? 0) / pageSize));
-  const resetFilters = () => { setStatus("all"); setDeviceId("all"); setSearch(""); setExternalId(""); setVerifyType(""); setDeviceStatus(""); setDateFrom(""); setDateTo(""); setPage(0); };
+  const resetFilters = () => { setStatus("all"); setDeviceId("all"); setSearch(""); setExternalId(""); setPair(""); setExtra({employee:"", file:"", batch:"", error:"", receivedFrom:"", receivedUntil:""}); setDateFrom(""); setDateTo(""); setPage(0); };
   const statusLabel = (value: string) => ({ inserted: "مسجلة", duplicate: "مكررة", unmatched: "رقم غير معرف", pending: "قيد المعالجة", error: "خطأ" }[value] ?? value);
 
   return <Card>
@@ -478,16 +477,22 @@ function DeviceSyncRecords({ devices, canView, canDelete }: { devices: Device[];
             <SelectTrigger><SelectValue placeholder="كل الحالات" /></SelectTrigger><SelectContent>
               <SelectItem value="all">كل الحالات</SelectItem><SelectItem value="inserted">تم تسجيلها</SelectItem><SelectItem value="duplicate">مكررة</SelectItem>
               <SelectItem value="unmatched">رقم غير معرف بالنظام</SelectItem><SelectItem value="unprocessed">لم تعالج أو بها خطأ</SelectItem>
+              <SelectItem value="pending">قيد المعالجة</SelectItem><SelectItem value="error">خطأ</SelectItem>
             </SelectContent>
           </Select>
-          <Input aria-label="نوع التحقق" placeholder="نوع التحقق (رقم)" inputMode="numeric" value={verifyType} onChange={(event) => { setVerifyType(event.target.value.replace(/\D/g, "")); setPage(0); }} />
-          <Input aria-label="حالة الحركة بالجهاز" placeholder="حالة الحركة بالجهاز" inputMode="numeric" value={deviceStatus} onChange={(event) => { setDeviceStatus(event.target.value.replace(/\D/g, "")); setPage(0); }} />
-          <Input aria-label="من تاريخ الحركة" type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setPage(0); }} />
-          <div className="flex gap-2"><Input aria-label="إلى تاريخ الحركة" type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setPage(0); }} /><Button variant="outline" onClick={resetFilters}>مسح</Button></div>
+          <label className="space-y-1">التحقق / الحالة
+            <Input dir="ltr" placeholder="1 / 0" value={pair} onChange={event => {setPair(event.target.value); setPage(0);}} />
+            <span className="text-xs text-muted-foreground">اكتب القيمة أو اضغط عليها في الجدول. للحالة وحدها أدخل <bdi>/ 0</bdi>.</span>
+            {!validPair && <span role="alert" className="block text-xs text-destructive">أدخل رقماً أو شرطة (—) لكل جزء.</span>}
+          </label>
+          {([["employee","اسم الموظف المطابق"],["file","اسم الملف"],["batch","بداية معرف الدفعة"],["error","نص الخطأ"],["receivedFrom","وقت الرفع من"],["receivedUntil","وقت الرفع إلى"]] as const).map(([key,label]) =>
+            <label key={key}>{label}<Input type={key.startsWith("received") ? "date" : "text"} value={extra[key]} onChange={event => {setExtra({...extra,[key]:event.target.value}); setPage(0);}} /></label>)}
+          <label>وقت الحركة من<Input type="date" value={dateFrom} onChange={event => {setDateFrom(event.target.value);setPage(0);}} /></label>
+          <div className="flex gap-2"><label>وقت الحركة إلى<Input aria-label="إلى تاريخ الحركة" type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setPage(0); }} /></label><Button variant="outline" onClick={resetFilters}>مسح</Button></div>
         </div>
         {query.error && <p role="alert" className="text-sm text-destructive">تعذر تحميل السجلات. تحقق من تطبيق ترحيل سجلات التحقق.</p>}
         {canDelete && <div className="flex flex-wrap items-center gap-2">
-          <Button variant="destructive" disabled={(!verifyType && !deviceStatus) || !query.data?.count || query.isError || archive.isPending || reprocess.isPending}
+          <Button variant="destructive" disabled={!validPair || (!verifyType && !deviceStatus) || !query.data?.count || query.isError || archive.isPending || reprocess.isPending}
             onClick={() => {
               if (confirm(`حذف الحركات المطابقة من سجل التحقق في جميع الصفحات؟\nنوع التحقق: ${verifyType || "الكل"} · حالة الجهاز: ${deviceStatus || "الكل"}\nعدد النتائج: ${query.data?.count} حسب الفلاتر الحالية. ستُحفظ نسخة للتدقيق ولن تتغير سجلات الحضور.`)) archive.mutate();
             }}><Trash2 className="ml-2 h-4 w-4" />{archive.isPending ? "جارٍ الحذف…" : "حذف الحركات المطابقة"}</Button>
@@ -501,11 +506,11 @@ function DeviceSyncRecords({ devices, canView, canDelete }: { devices: Device[];
               <TableCell>{row.device?.name ?? devices.find((device) => device.id === row.device_id)?.name ?? "—"}{row.upload?.file_name && <div className="text-xs text-muted-foreground break-all">{row.upload.file_name}</div>}</TableCell>
               <TableCell className="font-mono">{row.user_pin}</TableCell>
               <TableCell>{row.employee_id ? <div>{row.employee?.full_name ?? "موظف مرتبط"}<div className="text-xs text-muted-foreground">{row.employee_no ?? ""}</div></div> : <span className="text-warning">غير مرتبط</span>}</TableCell>
-              <TableCell>{row.verify_type ?? "—"} / {row.status ?? "—"}</TableCell>
+              <TableCell><button type="button" dir="ltr" className="text-primary underline" title="تصفية بهذه القيمة" onClick={() => {setPair(`${row.verify_type ?? "—"} / ${row.status ?? "—"}`); setPage(0);}}>{row.verify_type ?? "—"} / {row.status ?? "—"}</button></TableCell>
               <TableCell>{row.external_log_id ?? "—"}</TableCell>
               <TableCell><Badge variant={row.processing_status === "inserted" ? "default" : row.processing_status === "unmatched" || row.processing_status === "error" ? "destructive" : "secondary"}>{statusLabel(row.processing_status)}</Badge></TableCell>
               <TableCell className="max-w-64 whitespace-normal break-words text-xs text-muted-foreground">{row.error_message ?? "—"}</TableCell>
-              <TableCell className="font-mono text-xs">{row.sync_batch_id.slice(0, 8)}</TableCell>
+              <TableCell className="font-mono text-xs">{row.sync_batch_id?.slice(0, 8) ?? "—"}</TableCell>
             </TableRow>)}
               {!rows.length && <TableRow><TableCell colSpan={10} className="py-8 text-center text-muted-foreground">{query.isLoading ? "جارٍ تحميل السجلات…" : query.error ? "تعذر جلب السجلات؛ راجع صلاحية الحساب وترحيل قاعدة البيانات." : query.data?.count === 0 && status === "all" && deviceId === "all" && !search && !externalId && !verifyType && !deviceStatus && !dateFrom && !dateTo ? "لا توجد تفاصيل مسجلة بعد. انتقل إلى تبويب الأجهزة والمزامنة واضغط «سحب الآن» لتسجيل تفاصيل الحركات الجديدة." : "لا توجد حركات مطابقة للفلاتر الحالية؛ امسح الفلاتر لعرض جميع السجلات."}</TableCell></TableRow>}
             </TableBody>
