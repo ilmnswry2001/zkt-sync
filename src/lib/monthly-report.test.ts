@@ -7,6 +7,7 @@ import {
   loadAllRows,
   monthDates,
   summarizeDays,
+  summarizeAttendancePunches,
 } from "./monthly-report.ts";
 
 test("calendar handles leap years, short months, and December", () => {
@@ -41,24 +42,24 @@ test("merged punches use first entry and last exit, and manual status takes prec
   const days = buildAttendanceDays(
     ["2026-09-01", "2026-09-02", "2026-09-03"],
     [
-      { verify_time: "2026-09-01T17:30:00Z" },
-      { verify_time: "2026-09-01T08:00:00Z" },
-      { verify_time: "2026-09-02T09:00:00Z" },
-      { verify_time: "2026-09-01T12:00:00Z" },
+      { verify_time: "2026-09-01T17:30:00+03:00" },
+      { verify_time: "2026-09-01T08:00:00+03:00" },
+      { verify_time: "2026-09-02T09:00:00+03:00" },
+      { verify_time: "2026-09-01T12:00:00+03:00" },
     ],
     [{ work_date: "2026-09-01", status: "leave", notes: "إجازة معتمدة" }],
     "16:00:00",
     "2026-09-03",
   );
-  assert.equal(days[0].check_in, "2026-09-01T08:00:00Z");
-  assert.equal(days[0].check_out, "2026-09-01T17:30:00Z");
+  assert.equal(days[0].check_in, "2026-09-01T08:00:00+03:00");
+  assert.equal(days[0].check_out, "2026-09-01T17:30:00+03:00");
   assert.equal(days[0].hours, 9.5);
   assert.equal(days[0].overtime_hours, 1.5);
   assert.equal(days[0].status, "leave");
   assert.equal(days[0].manual, true);
   assert.equal(days[0].notes, "إجازة معتمدة");
   assert.equal(days[1].status, "incomplete");
-  assert.equal(days[1].check_in, "2026-09-02T09:00:00Z");
+  assert.equal(days[1].check_in, "2026-09-02T09:00:00+03:00");
   assert.equal(days[1].check_out, null);
   assert.equal(days[1].hours, 0);
   assert.equal(days[2].status, "absent");
@@ -72,6 +73,34 @@ test("merged punches use first entry and last exit, and manual status takes prec
     totalOvertimeHours: 1.5,
     workDays: 3,
   });
+});
+
+test("repeated terminal check-ins infer a Baghdad afternoon checkout", () => {
+  const first = "2026-09-01T08:00:00+03:00";
+  const last = "2026-09-01T12:31:00+03:00";
+  const punches = [last, first].map(verify_time => ({ verify_time, status: 0, source: "zk_agent" }));
+  const summary = summarizeAttendancePunches(punches, "12:00", 1);
+  assert.equal(summary.complete, true);
+  assert.equal(summary.event_details.at(-1)?.type, "out");
+  assert.equal(summary.overtime_hours.toFixed(2), "0.50");
+  const [day] = buildAttendanceDays(["2026-09-01"], punches, [], "16:00", "2026-09-01");
+  assert.equal(day.check_in, first);
+  assert.equal(day.check_out, last);
+  assert.equal(day.hours, 4.52);
+  assert.equal(day.hours.toFixed(1), "4.5");
+  assert.equal(day.status, "present");
+});
+
+test("inference respects short repeats, day boundaries and explicit exits", () => {
+  const punch = (time: string, status = 0) => ({ verify_time: "2026-09-01T" + time + ":00+03:00", status });
+  assert.equal(summarizeAttendancePunches([punch("08:00"), punch("08:59")]).complete, false);
+  assert.equal(summarizeAttendancePunches([punch("08:00"), punch("09:00")]).complete, true);
+  assert.equal(summarizeAttendancePunches([punch("11:30"), punch("12:05")]).complete, true);
+  assert.equal(summarizeAttendancePunches([punch("23:00"), { verify_time: "2026-09-02T02:00:00+03:00", status: 0 }]).complete, false);
+  const explicit = punch("11:45", 1);
+  assert.equal(summarizeAttendancePunches([punch("08:00"), explicit, punch("12:31")]).check_out, explicit.verify_time);
+  const mobile = { ...punch("11:50"), self_event_type: "check_out" };
+  assert.equal(summarizeAttendancePunches([punch("08:00"), mobile, punch("12:31")]).check_out, mobile.verify_time);
 });
 
 test("a single device punch shows its recorded time but remains incomplete", () => {

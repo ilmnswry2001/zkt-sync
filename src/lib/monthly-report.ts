@@ -33,6 +33,25 @@ export function summarizeAttendancePunches(
     }
   });
   const hasStructuredEvents = events.some(({ punch }) => punch.status != null || punch.self_event_type != null);
+  let inferredCheckout = false;
+  const last = events.at(-1);
+  // Some terminals report every punch as check-in. Interpret only the final
+  // device punch, leaving explicit exits, breaks and mobile events intact.
+  if (events.length >= 2 && last && events.every(({ punch }) =>
+    punch.status === 0 && !punch.self_event_type && punch.source !== "mobile_self" && punch.source !== "manual"
+  )) {
+    const firstTime = events[0].punch.verify_time;
+    const lastTime = last.punch.verify_time;
+    const date = dateKeyInTimeZone(firstTime);
+    if (date === dateKeyInTimeZone(lastTime)) {
+      const start = Date.parse(firstTime), end = Date.parse(lastTime);
+      const noon = Date.parse(instantAtTimeInTimeZone(date, "12:00"));
+      if (end - start >= 3600000 || (start < noon && end >= noon)) {
+        last.type = "out";
+        inferredCheckout = true;
+      }
+    }
+  }
   const pairs = (inType: string, outType: string) => {
     const pending: string[] = [];
     const result: [string, string][] = [];
@@ -73,6 +92,7 @@ export function summarizeAttendancePunches(
     overtime = Math.max(0, (Date.parse(checkOut) - Date.parse(shiftEndAt)) / 3600000 - Math.max(0, graceMinutes) / 60);
   }
   return {
+    inferred_checkout: inferredCheckout,
     check_in: checkIn,
     check_out: checkOut,
     hours: Math.max(0, hours),
@@ -178,7 +198,7 @@ export function buildAttendanceDays(
     const friday = isFriday(date);
     const override = manualDays.get(date);
     const manualOvertime = Number(override?.overtime_hours ?? 0);
-    const calculatedOvertime = storedOvertimeByDate.get(date);
+    const calculatedOvertime = attendance.inferred_checkout ? undefined : storedOvertimeByDate.get(date);
     let overtime = manualOvertime > 0
       ? manualOvertime
       : complete
