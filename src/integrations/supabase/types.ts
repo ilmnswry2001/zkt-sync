@@ -879,6 +879,7 @@ export type Database = {
       }
       employee_advance_installments: {
         Row: {
+          deducted_amount: number
           advance_id: string
           amount: number
           created_at: string
@@ -888,6 +889,7 @@ export type Database = {
           status: string
         }
         Insert: {
+          deducted_amount?: number
           advance_id: string
           amount: number
           created_at?: string
@@ -897,6 +899,7 @@ export type Database = {
           status?: string
         }
         Update: {
+          deducted_amount?: number
           advance_id?: string
           amount?: number
           created_at?: string
@@ -5171,6 +5174,9 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      recalculate_payroll_from_specialties: {Args:{p_run:string;p_lines:Json};Returns:undefined}
+      pay_payroll_with_advances: {Args:{p_run:string;p_method:string;p_reference?:string|null};Returns:undefined}
+
       project_verified_execution: { Args: { p_date: string }; Returns: { employee_id: string; full_name: string; employee_no: string; site_id: string | null; specialty: string; assignment_source: string; first_punch: string; conflicting: boolean }[] }
 
       set_workshop_period_tasks: { Args: { p_ids: string[]; p_start: string; p_end: string; p_site: string | null; p_activity: string; p_apply?: boolean }; Returns: undefined }

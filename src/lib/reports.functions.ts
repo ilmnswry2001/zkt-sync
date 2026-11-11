@@ -1,3 +1,4 @@
+import { resolvePayrollWage } from "./payroll-wage-resolution.ts";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
@@ -11,7 +12,6 @@ import {
 } from "./monthly-report.ts";
 import { z } from "zod";
 import { monthInstantRangeInBaghdad, todayInBaghdad } from "./date-time.ts";
-import { getEmployeePayType } from "./employee-pay-type.ts";
 
 async function approvedLeaveOverrides(supabase: any, employeeIds: string[], start: string, endDate: string) {
   const rows: { employee_id: string; work_date: string; status: "leave"; notes: string; overtime_hours: number; is_paid: boolean }[] = [];
@@ -192,14 +192,14 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
     const { data: emp, error } = await supabase
       .from("employees")
       .select(
-        "id, employee_no, full_name, position, base_salary, pay_type, departments(name), sites!employees_site_id_fkey(name, ctr_code), shifts(name, start_time, end_time, grace_minutes), wage_rates(title, daily_rate, monthly_rate, overtime_hour_rate, currency)",
+        "id, employee_no, full_name, position, base_salary, pay_type, salary_type, departments(name), sites!employees_site_id_fkey(name, ctr_code), shifts(name, start_time, end_time, grace_minutes), wage_rates(title, daily_rate, monthly_rate, overtime_hour_rate, currency)",
       )
       .eq("id", data.employee_id)
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!emp) throw new Error("الموظف غير موجود");
 
-    const [logs, overrides, additions, penalties, leaveOverrides, weeklySchedules, storedOvertime] = await Promise.all([
+    const [logs, overrides, additions, penalties, leaveOverrides, weeklySchedules, storedOvertime, wageRates] = await Promise.all([
       loadAllRows((from, to) =>
         supabase
           .from("attendance_logs")
@@ -260,8 +260,10 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
           .lt("work_date", endDate)
           .range(from, to),
       ),
+      loadAllRows((from,to)=>supabase.from("wage_rates").select("id,title,daily_rate,monthly_rate,overtime_hour_rate,currency").order("id").range(from,to)),
     ]);
-    const payType = getEmployeePayType(emp);
+    const resolvedWage = resolvePayrollWage(emp,wageRates);
+    const payType = resolvedWage.payType;
     const days = buildAttendanceDays(
       dates,
       logs,
@@ -274,8 +276,7 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
       storedOvertime as AttendanceDailyOvertime[],
     );
     const summary = summarizeDays(days);
-    const wage = emp.wage_rates;
-    const monthly = Number(emp.base_salary ?? wage?.monthly_rate ?? 0);
+    const monthly = resolvedWage.monthlySalary;
     const additionsTotal = additions.reduce((sum, a) => sum + Number(a.amount ?? 0), 0);
     const deductionsTotal = penalties.reduce(
       (sum, penalty) => sum + Number(penalty.deduction_amount ?? 0),
@@ -284,11 +285,11 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
     const pay = calculatePayroll({
       payType,
       monthlySalary: monthly,
-      dailyRate: Number(wage?.daily_rate ?? (monthly ? monthly / 26 : 0)),
+      dailyRate: resolvedWage.dailyRate,
       daysInMonth: dates.length,
       summary,
       holidayDays: days.filter((day) => day.status === "holiday").length,
-      overtimeHourlyRate: Number(wage?.overtime_hour_rate ?? 0),
+      overtimeHourlyRate: resolvedWage.overtimeHourlyRate,
       additions: additionsTotal,
       deductions: deductionsTotal,
     });
@@ -306,7 +307,7 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
         penalties,
         deductionsTotal,
         total: pay.netPay,
-        currency: wage?.currency ?? "IQD",
+        currency: "IQD",
       },
     };
   });

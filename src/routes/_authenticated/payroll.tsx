@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { printReport, escapeHtml } from "@/lib/report-print";
 import { amountInArabicIqd } from "@/lib/arabic-currency";
 import { currentMonthInBaghdad, monthInstantRangeInBaghdad, todayInBaghdad } from "@/lib/date-time";
-import { getEmployeePayType } from "@/lib/employee-pay-type";
+import { resolvePayrollWage, allocateAdvanceInstallments } from "@/lib/payroll-wage-resolution";
 import {
   type AttendanceDailyOvertime,
   buildAttendanceDays,
@@ -172,6 +172,8 @@ function PayrollSlipPreview({ row, month }: { row: PayrollSlipRow; month: string
 function PayrollPage() {
   const queryClient = useQueryClient();
   const [previewRow, setPreviewRow] = useState<PayrollSlipRow | null>(null);
+  const [recalculationSearch,setRecalculationSearch] = useState("");
+  const [recalculateOpen, setRecalculateOpen] = useState(false);
   const [month, setMonth] = useState(currentMonthInBaghdad);
   const [auditedMonth, setAuditedMonth] = useState<string | null>(null);
   const [auditFlags, setAuditFlags] = useState<PayrollAuditFlag[]>([]);
@@ -284,26 +286,22 @@ function PayrollPage() {
               .range(from, to),
           ),
         ]);
-      const [machineryData, machineryOperationsData] = await Promise.all([
+      const [machineryData, machineryOperationsData, wageRates] = await Promise.all([
         loadAllRows((from, to) => (supabase as any).from("machinery")
           .select("id, code, asset_number, name, category, status, daily_rent")
           .eq("status", "active").order("code").range(from, to)),
         loadAllRows((from, to) => (supabase as any).from("machinery_monthly_operations")
           .select("machinery_id, operating_days, operating_dates")
           .eq("month", `${month}-01`).order("machinery_id").range(from, to)),
+        loadAllRows((from,to)=>supabase.from("wage_rates").select("id,title,monthly_rate,daily_rate,overtime_hour_rate,currency").order("id").range(from,to)),
       ]);
-      const [{ data: runData, error: runError }, { data: advanceData, error: advancesError }] = await Promise.all([
+      const [{ data: runData, error: runError }, { data: advanceData }] = await Promise.all([
         (supabase as any).from("payroll_runs").select("*").eq("month", `${month}-01`).maybeSingle(),
-        (supabase as any).from("employee_advance_installments")
-          .select("id, advance_id, amount, employee_advances!inner(employee_id, status)")
-          .eq("month", `${month}-01`).eq("status", "scheduled").eq("employee_advances.status", "active"),
+        loadAllRows((from,to)=>(supabase as any).from("employee_advance_installments").select("id,advance_id,amount,deducted_amount,employee_advances!inner(employee_id,status)").eq("month",`${month}-01`).eq("status","scheduled").eq("employee_advances.status","active").order("id").range(from,to)).then(data=>({data,error:null})),
       ]);
       if (runError) throw new Error(runError.message);
-      if (advancesError) throw new Error(advancesError.message);
-      const { data: payrollLines, error: linesError } = runData
-        ? await (supabase as any).from("payroll_run_lines").select("employee_id, base_amount, overtime_hours, overtime_amount, additions_amount, deductions_amount, advance_deduction, net_amount, calculation_snapshot").eq("payroll_run_id", runData.id)
-        : { data: [], error: null };
-      if (linesError) throw new Error(linesError.message);
+
+      const payrollLines = runData ? await loadAllRows((from,to)=>(supabase as any).from("payroll_run_lines").select("employee_id,base_amount,overtime_hours,overtime_amount,additions_amount,deductions_amount,advance_deduction,net_amount,calculation_snapshot").eq("payroll_run_id",runData.id).order("id").range(from,to)) : [];
       const approvedLeaveDays: AttendanceOverride[] = (leaveCalendar as any[]).flatMap((form) => {
         const leaveType = Array.isArray(form.leave_types) ? form.leave_types[0] : form.leave_types;
         const end = form.leave_end_date || form.work_date;
@@ -318,6 +316,7 @@ function PayrollPage() {
       });
       return {
         employees,
+        wageRates,
         employeeCount: employees.length,
         additions: additions as Addition[],
         penalties: penalties as Penalty[],
@@ -331,7 +330,7 @@ function PayrollPage() {
         machineryOperations: machineryOperationsData as MachineryOperation[],
         payrollRun: runData,
         payrollLines: payrollLines ?? [],
-        advanceInstallments: (advanceData ?? []) as Array<{ id: string; amount: number; employee_advances: { employee_id: string; status: string } | Array<{ employee_id: string; status: string }> }>,
+        advanceInstallments: (advanceData ?? []) as Array<{ id: string; amount: number; deducted_amount:number; employee_advances: { employee_id: string; status: string } | Array<{ employee_id: string; status: string }> }>,
       };
     },
   });
@@ -360,11 +359,11 @@ function PayrollPage() {
       }),
     };
   }, [query.data]);
-  const rows = useMemo(
+  const recalculatedRows = useMemo(
     () => {
-      const savedLines = new Map((query.data?.payrollLines ?? []).map((line: any) => [line.employee_id, line]));
       return (query.data?.employees ?? []).map((employee) => {
-        const payType = getEmployeePayType(employee);
+        const wage = resolvePayrollWage(employee,query.data?.wageRates ?? []);
+        const payType = wage.payType;
         const days = buildAttendanceDays(
           monthDates(month),
           dataByEmployee.logs.get(employee.employee_no) ?? [],
@@ -377,16 +376,11 @@ function PayrollPage() {
           dataByEmployee.overtime.get(employee.id) ?? [],
         );
         const summary = summarizeDays(days);
-        const monthlySalary = Number(
-          employee.base_salary ?? employee.wage_rates?.monthly_rate ?? 0,
-        );
-        const dailyRate = Number(
-          employee.wage_rates?.daily_rate ?? (monthlySalary ? monthlySalary / 26 : 0),
-        );
-        let additions = (dataByEmployee.additions.get(employee.id) ?? [])
+        const {monthlySalary,dailyRate,overtimeHourlyRate} = wage;
+        const additions = (dataByEmployee.additions.get(employee.id) ?? [])
           .reduce((sum, item) => sum + Number(item.amount || 0), 0);
         const employeePenalties = dataByEmployee.penalties.get(employee.id) ?? [];
-        let deductions = employeePenalties
+        const deductions = employeePenalties
           .reduce((sum, item) => sum + Number(item.deduction_amount || 0), 0);
         const payroll = calculatePayroll({
           payType,
@@ -395,35 +389,62 @@ function PayrollPage() {
           daysInMonth: days.length,
           summary,
           holidayDays: days.filter((day) => day.status === "holiday").length,
-          overtimeHourlyRate: Number(employee.wage_rates?.overtime_hour_rate ?? 0),
+          overtimeHourlyRate,
           additions,
           deductions,
         });
         const advanceInstallments = dataByEmployee.advances.get(employee.id) ?? [];
-        const advanceDeduction = Math.min(payroll.netPay, advanceInstallments.reduce((sum, installment) => sum + Number(installment.amount || 0), 0));
-        const total = Math.max(0, payroll.netPay - advanceDeduction);
-        const saved = ["approved", "paid"].includes(query.data?.payrollRun?.status ?? "")
-          ? savedLines.get(employee.id) as any
-          : undefined;
-        if (saved) {
-          payroll.basePay = Number(saved.base_amount);
-          payroll.overtimeHours = Number(saved.overtime_hours);
-          payroll.overtimePay = Number(saved.overtime_amount);
-          payroll.netPay = Number(saved.net_amount);
-          additions = Number(saved.additions_amount);
-          deductions = Number(saved.deductions_amount);
-          return {
-            employee, payType, payroll,
-            summary: saved.calculation_snapshot?.summary ?? summary,
-            additions, deductions, penalties: employeePenalties,
-            advanceDeduction: Number(saved.advance_deduction), advanceInstallments, total: Number(saved.net_amount),
-          };
-        }
-        return { employee, payType, payroll, summary, additions, deductions, penalties: employeePenalties, advanceDeduction, advanceInstallments, total };
+        const advanceAllocations=allocateAdvanceInstallments(payroll.netPay,advanceInstallments);
+        const advanceDeduction=roundMoney(advanceAllocations.reduce((sum,item)=>sum+item.amount,0));
+        const total=roundMoney(Math.max(0,payroll.netPay-advanceDeduction));
+        return { employee,payType,wage,payroll,summary,additions,deductions,penalties:employeePenalties,advanceDeduction,advanceInstallments,advanceAllocations,total };
+
       });
     },
-    [query.data?.employees, query.data?.payrollLines, query.data?.payrollRun, dataByEmployee, month],
+    [query.data?.employees, query.data?.wageRates, dataByEmployee, month],
   );
+  const rows = useMemo(() => {
+    if (!["approved", "paid"].includes(query.data?.payrollRun?.status ?? ""))
+      return recalculatedRows;
+    const savedLines = new Map(
+      (query.data?.payrollLines ?? []).map((line: any) => [line.employee_id, line]),
+    );
+    return recalculatedRows.map((row) => {
+      const saved = savedLines.get(row.employee.id) as any;
+      if (!saved)
+        return {
+          ...row,
+          payroll: {
+            ...row.payroll,
+            basePay: 0,
+            overtimePay: 0,
+            overtimeHours: 0,
+            grossPay: 0,
+            netPay: 0,
+          },
+          additions: 0,
+          deductions: 0,
+          total: 0,
+          advanceDeduction: 0,
+        };
+      return {
+        ...row,
+        payroll: {
+          ...row.payroll,
+          basePay: Number(saved.base_amount),
+          overtimeHours: Number(saved.overtime_hours),
+          overtimePay: Number(saved.overtime_amount),
+          grossPay: roundMoney(Number(saved.base_amount) + Number(saved.overtime_amount)),
+          netPay: Number(saved.net_amount) + Number(saved.advance_deduction),
+        },
+        summary: saved.calculation_snapshot?.summary ?? row.summary,
+        additions: Number(saved.additions_amount),
+        deductions: Number(saved.deductions_amount),
+        advanceDeduction: Number(saved.advance_deduction),
+        total: Number(saved.net_amount),
+      };
+    });
+  }, [recalculatedRows, query.data?.payrollLines, query.data?.payrollRun?.status]);
   const filteredRows = search.trim()
     ? rows.filter(({ employee }) => `${employee.full_name} ${employee.employee_no}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
     : rows;
@@ -432,8 +453,8 @@ function PayrollPage() {
   const bankRows = rows.filter(
     (row) => row.employee.bank_account?.trim() || row.employee.iban?.trim(),
   );
-  const cashRows = rows.filter(({ employee }) => {
-    if (getEmployeePayType(employee) === "daily") return true;
+  const cashRows = rows.filter(({ employee, payType }) => {
+    if (payType === "daily") return true;
     return [employee.salary_type, employee.contract_type].some((value) =>
       /نقد|cash/i.test(value ?? ""),
     );
@@ -470,6 +491,40 @@ function PayrollPage() {
     onError: (error) => toast.error(`تعذر تدقيق الرواتب: ${error.message}`),
   });
   const isLocked = payrollRun?.status === "approved" || payrollRun?.status === "paid";
+  const recalculatePayroll = useMutation({
+    mutationFn: async () => {
+      if (!payrollRun || payrollRun.status === "paid")
+        throw new Error("لا يمكن إعادة احتساب مسير مصروف");
+      const lines = recalculatedRows.map((row) => ({
+        employee_id: row.employee.id,
+        base_amount: row.payroll.basePay,
+        overtime_hours: row.payroll.overtimeHours,
+        overtime_amount: row.payroll.overtimePay,
+        additions_amount: row.additions,
+        deductions_amount: row.deductions,
+        calculation_snapshot: {
+          summary: row.summary,
+          payType: row.payType,
+          wage: row.wage,
+          advanceAllocations: row.advanceAllocations,
+          penaltyIds: row.penalties.map((item) => item.id),
+        },
+      }));
+      const { error } = await supabase.rpc("recalculate_payroll_from_specialties", {
+        p_run: payrollRun.id,
+        p_lines: lines,
+      });
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      setRecalculateOpen(false);
+      await queryClient.invalidateQueries({ queryKey: ["payroll", month] });
+      toast.success(
+        "تم حفظ نسخة المسير السابق وإعادة الاحتساب وإرسال المسير للمراجعة. يلزم اعتماده مجدداً قبل الصرف.",
+      );
+    },
+    onError: (error) => toast.error(error.message),
+  });
   const savePayrollRun = useMutation({
     mutationFn: async (action: "draft" | "review" | "approve" | "pay") => {
       const { data: auth } = await supabase.auth.getUser();
@@ -483,10 +538,11 @@ function PayrollPage() {
       if (action === "review") runPayload.reviewed_by = auth.user.id;
       if (action === "approve") { runPayload.status = "approved"; runPayload.approved_by = auth.user.id; }
       if (action === "pay") {
-        runPayload.status = "paid"; runPayload.paid_by = auth.user.id;
-        runPayload.payment_method = advancePaymentMethod;
-        runPayload.payment_reference = window.prompt("رقم مرجع التحويل أو سند الصرف (اختياري)") || null;
-        runPayload.paid_at = new Date().toISOString();
+        const reference=window.prompt("رقم مرجع التحويل أو سند الصرف (اختياري)");
+        if(reference===null) return;
+        const {error}=await supabase.rpc("pay_payroll_with_advances",{p_run:payrollRun!.id,p_method:advancePaymentMethod,p_reference:reference||null});
+        if(error) throw error;
+        return;
       }
       let runId = payrollRun?.id;
       if (runId) {
@@ -507,7 +563,7 @@ function PayrollPage() {
             overtime_amount: row.payroll.overtimePay, additions_amount: row.additions,
             deductions_amount: row.deductions, advance_deduction: row.advanceDeduction,
             net_amount: row.total,
-            calculation_snapshot: { summary: row.summary, payType: row.payType, penaltyIds: row.penalties.map((item) => item.id) },
+            calculation_snapshot: { summary: row.summary, payType: row.payType, penaltyIds: row.penalties.map((item) => item.id), wage:row.wage, advanceAllocations:row.advanceAllocations },
           }));
           const { error } = await (supabase as any).from("payroll_run_lines").insert(lines);
           if (error) throw error;
@@ -517,14 +573,7 @@ function PayrollPage() {
         const { error } = await (supabase as any).from("payroll_runs").update({ status: "review" }).eq("id", runId);
         if (error) throw error;
       }
-      if (action === "pay") {
-        const installmentIds = rows.flatMap((row) => row.advanceInstallments.map((item) => item.id));
-        if (installmentIds.length) {
-          const { error } = await (supabase as any).from("employee_advance_installments")
-            .update({ status: "deducted", payroll_run_id: runId }).in("id", installmentIds);
-          if (error) throw error;
-        }
-      }
+
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["payroll", month] });
@@ -617,10 +666,10 @@ function PayrollPage() {
       return;
     }
     const sheetRows = filteredRows.map(
-      ({ employee, payroll, summary, additions, deductions, total: net }) => ({
+      ({ employee, payType, payroll, summary, additions, deductions, total: net }) => ({
         "رقم الموظف": employee.employee_no,
         "اسم الموظف": employee.full_name,
-        "نوع الأجر": getEmployeePayType(employee) === "daily" ? "يومي" : "شهري",
+        "نوع الأجر": payType === "daily" ? "يومي" : "شهري",
         "أيام الحضور": summary.presentDays,
         "إجازة مدفوعة": payroll.leaveDays,
         "إجازة بدون راتب": payroll.unpaidLeaveDays,
@@ -632,7 +681,7 @@ function PayrollPage() {
         الإضافات: additions,
         الاستقطاعات: deductions,
         "صافي الراتب": net,
-        العملة: employee.wage_rates?.currency ?? "IQD",
+        العملة: "IQD",
       }),
     );
     const sheet = XLSX.utils.json_to_sheet(sheetRows);
@@ -824,6 +873,7 @@ function PayrollPage() {
               <Button variant="outline" disabled={savePayrollRun.isPending || query.isLoading} onClick={() => savePayrollRun.mutate("draft")}>حفظ المسودة</Button>
               <Button disabled={savePayrollRun.isPending || query.isLoading || !rows.length} onClick={() => savePayrollRun.mutate("review")}>إرسال للمراجعة</Button>
             </>}
+            {(isPayrollOperator || isCeo) && payrollRun && payrollRun.status !== "paid" && <Button variant="outline" disabled={query.isFetching || recalculatePayroll.isPending} onClick={()=>setRecalculateOpen(true)}><RefreshCw className="h-4 w-4" />إعادة احتساب وتحديث المسير من أجور التخصصات</Button>}
             {isCeo && payrollRun?.status === "review" && <Button disabled={savePayrollRun.isPending} onClick={() => savePayrollRun.mutate("approve")}>اعتماد المسير</Button>}
             {isPayrollOperator && payrollRun?.status === "approved" && <Button disabled={savePayrollRun.isPending} onClick={() => savePayrollRun.mutate("pay")}>تأكيد صرف الرواتب</Button>}
             <Badge variant="secondary">الإجمالي الصافي: {money(total)}</Badge>
@@ -957,6 +1007,7 @@ function PayrollPage() {
                         >
                           <td className="p-3">
                             <b>{row.employee.full_name}</b>
+                            {!isLocked && <p className={row.wage.source==="default"?"text-xs text-warning":"text-xs text-muted-foreground"}>{({linked:"سلم مرتبط",specialty:"مطابقة تخصص",base:"راتب أساسي",default:"أجر افتراضي — راجعه"})[row.wage.source]} · {money(row.payType==="daily"?row.wage.dailyRate:row.wage.monthlySalary)}</p>}
                             <div className="text-xs text-muted-foreground">
                               {row.employee.employee_no} ·{" "}
                               {row.payType === "daily" ? "يومي" : "شهري"}
@@ -1123,6 +1174,113 @@ function PayrollPage() {
               <PayrollSlipPreview row={previewRow} month={month} />
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={recalculateOpen}
+        onOpenChange={(open) => {
+          if (!recalculatePayroll.isPending) setRecalculateOpen(open);
+        }}
+      >
+        <DialogContent dir="rtl" className="max-h-[90dvh] space-y-5 overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>مراجعة إعادة احتساب مسير {month}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm leading-7 text-muted-foreground">
+            تُحفظ نسخة من المبالغ القديمة، ثم يُعاد المسير للمراجعة والاعتماد. لا يتم صرف الرواتب
+            أو استهلاك أقساط السلف الآن.
+          </p>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="rounded-xl border p-4">
+              <p className="text-xs text-muted-foreground">الصافي المحفوظ / الحالي</p>
+              <b className="mt-3 block">{money(total)}</b>
+            </div>
+            <div className="rounded-xl border p-4">
+              <p className="text-xs text-muted-foreground">الصافي بعد الاحتساب</p>
+              <b className="mt-3 block">
+                {money(recalculatedRows.reduce((sum, row) => sum + row.total, 0))}
+              </b>
+            </div>
+          </div>
+          <p className="text-sm">
+            الموظفون: {recalculatedRows.length} · أجور تخصصات:{" "}
+            {recalculatedRows.filter((row) => row.wage.source === "specialty").length} · أجور
+            افتراضية تحتاج مراجعة:{" "}
+            {recalculatedRows.filter((row) => row.wage.source === "default").length}
+          </p>
+          <p className="text-sm">
+            أقساط السلف المقترحة:{" "}
+            {money(recalculatedRows.reduce((sum, row) => sum + row.advanceDeduction, 0))}
+          </p>
+          <p className="text-xs leading-6 text-warning">
+            راجع الأجور الافتراضية قبل التأكيد. اليومي: حضور فعلي فقط، دون WO أو إجازات وعطلات غير
+            معمول بها. الاستقطاع النهائي يُتحقق منه في قاعدة البيانات.
+          </p>
+          <details className="space-y-3">
+            <summary className="cursor-pointer text-sm font-medium">
+              تدقيق أجور الموظفين قبل إعادة الاحتساب
+            </summary>
+            <Input
+              aria-label="بحث في معاينة إعادة الاحتساب"
+              placeholder="ابحث بالاسم أو رقم الموظف"
+              value={recalculationSearch}
+              onChange={(e) => setRecalculationSearch(e.target.value)}
+            />
+            <div className="max-h-60 overflow-auto rounded-lg border">
+              <table className="w-full text-right text-xs">
+                <thead>
+                  <tr>
+                    <th className="p-2">الموظف / الأجر</th>
+                    <th className="p-2">الحضور</th>
+                    <th className="p-2">الصافي</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recalculatedRows
+                    .filter((row) =>
+                      `${row.employee.full_name} ${row.employee.employee_no}`.includes(
+                        recalculationSearch,
+                      ),
+                    )
+                    .slice(0, 30)
+                    .map((row) => (
+                      <tr key={row.employee.id} className="border-t">
+                        <td className="p-2">
+                          {row.employee.full_name}
+                          <p className="mt-1 text-muted-foreground">
+                            {row.employee.employee_no} ·{" "}
+                            {row.payType === "daily" ? "يومي" : "شهري"} ·{" "}
+                            {money(
+                              row.payType === "daily"
+                                ? row.wage.dailyRate
+                                : row.wage.monthlySalary,
+                            )}{" "}
+                            ·{" "}
+                            {row.wage.source === "default"
+                              ? "افتراضي يحتاج مراجعة"
+                              : row.wage.wageTitle}
+                          </p>
+                        </td>
+                        <td className="p-2">{row.summary.presentDays}</td>
+                        <td className="p-2">{money(row.total)}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              تعرض المعاينة أول 30 نتيجة؛ استخدم البحث للوصول إلى أي موظف. يشمل التحديث جميع
+              الموظفين.
+            </p>
+          </details>
+          <Button
+            disabled={recalculatePayroll.isPending || query.isFetching || !recalculatedRows.length}
+            onClick={() => recalculatePayroll.mutate()}
+          >
+            {recalculatePayroll.isPending
+              ? "جارٍ إعادة الاحتساب…"
+              : "تأكيد إعادة الاحتساب وإرساله للمراجعة"}
+          </Button>
         </DialogContent>
       </Dialog>
     </div>

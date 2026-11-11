@@ -306,7 +306,7 @@ export function calculatePayroll(options: {
   const woDays = isDaily ? 0 : (summary.woDays ?? 0);
   const workedDays = summary.presentDays;
   const paidHolidays = isDaily ? 0 : Math.max(0, holidayDays);
-  const paidLeaveDays = summary.leaveDays - summary.unpaidLeaveDays;
+  const paidLeaveDays = isDaily ? 0 : summary.leaveDays - summary.unpaidLeaveDays;
   const paidDays = workedDays + woDays + paidHolidays + paidLeaveDays;
   const overtimePay = roundMoney(summary.totalOvertimeHours * Math.max(0, overtimeHourlyRate));
   const basePay = roundMoney(dayRate * paidDays);
