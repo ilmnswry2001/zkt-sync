@@ -21,7 +21,13 @@ import {
   Archive,
   RotateCcw,
 } from "lucide-react";
-import { reorderWorkshopIds } from "@/lib/workshop-management";
+import { WorkshopRoster, WorkshopSitePicker } from "@/components/WorkshopManagementFields";
+import {
+  reorderWorkshopIds,
+  workshopPeriodDays,
+  workshopSiteLabel,
+  type WorkshopSiteOption,
+} from "@/lib/workshop-management";
 import { toast } from "sonner";
 
 type Workshop = {
@@ -47,7 +53,7 @@ type Line = {
   site_id: string | null;
 };
 const db = supabase as any;
-const field = "h-10 w-full rounded-md border border-input bg-background px-3 text-sm";
+
 const blank = { name: "", home_site_id: "", supervisor_name: "", specialty: "", description: "" };
 
 // Read full collections, including sites with more than Supabase's default page size.
@@ -88,6 +94,10 @@ export function WorkshopManagement({
   const [editing, setEditing] = useState<Workshop | "new" | null>(null);
   const [form, setForm] = useState(blank);
   const [task, setTask] = useState<Workshop | null>(null);
+  const [roster, setRoster] = useState<Workshop | null>(null);
+  const [periodTask, setPeriodTask] = useState(false);
+  const [taskStart, setTaskStart] = useState(date);
+  const [taskEnd, setTaskEnd] = useState(date);
   const [taskIds, setTaskIds] = useState<string[]>([]);
   const [taskSite, setTaskSite] = useState("");
   const [applyTask, setApplyTask] = useState(true);
@@ -115,7 +125,7 @@ export function WorkshopManagement({
           "daily_workshops",
           "id,name,is_active,home_site_id,supervisor_name,specialty,description,sort_order",
         ),
-        pages("sites", "id,name"),
+        pages("sites", "id,name,ctr_code"),
         pages(
           "daily_workshop_members",
           "id,workshop_id,employee_id,role_label,employees(full_name,employee_no)",
@@ -145,7 +155,7 @@ export function WorkshopManagement({
       }
       return {
         workshops: workshops as Workshop[],
-        sites: sites as { id: string; name: string }[],
+        sites: sites as WorkshopSiteOption[],
         members,
         reports: reports as Report[],
         lines,
@@ -193,7 +203,10 @@ export function WorkshopManagement({
     (w) =>
       w.is_active !== archived && `${w.name} ${w.supervisor_name} ${w.specialty}`.includes(search),
   );
-  const siteName = (id?: string | null) => data?.sites.find((s) => s.id === id)?.name ?? "غير محدد";
+  const siteName = (id?: string | null) =>
+    data?.sites.find((s) => s.id === id)
+      ? workshopSiteLabel(data.sites.find((s) => s.id === id)!)
+      : "غير محدد";
   const scopedReportIds = new Set(scoped.map((w) => reports.get(w.id)?.id).filter(Boolean));
   const homeReportIds = new Set(
     scoped.filter((w) => w.home_site_id === siteId).map((w) => reports.get(w.id)?.id),
@@ -371,47 +384,9 @@ export function WorkshopManagement({
                     وجهة التنفيذ: {siteName(report?.work_site_id)}
                   </p>
                 </div>
-                <details className="rounded-lg border p-3">
-                  <summary className="cursor-pointer text-sm font-medium">
-                    أسماء الكادر ({count})
-                  </summary>
-                  <div className="mt-3 max-h-48 space-y-2 overflow-auto">
-                    {data!.members
-                      .filter((m) => m.workshop_id === w.id)
-                      .map((m) => {
-                        const employee = Array.isArray(m.employees) ? m.employees[0] : m.employees;
-                        return (
-                          <div
-                            key={m.id}
-                            className="flex items-start justify-between gap-2 border-b pb-2 text-xs"
-                          >
-                            <div>
-                              <p className="font-medium">
-                                {employee?.full_name ?? "موظف غير متاح"}
-                              </p>
-                              <p className="mt-1 text-muted-foreground">
-                                {employee?.employee_no} · {m.role_label || "بدون تخصص"}
-                              </p>
-                            </div>
-                            <span
-                              className={
-                                lines.some((l) => l.employee_id === m.employee_id && l.attended)
-                                  ? "text-primary"
-                                  : "text-muted-foreground"
-                              }
-                            >
-                              {lines.some((l) => l.employee_id === m.employee_id && l.attended)
-                                ? "حاضر بالتقرير"
-                                : "غير مؤشّر"}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    {!count && (
-                      <p className="text-xs text-muted-foreground">لم يُضف كادر للورشة.</p>
-                    )}
-                  </div>
-                </details>
+                <Button variant="outline" className="w-full" onClick={() => setRoster(w)}>
+                  عرض الكادر والحضور ({count})
+                </Button>
                 {siteId && (
                   <Badge variant="outline">
                     {w.home_site_id === siteId ? "ورشة تابعة للمقر" : "فريق مكلف بالعمل في الموقع"}
@@ -437,6 +412,9 @@ export function WorkshopManagement({
                       variant="ghost"
                       onClick={() => {
                         setTask(w);
+                        setPeriodTask(false);
+                        setTaskStart(date);
+                        setTaskEnd(date);
                         setTaskIds([w.id]);
                         setTaskSite(report?.work_site_id ?? "");
                         setActivity(report?.work_activity ?? "");
@@ -483,12 +461,12 @@ export function WorkshopManagement({
           if (!open && !busy) setEditing(null);
         }}
       >
-        <DialogContent dir="rtl">
+        <DialogContent dir="rtl" className="max-h-[90dvh] overflow-y-auto gap-6 sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>{editing === "new" ? "إضافة ورشة" : "هوية الورشة وإعداداتها"}</DialogTitle>
           </DialogHeader>
           <form
-            className="space-y-4"
+            className="space-y-6"
             onSubmit={(e) => {
               e.preventDefault();
               void run(async () => {
@@ -511,7 +489,7 @@ export function WorkshopManagement({
               });
             }}
           >
-            <Label className="block space-y-2">
+            <Label className="flex flex-col items-stretch gap-3 leading-6">
               <span>اسم الورشة</span>
               <Input
                 required
@@ -521,22 +499,16 @@ export function WorkshopManagement({
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
             </Label>
-            <Label className="block space-y-2">
+            <Label className="flex flex-col items-stretch gap-3 leading-6">
               <span>المقر الدائم / الموقع الحاضن</span>
-              <select
-                className={field}
+              <WorkshopSitePicker
+                label="المقر الدائم"
+                sites={data!.sites}
                 value={form.home_site_id}
-                onChange={(e) => setForm({ ...form, home_site_id: e.target.value })}
-              >
-                <option value="">غير محدد</option>
-                {data!.sites.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(id) => setForm({ ...form, home_site_id: id })}
+              />
             </Label>
-            <Label className="block space-y-2">
+            <Label className="flex flex-col items-stretch gap-3 leading-6">
               <span>مسؤول الفريق</span>
               <Input
                 maxLength={120}
@@ -544,7 +516,7 @@ export function WorkshopManagement({
                 onChange={(e) => setForm({ ...form, supervisor_name: e.target.value })}
               />
             </Label>
-            <Label className="block space-y-2">
+            <Label className="flex flex-col items-stretch gap-3 leading-6">
               <span>التخصص الأساسي</span>
               <Input
                 maxLength={120}
@@ -553,7 +525,7 @@ export function WorkshopManagement({
                 onChange={(e) => setForm({ ...form, specialty: e.target.value })}
               />
             </Label>
-            <Label className="block space-y-2">
+            <Label className="flex flex-col items-stretch gap-3 leading-6">
               <span>وصف وإمكانات الورشة</span>
               <Textarea
                 maxLength={1000}
@@ -602,20 +574,23 @@ export function WorkshopManagement({
           if (!open && !busy) setTask(null);
         }}
       >
-        <DialogContent dir="rtl">
+        <DialogContent dir="rtl" className="max-h-[90dvh] overflow-y-auto gap-6 sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>
-              تكليف {task?.name} · {date}
-            </DialogTitle>
+            <DialogTitle>تكليف {task?.name}</DialogTitle>
           </DialogHeader>
           <form
-            className="space-y-4"
+            className="space-y-6"
             onSubmit={(e) => {
               e.preventDefault();
+              if (!workshopPeriodDays(periodTask ? taskStart : date, periodTask ? taskEnd : date)) {
+                toast.error("اختر فترة صحيحة بحد أقصى 366 يوماً");
+                return;
+              }
               void run(async () => {
-                const { error } = await supabase.rpc("set_workshop_daily_tasks", {
+                const { error } = await supabase.rpc("set_workshop_period_tasks", {
                   p_ids: taskIds,
-                  p_date: date,
+                  p_start: periodTask ? taskStart : date,
+                  p_end: periodTask ? taskEnd : date,
                   p_site: taskSite || null,
                   p_activity: activity.trim(),
                   p_apply: applyTask,
@@ -625,6 +600,48 @@ export function WorkshopManagement({
               });
             }}
           >
+            <div className="space-y-4 rounded-xl border bg-muted/30 p-4">
+              <label className="flex items-center gap-3 text-sm font-medium">
+                <input
+                  type="checkbox"
+                  checked={periodTask}
+                  onChange={(e) => setPeriodTask(e.target.checked)}
+                />
+                إسناد مستمر لفترة محددة
+              </label>
+              {periodTask ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Label className="flex flex-col gap-3 leading-6">
+                    من تاريخ
+                    <Input
+                      type="date"
+                      required
+                      value={taskStart}
+                      onChange={(e) => setTaskStart(e.target.value)}
+                    />
+                  </Label>
+                  <Label className="flex flex-col gap-3 leading-6">
+                    إلى تاريخ
+                    <Input
+                      type="date"
+                      required
+                      min={taskStart}
+                      value={taskEnd}
+                      onChange={(e) => setTaskEnd(e.target.value)}
+                    />
+                  </Label>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">ليوم {date} فقط</p>
+              )}
+              {periodTask && (
+                <p className="text-xs text-muted-foreground">
+                  يشمل يوم البداية والنهاية ·{" "}
+                  {workshopPeriodDays(taskStart, taskEnd) || "فترة غير صحيحة"} يوم · الحد الأقصى 366
+                  يوماً
+                </p>
+              )}
+            </div>
             <fieldset className="space-y-2">
               <legend className="mb-2 text-sm font-medium">تطبيق التكليف على الورش</legend>
               <div className="max-h-36 space-y-2 overflow-auto rounded-lg border p-3">
@@ -647,23 +664,17 @@ export function WorkshopManagement({
                   ))}
               </div>
             </fieldset>
-            <Label className="block space-y-2">
+            <Label className="flex flex-col items-stretch gap-3 leading-6">
               <span>موقع التنفيذ / مركز التكلفة</span>
-              <select
-                className={field}
+              <WorkshopSitePicker
+                label="موقع التنفيذ / مركز التكلفة"
+                sites={data!.sites}
                 value={taskSite}
-                onChange={(e) => setTaskSite(e.target.value)}
-              >
-                <option value="">دون إسناد افتراضي</option>
-                {data!.sites.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+                onChange={setTaskSite}
+              />
             </Label>
-            <Label className="block space-y-2">
-              <span>عمل اليوم</span>
+            <Label className="flex flex-col items-stretch gap-3 leading-6">
+              <span>وصف الأعمال المسندة</span>
               <Input
                 maxLength={200}
                 placeholder="مثال: المحطة الخامسة — أعمال الستيل"
@@ -672,8 +683,9 @@ export function WorkshopManagement({
               />
             </Label>
             <p className="text-sm text-muted-foreground">
-              التكليف لهذا اليوم فقط. ترثه أسطر الجرد الجديدة، ويمكن تطبيقه على الحاضرين غير
-              المسندين. الإسنادات الفردية السابقة محفوظة؛ عدّلها من توزيع العمل عند الحاجة.
+              يُحفظ التكليف لكل يوم ضمن الفترة المختارة، وتظهر وجهته تلقائياً عند تسجيل الحضور. يمكن
+              تطبيقه على الحاضرين غير المسندين. الإسنادات الفردية السابقة محفوظة؛ عدّلها من توزيع
+              العمل عند الحاجة.
             </p>
             <label className="flex items-center gap-2 text-sm">
               <input
@@ -683,10 +695,41 @@ export function WorkshopManagement({
               />
               تطبيق على الحاضرين غير المسندين حالياً
             </label>
-            <Button type="submit" disabled={busy || !taskIds.length}>
-              {busy ? "جارٍ الحفظ…" : `حفظ تكليف اليوم (${taskIds.length})`}
+            <Button
+              type="submit"
+              disabled={
+                busy ||
+                !taskIds.length ||
+                !workshopPeriodDays(periodTask ? taskStart : date, periodTask ? taskEnd : date)
+              }
+            >
+              {busy
+                ? "جارٍ الحفظ…"
+                : `حفظ ${periodTask ? "تكليف الفترة" : "تكليف اليوم"} (${taskIds.length})`}
             </Button>
           </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={!!roster}
+        onOpenChange={(open) => {
+          if (!open) setRoster(null);
+        }}
+      >
+        <DialogContent dir="rtl" className="max-h-[90dvh] overflow-y-auto gap-6 sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>
+              كادر {roster?.name} · {date}
+            </DialogTitle>
+          </DialogHeader>
+          {roster && (
+            <WorkshopRoster
+              key={roster.id}
+              members={data!.members.filter((m) => m.workshop_id === roster.id)}
+              lines={data!.lines.filter((l) => l.report_id === reports.get(roster.id)?.id)}
+              sites={data!.sites}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </section>
