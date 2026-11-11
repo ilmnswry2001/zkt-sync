@@ -160,6 +160,7 @@ export function DailyWorkshopInventory() {
   const [date, setDate] = useState(todayInBaghdad());
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>(["all"]);
   const [workshopId, setWorkshopId] = useState("");
+  const [additionalWorkshopId, setAdditionalWorkshopId] = useState("");
   const [workshopName, setWorkshopName] = useState("");
   const [employeeId, setEmployeeId] = useState("");
   const [employeePickerOpen, setEmployeePickerOpen] = useState(false);
@@ -633,17 +634,19 @@ export function DailyWorkshopInventory() {
     setSaving(true);
     try {
       const { error } = await supa.from("daily_workshop_members").upsert(
-        {
-          workshop_id: workshopId,
+        [...new Set([workshopId, additionalWorkshopId].filter(Boolean))].map(id => ({
+          workshop_id: id,
           employee_id: employee.id,
           role_label: roleLabel.trim() || employee.position || null,
           is_active: true,
-        },
+        })),
         { onConflict: "workshop_id,employee_id" },
       );
       if (error) throw error;
       setEmployeeId("");
       setRoleLabel("");
+      setAdditionalWorkshopId("");
+      await queryClient.invalidateQueries({ queryKey: ["daily-workshop-all-active-members"] });
       await refreshData();
       toast.success("تم إسناد الموظف إلى الورشة");
     } catch (error) {
@@ -1378,6 +1381,12 @@ export function DailyWorkshopInventory() {
                       placeholder="عامل، كوسرجي..."
                     />
                   </div>
+                  <label className="space-y-1.5">ورشة ثانية (اختياري)
+                    <select className={inputClass} value={additionalWorkshopId === workshopId ? "" : additionalWorkshopId} onChange={event => setAdditionalWorkshopId(event.target.value)}>
+                      <option value="">بدون ورشة ثانية</option>
+                      {workshops.filter(w => w.id !== workshopId).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                    </select>
+                  </label>
                   <Button type="submit" disabled={saving || !employeeId} className="self-end">
                     <Plus className="ml-2 h-4 w-4" />
                     إضافة للكادر

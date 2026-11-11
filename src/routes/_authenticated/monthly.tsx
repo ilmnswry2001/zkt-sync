@@ -23,6 +23,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { EmployeeReportHistory } from "@/components/EmployeeReportHistory";
 import { getEmployeeMonthly, getMonthlySheet, setDayStatus } from "@/lib/reports.functions";
 import { dailyTotals, type DayStatus, type ComputedStatus } from "@/lib/monthly-report";
 import { COMPANY_TIME_ZONE, currentMonthInBaghdad } from "@/lib/date-time";
@@ -466,7 +467,8 @@ function MonthlyPage() {
       </header>
 
       <Tabs defaultValue="attendance" dir="rtl" className="space-y-4">
-        <TabsList className="grid h-auto w-full grid-cols-1 gap-2 bg-transparent p-0 sm:grid-cols-3">
+        <TabsList className="grid h-auto w-full grid-cols-1 gap-2 bg-transparent p-0 sm:grid-cols-4">
+          <TabsTrigger value="history" className="min-h-12 rounded-xl border bg-card">سجل التغييرات</TabsTrigger>
           <TabsTrigger value="attendance" className="min-h-12 rounded-xl border bg-card">
             <CalendarDays className="ml-2 h-4 w-4" /> كشف حضور الموظفين
           </TabsTrigger>
@@ -477,6 +479,7 @@ function MonthlyPage() {
             <Cog className="ml-2 h-4 w-4" /> حضور الآليات
           </TabsTrigger>
       </TabsList>
+      <TabsContent value="history"><EmployeeReportHistory key={month} month={month} /></TabsContent>
       <TabsContent value="attendance" className="mt-0">
       <Card className="min-w-0 overflow-hidden">
         <div className="grid grid-cols-1 gap-3 border-b p-4 sm:grid-cols-2 xl:grid-cols-3">

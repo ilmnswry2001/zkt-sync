@@ -2,6 +2,7 @@ import { formatErrorMessage } from "@/lib/error-message";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { EmployeeReportHistory } from "@/components/EmployeeReportHistory";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { FaceCameraDialog } from "@/components/FaceCameraDialog";
@@ -733,6 +734,7 @@ export function EmployeeProfileContent({
       </div>
       <Tabs defaultValue="overview" className="space-y-5">
         <TabsList className={`grid h-auto w-full grid-cols-2 gap-2 bg-transparent sm:grid-cols-4 ${canEnrollFace ? "lg:grid-cols-8" : "lg:grid-cols-7"}`}>
+          <TabsTrigger value="history">سجل التغييرات</TabsTrigger>
           <TabsTrigger value="overview" className="min-h-11 rounded-xl border">
             نظرة عامة
           </TabsTrigger>
@@ -759,6 +761,7 @@ export function EmployeeProfileContent({
           </TabsTrigger>
           {canEnrollFace && <TabsTrigger value="face" className="min-h-11 rounded-xl border"><ScanFace className="ml-2 h-4 w-4" /> بصمة الوجه</TabsTrigger>}
         </TabsList>
+        <TabsContent value="history"><EmployeeReportHistory key={employeeId} employeeId={employeeId} /></TabsContent>
         <TabsContent value="overview" className="grid gap-4 lg:grid-cols-3">
           <Card className="lg:col-span-2">
             <CardHeader>
