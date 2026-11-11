@@ -15,3 +15,5 @@ Apply this style to all future UI designs and requested interface changes in thi
 - Keep cards, tables, and controls consistent with existing Shadcn components. Provide clear loading, error, and empty states.
 - When drag-and-drop ordering is relevant, persist it and provide accessible button/keyboard alternatives.
 - Reuse these patterns according to the workflow; do not force every screen into identical cards or add unrelated functionality.
+
+- Design and verify light mode explicitly, not only dark mode. Use the shared daylight palette and `MetricCard` statistical readouts; check text/field contrast, long IQD values, and mobile layouts in both themes.

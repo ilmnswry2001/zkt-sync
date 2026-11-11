@@ -1,3 +1,4 @@
+import { MetricCard, type MetricTone } from "@/components/MetricCard";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -77,19 +78,8 @@ function StatCard({
   icon: typeof Users;
   tone: string;
 }) {
-  return (
-    <Card>
-      <CardContent className="flex items-center gap-3 p-4">
-        <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${tone}`}>
-          <Icon className="h-5 w-5 text-white" />
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground">{title}</p>
-          <p className="text-xl font-bold">{value}</p>
-        </div>
-      </CardContent>
-    </Card>
-  );
+  const metricTone: MetricTone = tone.includes("destructive") || tone.includes("rose") ? "destructive" : tone.includes("amber") ? "warning" : tone.includes("emerald") ? "success" : tone.includes("indigo") || tone.includes("sky") || tone.includes("slate") ? "info" : "primary";
+  return <MetricCard title={title} value={value} icon={Icon} tone={metricTone} />;
 }
 
 function ProjectsPage() {

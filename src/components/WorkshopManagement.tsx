@@ -1,3 +1,4 @@
+import { MetricCard, type MetricTone } from "@/components/MetricCard";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -287,17 +288,14 @@ export function WorkshopManagement({
           )}
         </div>
       </header>
-      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {[
           ["الورش النشطة", scoped.filter((w) => w.is_active).length],
           ["الكادر المسجل · أفراد فريدون", members.size],
           ["الحضور المبلغ لليوم · أفراد فريدون", present.size],
           ["ورش لها تكليف اليوم", scoped.filter((w) => reports.get(w.id)?.work_activity).length],
-        ].map(([label, value]) => (
-          <div key={label} className="bg-card p-5">
-            <p className="text-xs text-muted-foreground">{label}</p>
-            <p className="mt-3 text-3xl font-semibold tabular-nums">{value}</p>
-          </div>
+        ].map(([label, value], index) => (
+          <MetricCard key={label} title={String(label)} value={value} tone={(["primary", "info", "success", "warning"] as MetricTone[])[index]} />
         ))}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3">

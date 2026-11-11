@@ -1,3 +1,4 @@
+import { MetricCard, type MetricTone } from "@/components/MetricCard";
 import { OperationsOverview } from "@/components/OperationsOverview";
 import { createFileRoute, redirect, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -71,31 +72,16 @@ function StatCard({
   icon: Icon,
   detail,
   loading,
+  tone,
 }: {
   title: string;
   value: number | string;
   icon: typeof Users;
   detail?: React.ReactNode;
   loading?: boolean;
+  tone?: MetricTone;
 }) {
-  return (
-    <Card className="min-w-0">
-      <CardContent className="flex min-h-28 items-start gap-3 p-4">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <Icon className="h-5 w-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm text-muted-foreground">{title}</p>
-          {loading ? (
-            <div className="mt-2 h-8 w-24 animate-pulse rounded bg-muted" />
-          ) : (
-            <p className="mt-1 text-2xl font-bold tabular-nums">{value}</p>
-          )}
-          {!loading && detail && <div className="mt-2">{detail}</div>}
-        </div>
-      </CardContent>
-    </Card>
-  );
+  return <MetricCard title={title} value={value} icon={Icon} detail={detail} loading={loading} tone={tone} />;
 }
 
 const refreshInterval = 120_000;
@@ -435,6 +421,7 @@ function Dashboard() {
         >
           <StatCard
             title="الموظفون النشطون"
+            tone="info"
             value={formatCount(activeEmployeesQuery.data?.total ?? 0)}
             icon={Users}
             loading={activeEmployeesQuery.isLoading}
@@ -451,6 +438,7 @@ function Dashboard() {
           />
           <StatCard
             title="حضور اليوم"
+            tone="success"
             value={formatCount(presentToday)}
             icon={UserCheck}
             loading={dailyQuery.isLoading}
@@ -481,6 +469,7 @@ function Dashboard() {
           />
           <StatCard
             title="المواقع النشطة"
+            tone="primary"
             value={formatCount(sitesQuery.data?.active ?? 0)}
             icon={MapPinned}
             loading={sitesQuery.isLoading}
@@ -583,6 +572,7 @@ function Dashboard() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <StatCard
               title="متصلة خلال آخر 24 ساعة"
+            tone="success"
               value={formatCount(connectedDevices)}
               icon={Fingerprint}
               loading={devicesQuery.isLoading}
@@ -592,6 +582,7 @@ function Dashboard() {
             />
             <StatCard
               title="نشطة ولم تزامن خلال 24 ساعة"
+            tone="warning"
               value={formatCount(staleDevices.length)}
               icon={AlertTriangle}
               loading={devicesQuery.isLoading}

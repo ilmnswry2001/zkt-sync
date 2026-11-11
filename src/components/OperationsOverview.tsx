@@ -116,9 +116,9 @@ export function OperationsOverview({
   });
   return (
     <>
-      <header className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-slate-900 p-6 text-white">
+      <header className="operations-banner flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-slate-900 p-6 text-white">
         <div>
-          <p className="text-sm text-slate-300">
+          <p className="operations-date text-sm text-slate-300">
             {new Date(today + "T12:00:00+03:00").toLocaleDateString("ar-IQ", {
               dateStyle: "full",
               timeZone: "Asia/Baghdad",

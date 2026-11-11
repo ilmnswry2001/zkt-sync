@@ -1,3 +1,4 @@
+import { MetricCard, type MetricTone } from "@/components/MetricCard";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -940,7 +941,7 @@ function AttendancePage() {
                           ["النقص", comparisonWorkers.reduce((s, i) => s + i.missing, 0)],
                           ["الالتزام بالخطة", `${pct}%`],
                           [biometricMatch ? "التكلفة الفعلية بالبصمة" : "تكلفة التقرير", money(actualCost)],
-                        ].map(([label, value]) => <div key={label} className="rounded-xl border bg-primary/5 p-4"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-2 text-xl font-bold">{value}</p></div>)}
+                        ].map(([label, value], index) => <MetricCard key={label} title={String(label)} value={value} tone={(["info", "success", "destructive", "primary", "warning"] as MetricTone[])[index]} />)}
                       </div>
                       <div className="mb-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-muted/30 p-4">
                         <div className="space-y-1 text-sm">
