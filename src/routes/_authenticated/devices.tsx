@@ -386,6 +386,7 @@ function DevicesPage() {
 }
 
 type SyncRecordStatus = "all" | "inserted" | "duplicate" | "unmatched" | "unprocessed" | "pending" | "error";
+const verificationFields = "id, device_id, user_pin, employee_no, employee_id, verify_time, verify_type, status, external_log_id, processing_status, error_message, sync_batch_id, employee:employees(full_name), device:devices(name), batch:sync_batches(received_at), upload:uploaded_files(file_name)";
 function DeviceSyncRecords({ devices, canView, canDelete }: { devices: Device[]; canView: boolean; canDelete: boolean }) {
   const qc = useQueryClient();
   const [status, setStatus] = useState<SyncRecordStatus>("all");
@@ -444,7 +445,7 @@ function DeviceSyncRecords({ devices, canView, canDelete }: { devices: Device[];
     queryFn: async () => {
       const db = supabase as any;
       const request = db.rpc("filtered_verification_records", { f: filters }, {count:"exact"})
-        .select("id, device_id, user_pin, employee_no, employee_id, verify_time, verify_type, status, external_log_id, processing_status, error_message, sync_batch_id, employee:employees(full_name), device:devices(name), batch:sync_batches(received_at), upload:uploaded_files(file_name)")
+        .select(verificationFields)
         .order("verify_time", { ascending: false }).order("id", { ascending: false });
       const { data, error, count } = await request.range(page * pageSize, (page + 1) * pageSize - 1);
       if (error) throw error;
@@ -455,10 +456,50 @@ function DeviceSyncRecords({ devices, canView, canDelete }: { devices: Device[];
   const totalPages = Math.max(1, Math.ceil((query.data?.count ?? 0) / pageSize));
   const resetFilters = () => { setStatus("all"); setDeviceId("all"); setSearch(""); setExternalId(""); setPair(""); setExtra({employee:"", file:"", batch:"", error:"", receivedFrom:"", receivedUntil:""}); setDateFrom(""); setDateTo(""); setPage(0); };
   const statusLabel = (value: string) => ({ inserted: "مسجلة", duplicate: "مكررة", unmatched: "رقم غير معرف", pending: "قيد المعالجة", error: "خطأ" }[value] ?? value);
+  const exportMovements = useMutation({
+    mutationFn: async () => {
+      const XLSX = await import("xlsx");
+      const workbook = XLSX.utils.book_new();
+      workbook.Workbook = { Views: [{ RTL: true }] };
+      const headings = ["وقت الحركة (بغداد)", "وقت الرفع (بغداد)", "الجهاز", "الملف", "معرف الجهاز", "الموظف المطابق", "الرقم الوظيفي", "التحقق", "الحالة", "معرف الحركة", "حالة المعالجة", "الخطأ", "معرف الدفعة"];
+      const dateFormat = new Intl.DateTimeFormat("sv-SE", { dateStyle: "short", timeStyle: "medium", timeZone: "Asia/Baghdad" });
+      let cursor: string | undefined;
+      let count = 0;
+      let sheet = XLSX.utils.aoa_to_sheet([headings]);
+      const sheetCapacity = 1048575;
+      for (;;) {
+        let request = (supabase as any).rpc("filtered_verification_records", { f: {} })
+          .select(verificationFields).order("id").limit(Math.min(1000, sheetCapacity - count % sheetCapacity));
+        if (cursor) request = request.gt("id", cursor);
+        const { data, error } = await request;
+        if (error) throw error;
+        if (!data.length) break;
+        if (count % sheetCapacity === 0) {
+          sheet = XLSX.utils.aoa_to_sheet([headings]);
+          sheet["!cols"] = headings.map((_, index) => ({ wch: index === 12 ? 38 : 23 }));
+          XLSX.utils.book_append_sheet(workbook, sheet, `الحركات ${workbook.SheetNames.length + 1}`);
+        }
+        XLSX.utils.sheet_add_aoa(sheet, data.map((row: any) => [
+          dateFormat.format(new Date(row.verify_time)), row.batch?.received_at ? dateFormat.format(new Date(row.batch.received_at)) : "",
+          row.device?.name, row.upload?.file_name, row.user_pin, row.employee?.full_name, row.employee_no,
+          row.verify_type, row.status, row.external_log_id, statusLabel(row.processing_status), row.error_message, row.sync_batch_id,
+        ]), { origin: -1 });
+        count += data.length;
+        cursor = data[data.length - 1].id;
+      }
+      if (!count) return toast.info("لا توجد حركات للتصدير");
+      XLSX.writeFile(workbook, "سجلات-التحقق.xlsx");
+      toast.success(`تم تصدير ${count.toLocaleString("ar-IQ")} حركة`);
+    },
+    onError: (error: Error) => toast.error(formatErrorMessage(error, "تعذر تصدير الحركات")),
+  });
 
   return <Card>
     <CardHeader className="flex flex-row items-start justify-between gap-4">
       <div className="space-y-1"><CardTitle>سجلات التحقق من حركات الأجهزة والملفات</CardTitle></div>
+      {canView && <Button variant="outline" disabled={exportMovements.isPending} onClick={() => exportMovements.mutate()}>
+        <Download className="ml-2 h-4 w-4" />{exportMovements.isPending ? "جارٍ تصدير الحركات…" : "تصدير جميع الحركات إلى Excel"}
+      </Button>}
       {canView && <Button type="button" variant="outline" disabled={reprocess.isPending} onClick={() => {
         if (confirm("ستعاد مطابقة الحركات غير المعالجة والأخطاء والأرقام غير المعرفة باستخدام أرقام أجهزة البصمة والرقم الوظيفي الحالية. سيتم تجاهل الحركات المكررة. متابعة؟")) reprocess.mutate();
       }}>
