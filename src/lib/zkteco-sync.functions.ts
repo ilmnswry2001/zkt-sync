@@ -135,6 +135,7 @@ export const reprocessZktecoSyncRecords = createServerFn({ method: "POST" })
       let query = admin.from("device_sync_records")
         .select("id, sync_batch_id, device_id, user_pin, employee_no, employee_id, verify_time, verify_type, status, external_log_id, processing_status")
         .in("processing_status", ["pending", "error", "unmatched"])
+        .is("archived_at", null)
         .order("created_at", { ascending: true }).order("id", { ascending: true })
         .range(offset, offset + 499);
       if (data.device_id) query = query.eq("device_id", data.device_id);

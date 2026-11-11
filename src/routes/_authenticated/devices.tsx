@@ -379,14 +379,14 @@ function DevicesPage() {
     </div>
       </TabsContent>
       <TabsContent value="verification" className="mt-0">
-        <DeviceSyncRecords devices={devices} canView={isAdmin || isHR} />
+        <DeviceSyncRecords devices={devices} canView={isAdmin || isHR} canDelete={isAdmin} />
       </TabsContent>
     </Tabs>
   );
 }
 
 type SyncRecordStatus = "all" | "inserted" | "duplicate" | "unmatched" | "unprocessed";
-function DeviceSyncRecords({ devices, canView }: { devices: Device[]; canView: boolean }) {
+function DeviceSyncRecords({ devices, canView, canDelete }: { devices: Device[]; canView: boolean; canDelete: boolean }) {
   const qc = useQueryClient();
   const [status, setStatus] = useState<SyncRecordStatus>("all");
   const [deviceId, setDeviceId] = useState("all");
@@ -398,6 +398,29 @@ function DeviceSyncRecords({ devices, canView }: { devices: Device[]; canView: b
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(0);
   const pageSize = 50;
+  const term = search.trim().replace(/[,()%\\]/g, " ");
+  const until = dateTo ? new Date(`${dateTo}T00:00:00`) : null;
+  if (until) until.setDate(until.getDate() + 1);
+  const archive = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await (supabase as any).rpc("archive_device_verification_records", {
+        p_verify_type: verifyType ? Number(verifyType) : null,
+        p_status: deviceStatus ? Number(deviceStatus) : null,
+        p_device: deviceId === "all" ? null : deviceId, p_processing: status,
+        p_search: term, p_external: externalId ? Number(externalId) : null,
+        p_from: dateFrom ? new Date(`${dateFrom}T00:00:00`).toISOString() : null,
+        p_until: until?.toISOString() ?? null,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (count) => {
+      setPage(0);
+      qc.invalidateQueries({ queryKey: ["device-sync-records"] });
+      toast.success(`تم حذف ${count} حركة من سجل التحقق`);
+    },
+    onError: (error: Error) => toast.error(formatErrorMessage(error)),
+  });
   const reprocess = useMutation({
     mutationFn: () => reprocessZktecoSyncRecords({ data: deviceId === "all" ? {} : { device_id: deviceId } }),
     onSuccess: (result) => {
@@ -414,21 +437,16 @@ function DeviceSyncRecords({ devices, canView }: { devices: Device[]; canView: b
       const db = supabase as any;
       let request = db.from("device_sync_records")
         .select("id, device_id, user_pin, employee_no, employee_id, verify_time, verify_type, status, external_log_id, processing_status, error_message, sync_batch_id, employee:employees(full_name), device:devices(name), batch:sync_batches(received_at), upload:uploaded_files(file_name)", { count: "exact" })
-        .order("verify_time", { ascending: false }).order("id", { ascending: false });
+        .is("archived_at", null).order("verify_time", { ascending: false }).order("id", { ascending: false });
       if (deviceId !== "all") request = request.eq("device_id", deviceId);
       if (status === "unprocessed") request = request.in("processing_status", ["pending", "error", "unmatched"]);
       else if (status !== "all") request = request.eq("processing_status", status);
-      const term = search.trim().replace(/[,()%\\]/g, " ");
       if (term) request = request.or(`user_pin.ilike.%${term}%,employee_no.ilike.%${term}%`);
       if (externalId.trim()) request = request.eq("external_log_id", Number(externalId));
       if (verifyType.trim()) request = request.eq("verify_type", Number(verifyType));
       if (deviceStatus.trim()) request = request.eq("status", Number(deviceStatus));
       if (dateFrom) request = request.gte("verify_time", new Date(`${dateFrom}T00:00:00`).toISOString());
-      if (dateTo) {
-        const until = new Date(`${dateTo}T00:00:00`);
-        until.setDate(until.getDate() + 1);
-        request = request.lt("verify_time", until.toISOString());
-      }
+      if (until) request = request.lt("verify_time", until.toISOString());
       const { data, error, count } = await request.range(page * pageSize, (page + 1) * pageSize - 1);
       if (error) throw error;
       return { rows: data ?? [], count: count ?? 0 };
@@ -468,6 +486,13 @@ function DeviceSyncRecords({ devices, canView }: { devices: Device[]; canView: b
           <div className="flex gap-2"><Input aria-label="إلى تاريخ الحركة" type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setPage(0); }} /><Button variant="outline" onClick={resetFilters}>مسح</Button></div>
         </div>
         {query.error && <p role="alert" className="text-sm text-destructive">تعذر تحميل السجلات. تحقق من تطبيق ترحيل سجلات التحقق.</p>}
+        {canDelete && <div className="flex flex-wrap items-center gap-2">
+          <Button variant="destructive" disabled={(!verifyType && !deviceStatus) || !query.data?.count || query.isError || archive.isPending || reprocess.isPending}
+            onClick={() => {
+              if (confirm(`حذف الحركات المطابقة من سجل التحقق في جميع الصفحات؟\nنوع التحقق: ${verifyType || "الكل"} · حالة الجهاز: ${deviceStatus || "الكل"}\nعدد النتائج: ${query.data?.count} حسب الفلاتر الحالية. ستُحفظ نسخة للتدقيق ولن تتغير سجلات الحضور.`)) archive.mutate();
+            }}><Trash2 className="ml-2 h-4 w-4" />{archive.isPending ? "جارٍ الحذف…" : "حذف الحركات المطابقة"}</Button>
+          {!verifyType && !deviceStatus && <span className="text-sm text-muted-foreground">حدد نوع التحقق أو حالة الحركة بالجهاز لتفعيل الحذف.</span>}
+        </div>}
         <div className="overflow-x-auto rounded-md border">
           <Table><TableHeader><TableRow><TableHead>وقت الحركة</TableHead><TableHead>وقت الرفع</TableHead><TableHead>الجهاز</TableHead><TableHead>معرف الجهاز</TableHead><TableHead>الموظف المطابق</TableHead><TableHead>التحقق / الحالة</TableHead><TableHead>معرف الحركة</TableHead><TableHead>حالة المعالجة</TableHead><TableHead>الخطأ</TableHead><TableHead>معرف الدفعة</TableHead></TableRow></TableHeader>
             <TableBody>{rows.map((row: any) => <TableRow key={row.id}>
