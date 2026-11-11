@@ -38,6 +38,16 @@ export const Route = createFileRoute("/_authenticated/employees")({
 });
 
 type Emp = { id: string; employee_no: string; attendance_device_id?: string | null; id_no?: string | null; employee_import_data?: Record<string, string | number | boolean | null> | null; full_name: string; email?: string | null; department_id: string | null; position: string | null; status: string; departments?: { name: string } | null };
+const directoryColumns = {
+  employee_no: "الرقم الوظيفي", full_name: "اسم الموظف", department: "القسم", id_no: "رقم الهوية",
+  position: "التخصص / المسمى", device: "رقم جهاز البصمة", pay: "تصنيف الأجر", status: "الحالة",
+  email: "البريد الإلكتروني", phone1: "رقم الهاتف", hire_date: "تاريخ المباشرة",
+};
+type DirectoryColumn = keyof typeof directoryColumns;
+const columnKeys = Object.keys(directoryColumns) as DirectoryColumn[];
+const defaultColumns = columnKeys.slice(0, 8);
+const emptyFilters = { department: "", status: "", pay: "", position: "", from: "", to: "" };
+
 function EmployeesPage() {
   const qc = useQueryClient();
   const { isAdmin } = useAuth();
@@ -120,18 +130,49 @@ function EmployeesPage() {
 
 
   const [limit, setLimit] = useState(50);
-  const { data: rows = [], isFetching } = useQuery({
-    queryKey: ["employees", search, limit],
+  const [filters, setFilters] = useState(emptyFilters);
+  const [columns, setColumns] = useState<DirectoryColumn[]>(defaultColumns);
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("employee-directory-columns") ?? "null");
+      const valid = columnKeys.filter(key => Array.isArray(saved) && saved.includes(key));
+      if (valid.length) setColumns(valid);
+    } catch { /* Use defaults when storage is unavailable. */ }
+  }, []);
+  function chooseColumns(next: DirectoryColumn[]) {
+    setColumns(next);
+    try { localStorage.setItem("employee-directory-columns", JSON.stringify(next)); } catch { /* Keep the session preference. */ }
+  }
+  function changeFilter(key: keyof typeof emptyFilters, value: string) {
+    setFilters(current => ({ ...current, [key]: value }));
+    setLimit(50);
+  }
+  const { data: directory, isFetching, isError: directoryError } = useQuery({
+    queryKey: ["employees", search, filters, limit],
     queryFn: async () => {
-      let q = supabase.from("employees").select("*, departments(name)");
+      let q = supabase.from("employees").select("*, departments(name)", {count: "exact"});
       const term = search.trim();
-      if (term) q = q.or(`employee_no.ilike.%${term}%,full_name.ilike.%${term}%`);
-      const { data, error } = await q
-        .order("created_at", { ascending: false })
-        .order("employee_no")
-        .limit(limit);
-      if (error) throw error;
-      return data as Emp[];
+      if (term) {
+        const pattern = JSON.stringify(`%${term}%`);
+        q = q.or(["employee_no","full_name","id_no","attendance_device_id","phone1","email"].map(field => `${field}.ilike.${pattern}`).join(","));
+      }
+      if (filters.department) q = q.eq("department_id", filters.department);
+      if (filters.status) q = q.eq("status", filters.status as "active" | "inactive" | "terminated");
+      if (filters.pay) q = q.eq("pay_type", filters.pay);
+      if (filters.position.trim()) q = q.ilike("position", `%${filters.position.trim()}%`);
+      if (filters.from) q = q.gte("hire_date", filters.from);
+      if (filters.to) q = q.lte("hire_date", filters.to);
+      const ordered = q.order("created_at", { ascending: false }).order("employee_no");
+      const rows: (Emp & { phone1?: string | null; hire_date?: string | null })[] = [];
+      let total = 0;
+      do {
+        const { data, error, count } = await ordered.range(rows.length, Math.min(rows.length + 999, limit - 1));
+        if (error) throw error;
+        total = count ?? 0;
+        if (!data.length) break;
+        rows.push(...(data as typeof rows));
+      } while (rows.length < Math.min(total, limit));
+      return { rows, count: total };
     },
   });
   const { data: profileMatches = [], isFetching: profileSearching } = useQuery({
@@ -326,7 +367,7 @@ function EmployeesPage() {
     onError: (error: unknown) => toast.error(formatErrorMessage(error)),
   });
 
-  const filtered = rows;
+  const filtered = directory?.rows ?? [];
 
   return (
     <div className="space-y-6">
@@ -706,25 +747,40 @@ function EmployeesPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>القائمة</CardTitle>
-          <div className="relative w-72">
+          <div className="relative w-full max-w-80">
             <Search className="absolute right-3 top-3 w-4 h-4 text-muted-foreground" />
-            <Input placeholder="بحث بالرقم أو الاسم..." className="pr-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Input aria-label="بحث في دليل الموظفين" placeholder="الاسم، الرقم، الهوية، البصمة، الهاتف أو البريد" className="pr-9" value={search} onChange={(e) => { setSearch(e.target.value); setLimit(50); }} />
           </div>
         </CardHeader>
         <CardContent>
+          <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <label>القسم<select className="mt-1 h-10 w-full rounded-md border bg-background px-3" value={filters.department} onChange={e => changeFilter("department", e.target.value)}><option value="">الكل</option>{depts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
+            <label>الحالة<select className="mt-1 h-10 w-full rounded-md border bg-background px-3" value={filters.status} onChange={e => changeFilter("status", e.target.value)}><option value="">الكل</option><option value="active">نشط</option><option value="inactive">معطل</option><option value="terminated">منتهي</option></select></label>
+            <label>تصنيف الأجر<select className="mt-1 h-10 w-full rounded-md border bg-background px-3" value={filters.pay} onChange={e => changeFilter("pay", e.target.value)}><option value="">الكل</option><option value="daily">يومي</option><option value="monthly">شهري</option></select></label>
+            <label>المسمى الوظيفي<Input type="text" value={filters.position} onChange={e => changeFilter("position", e.target.value)} /></label>
+            <label>تاريخ المباشرة من<Input type="date" value={filters.from} onChange={e => changeFilter("from", e.target.value)} /></label>
+            <label>تاريخ المباشرة إلى<Input type="date" value={filters.to} onChange={e => changeFilter("to", e.target.value)} /></label>
+          </div>
+          <div className="mb-4 flex flex-wrap items-start gap-4">
+            <details><summary className="cursor-pointer py-2 font-medium">تخصيص الأعمدة</summary><div className="grid grid-cols-2 gap-3 rounded-md border p-3">
+              {columnKeys.map(key => <label key={key} className="flex items-center gap-2"><input type="checkbox" checked={columns.includes(key)} disabled={columns.length === 1 && columns[0] === key} onChange={e => chooseColumns(e.target.checked ? [...columns,key] : columns.filter(col => col !== key))} />{directoryColumns[key]}</label>)}
+              <Button variant="ghost" onClick={() => chooseColumns(defaultColumns)}>استعادة الأعمدة الافتراضية</Button>
+            </div></details>
+            <Button variant="outline" onClick={() => {setFilters(emptyFilters); setSearch(""); setLimit(50);}}>مسح الفلاتر</Button>
+          </div>
           <Table>
-            <TableHeader><TableRow><TableHead>الرقم الوظيفي</TableHead><TableHead>اسم الموظف</TableHead><TableHead>القسم</TableHead><TableHead>رقم الهوية</TableHead><TableHead>التخصص / المسمى</TableHead><TableHead>رقم جهاز البصمة</TableHead><TableHead>تصنيف الأجر</TableHead><TableHead>الحالة</TableHead><TableHead></TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow>{columnKeys.filter(key => columns.includes(key)).map(key => <TableHead key={key}>{directoryColumns[key]}</TableHead>)}<TableHead>الإجراءات</TableHead></TableRow></TableHeader>
             <TableBody showAllRows>
               {filtered.map((e) => (
                 <TableRow key={e.id}>
-                  <TableCell className="font-mono">{e.employee_no}</TableCell>
-                  <TableCell className="font-medium"><button type="button" onClick={() => openPersonalReport(e)} className="inline-flex min-h-10 items-center text-primary underline-offset-4 hover:underline" aria-label={`فتح التقرير الشخصي لـ ${e.full_name}`}>{e.full_name}</button></TableCell>
-                  <TableCell>{e.departments?.name ?? "-"}</TableCell>
-                  <TableCell className="font-mono">{e.id_no || "-"}</TableCell>
-                  <TableCell>{e.position ?? "-"}</TableCell>
-                  <TableCell className="font-mono">{e.attendance_device_id || "-"}</TableCell>
-                  <TableCell>{(e as any).pay_type === "daily" ? "يومي" : "شهري"}</TableCell>
-                  <TableCell>
+                  {columns.includes("employee_no") && <TableCell className="font-mono">{e.employee_no}</TableCell>}
+                  {columns.includes("full_name") && <TableCell className="font-medium"><button type="button" onClick={() => openPersonalReport(e)} className="inline-flex min-h-10 items-center text-primary underline-offset-4 hover:underline" aria-label={`فتح التقرير الشخصي لـ ${e.full_name}`}>{e.full_name}</button></TableCell>}
+                  {columns.includes("department") && <TableCell>{e.departments?.name ?? "-"}</TableCell>}
+                  {columns.includes("id_no") && <TableCell className="font-mono">{e.id_no || "-"}</TableCell>}
+                  {columns.includes("position") && <TableCell>{e.position ?? "-"}</TableCell>}
+                  {columns.includes("device") && <TableCell className="font-mono">{e.attendance_device_id || "-"}</TableCell>}
+                  {columns.includes("pay") && <TableCell>{(e as any).pay_type === "daily" ? "يومي" : "شهري"}</TableCell>}
+                  {columns.includes("status") && <TableCell>
                     <Select value={e.status} onValueChange={(status: "active" | "inactive" | "terminated") => updateStatus.mutate({ employeeId: e.id, status })}>
                       <SelectTrigger className="h-9 min-w-28" aria-label={`حالة ${e.full_name}`}><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -733,7 +789,10 @@ function EmployeesPage() {
                         <SelectItem value="terminated">منتهي</SelectItem>
                       </SelectContent>
                     </Select>
-                  </TableCell>
+                  </TableCell>}
+                  {columns.includes("email") && <TableCell>{e.email || "—"}</TableCell>}
+                  {columns.includes("phone1") && <TableCell>{e.phone1 || "—"}</TableCell>}
+                  {columns.includes("hire_date") && <TableCell>{e.hire_date || "—"}</TableCell>}
                   <TableCell>
                     <div className="flex gap-1">
                       <Button size="icon" variant="ghost" title="فتح التقرير الشخصي" aria-label="فتح التقرير الشخصي" onClick={() => openPersonalReport(e)}><UserRound className="w-4 h-4" /></Button>
@@ -743,12 +802,12 @@ function EmployeesPage() {
                   </TableCell>
                 </TableRow>
               ))}
-              {!filtered.length && <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">لا توجد بيانات</TableCell></TableRow>}
+              {!filtered.length && <TableRow><TableCell colSpan={columns.length + 1} className="text-center text-muted-foreground py-8">{directoryError ? "تعذر تحميل الموظفين" : isFetching ? "جارٍ تحميل الموظفين…" : "لا يوجد موظفون مطابقون"}</TableCell></TableRow>}
             </TableBody>
           </Table>
           <div className="mt-4 flex items-center justify-center gap-3">
-            <p className="text-xs text-muted-foreground">يتم عرض {filtered.length} من {totalCount}</p>
-            {filtered.length >= limit && (
+            <p className="text-xs text-muted-foreground">يتم عرض {filtered.length} من {directory?.count ?? 0}</p>
+{filtered.length < (directory?.count ?? 0) && (
               <Button variant="outline" size="sm" disabled={isFetching} onClick={() => setLimit(limit + 50)}>
                 {isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : "عرض المزيد"}
               </Button>

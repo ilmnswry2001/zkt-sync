@@ -40,6 +40,7 @@ Minimize unnecessary context, token usage, repeated work, and unrelated changes 
 - Run type checking, linting, or build checks when relevant and feasible.
 - Report actual test results; never claim an unexecuted test passed.
 - Review the final diff for unintended changes.
+- After each completed change, commit the task's files and push the commit to GitHub as part of the same task.
 
 ## Completion Report
 Report what changed, files changed, tests executed with actual results, and unresolved risks or blockers. Keep the report to five concise bullets or fewer.
