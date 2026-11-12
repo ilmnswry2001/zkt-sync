@@ -1,3 +1,4 @@
+import { VehiclePassengerUtilization } from "@/components/VehiclePassengerUtilization";
 import { PrivateStorageMedia } from "@/components/PrivateStorageMedia";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute, redirect } from "@tanstack/react-router";
@@ -726,8 +727,9 @@ function VehiclesPage() {
       <p className="text-sm font-medium text-muted-foreground">
         سجل المركبات والآليات وتشغيلها الشهري
       </p>
-      <Tabs defaultValue="list" className="space-y-6">
-        <TabsList className="glass-card h-auto w-full justify-start gap-1 rounded-full p-1 sm:w-auto sm:justify-center">
+      <Tabs defaultValue="utilization" className="space-y-6">
+        <TabsList className="glass-card h-auto w-full flex-wrap justify-start gap-1 rounded-full p-1 sm:w-auto sm:justify-center">
+          <TabsTrigger value="utilization" className="rounded-full px-4 py-2">جدوى المركبات الخفيفة والكادر</TabsTrigger>
           <TabsTrigger
             value="list"
             className="gap-2 rounded-full px-4 py-2 text-sm font-semibold text-muted-foreground data-[state=active]:bg-white/70 data-[state=active]:text-teal-800 data-[state=active]:shadow-sm dark:data-[state=active]:bg-white/10 dark:data-[state=active]:text-white"
@@ -747,6 +749,7 @@ function VehiclesPage() {
             <Wrench className="h-4 w-4" /> الآليات
           </TabsTrigger>
         </TabsList>
+        <TabsContent value="utilization"><VehiclePassengerUtilization /></TabsContent>
         <TabsContent value="list" className="space-y-6">
           <Card>
             <CardHeader>

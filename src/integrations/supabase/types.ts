@@ -4909,8 +4909,18 @@ export type Database = {
           },
         ]
       }
+      vehicle_passenger_assignments: {
+        Row: { id:string;vehicle_id:string;employee_id:string;starts_on:string;ends_on:string|null;created_at:string }
+        Insert: { id?:string;vehicle_id:string;employee_id:string;starts_on:string;ends_on?:string|null;created_at?:string }
+        Update: { id?:string;vehicle_id?:string;employee_id?:string;starts_on?:string;ends_on?:string|null;created_at?:string }
+        Relationships: [
+          { foreignKeyName:"vehicle_passenger_assignments_vehicle_id_fkey";columns:["vehicle_id"];isOneToOne:false;referencedRelation:"vehicles";referencedColumns:["id"] },
+          { foreignKeyName:"vehicle_passenger_assignments_employee_id_fkey";columns:["employee_id"];isOneToOne:false;referencedRelation:"employees";referencedColumns:["id"] }
+        ]
+      }
       vehicles: {
         Row: {
+          passenger_capacity: number | null
           created_at: string
           currency: string
           current_driver_id: string | null
@@ -4929,6 +4939,7 @@ export type Database = {
           vehicle_no: string
         }
         Insert: {
+          passenger_capacity?: number | null
           created_at?: string
           currency?: string
           current_driver_id?: string | null
@@ -4947,6 +4958,7 @@ export type Database = {
           vehicle_no: string
         }
         Update: {
+          passenger_capacity?: number | null
           created_at?: string
           currency?: string
           current_driver_id?: string | null
@@ -5174,6 +5186,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      vehicle_passenger_attendance: { Args:{p_day:string};Returns:{vehicle_id:string;employee_id:string;full_name:string;employee_no:string;active_assignment_id:string|null;assigned:boolean;week_days:number;month_days:number;present_today:boolean}[] }
+
       payroll_read_logs: {
         Args: { p_start: string; p_end: string }
         Returns: (Pick<Database["public"]["Tables"]["attendance_logs"]["Row"], "id" | "employee_no" | "verify_time" | "status" | "source" | "self_event_type">)[]
