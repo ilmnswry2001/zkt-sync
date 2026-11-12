@@ -296,6 +296,68 @@ export function EmployeeProfileContent({
   const [faceDialogOpen, setFaceDialogOpen] = useState(false);
   const [savingFace, setSavingFace] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const canAssignWorkshop = canEditEmployee || roles.includes("supervisor");
+  const [assignmentOpen, setAssignmentOpen] = useState(false);
+  const [targetWorkshop, setTargetWorkshop] = useState("keep");
+  const [workshopRole, setWorkshopRole] = useState("");
+  const assignment = useQuery({
+    queryKey: ["employee-workshop-assignment", employeeId],
+    queryFn: async () => {
+      const {data,error} = await supabase.from("daily_workshop_members")
+        .select("workshop_id,role_label,daily_workshops!inner(id,name,specialty,supervisor_name,is_active)")
+        .eq("employee_id", employeeId).eq("is_active",true).eq("daily_workshops.is_active",true);
+      if (error) throw error;
+      return data;
+    },
+  });
+  const workshopOptions = useQuery({
+    queryKey: ["profile-active-workshops"],
+    enabled: canAssignWorkshop && (assignmentOpen || editOpen),
+    queryFn: async () => {
+      const {data,error} = await supabase.from("daily_workshops").select("id,name,specialty,supervisor_name")
+        .eq("is_active",true).order("sort_order").order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const changeWorkshop = useMutation({
+    mutationFn: async ({target,role}:{target:string;role:string}) => {
+      const {error} = await supabase.rpc("set_employee_profile_workshop",{
+        p_employee:employeeId,p_workshop:target==="none"?null:target,p_role:role.trim() || null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        ["employee-workshop-assignment",employeeId],["daily-workshop-members"],["daily-workshop-all-active-members"],
+        ["workshop-management"],["project-execution"],["projects-dashboard"],["executive-dashboard","workshops"],
+      ].map(queryKey=>queryClient.invalidateQueries({queryKey})));
+      toast.success("تم تحديث تنسيب الموظف بنجاح");
+    },
+  });
+  const currentWorkshops = assignment.data?.map(m=>m.daily_workshops.name).join("، ");
+  function workshopFields() {
+    return <div className="flex flex-col gap-3 leading-6">
+      <label>ورشة التنسيب
+        <select className="mt-2 w-full rounded-md border bg-background p-2" value={targetWorkshop}
+          disabled={!assignment.isSuccess || !workshopOptions.isSuccess || changeWorkshop.isPending}
+          onChange={event=>{
+            const id=event.target.value;
+            setTargetWorkshop(id);
+            setWorkshopRole(assignment.data?.find(m=>m.workshop_id===id)?.role_label ?? "");
+          }}>
+          <option value="keep">{currentWorkshops ? "التنسيب الحالي: "+currentWorkshops : "اختر الورشة"}</option>
+          {!!assignment.data?.length && <option value="none">إلغاء جميع التنسيبات الحالية</option>}
+          {workshopOptions.data?.map(w=><option key={w.id} value={w.id}>{[w.name,w.specialty,w.supervisor_name && "المشرف: "+w.supervisor_name].filter(Boolean).join(" · ")}</option>)}
+        </select>
+      </label>
+      {workshopOptions.isError || assignment.isError ? <p role="alert">تعذر تحميل بيانات التنسيب.</p> : workshopOptions.isLoading ? <p>جارٍ تحميل الورش…</p> : workshopOptions.data?.length===0 && <p>لا توجد ورش نشطة.</p>}
+      {targetWorkshop!=="keep" && targetWorkshop!=="none" && <label>الصفة داخل الورشة (اختياري)
+        <Input className="mt-2" maxLength={120} value={workshopRole} onChange={e=>setWorkshopRole(e.target.value)} placeholder="مثلاً: فني لحام"/>
+      </label>}
+      {targetWorkshop!=="keep" && <p className="text-sm text-muted-foreground">{targetWorkshop==="none"?"سيتم إلغاء تنشيط جميع التنسيبات الحالية.":"سيُستبدل أي تنسيب سابق بالورشة المختارة ليظهر الموظف في جردها اليومي."}</p>}
+    </div>;
+  }
   const [savingEmployee, setSavingEmployee] = useState(false);
   const custodyQuery = useQuery({
     queryKey: ["employee-custody", employeeId],
@@ -601,8 +663,19 @@ export function EmployeeProfileContent({
       notes: value("notes"), employee_import_data: { ...extraImportValues, ...sourceHeaders }, ...sourceFields,
     };
     const { error: saveError } = await (supabase as any).from("employees").update(payload).eq("id", employeeId);
+    if (saveError) {
+      setSavingEmployee(false);
+      return toast.error(`تعذر حفظ بيانات الموظف: ${formatErrorMessage(saveError)}`);
+    }
+    if (targetWorkshop !== "keep") {
+      try { await changeWorkshop.mutateAsync({target:targetWorkshop,role:workshopRole}); }
+      catch (error) {
+        setSavingEmployee(false);
+        await queryClient.invalidateQueries({queryKey:["employee-profile",employeeId]});
+        return toast.error(`حُفظت بيانات الموظف وتعذر تحديث التنسيب: ${formatErrorMessage(error)}`);
+      }
+    }
     setSavingEmployee(false);
-    if (saveError) return toast.error(`تعذر حفظ بيانات الموظف: ${formatErrorMessage(saveError)}`);
     setEditOpen(false);
     await queryClient.invalidateQueries({ queryKey: ["employee-profile", employeeId] });
     await queryClient.invalidateQueries({ queryKey: ["employee-profile-search"] });
@@ -639,6 +712,7 @@ export function EmployeeProfileContent({
           <DialogHeader><DialogTitle>تعديل بيانات الموظف — جميع الحقول</DialogTitle></DialogHeader>
           <form key={employee.id} onSubmit={(event) => { event.preventDefault(); void saveEmployeeProfile(new FormData(event.currentTarget)); }} className="space-y-5">
             <section className="space-y-3 rounded-xl border p-4"><h3 className="font-semibold">البيانات الأساسية والوظيفية</h3><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {workshopFields()}
               <Field label="الرقم الوظيفي *" name="employee_no" value={employee.employee_no} required/><Field label="الاسم الكامل *" name="full_name" value={employee.full_name} required/><Field label="رقم جهاز البصمة" name="attendance_device_id" value={employee.attendance_device_id}/><Field label="المسمى الوظيفي" name="position" value={employee.position}/><Field label="القسم" name="department_id" value={employee.department_id}/><Field label="الحالة" name="status" value={employee.status}/><Field label="رقم ERP" name="erp_no" value={employee.erp_no}/><Field label="رقم الهوية" name="id_no" value={employee.id_no}/><Field label="المشروع" name="project" value={employee.project}/><Field label="الموقع" name="site_id" value={employee.site_id}/><Field label="كود التكلفة CTR" name="ctr_code" value={employee.ctr_code}/><Field label="أجر التخصص" name="wage_rate_id" value={employee.wage_rate_id}/><Field label="تصنيف الأجر" name="pay_type" value={employee.pay_type}/><Field label="الراتب الأساسي" name="base_salary" value={employee.base_salary} type="number"/><Field label="نوع الراتب" name="salary_type" value={employee.salary_type}/><Field label="هيكل الراتب" name="salary_structure" value={employee.salary_structure}/>
             </div></section>
             <section className="space-y-3 rounded-xl border p-4"><h3 className="font-semibold">البيانات الشخصية والتواصل</h3><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -653,7 +727,27 @@ export function EmployeeProfileContent({
           </form>
         </DialogContent>
       </Dialog>
-      {canEditEmployee && <div className="flex justify-end"><Button variant="outline" onClick={() => setEditOpen(true)}><Pencil className="ml-2 h-4 w-4"/>تعديل جميع بيانات الموظف</Button></div>}
+      <section className="flex flex-wrap items-center gap-3 rounded-xl border bg-card p-4" dir="rtl">
+        <h3 className="flex items-center gap-2 font-semibold"><Wrench className="size-4"/>تنسيب الورش</h3>
+        {assignment.isLoading ? "جارٍ تحميل التنسيب…" : assignment.isError ? "تعذر تحميل التنسيب" : assignment.data?.length ?
+          assignment.data.map(m=><Badge key={m.workshop_id} variant="secondary" className="whitespace-normal">{[m.daily_workshops.name,m.daily_workshops.specialty,m.role_label].filter(Boolean).join(" · ")}</Badge>) :
+          <Badge variant="outline">غير منسّب لأي ورشة</Badge>}
+        {canAssignWorkshop && assignment.isSuccess && <>
+          <Button variant="outline" onClick={()=>{setTargetWorkshop("keep");setWorkshopRole("");setAssignmentOpen(true);}}>{currentWorkshops?"تغيير الورشة":"+ تنسيب إلى ورشة"}</Button>
+          {currentWorkshops && <Button variant="ghost" onClick={()=>{setTargetWorkshop("none");setAssignmentOpen(true);}}>إلغاء التنسيب</Button>}
+        </>}
+        {canEditEmployee && <Button variant="outline" onClick={()=>{setTargetWorkshop("keep");setWorkshopRole("");setEditOpen(true);}}><Pencil className="ml-2 h-4 w-4"/>تعديل جميع بيانات الموظف</Button>}
+      </section>
+      <Dialog open={assignmentOpen} onOpenChange={open=>{if(!changeWorkshop.isPending)setAssignmentOpen(open);}}>
+        <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>{currentWorkshops?"تغيير تنسيب الورشة":"تنسيب الموظف إلى ورشة عمل"}</DialogTitle></DialogHeader>
+          {workshopFields()}
+          <div className="flex justify-end gap-2"><Button variant="outline" disabled={changeWorkshop.isPending} onClick={()=>setAssignmentOpen(false)}>إلغاء</Button>
+            <Button disabled={targetWorkshop==="keep" || changeWorkshop.isPending} onClick={()=>changeWorkshop.mutate({target:targetWorkshop,role:workshopRole},{
+              onSuccess:()=>setAssignmentOpen(false),onError:error=>toast.error(formatErrorMessage(error)),
+            })}>{changeWorkshop.isPending?"جارٍ الحفظ…":"تأكيد وحفظ"}</Button></div>
+        </DialogContent>
+      </Dialog>
       <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-primary p-6 text-white shadow-xl md:p-8">
         <div className="absolute -left-10 -top-16 h-48 w-48 rounded-full bg-white/10 blur-2xl" />
         <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">

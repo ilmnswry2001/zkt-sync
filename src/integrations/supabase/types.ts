@@ -5174,6 +5174,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      set_employee_profile_workshop: { Args: { p_employee: string; p_workshop: string | null; p_role: string | null }; Returns: undefined }
       recalculate_payroll_from_specialties: {Args:{p_run:string;p_lines:Json};Returns:undefined}
       pay_payroll_with_advances: {Args:{p_run:string;p_method:string;p_reference?:string|null};Returns:undefined}
 
