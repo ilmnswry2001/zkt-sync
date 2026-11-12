@@ -1,3 +1,4 @@
+import { PrivateStorageMedia } from "@/components/PrivateStorageMedia";
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { formatErrorMessage } from "@/lib/error-message";
@@ -1095,19 +1096,19 @@ function MaintenancePage() {
               <div className="flex flex-wrap gap-2">
                 {form.existingAttachments.map((attachment) => (
                   <div key={attachment.id ?? attachment.file_url} className="relative">
-                    <a href={attachment.file_url} target="_blank" rel="noopener noreferrer">
+                    <PrivateStorageMedia bucket="maintenance-attachments" reference={attachment.file_url}>{url => <a href={url} target="_blank" rel="noopener noreferrer">
                       {attachment.file_type === "application/pdf" ? (
                         <span className="flex h-16 w-16 items-center justify-center rounded-lg border bg-muted text-xs">
                           PDF
                         </span>
                       ) : (
                         <img
-                          src={attachment.file_url}
+                          src={url}
                           alt="مرفق الصيانة"
                           className="h-16 w-16 rounded-lg border object-cover"
                         />
                       )}
-                    </a>
+                    </a>}</PrivateStorageMedia>
                     <button
                       type="button"
                       aria-label="حذف المرفق"

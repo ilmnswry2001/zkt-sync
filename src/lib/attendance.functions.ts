@@ -236,6 +236,9 @@ export const deleteUploads = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ ids: z.array(z.string().uuid()).min(1).max(200) }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = context;
+    const { data: admin, error: roleError } = await supabase.rpc("is_admin", { _user_id: context.userId });
+    if (roleError) throw new Error(roleError.message);
+    if (!admin) throw new Error("حذف ملفات البصمة متاح لمدير النظام فقط");
     const { data: files, error: readErr } = await supabase
       .from("uploaded_files")
       .select("id, storage_path")
@@ -246,7 +249,10 @@ export const deleteUploads = createServerFn({ method: "POST" })
     if (logErr) throw new Error(logErr.message);
 
     const paths = (files ?? []).map((f) => f.storage_path).filter(Boolean);
-    if (paths.length) await supabase.storage.from("zk-backups").remove(paths);
+    if (paths.length) {
+      const { error: storageError } = await supabase.storage.from("zk-backups").remove(paths);
+      if (storageError) throw new Error(storageError.message);
+    }
 
     const { error } = await supabase.from("uploaded_files").delete().in("id", data.ids);
     if (error) throw new Error(error.message);

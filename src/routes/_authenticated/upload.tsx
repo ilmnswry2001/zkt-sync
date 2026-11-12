@@ -36,7 +36,7 @@ async function sha256(buffer: ArrayBuffer) {
 }
 
 function UploadPage() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [deviceId, setDeviceId] = useState<string>("none");
   const [busy, setBusy] = useState(false);
@@ -52,7 +52,7 @@ function UploadPage() {
   });
 
   const doUpload = async (hash: string, isDuplicate: boolean) => {
-    if (!file || !user) return;
+    if (!file || !user || !isAdmin) return;
     setBusy(true);
     setDone(false);
     setProgress(30);
@@ -177,7 +177,8 @@ function UploadPage() {
             </div>
           )}
 
-          <Button onClick={handleUpload} disabled={!file || busy} className="w-full" size="lg">
+          {!isAdmin && <p>رفع ملفات البصمة متاح لمدير النظام.</p>}
+          <Button onClick={handleUpload} disabled={!isAdmin || !file || busy} className="w-full" size="lg">
             {busy ? "جارٍ الرفع..." : "رفع الملف"}
           </Button>
           {done && (

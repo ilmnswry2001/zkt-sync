@@ -5174,6 +5174,26 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      payroll_read_logs: {
+        Args: { p_start: string; p_end: string }
+        Returns: (Pick<Database["public"]["Tables"]["attendance_logs"]["Row"], "id" | "employee_no" | "verify_time" | "status" | "source" | "self_event_type">)[]
+      }
+      payroll_read_days: {
+        Args: { p_start: string; p_end: string }
+        Returns: (Pick<Database["public"]["Tables"]["attendance_day_status"]["Row"], "employee_id" | "work_date" | "status" | "notes" | "overtime_hours">)[]
+      }
+      payroll_read_machinery: {
+        Args: Record<PropertyKey, never>
+        Returns: (Pick<Database["public"]["Tables"]["machinery"]["Row"], "id" | "code" | "asset_number" | "name" | "category" | "status" | "daily_rent">)[]
+      }
+      payroll_read_leave_types: {
+        Args: Record<PropertyKey, never>
+        Returns: (Pick<Database["public"]["Tables"]["leave_types"]["Row"], "id" | "is_paid" | "count_non_working_days">)[]
+      }
+      payroll_employee_directory: {
+        Args: Record<PropertyKey, never>
+        Returns: (Pick<Database["public"]["Tables"]["employees"]["Row"], "id" | "employee_no" | "full_name" | "position" | "base_salary" | "pay_type" | "salary_type" | "contract_type" | "bank_name" | "bank_account" | "iban"> & { sites: Json; departments: Json; shifts: Json; wage_rates: Json })[]
+      }
       set_employee_profile_workshop: { Args: { p_employee: string; p_workshop: string | null; p_role: string | null }; Returns: undefined }
       recalculate_payroll_from_specialties: {Args:{p_run:string;p_lines:Json};Returns:undefined}
       pay_payroll_with_advances: {Args:{p_run:string;p_method:string;p_reference?:string|null};Returns:undefined}

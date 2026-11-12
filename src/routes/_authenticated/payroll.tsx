@@ -192,12 +192,8 @@ function PayrollPage() {
     staleTime: 60_000,
     queryFn: async () => {
       const attendanceRange = monthInstantRangeInBaghdad(month);
-      const employeeQuery = supabase
-        .from("employees")
-        .select(
-          "id, employee_no, full_name, position, base_salary, pay_type, salary_type, contract_type, bank_name, bank_account, iban, sites!employees_site_id_fkey(name), departments!employees_department_id_fkey(name), wage_rates(title, monthly_rate, daily_rate, overtime_hour_rate, currency), shifts(end_time, grace_minutes)",
-          { count: "exact" },
-        )
+      const payroll = supabase;
+      const employeeQuery = payroll.rpc("payroll_employee_directory")
         .order("employee_no")
         .order("id");
       const employees = await loadAllRows((from, to) => employeeQuery.range(from, to)) as Employee[];
@@ -221,8 +217,7 @@ function PayrollPage() {
               .range(from, to),
           ),
           loadAllRows((from, to) =>
-            supabase
-              .from("attendance_logs")
+            payroll.rpc("payroll_read_logs", {p_start:attendanceRange.start,p_end:attendanceRange.end})
               .select("employee_no, verify_time, status, source, self_event_type")
               .gte("verify_time", attendanceRange.start)
               .lt("verify_time", attendanceRange.end)
@@ -231,8 +226,7 @@ function PayrollPage() {
               .range(from, to),
           ),
           loadAllRows((from, to) =>
-            supabase
-              .from("attendance_day_status")
+            payroll.rpc("payroll_read_days", {p_start:`${month}-01`,p_end:nextMonth})
               .select("employee_id, work_date, status, notes, overtime_hours")
               .gte("work_date", `${month}-01`)
               .lt("work_date", nextMonth)
@@ -278,7 +272,7 @@ function PayrollPage() {
           loadAllRows((from, to) =>
             supabase
               .from("forms")
-              .select("employee_id, work_date, leave_end_date, status, leave_types(is_paid, count_non_working_days)")
+              .select("employee_id, work_date, leave_end_date, status, leave_type_id")
               .eq("kind", "leave")
               .in("status", ["pending_execution", "executed"])
               .lt("work_date", nextMonth)
@@ -286,14 +280,15 @@ function PayrollPage() {
               .range(from, to),
           ),
         ]);
-      const [machineryData, machineryOperationsData, wageRates] = await Promise.all([
-        loadAllRows((from, to) => (supabase as any).from("machinery")
+      const [machineryData, machineryOperationsData, wageRates, leaveTypes] = await Promise.all([
+        loadAllRows((from, to) => payroll.rpc("payroll_read_machinery")
           .select("id, code, asset_number, name, category, status, daily_rent")
           .eq("status", "active").order("code").range(from, to)),
         loadAllRows((from, to) => (supabase as any).from("machinery_monthly_operations")
           .select("machinery_id, operating_days, operating_dates")
           .eq("month", `${month}-01`).order("machinery_id").range(from, to)),
         loadAllRows((from,to)=>supabase.from("wage_rates").select("id,title,monthly_rate,daily_rate,overtime_hour_rate,currency").order("id").range(from,to)),
+        loadAllRows<{id:string;is_paid:boolean;count_non_working_days:boolean}>((from,to)=>payroll.rpc("payroll_read_leave_types").order("id").range(from,to)),
       ]);
       const [{ data: runData, error: runError }, { data: advanceData }] = await Promise.all([
         (supabase as any).from("payroll_runs").select("*").eq("month", `${month}-01`).maybeSingle(),
@@ -303,7 +298,7 @@ function PayrollPage() {
 
       const payrollLines = runData ? await loadAllRows((from,to)=>(supabase as any).from("payroll_run_lines").select("employee_id,base_amount,overtime_hours,overtime_amount,additions_amount,deductions_amount,advance_deduction,net_amount,calculation_snapshot").eq("payroll_run_id",runData.id).order("id").range(from,to)) : [];
       const approvedLeaveDays: AttendanceOverride[] = (leaveCalendar as any[]).flatMap((form) => {
-        const leaveType = Array.isArray(form.leave_types) ? form.leave_types[0] : form.leave_types;
+        const leaveType = leaveTypes.find(type=>type.id===form.leave_type_id);
         const end = form.leave_end_date || form.work_date;
         const dates: AttendanceOverride[] = [];
         for (let date = new Date(`${form.work_date}T00:00:00Z`); date <= new Date(`${end}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + 1)) {

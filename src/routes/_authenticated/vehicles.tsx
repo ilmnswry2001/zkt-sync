@@ -1,3 +1,4 @@
+import { PrivateStorageMedia } from "@/components/PrivateStorageMedia";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -240,8 +241,7 @@ async function uploadVehicleImage(file: File, vehicleId: string) {
     .from("vehicle-images")
     .upload(path, file, { contentType: file.type, upsert: false });
   if (error) throw error;
-  const { data } = supabase.storage.from("vehicle-images").getPublicUrl(path);
-  return data.publicUrl;
+  return `storage://vehicle-images/${path}`;
 }
 
 function describeVehicleImageError(error: unknown) {
@@ -1989,11 +1989,11 @@ function VehicleDetailForm({
             </p>
           )}
           {imageUrl ? (
-            <img
-              src={imageUrl}
+            <PrivateStorageMedia bucket="vehicle-images" reference={imageUrl}>{url => <img
+              src={url}
               alt="معاينة شكل المركبة"
               className="mt-1 h-24 w-auto rounded-lg border bg-white object-contain p-1"
-            />
+            />}</PrivateStorageMedia>
           ) : (
             <div className="mt-1 flex h-24 w-44 items-center justify-center rounded-lg border border-dashed text-xs text-muted-foreground">
               لم تُرفق صورة بعد

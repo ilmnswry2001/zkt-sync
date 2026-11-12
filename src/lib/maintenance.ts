@@ -165,8 +165,7 @@ export async function uploadMaintenanceAttachment(file: File, recordNo: string) 
     }
     throw error;
   }
-  const { data } = supabase.storage.from("maintenance-attachments").getPublicUrl(path);
-  return { url: data.publicUrl, path };
+  return { url: `storage://maintenance-attachments/${path}`, path };
 }
 
 export function writeXlsx(rows: Record<string, unknown>[], sheetName: string, fileName: string) {

@@ -1,3 +1,4 @@
+import { PrivateStorageMedia } from "@/components/PrivateStorageMedia";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -134,8 +135,7 @@ async function uploadFuelReceipt(file: File, voucherNo: string) {
     }
     throw error;
   }
-  const { data } = supabase.storage.from("fuel-receipts").getPublicUrl(path);
-  return data.publicUrl;
+  return `storage://fuel-receipts/${path}`;
 }
 
 const printCell: CSSProperties = {
@@ -537,13 +537,13 @@ function FuelPage() {
                         </td>
                         <td className="p-3">
                           {voucher.receipt_image_url ? (
-                            <a href={voucher.receipt_image_url} target="_blank" rel="noopener noreferrer">
+                            <PrivateStorageMedia bucket="fuel-receipts" reference={voucher.receipt_image_url}>{url => <a href={url} target="_blank" rel="noopener noreferrer">
                               <img
-                                src={voucher.receipt_image_url}
+                                src={url}
                                 alt={`وصل ${voucher.voucher_no}`}
                                 className="h-10 w-10 rounded-md border object-cover"
                               />
-                            </a>
+                            </a>}</PrivateStorageMedia>
                           ) : (
                             <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                               <ImageIcon className="h-4 w-4" /> لا يوجد

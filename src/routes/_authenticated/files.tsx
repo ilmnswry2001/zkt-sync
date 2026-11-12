@@ -1,3 +1,4 @@
+import { useAuth } from "@/hooks/use-auth";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -19,6 +20,7 @@ export const Route = createFileRoute("/_authenticated/files")({
 });
 
 function FilesPage() {
+  const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const ingest = useServerFn(ingestZkData);
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -113,7 +115,7 @@ function FilesPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        disabled={processingId !== null}
+                        disabled={!isAdmin || processingId !== null}
                         onClick={() => void processFile(r)}
                       >
                         {processingId === r.id ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Play className="ml-2 h-4 w-4" />}

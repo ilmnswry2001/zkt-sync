@@ -1,3 +1,4 @@
+import { PrivateStorageMedia } from "@/components/PrivateStorageMedia";
 import { cn } from "@/lib/utils";
 import { CarFront, Fuel, ShieldAlert } from "lucide-react";
 
@@ -109,8 +110,8 @@ export function VehicleDiagram({ data }: { data: VehicleDiagramData }) {
       <div className="glass-card relative overflow-hidden rounded-3xl">
         <div className="vehicle-stage-glow pointer-events-none absolute inset-0" />
         <div className="relative aspect-[1672/940]">
-          <img
-            src={imageSrc}
+          <PrivateStorageMedia bucket="vehicle-images" reference={imageSrc}>{url => <img
+            src={url}
             alt="شكل المركبة"
             loading="lazy"
             className="absolute inset-0 h-full w-full object-contain"
@@ -119,7 +120,7 @@ export function VehicleDiagram({ data }: { data: VehicleDiagramData }) {
               if (image.src.endsWith(DEFAULT_VEHICLE_IMAGE)) return;
               image.src = DEFAULT_VEHICLE_IMAGE;
             }}
-          />
+          />}</PrivateStorageMedia>
 
           {/* hotspots on the vehicle */}
           <span className="vehicle-hotspot" style={{ left: "4.5%", top: "72%" }} aria-hidden="true" />
