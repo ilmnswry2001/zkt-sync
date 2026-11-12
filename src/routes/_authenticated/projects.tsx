@@ -1,5 +1,9 @@
 import { useProjectExecution } from "@/lib/use-project-execution";
-import { verifiedSpecialtyCosts, projectDailyRate } from "@/lib/project-execution-costs";
+import {
+  verifiedSpecialtyCosts,
+  projectDailyRate,
+  projectCostCrew,
+} from "@/lib/project-execution-costs";
 import { loadAllRows } from "@/lib/monthly-report";
 import { ProjectExecutionPanel } from "@/components/ProjectExecutionPanel";
 import { WorkshopSitePicker } from "@/components/WorkshopManagementFields";
@@ -95,39 +99,51 @@ function ProjectsPage() {
     queryKey: ["projects-dashboard", reportDate],
     refetchInterval: 30_000,
     queryFn: async () => {
-      const [projectsResult, reportsResult, wagesResult, plansResult] = await Promise.all([
-        loadAllRows((a, b) =>
-          supabase.from("sites").select("id, name, ctr_code").order("id").range(a, b),
-        ).then((data) => ({ data, error: null })),
-        loadAllRows((a, b) =>
-          supabase
-            .from("site_daily_reports")
-            .select("id, site_id, report_date, notes")
-            .eq("report_date", reportDate)
-            .order("site_id")
-            .order("id")
-            .range(a, b),
-        ).then((data) => ({ data, error: null })),
-        loadAllRows((a, b) =>
-          supabase
-            .from("wage_rates")
-            .select("title, daily_rate, monthly_rate, currency")
-            .order("title")
-            .order("id")
-            .range(a, b),
-        ).then((data) => ({ data, error: null })),
-        loadAllRows((a, b) =>
-          supabase
-            .from("site_work_plans")
-            .select("id, site_id, status, specialties, final_plan, request_date")
-            .eq("status", "finalized")
-            .lte("request_date", reportDate)
-            .order("request_date", { ascending: false })
-            .order("created_at", { ascending: false })
-            .order("id", { ascending: false })
-            .range(a, b),
-        ).then((data) => ({ data, error: null })),
-      ]);
+      const [projectsResult, reportsResult, wagesResult, plansResult, workshopAttendance] =
+        await Promise.all([
+          loadAllRows((a, b) =>
+            supabase.from("sites").select("id, name, ctr_code").order("id").range(a, b),
+          ).then((data) => ({ data, error: null })),
+          loadAllRows((a, b) =>
+            supabase
+              .from("site_daily_reports")
+              .select("id, site_id, report_date, notes")
+              .eq("report_date", reportDate)
+              .order("site_id")
+              .order("id")
+              .range(a, b),
+          ).then((data) => ({ data, error: null })),
+          loadAllRows((a, b) =>
+            supabase
+              .from("wage_rates")
+              .select("title, daily_rate, monthly_rate, currency")
+              .order("title")
+              .order("id")
+              .range(a, b),
+          ).then((data) => ({ data, error: null })),
+          loadAllRows((a, b) =>
+            supabase
+              .from("site_work_plans")
+              .select("id, site_id, status, specialties, final_plan, request_date")
+              .eq("status", "finalized")
+              .lte("request_date", reportDate)
+              .order("request_date", { ascending: false })
+              .order("created_at", { ascending: false })
+              .order("id", { ascending: false })
+              .range(a, b),
+          ).then((data) => ({ data, error: null })),
+          loadAllRows((a, b) =>
+            supabase
+              .from("daily_workshop_report_lines")
+              .select(
+                "employee_id,site_id,role_label,daily_workshop_reports!inner(report_date,work_site_id)",
+              )
+              .eq("attended", true)
+              .eq("daily_workshop_reports.report_date", reportDate)
+              .order("id")
+              .range(a, b),
+          ),
+        ]);
       if (projectsResult.error) throw projectsResult.error;
       if (reportsResult.error) throw reportsResult.error;
       if (wagesResult.error) throw wagesResult.error;
@@ -152,6 +168,7 @@ function ProjectsPage() {
       }
 
       return {
+        workshopAttendance,
         projects: (projectsResult.data ?? []) as Project[],
         reports,
         lines,
@@ -162,6 +179,7 @@ function ProjectsPage() {
   });
 
   const data = query.data ?? {
+    workshopAttendance: [],
     projects: [],
     reports: [],
     lines: [],
@@ -195,6 +213,10 @@ function ProjectsPage() {
         : data.projects.filter((project) => project.id === selectedProjectId),
     [data.projects, selectedProjectId],
   );
+  const costCrew = useMemo(
+    () => projectCostCrew(execution.data ?? [], data.workshopAttendance),
+    [execution.data, data.workshopAttendance],
+  );
   const projectCards = useMemo(
     () =>
       visibleProjects.map((project) => {
@@ -203,7 +225,7 @@ function ProjectsPage() {
         const equipmentTotal = lines
           .filter((line) => line.kind === "equipment_type")
           .reduce((sum, line) => sum + Number(line.total_count || 0), 0);
-        const siteCrewAssignments = (execution.data ?? []).filter(
+        const siteCrewAssignments = costCrew.filter(
           (person) => person.site_id === project.id && !person.conflicting,
         );
         const specialtyCosts = verifiedSpecialtyCosts(siteCrewAssignments, data.wages);
@@ -253,7 +275,7 @@ function ProjectsPage() {
         };
       }),
     [
-      execution.data,
+      costCrew,
       execution.isSuccess,
       data.wages,
       finalPlanByProject,
@@ -326,7 +348,7 @@ function ProjectsPage() {
           <p className="mb-2 text-xs text-muted-foreground">التخطيط / التنفيذ / مراكز التكلفة</p>
           <h1 className="text-3xl font-bold">المشاريع والتكلفة الفعلية</h1>
           <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground">
-            بصمة صالحة ← إسناد فردي أو تكليف ورشة أو خطة معتمدة ← CTR واحد ← تكلفة العمالة اليومية.
+            تُحمّل أجور الحاضرين على موقع العمل حسب جرد الورش المحفوظ أو الحضور المتحقق بالبصمة.
             تقارير الموقع مرجع للمقارنة ولا تُجمع مرة ثانية مع الأفراد.
           </p>
         </div>
@@ -397,17 +419,12 @@ function ProjectsPage() {
           icon={TriangleAlert}
           tone="bg-amber-600"
         />
-        <StatCard
-          title="الحضور المتحقق المسند"
-          value={workerTotal}
-          icon={Users}
-          tone="bg-indigo-600"
-        />
+        <StatCard title="الحاضرون المسندون" value={workerTotal} icon={Users} tone="bg-indigo-600" />
       </div>
       <p className="rounded-lg border border-warning/30 bg-warning/5 p-4 text-xs leading-6">
-        التكلفة المعروضة تخص العمالة ذات البصمة وفق جدول الأجور الحالي أو الأجر الافتراضي الموضح،
-        ولا تشمل الآليات والمواد. تأخر مزامنة الأجهزة قد يخفض العدد مؤقتاً؛ فرق التكلفة لا يثبت
-        وفراً نهائياً قبل اكتمال الحضور.
+        التكلفة المعروضة تخص الحاضرين المسندين من الجرد أو البصمة وفق جدول الأجور الحالي أو الأجر
+        الافتراضي الموضح، ولا تشمل الآليات والمواد. تأخر مزامنة الأجهزة قد يخفض العدد مؤقتاً؛ فرق
+        التكلفة لا يثبت وفراً نهائياً قبل اكتمال الحضور.
       </p>
       <Card className="border-primary/20">
         <CardHeader className="pb-3">
@@ -416,7 +433,7 @@ function ProjectsPage() {
             {reportDate}
           </CardTitle>
           <p className="text-xs text-muted-foreground">
-            تقارن أحدث خطة معتمدة لا تتجاوز التاريخ المحدد بالحضور ذي البصمة (
+            تقارن أحدث خطة معتمدة لا تتجاوز التاريخ المحدد بالحضور المسند للموقع (
             {comparableProjects.length}). تتوفر خطة نهائية لـ {sitesWithFinalPlan} من أصل{" "}
             {projectCards.length} مشاريع.
           </p>
@@ -429,7 +446,7 @@ function ProjectsPage() {
             tone="bg-sky-700"
           />
           <StatCard
-            title="الفعلية بالبصمة في المشاريع المقارنة"
+            title="الفعلية في المشاريع المقارنة"
             value={`${comparableDailyCost.toLocaleString("ar-IQ")} د.ع`}
             icon={WalletCards}
             tone="bg-rose-600"
@@ -489,7 +506,7 @@ function ProjectsPage() {
                 </p>
                 <CardTitle className="pt-2 text-lg leading-7">{card.project.name}</CardTitle>
                 <div className="flex flex-wrap gap-2 pt-2">
-                  <Badge variant="outline">بصمة متحققة: {card.actualWorkerTotal}</Badge>
+                  <Badge variant="outline">حضور مسند: {card.actualWorkerTotal}</Badge>
                   <Badge variant="secondary">
                     تقرير الموقع: {card.report ? card.reportedWorkerTotal : "غير مرفوع"}
                   </Badge>
@@ -506,7 +523,7 @@ function ProjectsPage() {
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">العمالة الفعلية بالبصمة</p>
+                    <p className="text-xs text-muted-foreground">تكلفة العمالة الفعلية</p>
                     <p className="mt-2 font-bold text-primary">
                       {card.siteDailyCost.toLocaleString("ar-IQ")} د.ع
                     </p>
@@ -514,7 +531,7 @@ function ProjectsPage() {
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3 text-xs">
                   <span className="text-muted-foreground">
-                    المطلوب: {card.plan ? card.plannedWorkerTotal : "—"} · الحاضر المتحقق:{" "}
+                    المطلوب: {card.plan ? card.plannedWorkerTotal : "—"} · الحضور المسند:{" "}
                     {card.actualWorkerTotal}
                   </span>
                   {card.plan && (
@@ -582,7 +599,7 @@ function ProjectsPage() {
                           <th className="px-4 py-3 text-center font-semibold">تغطية التخصصات</th>
                           <th className="px-4 py-3 text-center font-semibold">الفرق</th>
                           <th className="px-4 py-3 text-center font-semibold">
-                            الحضور المتحقق والتكلفة
+                            الحضور المسند والتكلفة
                           </th>
                         </tr>
                       </thead>

@@ -1,6 +1,36 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { verifiedSpecialtyCosts, projectDailyRate } from "./project-execution-costs.ts";
+import {
+  verifiedSpecialtyCosts,
+  projectDailyRate,
+  projectCostCrew,
+} from "./project-execution-costs.ts";
+test("saved workshop attendance charges one site once with or without a punch", () => {
+  const line = (employee_id: string, workshop: string, site_id: string | null = null) => ({
+    employee_id,
+    site_id,
+    role_label: "steel",
+    daily_workshop_reports: { work_site_id: workshop },
+  });
+  const crew = projectCostCrew(
+    [{ employee_id: "a", site_id: "x", specialty: "steel", conflicting: false }],
+    [
+      line("a", "x"),
+      line("b", "x"),
+      line("b", "x"),
+      line("c", "x"),
+      line("c", "y"),
+      line("d", "y", "x"),
+    ],
+  );
+  const costs = verifiedSpecialtyCosts(
+    crew.filter((p) => p.site_id === "x" && !p.conflicting),
+    [{ title: "steel", daily_rate: 50000, monthly_rate: 0, currency: "IQD" }],
+  );
+  assert.equal(costs[0].count, 3);
+  assert.equal(costs[0].cost, 150000);
+  assert.equal(crew.find((p) => p.employee_id === "c")?.conflicting, true);
+});
 test("a repeated employee cannot inflate verified payroll", () => {
   const result = verifiedSpecialtyCosts(
     [
