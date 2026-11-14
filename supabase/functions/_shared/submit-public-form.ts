@@ -76,7 +76,10 @@ export async function submitPublicForm(
       p_request: body.request_id,
       p_hash: hash,
     });
-    if (prior.error) throw Error("receipt");
+    if (prior.error && prior.error.code !== "PGRST202") {
+      console.error("public_form_receipt", prior.error.code, prior.error.message);
+      throw Error("receipt lookup failed");
+    }
     if (prior.data) return reply(200, { reference_code: prior.data });
 
     if (turnstile) {
@@ -91,7 +94,10 @@ export async function submitPublicForm(
       if (!(await check.json()).success) return reply(403, { error: "أعد التحقق وأرسل الاستمارة" });
     }
     const { data: form, error } = await db.rpc("get_public_form", { token: body.token });
-    if (error) throw Error("load");
+    if (error) {
+      console.error("get_public_form", error.code, error.message);
+      throw Error("template lookup failed");
+    }
     if (!form)
       return reply(409, { error: "الرابط غير متاح، ربما انتهت صلاحيته أو اكتمل عدد الإرسالات" });
     if (form.version !== body.version)
@@ -102,17 +108,26 @@ export async function submitPublicForm(
     } catch (e) {
       return reply(422, { error: (e as Error).message });
     }
-    const saved = await db.rpc("commit_public_form", {
+    const args = {
       p_token: body.token,
       p_version: form.version,
-      p_locked: form.prefill,
-      p_locks: form.locked_fields,
       p_data: data,
       p_hash: hash,
       p_request: body.request_id,
-    });
+    };
+    let saved = await db.rpc("commit_public_form", args);
+    // The repository migration also ships a signature that checks the lock snapshot.
+    // PostgREST returns PGRST202 before executing a function with an unmatched signature.
+    if (saved.error?.code === "PGRST202") {
+      console.error("commit_public_form signature lookup", saved.error.code, saved.error.message);
+      saved = await db.rpc("commit_public_form", {
+        ...args,
+        p_locked: form.prefill,
+        p_locks: form.locked_fields,
+      });
+    }
     if (saved.error) {
-      console.warn("Form submission refused", saved.error.code);
+      console.error("commit_public_form", saved.error.code, saved.error.message);
       return reply(saved.error.message === "rate limit" ? 429 : 409, {
         error:
           saved.error.message === "rate limit"

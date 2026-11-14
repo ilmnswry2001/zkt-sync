@@ -42,6 +42,8 @@ test("public forms restrict data, preserve versions, reserve capacity and thrott
     );
     const rpc = {
       async rpc(name, args) {
+        if (name === "commit_public_form" && !("p_locked" in args))
+          return { data: null, error: { code: "PGRST202", message: "Signature not found" } };
         const parameters = Object.entries(args);
         const binds = parameters.map(([key], i) => key + " => $" + (i + 1));
         const values = parameters.map(([key, v]) =>
@@ -138,4 +140,60 @@ test("public forms restrict data, preserve versions, reserve capacity and thrott
   } finally {
     await db.close();
   }
+});
+
+test("missing receipt RPC allows a five-argument commit and idempotent retry", async () => {
+  const calls = [];
+  const payload = {
+    token: "a".repeat(64),
+    version: 1,
+    request_id: crypto.randomUUID(),
+    data: { name: "اختبار" },
+  };
+  const rpc = {
+    async rpc(name, args) {
+      calls.push(name);
+      if (name === "public_form_receipt")
+        return { data: null, error: { code: "PGRST202", message: "Function not found" } };
+      if (name === "get_public_form")
+        return {
+          data: {
+            version: 1,
+            prefill: {},
+            locked_fields: [],
+            schema: {
+              sections: [
+                { type: "info_grid", fields: [{ key: "name", input: "text", label_ar: "الاسم" }] },
+              ],
+            },
+          },
+          error: null,
+        };
+      assert.equal(name, "commit_public_form");
+      assert.deepEqual(Object.keys(args).sort(), [
+        "p_data",
+        "p_hash",
+        "p_request",
+        "p_token",
+        "p_version",
+      ]);
+      assert.equal(args.p_request, payload.request_id);
+      return { data: "TL-2026-00000001", error: null };
+    },
+  };
+  for (let i = 0; i < 2; i++) {
+    const response = await submitPublicForm(
+      new Request("http://localhost/api/public/submit-form", {
+        method: "POST",
+        headers: { "cf-connecting-ip": "192.0.2.1" },
+        body: JSON.stringify(payload),
+      }),
+      rpc,
+      "test-key",
+      undefined,
+    );
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { reference_code: "TL-2026-00000001" });
+  }
+  assert.equal(calls.length, 6);
 });
