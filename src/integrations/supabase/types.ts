@@ -5186,6 +5186,11 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      payroll_read_schedules: { Args: { p_start: string; p_end: string }; Returns: Pick<Database["public"]["Tables"]["employee_weekly_schedules"]["Row"], "employee_id" | "weekday" | "start_time" | "end_time" | "grace_minutes" | "effective_from" | "effective_until"> [] }
+      payroll_read_overtime: { Args: { p_start: string; p_end: string }; Returns: Pick<Database["public"]["Tables"]["attendance_daily_overtime"]["Row"], "employee_id" | "work_date" | "overtime_hours"> [] }
+      payroll_read_vehicles: { Args: Record<PropertyKey, never>; Returns: Pick<Database["public"]["Tables"]["vehicles"]["Row"], "id" | "vehicle_no" | "name" | "vehicle_class" | "daily_rate" | "currency" | "is_active"> [] }
+      payroll_read_vehicle_ops: { Args: { p_start: string }; Returns: Pick<Database["public"]["Tables"]["vehicle_monthly_operations"]["Row"], "vehicle_id" | "month" | "operating_days"> [] }
+      payroll_read_machinery_ops: { Args: { p_start: string }; Returns: Pick<Database["public"]["Tables"]["machinery_monthly_operations"]["Row"], "machinery_id" | "month" | "operating_days" | "operating_dates"> [] }
       vehicle_passenger_attendance: { Args:{p_day:string};Returns:{vehicle_id:string;employee_id:string;full_name:string;employee_no:string;active_assignment_id:string|null;assigned:boolean;week_days:number;month_days:number;present_today:boolean}[] }
 
       payroll_read_logs: {

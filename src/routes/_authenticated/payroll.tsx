@@ -235,8 +235,7 @@ function PayrollPage() {
               .range(from, to),
           ),
           loadAllRows((from, to) =>
-            (supabase as any)
-              .from("employee_weekly_schedules")
+            payroll.rpc("payroll_read_schedules", {p_start:`${month}-01`,p_end:nextMonth})
               .select("employee_id, weekday, start_time, end_time, grace_minutes, effective_from, effective_until")
               .lt("effective_from", nextMonth)
               .or(`effective_until.is.null,effective_until.gte.${month}-01`)
@@ -244,8 +243,7 @@ function PayrollPage() {
               .range(from, to),
           ),
           loadAllRows((from, to) =>
-            (supabase as any)
-              .from("attendance_daily_overtime")
+            payroll.rpc("payroll_read_overtime", {p_start:`${month}-01`,p_end:nextMonth})
               .select("employee_id, work_date, overtime_hours")
               .gte("work_date", `${month}-01`)
               .lt("work_date", nextMonth)
@@ -254,16 +252,14 @@ function PayrollPage() {
               .range(from, to),
           ),
           loadAllRows((from, to) =>
-            (supabase as any)
-              .from("vehicles")
+            payroll.rpc("payroll_read_vehicles")
               .select("id, vehicle_no, name, vehicle_class, daily_rate, currency, is_active")
               .eq("is_active", true)
               .order("vehicle_no")
               .range(from, to),
           ),
           loadAllRows((from, to) =>
-            (supabase as any)
-              .from("vehicle_monthly_operations")
+            payroll.rpc("payroll_read_vehicle_ops", {p_start:`${month}-01`})
               .select("vehicle_id, operating_days")
               .eq("month", `${month}-01`)
               .order("vehicle_id")
@@ -284,7 +280,7 @@ function PayrollPage() {
         loadAllRows((from, to) => payroll.rpc("payroll_read_machinery")
           .select("id, code, asset_number, name, category, status, daily_rent")
           .eq("status", "active").order("code").range(from, to)),
-        loadAllRows((from, to) => (supabase as any).from("machinery_monthly_operations")
+        loadAllRows((from, to) => payroll.rpc("payroll_read_machinery_ops",{p_start:`${month}-01`})
           .select("machinery_id, operating_days, operating_dates")
           .eq("month", `${month}-01`).order("machinery_id").range(from, to)),
         loadAllRows((from,to)=>supabase.from("wage_rates").select("id,title,monthly_rate,daily_rate,overtime_hour_rate,currency").order("id").range(from,to)),

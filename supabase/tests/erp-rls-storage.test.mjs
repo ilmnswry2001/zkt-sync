@@ -126,6 +126,40 @@ test("ERP roles, payroll projections, owner records and storage boundaries", asy
     await assert.rejects(db.query("select * from employees"));
     await assert.rejects(db.query("select * from payroll_employee_directory()"));
     assert.equal(await count("storage.objects"), 0);
+    await db.exec("reset role");
+    const staff=[2,3,4,8], fleet=[...staff,5], stock=[...staff,10], member=[...fleet,6,7,10];
+    const rules = [
+      ["employee_weekly_schedules","employee_id uuid,weekday int,start_time time,end_time time,grace_minutes int,effective_from date,effective_until date",[1,2,3,4,6]],
+      ["attendance_daily_overtime","employee_id uuid,work_date date,overtime_hours numeric",[1,2,3,4,5]],
+      ["vehicles","vehicle_no text,name text,vehicle_class text,daily_rate numeric,currency text,is_active boolean",fleet],
+      ["vehicle_monthly_operations","vehicle_id uuid,month date,operating_days int",fleet],
+      ["machinery_monthly_operations","machinery_id uuid,month date,operating_days int,operating_dates date[]",fleet],
+      ...["vehicle_fuel_vouchers","vehicle_maintenance_schedules"].map(t=>[t,"",fleet]),
+      ...["stock_counts","stock_count_lines","stock_movements"].map(t=>[t,"",stock]),
+      ...["devices","maintenance_workshops"].map(t=>[t,"",staff]),
+      ["department_managers","user_id uuid",[1,3,4]],["form_role_assignments","user_id uuid",[1,3,4]],
+      ["form_events","actor uuid",[1,2,3,4,6]],["uploaded_files","uploaded_by uuid",[1,3,4]],
+      ...["report_catalog_items","gamification_badges","self_attendance_settings","training_course_types"].map(t=>[t,"",member])
+    ];
+    for(const [t,cols] of rules){
+      await db.exec(`create table ${t}(id uuid default gen_random_uuid()${cols?", "+cols:""});
+        grant select on ${t} to authenticated,anon; alter table ${t} enable row level security;
+        create policy legacy_all on ${t} for all to authenticated using(true); insert into ${t} default values;`);
+      const owner=cols.split(" ")[0];
+      if(["employee_id","actor","uploaded_by","user_id"].includes(owner)) await db.query(`update ${t} set ${owner}=$1`,[id(1)]);
+    }
+    await db.exec(`update employee_weekly_schedules set effective_from='2026-10-01';update attendance_daily_overtime set work_date='2026-11-03';
+      update vehicles set is_active=true;update vehicle_monthly_operations set month='2026-11-01';update machinery_monthly_operations set month='2026-11-01';
+      insert into user_roles values('${id(10)}','warehouse_keeper');insert into storage.objects(bucket_id,owner_id) values ('fuel-receipts','${id(1)}');`);
+    await db.exec(await readFile(new URL("../migrations/20261114120000_restrict_operational_reads.sql",import.meta.url),"utf8"));
+    await db.exec("set role authenticated");
+    for(let n=1;n<=11;n++){
+      await db.exec(`set test.uid='${id(n)}'`);
+      for(const [t,,allowed] of rules) assert.equal(await count(t),Number(allowed.includes(n)),t+" actor "+n);
+      assert.equal(await count("storage.objects","where bucket_id='fuel-receipts'"),Number([1,2,3,4].includes(n)));
+      for(const rpc of ["schedules('2026-11-01','2026-12-01')","overtime('2026-11-01','2026-12-01')","vehicles()","vehicle_ops('2026-11-01')","machinery_ops('2026-11-01')"])
+        assert.equal(await count("payroll_read_"+rpc),Number([3,4,5,9].includes(n)));
+    }
   } finally {
     await db.close();
   }
