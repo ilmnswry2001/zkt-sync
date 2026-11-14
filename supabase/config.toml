@@ -1,1 +1,3 @@
 project_id = "osyizomdnofiusmpoduh"
+[functions.submit_public_form]
+verify_jwt = false

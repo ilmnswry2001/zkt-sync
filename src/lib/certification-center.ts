@@ -61,7 +61,7 @@ function rows<T>(table: string, columns: string, activeOnly = false) {
 }
 export async function loadCenter() {
   const employee = "full_name,employee_no,department_name,departments(name),position";
-  const [certs, training, courses, departments, templates, forms] = await Promise.all([
+  const [certs, training, courses, departments] = await Promise.all([
     rows<Certificate>(
       "employee_certifications",
       `id,issue_date,expiry_date,status,attachment_url,employee:employees(${employee}),course:training_course_types(name_ar)`,
@@ -72,17 +72,11 @@ export async function loadCenter() {
     ),
     rows<Course>("training_course_types", "*"),
     rows<Department>("departments", "id,name,manager_user_id"),
-    rows<Template>("digital_form_templates", "*", true),
-    rows<Submission>(
-      "digital_form_submissions",
-      "id,status,submitted_at,form_data,employee:employees(full_name),form:digital_form_templates(title)",
-    ),
   ]);
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Baghdad" });
   return {
     courses,
     departments,
-    templates,
     certifications: certs.map((c) => {
       const days = c.expiry_date
         ? (Date.parse(c.expiry_date) - Date.parse(today)) / 86400000
@@ -108,6 +102,19 @@ export async function loadCenter() {
         course_type: r.course?.name_ar ?? "—",
         approver: r.department?.name ?? "—",
       })),
+  };
+}
+
+export async function loadFormsCenter() {
+  const [templates, forms] = await Promise.all([
+    rows<Template>("digital_form_templates", "*", true),
+    rows<Submission>(
+      "digital_form_submissions",
+      "id,status,submitted_at,form_data,employee:employees(full_name),form:digital_form_templates(title)",
+    ),
+  ]);
+  return {
+    templates,
     submissions: forms
       .sort((a, b) => b.submitted_at.localeCompare(a.submitted_at))
       .map((s) => ({

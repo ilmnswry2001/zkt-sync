@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { certificationDb as db, loadCenter, copyForm } from "@/lib/certification-center";
+import { certificationDb as db, loadCenter } from "@/lib/certification-center";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { CertificationFormsDialog } from "@/components/CertificationFormsDialog";
+import { StatCard } from "@/components/CertificationStatCard";
 import { useMemo, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -34,10 +34,8 @@ import {
   CheckCircle2,
   Clock3,
   FileCheck2,
-  FileText,
   Funnel,
   GraduationCap,
-  QrCode,
   Search,
   ShieldCheck,
   TicketCheck,
@@ -64,39 +62,13 @@ const statusLabel: Record<string, string> = {
   completed: "مكتمل",
 };
 
-function StatCard({
-  title,
-  value,
-  icon: Icon,
-  tone,
-}: {
-  title: string;
-  value: string | number;
-  icon: typeof Award;
-  tone: string;
-}) {
-  return (
-    <Card>
-      <CardContent className="flex items-center gap-3 p-4">
-        <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${tone}`}>
-          <Icon className="h-5 w-5 text-white" />
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground">{title}</p>
-          <p className="text-2xl font-bold">{value}</p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 export const Route = createFileRoute("/_authenticated/certifications")({
   head: () => ({
     meta: [
       { title: "الشهادات والدورات — مركز التدريب والتأهيل" },
       {
         name: "description",
-        content: "إدارة الشهادات والدورات التدريبية، طلبات الاعتماد، ومركز النماذج الرقمية.",
+        content: "إدارة الشهادات والدورات التدريبية وطلبات الاعتماد.",
       },
     ],
   }),
@@ -114,8 +86,6 @@ function CertificationsPage() {
   const {
     certifications = [],
     requests = [],
-    submissions = [],
-    templates = [],
     courses = [],
     departments = [],
   } = center.data ?? {};
@@ -132,7 +102,6 @@ function CertificationsPage() {
       return data?.employee_id as string | null;
     },
   });
-  const [dialog, setDialog] = useState("");
   const [term, setTerm] = useState("");
   const [busy, setBusy] = useState(false);
   const [employeeLabel, setEmployeeLabel] = useState("");
@@ -169,7 +138,6 @@ function CertificationsPage() {
     renewalDate: "",
     attachmentUrl: "",
   });
-  const [selectedTemplate, setSelectedTemplate] = useState("");
 
   const certificationStats = useMemo(() => {
     const total = certifications.length;
@@ -196,11 +164,7 @@ function CertificationsPage() {
 
   const selectedRequest = requests.find((request) => request.id === selectedRequestId) ?? null;
 
-  const selected = templates.find((t) => t.id === selectedTemplate);
   const assigned = departments.filter((d) => d.manager_user_id);
-  function close() {
-    setDialog("");
-  }
   async function save(
     action: () => PromiseLike<{ error: { message: string } | null }>,
     after?: () => void,
@@ -275,17 +239,6 @@ function CertificationsPage() {
       () => setSelectedRequestId(""),
     );
   }
-  function handleSubmissionDecision(id: string, status: string) {
-    void save(() =>
-      db
-        .from("digital_form_submissions")
-        .update({ status, reviewer_id: user?.id, reviewed_at: new Date().toISOString() })
-        .eq("id", id)
-        .eq("status", "pending_review")
-        .select("id")
-        .single(),
-    );
-  }
   if (center.error)
     return (
       <Card dir="rtl" className="p-6">
@@ -307,14 +260,10 @@ function CertificationsPage() {
           <p className="text-sm text-muted-foreground">إدارة الموارد البشرية والتأهيل</p>
           <h1 className="text-3xl font-bold">الشهادات والدورات</h1>
         </div>
-        <Button variant="outline" onClick={() => setDialog("quick")}>
-          <QrCode className="ml-2 h-4 w-4" />
-          رابط النموذج السريع
-        </Button>
       </div>
 
       <Tabs defaultValue="overview" className="space-y-5">
-        <TabsList className="grid rounded-none h-auto w-full grid-cols-2 gap-2 bg-transparent md:grid-cols-5">
+        <TabsList className="grid rounded-none h-auto w-full grid-cols-2 gap-2 bg-transparent md:grid-cols-4">
           <TabsTrigger
             className="rounded-none border data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
             value="overview"
@@ -332,12 +281,6 @@ function CertificationsPage() {
             value="approvals"
           >
             الطلبات المحالة
-          </TabsTrigger>
-          <TabsTrigger
-            className="rounded-none border data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-            value="forms"
-          >
-            مركز النماذج
           </TabsTrigger>
           <TabsTrigger
             className="rounded-none border data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -828,148 +771,6 @@ function CertificationsPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="forms" className="space-y-4">
-          {isHR && <Button onClick={() => setDialog("new")}>+ إضافة نوع استمارة جديدة</Button>}
-          <div className="grid gap-4 md:grid-cols-4">
-            <StatCard
-              title="إجمالي القوالب"
-              value={templates.length}
-              icon={FileText}
-              tone="bg-sky-600"
-            />
-            <StatCard
-              title="قيد المراجعة"
-              value={submissions.filter((row) => row.status === "pending_review").length}
-              icon={Clock3}
-              tone="bg-amber-500"
-            />
-            <StatCard
-              title="معتمدة"
-              value={submissions.filter((row) => row.status === "approved").length}
-              icon={CheckCircle2}
-              tone="bg-emerald-600"
-            />
-            <StatCard
-              title="نسبة الإنجاز"
-              value={
-                Math.round(
-                  (100 * submissions.filter((s) => s.status !== "pending_review").length) /
-                    (submissions.length || 1),
-                ) + "%"
-              }
-              icon={Award}
-              tone="bg-violet-600"
-            />
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>قوالب النماذج الرقمية</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {!templates.length && <p>لا توجد قوالب نشطة.</p>}
-                {templates.map((template) => (
-                  <div key={template.id} className="rounded-xl border p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="font-semibold">{template.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {template.category} · {template.target_audience}
-                        </p>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setSelectedTemplate(template.id)}
-                      >
-                        اختر
-                      </Button>
-                    </div>
-                    <p className="mt-2 text-sm text-muted-foreground">{template.description}</p>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>توليد رابط النموذج</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="rounded-xl bg-muted/30 p-4 text-sm">
-                  <p className="font-semibold">النموذج المختار</p>
-                  <p className="mt-2">{selected?.title ?? "اختر استمارة"}</p>
-                </div>
-                <Button
-                  disabled={!selected}
-                  onClick={() => copyForm(selectedTemplate)}
-                  className="w-full"
-                >
-                  <QrCode className="ml-2 h-4 w-4" /> إنشاء رابط مباشر
-                </Button>
-                <Button
-                  disabled={!selected}
-                  onClick={() => setDialog("qr")}
-                  className="w-full"
-                  variant="outline"
-                >
-                  <QrCode className="ml-2 h-4 w-4" /> إنشاء رمز QR
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>طلبات المراجعة</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {!submissions.length && <p>لا توجد استمارات مرسلة للمراجعة.</p>}
-              {submissions.map((submission) => (
-                <div key={submission.id} className="rounded-xl border p-3">
-                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <p className="font-semibold">{submission.employee_name}</p>
-                      <dl>
-                        {Object.entries(submission.form_data ?? {}).map(([key, v]) => (
-                          <div key={key}>
-                            <dt>{key}</dt>
-                            <dd>{String(v)}</dd>
-                          </div>
-                        ))}
-                      </dl>
-                      <p className="text-sm text-muted-foreground">
-                        {submission.template} · {submission.submitted_at}
-                      </p>
-                    </div>
-                    <Badge className={statusTone[submission.status] ?? "bg-slate-500 text-white"}>
-                      {statusLabel[submission.status] ?? submission.status}
-                    </Badge>
-                  </div>
-                  {canManage && submission.status === "pending_review" && (
-                    <div className="mt-3 flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => handleSubmissionDecision(submission.id, "approved")}
-                      >
-                        اعتماد
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleSubmissionDecision(submission.id, "rejected")}
-                      >
-                        رفض
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
         <TabsContent value="settings" className="grid gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader>
@@ -1091,16 +892,6 @@ function CertificationsPage() {
           </Card>
         </TabsContent>
       </Tabs>
-      <CertificationFormsDialog
-        mode={dialog}
-        busy={busy}
-        selected={selected}
-        templates={templates}
-        close={close}
-        saveTemplate={(values) =>
-          void save(() => db.from("digital_form_templates").insert(values as never), close)
-        }
-      />
     </div>
   );
 }

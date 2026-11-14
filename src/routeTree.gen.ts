@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedAccountsRouteImport } from './routes/_authenticated/accounts'
 import { Route as AuthenticatedAttendanceRouteImport } from './routes/_authenticated/attendance'
+import { Route as AuthenticatedAttendanceFormsRouteImport } from './routes/_authenticated/attendance-forms'
 import { Route as AuthenticatedCertificationsRouteImport } from './routes/_authenticated/certifications'
 import { Route as AuthenticatedCommandCenterRouteImport } from './routes/_authenticated/command-center'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
@@ -21,6 +22,7 @@ import { Route as AuthenticatedDepartmentsRouteImport } from './routes/_authenti
 import { Route as AuthenticatedDevicesRouteImport } from './routes/_authenticated/devices'
 import { Route as AuthenticatedEmployeesRouteImport } from './routes/_authenticated/employees'
 import { Route as AuthenticatedFilesRouteImport } from './routes/_authenticated/files'
+import { Route as AuthenticatedFormCenterRouteImport } from './routes/_authenticated/form-center'
 import { Route as AuthenticatedFormsRouteImport } from './routes/_authenticated/forms'
 import { Route as AuthenticatedFuelRouteImport } from './routes/_authenticated/fuel'
 import { Route as AuthenticatedLeavesRouteImport } from './routes/_authenticated/leaves'
@@ -49,11 +51,15 @@ import { Route as AuthenticatedWagesRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedWarehousesRouteImport } from './routes/_authenticated/warehouses'
 import { Route as AuthenticatedWorkCenterRouteImport } from './routes/_authenticated/work-center'
 import { Route as DigitalFormIdRouteImport } from './routes/digital-form.$id'
+import { Route as FTokenRouteImport } from './routes/f.$token'
 import { Route as AuthenticatedEmployeesEmployeeIdRouteImport } from './routes/_authenticated/employees.$employeeId'
+import { Route as AuthenticatedFormsIndexRouteImport } from './routes/_authenticated/forms.index'
+import { Route as AuthenticatedFormsInboxRouteImport } from './routes/_authenticated/forms.inbox'
 import { Route as ApiPublicAttendanceRemindersRouteImport } from './routes/api/public/attendance-reminders'
 import { Route as ApiPublicZkSyncRouteImport } from './routes/api/public/zk-sync'
 import { Route as ApiPublicZkSyncCommandRouteImport } from './routes/api/public/zk-sync-command'
 import { Route as ApiPublicZktecoSyncRouteImport } from './routes/api/public/zkteco-sync'
+import { Route as AuthenticatedFormsSubmissionsIdRouteImport } from './routes/_authenticated/forms.submissions.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -79,6 +85,12 @@ const AuthenticatedAttendanceRoute = AuthenticatedAttendanceRouteImport.update({
   path: '/attendance',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedAttendanceFormsRoute =
+  AuthenticatedAttendanceFormsRouteImport.update({
+    id: '/attendance-forms',
+    path: '/attendance-forms',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedCertificationsRoute =
   AuthenticatedCertificationsRouteImport.update({
     id: '/certifications',
@@ -115,6 +127,11 @@ const AuthenticatedEmployeesRoute = AuthenticatedEmployeesRouteImport.update({
 const AuthenticatedFilesRoute = AuthenticatedFilesRouteImport.update({
   id: '/files',
   path: '/files',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedFormCenterRoute = AuthenticatedFormCenterRouteImport.update({
+  id: '/form-center',
+  path: '/form-center',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedFormsRoute = AuthenticatedFormsRouteImport.update({
@@ -263,12 +280,27 @@ const DigitalFormIdRoute = DigitalFormIdRouteImport.update({
   path: '/digital-form/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FTokenRoute = FTokenRouteImport.update({
+  id: '/f/$token',
+  path: '/f/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedEmployeesEmployeeIdRoute =
   AuthenticatedEmployeesEmployeeIdRouteImport.update({
     id: '/$employeeId',
     path: '/$employeeId',
     getParentRoute: () => AuthenticatedEmployeesRoute,
   } as any)
+const AuthenticatedFormsIndexRoute = AuthenticatedFormsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthenticatedFormsRoute,
+} as any)
+const AuthenticatedFormsInboxRoute = AuthenticatedFormsInboxRouteImport.update({
+  id: '/inbox',
+  path: '/inbox',
+  getParentRoute: () => AuthenticatedFormsRoute,
+} as any)
 const ApiPublicAttendanceRemindersRoute =
   ApiPublicAttendanceRemindersRouteImport.update({
     id: '/api/public/attendance-reminders',
@@ -290,12 +322,19 @@ const ApiPublicZktecoSyncRoute = ApiPublicZktecoSyncRouteImport.update({
   path: '/api/public/zkteco-sync',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedFormsSubmissionsIdRoute =
+  AuthenticatedFormsSubmissionsIdRouteImport.update({
+    id: '/submissions/$id',
+    path: '/submissions/$id',
+    getParentRoute: () => AuthenticatedFormsRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/accounts': typeof AuthenticatedAccountsRoute
   '/attendance': typeof AuthenticatedAttendanceRoute
+  '/attendance-forms': typeof AuthenticatedAttendanceFormsRoute
   '/certifications': typeof AuthenticatedCertificationsRoute
   '/command-center': typeof AuthenticatedCommandCenterRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -303,7 +342,8 @@ export interface FileRoutesByFullPath {
   '/devices': typeof AuthenticatedDevicesRoute
   '/employees': typeof AuthenticatedEmployeesRouteWithChildren
   '/files': typeof AuthenticatedFilesRoute
-  '/forms': typeof AuthenticatedFormsRoute
+  '/form-center': typeof AuthenticatedFormCenterRoute
+  '/forms': typeof AuthenticatedFormsRouteWithChildren
   '/fuel': typeof AuthenticatedFuelRoute
   '/leaves': typeof AuthenticatedLeavesRoute
   '/maintenance': typeof AuthenticatedMaintenanceRoute
@@ -331,17 +371,22 @@ export interface FileRoutesByFullPath {
   '/warehouses': typeof AuthenticatedWarehousesRoute
   '/work-center': typeof AuthenticatedWorkCenterRoute
   '/digital-form/$id': typeof DigitalFormIdRoute
+  '/f/$token': typeof FTokenRoute
   '/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
+  '/forms/inbox': typeof AuthenticatedFormsInboxRoute
   '/api/public/attendance-reminders': typeof ApiPublicAttendanceRemindersRoute
   '/api/public/zk-sync': typeof ApiPublicZkSyncRoute
   '/api/public/zk-sync-command': typeof ApiPublicZkSyncCommandRoute
   '/api/public/zkteco-sync': typeof ApiPublicZktecoSyncRoute
+  '/forms/': typeof AuthenticatedFormsIndexRoute
+  '/forms/submissions/$id': typeof AuthenticatedFormsSubmissionsIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/accounts': typeof AuthenticatedAccountsRoute
   '/attendance': typeof AuthenticatedAttendanceRoute
+  '/attendance-forms': typeof AuthenticatedAttendanceFormsRoute
   '/certifications': typeof AuthenticatedCertificationsRoute
   '/command-center': typeof AuthenticatedCommandCenterRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -349,7 +394,7 @@ export interface FileRoutesByTo {
   '/devices': typeof AuthenticatedDevicesRoute
   '/employees': typeof AuthenticatedEmployeesRouteWithChildren
   '/files': typeof AuthenticatedFilesRoute
-  '/forms': typeof AuthenticatedFormsRoute
+  '/form-center': typeof AuthenticatedFormCenterRoute
   '/fuel': typeof AuthenticatedFuelRoute
   '/leaves': typeof AuthenticatedLeavesRoute
   '/maintenance': typeof AuthenticatedMaintenanceRoute
@@ -377,11 +422,15 @@ export interface FileRoutesByTo {
   '/warehouses': typeof AuthenticatedWarehousesRoute
   '/work-center': typeof AuthenticatedWorkCenterRoute
   '/digital-form/$id': typeof DigitalFormIdRoute
+  '/f/$token': typeof FTokenRoute
   '/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
+  '/forms/inbox': typeof AuthenticatedFormsInboxRoute
   '/api/public/attendance-reminders': typeof ApiPublicAttendanceRemindersRoute
   '/api/public/zk-sync': typeof ApiPublicZkSyncRoute
   '/api/public/zk-sync-command': typeof ApiPublicZkSyncCommandRoute
   '/api/public/zkteco-sync': typeof ApiPublicZktecoSyncRoute
+  '/forms': typeof AuthenticatedFormsIndexRoute
+  '/forms/submissions/$id': typeof AuthenticatedFormsSubmissionsIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -390,6 +439,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/accounts': typeof AuthenticatedAccountsRoute
   '/_authenticated/attendance': typeof AuthenticatedAttendanceRoute
+  '/_authenticated/attendance-forms': typeof AuthenticatedAttendanceFormsRoute
   '/_authenticated/certifications': typeof AuthenticatedCertificationsRoute
   '/_authenticated/command-center': typeof AuthenticatedCommandCenterRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
@@ -397,7 +447,8 @@ export interface FileRoutesById {
   '/_authenticated/devices': typeof AuthenticatedDevicesRoute
   '/_authenticated/employees': typeof AuthenticatedEmployeesRouteWithChildren
   '/_authenticated/files': typeof AuthenticatedFilesRoute
-  '/_authenticated/forms': typeof AuthenticatedFormsRoute
+  '/_authenticated/form-center': typeof AuthenticatedFormCenterRoute
+  '/_authenticated/forms': typeof AuthenticatedFormsRouteWithChildren
   '/_authenticated/fuel': typeof AuthenticatedFuelRoute
   '/_authenticated/leaves': typeof AuthenticatedLeavesRoute
   '/_authenticated/maintenance': typeof AuthenticatedMaintenanceRoute
@@ -425,11 +476,15 @@ export interface FileRoutesById {
   '/_authenticated/warehouses': typeof AuthenticatedWarehousesRoute
   '/_authenticated/work-center': typeof AuthenticatedWorkCenterRoute
   '/digital-form/$id': typeof DigitalFormIdRoute
+  '/f/$token': typeof FTokenRoute
   '/_authenticated/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
+  '/_authenticated/forms/inbox': typeof AuthenticatedFormsInboxRoute
   '/api/public/attendance-reminders': typeof ApiPublicAttendanceRemindersRoute
   '/api/public/zk-sync': typeof ApiPublicZkSyncRoute
   '/api/public/zk-sync-command': typeof ApiPublicZkSyncCommandRoute
   '/api/public/zkteco-sync': typeof ApiPublicZktecoSyncRoute
+  '/_authenticated/forms/': typeof AuthenticatedFormsIndexRoute
+  '/_authenticated/forms/submissions/$id': typeof AuthenticatedFormsSubmissionsIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -438,6 +493,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/accounts'
     | '/attendance'
+    | '/attendance-forms'
     | '/certifications'
     | '/command-center'
     | '/dashboard'
@@ -445,6 +501,7 @@ export interface FileRouteTypes {
     | '/devices'
     | '/employees'
     | '/files'
+    | '/form-center'
     | '/forms'
     | '/fuel'
     | '/leaves'
@@ -473,17 +530,22 @@ export interface FileRouteTypes {
     | '/warehouses'
     | '/work-center'
     | '/digital-form/$id'
+    | '/f/$token'
     | '/employees/$employeeId'
+    | '/forms/inbox'
     | '/api/public/attendance-reminders'
     | '/api/public/zk-sync'
     | '/api/public/zk-sync-command'
     | '/api/public/zkteco-sync'
+    | '/forms/'
+    | '/forms/submissions/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/auth'
     | '/accounts'
     | '/attendance'
+    | '/attendance-forms'
     | '/certifications'
     | '/command-center'
     | '/dashboard'
@@ -491,7 +553,7 @@ export interface FileRouteTypes {
     | '/devices'
     | '/employees'
     | '/files'
-    | '/forms'
+    | '/form-center'
     | '/fuel'
     | '/leaves'
     | '/maintenance'
@@ -519,11 +581,15 @@ export interface FileRouteTypes {
     | '/warehouses'
     | '/work-center'
     | '/digital-form/$id'
+    | '/f/$token'
     | '/employees/$employeeId'
+    | '/forms/inbox'
     | '/api/public/attendance-reminders'
     | '/api/public/zk-sync'
     | '/api/public/zk-sync-command'
     | '/api/public/zkteco-sync'
+    | '/forms'
+    | '/forms/submissions/$id'
   id:
     | '__root__'
     | '/'
@@ -531,6 +597,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/accounts'
     | '/_authenticated/attendance'
+    | '/_authenticated/attendance-forms'
     | '/_authenticated/certifications'
     | '/_authenticated/command-center'
     | '/_authenticated/dashboard'
@@ -538,6 +605,7 @@ export interface FileRouteTypes {
     | '/_authenticated/devices'
     | '/_authenticated/employees'
     | '/_authenticated/files'
+    | '/_authenticated/form-center'
     | '/_authenticated/forms'
     | '/_authenticated/fuel'
     | '/_authenticated/leaves'
@@ -566,11 +634,15 @@ export interface FileRouteTypes {
     | '/_authenticated/warehouses'
     | '/_authenticated/work-center'
     | '/digital-form/$id'
+    | '/f/$token'
     | '/_authenticated/employees/$employeeId'
+    | '/_authenticated/forms/inbox'
     | '/api/public/attendance-reminders'
     | '/api/public/zk-sync'
     | '/api/public/zk-sync-command'
     | '/api/public/zkteco-sync'
+    | '/_authenticated/forms/'
+    | '/_authenticated/forms/submissions/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -578,6 +650,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   DigitalFormIdRoute: typeof DigitalFormIdRoute
+  FTokenRoute: typeof FTokenRoute
   ApiPublicAttendanceRemindersRoute: typeof ApiPublicAttendanceRemindersRoute
   ApiPublicZkSyncRoute: typeof ApiPublicZkSyncRoute
   ApiPublicZkSyncCommandRoute: typeof ApiPublicZkSyncCommandRoute
@@ -619,6 +692,13 @@ declare module '@tanstack/react-router' {
       path: '/attendance'
       fullPath: '/attendance'
       preLoaderRoute: typeof AuthenticatedAttendanceRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/attendance-forms': {
+      id: '/_authenticated/attendance-forms'
+      path: '/attendance-forms'
+      fullPath: '/attendance-forms'
+      preLoaderRoute: typeof AuthenticatedAttendanceFormsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/certifications': {
@@ -668,6 +748,13 @@ declare module '@tanstack/react-router' {
       path: '/files'
       fullPath: '/files'
       preLoaderRoute: typeof AuthenticatedFilesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/form-center': {
+      id: '/_authenticated/form-center'
+      path: '/form-center'
+      fullPath: '/form-center'
+      preLoaderRoute: typeof AuthenticatedFormCenterRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/forms': {
@@ -866,12 +953,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DigitalFormIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/f/$token': {
+      id: '/f/$token'
+      path: '/f/$token'
+      fullPath: '/f/$token'
+      preLoaderRoute: typeof FTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/employees/$employeeId': {
       id: '/_authenticated/employees/$employeeId'
       path: '/$employeeId'
       fullPath: '/employees/$employeeId'
       preLoaderRoute: typeof AuthenticatedEmployeesEmployeeIdRouteImport
       parentRoute: typeof AuthenticatedEmployeesRoute
+    }
+    '/_authenticated/forms/': {
+      id: '/_authenticated/forms/'
+      path: '/'
+      fullPath: '/forms/'
+      preLoaderRoute: typeof AuthenticatedFormsIndexRouteImport
+      parentRoute: typeof AuthenticatedFormsRoute
+    }
+    '/_authenticated/forms/inbox': {
+      id: '/_authenticated/forms/inbox'
+      path: '/inbox'
+      fullPath: '/forms/inbox'
+      preLoaderRoute: typeof AuthenticatedFormsInboxRouteImport
+      parentRoute: typeof AuthenticatedFormsRoute
     }
     '/api/public/attendance-reminders': {
       id: '/api/public/attendance-reminders'
@@ -901,6 +1009,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicZktecoSyncRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/forms/submissions/$id': {
+      id: '/_authenticated/forms/submissions/$id'
+      path: '/submissions/$id'
+      fullPath: '/forms/submissions/$id'
+      preLoaderRoute: typeof AuthenticatedFormsSubmissionsIdRouteImport
+      parentRoute: typeof AuthenticatedFormsRoute
+    }
   }
 }
 
@@ -919,9 +1034,25 @@ const AuthenticatedEmployeesRouteWithChildren =
     AuthenticatedEmployeesRouteChildren,
   )
 
+interface AuthenticatedFormsRouteChildren {
+  AuthenticatedFormsInboxRoute: typeof AuthenticatedFormsInboxRoute
+  AuthenticatedFormsIndexRoute: typeof AuthenticatedFormsIndexRoute
+  AuthenticatedFormsSubmissionsIdRoute: typeof AuthenticatedFormsSubmissionsIdRoute
+}
+
+const AuthenticatedFormsRouteChildren: AuthenticatedFormsRouteChildren = {
+  AuthenticatedFormsInboxRoute: AuthenticatedFormsInboxRoute,
+  AuthenticatedFormsIndexRoute: AuthenticatedFormsIndexRoute,
+  AuthenticatedFormsSubmissionsIdRoute: AuthenticatedFormsSubmissionsIdRoute,
+}
+
+const AuthenticatedFormsRouteWithChildren =
+  AuthenticatedFormsRoute._addFileChildren(AuthenticatedFormsRouteChildren)
+
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAccountsRoute: typeof AuthenticatedAccountsRoute
   AuthenticatedAttendanceRoute: typeof AuthenticatedAttendanceRoute
+  AuthenticatedAttendanceFormsRoute: typeof AuthenticatedAttendanceFormsRoute
   AuthenticatedCertificationsRoute: typeof AuthenticatedCertificationsRoute
   AuthenticatedCommandCenterRoute: typeof AuthenticatedCommandCenterRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
@@ -929,7 +1060,8 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDevicesRoute: typeof AuthenticatedDevicesRoute
   AuthenticatedEmployeesRoute: typeof AuthenticatedEmployeesRouteWithChildren
   AuthenticatedFilesRoute: typeof AuthenticatedFilesRoute
-  AuthenticatedFormsRoute: typeof AuthenticatedFormsRoute
+  AuthenticatedFormCenterRoute: typeof AuthenticatedFormCenterRoute
+  AuthenticatedFormsRoute: typeof AuthenticatedFormsRouteWithChildren
   AuthenticatedFuelRoute: typeof AuthenticatedFuelRoute
   AuthenticatedLeavesRoute: typeof AuthenticatedLeavesRoute
   AuthenticatedMaintenanceRoute: typeof AuthenticatedMaintenanceRoute
@@ -961,6 +1093,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAccountsRoute: AuthenticatedAccountsRoute,
   AuthenticatedAttendanceRoute: AuthenticatedAttendanceRoute,
+  AuthenticatedAttendanceFormsRoute: AuthenticatedAttendanceFormsRoute,
   AuthenticatedCertificationsRoute: AuthenticatedCertificationsRoute,
   AuthenticatedCommandCenterRoute: AuthenticatedCommandCenterRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
@@ -968,7 +1101,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDevicesRoute: AuthenticatedDevicesRoute,
   AuthenticatedEmployeesRoute: AuthenticatedEmployeesRouteWithChildren,
   AuthenticatedFilesRoute: AuthenticatedFilesRoute,
-  AuthenticatedFormsRoute: AuthenticatedFormsRoute,
+  AuthenticatedFormCenterRoute: AuthenticatedFormCenterRoute,
+  AuthenticatedFormsRoute: AuthenticatedFormsRouteWithChildren,
   AuthenticatedFuelRoute: AuthenticatedFuelRoute,
   AuthenticatedLeavesRoute: AuthenticatedLeavesRoute,
   AuthenticatedMaintenanceRoute: AuthenticatedMaintenanceRoute,
@@ -1005,6 +1139,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   DigitalFormIdRoute: DigitalFormIdRoute,
+  FTokenRoute: FTokenRoute,
   ApiPublicAttendanceRemindersRoute: ApiPublicAttendanceRemindersRoute,
   ApiPublicZkSyncRoute: ApiPublicZkSyncRoute,
   ApiPublicZkSyncCommandRoute: ApiPublicZkSyncCommandRoute,

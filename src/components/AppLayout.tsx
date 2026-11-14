@@ -79,7 +79,8 @@ const nav = [
   { to: "/team-follow-up", label: "متابعة الفريق", icon: Users },
   { to: "/projects", label: "تكلفة المشاريع", icon: Wallet, access: "hr" },
   { to: "/monthly", label: "التقرير الشهري", icon: CalendarDays },
-  { to: "/forms", label: "الاستمارات الإلكترونية", icon: FileSignature },
+  { to: "/attendance-forms", label: "استمارات الحضور والإضافي", icon: FileSignature },
+  { to: "/forms", label: "مركز النماذج", icon: FileSignature },
   { to: "/certifications", label: "الشهادات والدورات", icon: Award, access: "hr" },
   { to: "/penalties", label: "العقوبات والتغييب", icon: FileWarning },
   { to: "/employees", label: "الموظفون", icon: Users },
@@ -128,7 +129,7 @@ const NAV_GROUPS = [
     key: "hr",
     label: "الموارد البشرية",
     icon: Users,
-    tos: ["/employees", "/departments", "/leaves", "/penalties", "/forms", "/certifications"],
+    tos: ["/employees", "/departments", "/leaves", "/penalties", "/attendance-forms", "/forms", "/certifications"],
   },
   {
     key: "vehicles",
@@ -220,7 +221,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       (p) =>
         pathname === p ||
         pathname.startsWith(p + "/") ||
-        (p === "/planning" && pathname === "/project-plans"),
+        (p === "/planning" && pathname === "/project-plans") ||
+        (p === "/forms" && pathname === "/attendance-forms") ||
+        (p === "/certifications" && pathname === "/form-center"),
     );
   useEffect(() => {
     if (blocked && allowedSections?.[0]) navigate({ to: allowedSections[0] as any });
@@ -268,7 +271,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       (item.to === "/planning" && pathname === "/project-plans"),
   );
   const visibleNav = nav.filter((item) => {
-    if (!canAccessSection(item.to)) return false;
+    if (!canAccessSection(item.to) && !(item.to === "/attendance-forms" && canAccessSection("/forms"))) return false;
     if ("access" in item && item.access === "admin" && !isAdmin) return false;
     if ("access" in item && item.access === "hr" && !isHR) return false;
     if (

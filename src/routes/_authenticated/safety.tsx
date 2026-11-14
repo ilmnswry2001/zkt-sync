@@ -243,7 +243,7 @@ function SafetyCenter() {
   return <div dir="rtl" className="mx-auto max-w-7xl space-y-5 pb-10">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div><div className="flex items-center gap-2"><HardHat className="h-7 w-7 text-primary"/><h1 className="text-2xl font-bold">السلامة المهنية والبلاغات</h1></div><p className="mt-1 text-sm text-muted-foreground">التقارير الميدانية، متابعة المخاطر، التذاكر وفحص المركبات في مساحة واحدة.</p></div>
-      <div className="flex flex-wrap gap-2"><Button variant="outline" asChild><Link to="/planning"><ClipboardCheck className="ml-2 h-4 w-4"/>الخطط اليومية</Link></Button><Button variant="outline" asChild><Link to="/forms"><Activity className="ml-2 h-4 w-4"/>الاستمارات</Link></Button></div>
+      <div className="flex flex-wrap gap-2"><Button variant="outline" asChild><Link to="/planning"><ClipboardCheck className="ml-2 h-4 w-4"/>الخطط اليومية</Link></Button><Button variant="outline" asChild><Link to="/attendance-forms"><Activity className="ml-2 h-4 w-4"/>الاستمارات</Link></Button></div>
     </div>
 
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

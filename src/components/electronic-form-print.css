@@ -1,0 +1,117 @@
+.ef-document {
+  --line: #50555b;
+  --frame: #345879;
+  --neutral: #eceef0;
+  --tint: color-mix(in srgb, var(--ink) 13%, white);
+  --row: 11mm;
+  color: #15181b;
+  font:
+    10pt/1.22 Arial,
+    sans-serif;
+  direction: rtl;
+}
+.ef-sheet,
+.ef-sheet * {
+  box-sizing: border-box;
+}
+.ef-sheet {
+  isolation: isolate;
+  background: white;
+  position: relative;
+  border: 3px double var(--frame);
+  width: 100%;
+  max-width: 184.6mm;
+  min-height: 268mm;
+  display: flex;
+  flex-direction: column;
+  padding: 3mm;
+  margin: 0 auto;
+  break-after: page;
+}
+.ef-sheet header {
+  display: grid;
+  grid-template-columns: 1fr 17mm 1fr;
+  align-items: center;
+  min-height: 15mm;
+  border-bottom: 1.5pt solid var(--ink);
+}
+.ef-sheet header img {
+  width: 15mm;
+  height: 14mm;
+  object-fit: contain;
+}
+.ef-sheet header strong {
+  display: block;
+  font-size: 14pt;
+}
+.ef-sheet header span {
+  display: block;
+}
+.ef-sheet h1 {
+  text-align: center;
+  font: bold 15pt Arial;
+  text-decoration: underline;
+  margin: 2.5mm 0;
+}
+.ef-sheet table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  margin: 0 0 2mm;
+}
+.ef-sheet td,
+.ef-sheet th {
+  color: #111;
+  padding: 0.7mm 1mm;
+  border: 0.6pt solid var(--line);
+  text-align: center;
+  overflow-wrap: anywhere;
+  height: var(--row);
+  font-size: 10pt;
+}
+.ef-sheet th {
+  font-weight: bold;
+  background: var(--neutral);
+}
+.ef-sheet thead th {
+  height: 6mm;
+}
+.ef-sheet thead tr + tr th {
+  background: var(--tint);
+}
+.ef-sheet td {
+  font-weight: normal;
+}
+.ef-sheet thead {
+  display: table-header-group;
+}
+.ef-sheet tr {
+  break-inside: avoid;
+}
+.ef-sheet footer {
+  margin-top: auto;
+  border-top: 0.6pt solid var(--ink);
+  display: flex;
+  justify-content: space-between;
+  gap: 2mm;
+  padding-top: 1mm;
+}
+.ef-watermark {
+  position: absolute;
+  width: 54%;
+  height: 55%;
+  object-fit: contain;
+  top: 22%;
+  left: 23%;
+  opacity: 0.12;
+  z-index: -1;
+}
+@media print {
+  .ef-sheet {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  .ef-document:last-child .ef-sheet:last-child {
+    break-after: auto;
+  }
+}

@@ -324,7 +324,7 @@ export function OperationsOverview({
                 "المهام المنجزة اليوم",
                 number(tasks?.completed) + " من " + number(tasks?.total),
               ],
-              ["/forms", "استمارات بانتظار التنفيذ", number(forms)],
+              ["/attendance-forms", "استمارات بانتظار التنفيذ", number(forms)],
             ] as const
           ).map(([to, label, value]) => (
             <Card key={to}>
