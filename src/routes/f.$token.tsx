@@ -136,21 +136,26 @@ function Fill({ token, form }: { token: string; form: Public }) {
               if (!navigator.onLine) throw Error("أعد الاتصال بالإنترنت ثم أرسل المسودة");
               const clean = validate(form.schema, data, form.prefill, form.locked_fields);
               if (key && !challenge.current) throw Error("أكمل التحقق أولاً");
-              const r = await db.functions.invoke("submit_public_form", {
-                body: {
+              const response = await fetch("/api/public/submit-form", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
                   token,
                   version: form.version,
                   data: clean,
                   request_id: request,
                   website: honey.current?.value,
                   challenge: challenge.current,
-                },
+                }),
               });
-              if (r.error) {
-                const detail = await r.error.context?.json?.().catch(() => null);
-                throw Error(detail?.error ?? "تعذر إرسال الاستمارة");
-              }
-              setRef(r.data.reference_code);
+              const result = await response.json().catch(() => null);
+              if (
+                !response.ok ||
+                typeof result?.reference_code !== "string" ||
+                !result.reference_code
+              )
+                throw Error(result?.error ?? "تعذر تأكيد حفظ الاستمارة، حاول مرة أخرى");
+              setRef(result.reference_code);
               setData(clean);
               try {
                 localStorage.removeItem(storage);

@@ -56,6 +56,7 @@ import { Route as AuthenticatedEmployeesEmployeeIdRouteImport } from './routes/_
 import { Route as AuthenticatedFormsIndexRouteImport } from './routes/_authenticated/forms.index'
 import { Route as AuthenticatedFormsInboxRouteImport } from './routes/_authenticated/forms.inbox'
 import { Route as ApiPublicAttendanceRemindersRouteImport } from './routes/api/public/attendance-reminders'
+import { Route as ApiPublicSubmitFormRouteImport } from './routes/api/public/submit-form'
 import { Route as ApiPublicZkSyncRouteImport } from './routes/api/public/zk-sync'
 import { Route as ApiPublicZkSyncCommandRouteImport } from './routes/api/public/zk-sync-command'
 import { Route as ApiPublicZktecoSyncRouteImport } from './routes/api/public/zkteco-sync'
@@ -307,6 +308,11 @@ const ApiPublicAttendanceRemindersRoute =
     path: '/api/public/attendance-reminders',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicSubmitFormRoute = ApiPublicSubmitFormRouteImport.update({
+  id: '/api/public/submit-form',
+  path: '/api/public/submit-form',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicZkSyncRoute = ApiPublicZkSyncRouteImport.update({
   id: '/api/public/zk-sync',
   path: '/api/public/zk-sync',
@@ -375,6 +381,7 @@ export interface FileRoutesByFullPath {
   '/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
   '/forms/inbox': typeof AuthenticatedFormsInboxRoute
   '/api/public/attendance-reminders': typeof ApiPublicAttendanceRemindersRoute
+  '/api/public/submit-form': typeof ApiPublicSubmitFormRoute
   '/api/public/zk-sync': typeof ApiPublicZkSyncRoute
   '/api/public/zk-sync-command': typeof ApiPublicZkSyncCommandRoute
   '/api/public/zkteco-sync': typeof ApiPublicZktecoSyncRoute
@@ -426,6 +433,7 @@ export interface FileRoutesByTo {
   '/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
   '/forms/inbox': typeof AuthenticatedFormsInboxRoute
   '/api/public/attendance-reminders': typeof ApiPublicAttendanceRemindersRoute
+  '/api/public/submit-form': typeof ApiPublicSubmitFormRoute
   '/api/public/zk-sync': typeof ApiPublicZkSyncRoute
   '/api/public/zk-sync-command': typeof ApiPublicZkSyncCommandRoute
   '/api/public/zkteco-sync': typeof ApiPublicZktecoSyncRoute
@@ -480,6 +488,7 @@ export interface FileRoutesById {
   '/_authenticated/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
   '/_authenticated/forms/inbox': typeof AuthenticatedFormsInboxRoute
   '/api/public/attendance-reminders': typeof ApiPublicAttendanceRemindersRoute
+  '/api/public/submit-form': typeof ApiPublicSubmitFormRoute
   '/api/public/zk-sync': typeof ApiPublicZkSyncRoute
   '/api/public/zk-sync-command': typeof ApiPublicZkSyncCommandRoute
   '/api/public/zkteco-sync': typeof ApiPublicZktecoSyncRoute
@@ -534,6 +543,7 @@ export interface FileRouteTypes {
     | '/employees/$employeeId'
     | '/forms/inbox'
     | '/api/public/attendance-reminders'
+    | '/api/public/submit-form'
     | '/api/public/zk-sync'
     | '/api/public/zk-sync-command'
     | '/api/public/zkteco-sync'
@@ -585,6 +595,7 @@ export interface FileRouteTypes {
     | '/employees/$employeeId'
     | '/forms/inbox'
     | '/api/public/attendance-reminders'
+    | '/api/public/submit-form'
     | '/api/public/zk-sync'
     | '/api/public/zk-sync-command'
     | '/api/public/zkteco-sync'
@@ -638,6 +649,7 @@ export interface FileRouteTypes {
     | '/_authenticated/employees/$employeeId'
     | '/_authenticated/forms/inbox'
     | '/api/public/attendance-reminders'
+    | '/api/public/submit-form'
     | '/api/public/zk-sync'
     | '/api/public/zk-sync-command'
     | '/api/public/zkteco-sync'
@@ -652,6 +664,7 @@ export interface RootRouteChildren {
   DigitalFormIdRoute: typeof DigitalFormIdRoute
   FTokenRoute: typeof FTokenRoute
   ApiPublicAttendanceRemindersRoute: typeof ApiPublicAttendanceRemindersRoute
+  ApiPublicSubmitFormRoute: typeof ApiPublicSubmitFormRoute
   ApiPublicZkSyncRoute: typeof ApiPublicZkSyncRoute
   ApiPublicZkSyncCommandRoute: typeof ApiPublicZkSyncCommandRoute
   ApiPublicZktecoSyncRoute: typeof ApiPublicZktecoSyncRoute
@@ -988,6 +1001,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicAttendanceRemindersRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/submit-form': {
+      id: '/api/public/submit-form'
+      path: '/api/public/submit-form'
+      fullPath: '/api/public/submit-form'
+      preLoaderRoute: typeof ApiPublicSubmitFormRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/zk-sync': {
       id: '/api/public/zk-sync'
       path: '/api/public/zk-sync'
@@ -1141,6 +1161,7 @@ const rootRouteChildren: RootRouteChildren = {
   DigitalFormIdRoute: DigitalFormIdRoute,
   FTokenRoute: FTokenRoute,
   ApiPublicAttendanceRemindersRoute: ApiPublicAttendanceRemindersRoute,
+  ApiPublicSubmitFormRoute: ApiPublicSubmitFormRoute,
   ApiPublicZkSyncRoute: ApiPublicZkSyncRoute,
   ApiPublicZkSyncCommandRoute: ApiPublicZkSyncCommandRoute,
   ApiPublicZktecoSyncRoute: ApiPublicZktecoSyncRoute,

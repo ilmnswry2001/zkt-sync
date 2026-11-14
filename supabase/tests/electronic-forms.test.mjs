@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { submitPublicForm } from "../functions/_shared/submit-public-form.ts";
 import { validate } from "../functions/_shared/form-schema.ts";
 const { PGlite } = await import(process.env.PGLITE_MODULE ?? "@electric-sql/pglite");
 test("public forms restrict data, preserve versions, reserve capacity and throttle retries", async () => {
@@ -29,6 +30,64 @@ test("public forms restrict data, preserve versions, reserve capacity and thrott
       crew: [],
       extra: "ignore",
     };
+    await db.exec(
+      await readFile(
+        new URL("../migrations/20261114160000_public_form_reference_width.sql", import.meta.url),
+        "utf8",
+      ),
+    );
+    const sample = await one(
+      "insert into form_links(template_id,max_submissions) values($1,1) returning token",
+      [t.id],
+    );
+    const rpc = {
+      async rpc(name, args) {
+        const parameters = Object.entries(args);
+        const binds = parameters.map(([key], i) => key + " => $" + (i + 1));
+        const values = parameters.map(([key, v]) =>
+          ["p_data", "p_locked"].includes(key) ? JSON.stringify(v) : v,
+        );
+        const row = await one("select " + name + "(" + binds.join(",") + ") as result", values);
+        return { data: row.result, error: null };
+      },
+    };
+    const payload = {
+      token: sample.token,
+      version: t.version,
+      request_id: crypto.randomUUID(),
+      data: raw,
+    };
+    const attempt = (body) =>
+      submitPublicForm(
+        new Request("http://localhost/api/public/submit-form", {
+          method: "POST",
+          headers: { "cf-connecting-ip": "192.0.2.1" },
+          body: JSON.stringify(body),
+        }),
+        rpc,
+        "test-only",
+        undefined,
+      );
+    assert.equal((await attempt({ ...payload, website: "bot" })).status, 400);
+    assert.equal((await attempt({ ...payload, data: {} })).status, 422);
+    const response = await attempt(payload);
+    assert.equal(response.status, 200);
+    const receipt = await response.json();
+    assert.match(receipt.reference_code, /^TL-\d{4}-\d{8}$/);
+    assert.deepEqual(await (await attempt(payload)).json(), receipt);
+    assert.equal(
+      (
+        await one("select status from form_submissions where reference_code=$1", [
+          receipt.reference_code,
+        ])
+      ).status,
+      "pending_review",
+    );
+    assert.equal(
+      (await one("select submissions_count from form_links where token=$1", [sample.token]))
+        .submissions_count,
+      1,
+    );
     const clean = validate(t.schema, raw, { driver_name: "locked" }, ["driver_name"]);
     assert.equal(clean.driver_name, "locked");
     assert.equal(clean.plate, "12");
