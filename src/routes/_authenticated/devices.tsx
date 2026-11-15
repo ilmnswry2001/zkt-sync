@@ -417,10 +417,10 @@ function DeviceSyncRecords({ devices, canView, canDelete }: { devices: Device[];
     verify: verifyType === "—" ? null : verifyType || undefined,
     status: deviceStatus === "—" ? null : deviceStatus || undefined,
     processing: status === "all" ? undefined : status, device: deviceId === "all" ? undefined : deviceId,
-    search: search.trim() || undefined, external: externalId || undefined,
+    search: search.trim().replaceAll("*", "%") || undefined, external: externalId || undefined,
     from: boundary(dateFrom), until: boundary(dateTo,true),
-    employee: extra.employee.trim() || undefined, file: extra.file.trim() || undefined,
-    error: extra.error.trim() || undefined, batch: extra.batch.trim() || undefined,
+    employee: extra.employee.trim().replaceAll("*", "%") || undefined, file: extra.file.trim().replaceAll("*", "%") || undefined,
+    error: extra.error.trim().replaceAll("*", "%") || undefined, batch: extra.batch.trim() || undefined,
     receivedFrom: boundary(extra.receivedFrom), receivedUntil: boundary(extra.receivedUntil,true),
   };
   const archive = useMutation({
@@ -449,11 +449,41 @@ function DeviceSyncRecords({ devices, canView, canDelete }: { devices: Device[];
     enabled: canView && validPair,
     refetchInterval: 15_000,
     queryFn: async () => {
-      const db = supabase as any;
-      const request = db.rpc("filtered_verification_records", { f: filters }, {count:"exact"})
-        .select(verificationFields)
-        .order("verify_time", { ascending: false }).order("id", { ascending: false });
-      const { data, error, count } = await request.range(page * pageSize, (page + 1) * pageSize - 1);
+      let fields: string = verificationFields;
+      if (filters.employee) fields = fields.replace("employee:employees(", "employee:employees!inner(");
+      if (filters.file) fields = fields.replace("upload:uploaded_files(", "upload:uploaded_files!inner(");
+      if (filters.receivedFrom || filters.receivedUntil) fields = fields.replace("batch:sync_batches(", "batch:sync_batches!inner(");
+      let request = supabase.from("device_sync_records").select(fields, { count: "exact" }).is("archived_at", null);
+      if (filters.verify === null) request = request.is("verify_type", null);
+      else if (filters.verify !== undefined) request = request.eq("verify_type", Number(filters.verify));
+      if (filters.status === null) request = request.is("status", null);
+      else if (filters.status !== undefined) request = request.eq("status", Number(filters.status));
+      if (filters.device) request = request.eq("device_id", filters.device);
+      if (filters.processing === "unprocessed") request = request.in("processing_status", ["pending", "error", "unmatched"]);
+      else if (filters.processing) request = request.eq("processing_status", filters.processing);
+      if (filters.external) request = request.eq("external_log_id", Number(filters.external));
+      if (filters.search) {
+        const pattern = JSON.stringify(`%${filters.search}%`);
+        request = request.or(`user_pin.ilike.${pattern},employee_no.ilike.${pattern}`);
+      }
+      if (filters.from) request = request.gte("verify_time", filters.from);
+      if (filters.until) request = request.lt("verify_time", filters.until);
+      if (filters.error) request = request.ilike("error_message", `%${filters.error}%`);
+      if (filters.employee) request = request.ilike("employee.full_name", `%${filters.employee}%`);
+      if (filters.file) request = request.ilike("upload.file_name", `%${filters.file}%`);
+      if (filters.receivedFrom) request = request.gte("batch.received_at", filters.receivedFrom);
+      if (filters.receivedUntil) request = request.lt("batch.received_at", filters.receivedUntil);
+      if (filters.batch) {
+        // PostgreSQL UUIDs support range comparisons, but not ILIKE.
+        const prefix = filters.batch.toLowerCase();
+        const layout = "00000000-0000-0000-0000-000000000000";
+        if (prefix.length > layout.length || [...prefix].some((c, i) =>
+          layout[i] === "-" ? c !== "-" : !/[0-9a-f]/.test(c))) return { rows: [], count: 0 };
+        const suffix = layout.slice(prefix.length);
+        request = request.gte("sync_batch_id", prefix + suffix).lte("sync_batch_id", prefix + suffix.replaceAll("0", "f"));
+      }
+      const { data, error, count } = await request.order("verify_time", { ascending: false })
+        .order("id", { ascending: false }).range(page * pageSize, (page + 1) * pageSize - 1);
       if (error) throw error;
       return { rows: data ?? [], count: count ?? 0 };
     },
@@ -474,12 +504,12 @@ function DeviceSyncRecords({ devices, canView, canDelete }: { devices: Device[];
       let sheet = XLSX.utils.aoa_to_sheet([headings]);
       const sheetCapacity = 1048575;
       for (;;) {
-        let request = (supabase as any).rpc("filtered_verification_records", { f: {} })
-          .select(verificationFields).order("id").limit(Math.min(1000, sheetCapacity - count % sheetCapacity));
+        let request = supabase.from("device_sync_records").select(verificationFields)
+          .is("archived_at", null).order("id").limit(Math.min(1000, sheetCapacity - count % sheetCapacity));
         if (cursor) request = request.gt("id", cursor);
         const { data, error } = await request;
         if (error) throw error;
-        if (!data.length) break;
+        if (!data?.length) break;
         if (count % sheetCapacity === 0) {
           sheet = XLSX.utils.aoa_to_sheet([headings]);
           sheet["!cols"] = headings.map((_, index) => ({ wch: index === 12 ? 38 : 23 }));
