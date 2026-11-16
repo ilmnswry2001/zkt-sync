@@ -863,6 +863,7 @@ export function EmployeeProfileContent({
             </CardHeader>
             <CardContent className="grid gap-3 sm:grid-cols-2">
               <Info icon={UserRound} label="الرقم الوظيفي" value={employee.employee_no} />
+              <Info icon={UserRound} label="رقم جهاز البصمة" value={employee.attendance_device_id || "غير منسّب"} />
               <Info
                 icon={BriefcaseBusiness}
                 label="المسمى والقسم"

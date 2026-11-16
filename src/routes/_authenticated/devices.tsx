@@ -13,6 +13,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { MetricCard } from "@/components/MetricCard";
+import { AssignDevicePinDialog } from "@/components/AssignDevicePinDialog";
 import { Trash2, Plus, Pencil, KeyRound, Copy, Download, RefreshCw, Ban } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
@@ -26,7 +28,7 @@ export const Route = createFileRoute("/_authenticated/devices")({
   component: DevicesPage,
 });
 
-type Device = { id: string; name: string; serial_number: string | null; ip_address: string | null; location: string | null; description: string | null; status: string; last_sync_at: string | null };
+type Device = { id: string; name: string; serial_number: string | null; ip_address: string | null; location: string | null; description: string | null; status: string; last_sync_at: string | null; auto_last_sync_at: string | null };
 type SyncStatus = { device_id: string; auto_last_sync_at: string | null; auto_synced_logs_total: number; has_active_key: boolean; key_prefix: string | null; batches: { id: string; received_at: string; record_count: number; inserted_count: number; duplicate_count: number; unmatched_count: number; error_count: number; error_details: { message?: string }[] }[]; commands: { id: string; requested_at: string; started_at: string | null; completed_at: string | null; status: "pending" | "running" | "succeeded" | "failed"; result: { inserted?: number; duplicates?: number; unmatched?: number }; error_message: string | null }[] };
 
 function DevicesPage() {
@@ -36,8 +38,9 @@ function DevicesPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Device | null>(null);
 
-  const { data: devices = [] } = useQuery({
+  const { data: devices = [], isPending: devicesLoading, isError: devicesError } = useQuery({
     queryKey: ["devices"],
+    refetchInterval: 15_000,
     queryFn: async () => {
       const { data, error } = await supabase.from("devices").select("*").order("created_at", { ascending: false });
       if (error) throw error;
@@ -58,6 +61,14 @@ function DevicesPage() {
     refetchInterval: 5_000,
   });
   const syncByDevice = new Map((syncStatuses as SyncStatus[]).map((status) => [status.device_id, status]));
+  const now = Date.now();
+  const lastContact = (device: Device) => Math.max(
+    Date.parse(device.auto_last_sync_at ?? "") || 0,
+    Date.parse(device.last_sync_at ?? "") || 0,
+    Date.parse(syncByDevice.get(device.id)?.auto_last_sync_at ?? "") || 0,
+  );
+  const isConnected = (device: Device) => now - lastContact(device) <= 15 * 60_000;
+  const onlineCount = devices.filter(isConnected).length;
 
   const createKey = useMutation({
     mutationFn: (deviceId: string) => createZktecoSyncKey({ data: { device_id: deviceId } }),
@@ -213,6 +224,10 @@ function DevicesPage() {
 
   return (
     <Tabs defaultValue="devices" dir="rtl" className="space-y-5">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <MetricCard title="الأجهزة المتصلة" value={devicesError ? "—" : onlineCount} loading={devicesLoading} tone="success" detail="آخر مزامنة خلال 15 دقيقة" />
+        <MetricCard title="الأجهزة غير المتصلة" value={devicesError ? "—" : devices.length - onlineCount} loading={devicesLoading} tone="warning" detail="تشمل الأجهزة التي لم تزامن بعد" />
+      </div>
       <TabsList className="h-auto flex-wrap bg-transparent p-0">
         <TabsTrigger value="devices" className="min-h-10 rounded-xl border bg-card">الأجهزة والمزامنة</TabsTrigger>
         <TabsTrigger value="verification" className="min-h-10 rounded-xl border bg-card">سجلات التحقق</TabsTrigger>
@@ -341,8 +356,8 @@ function DevicesPage() {
                   <TableCell className="text-sm text-muted-foreground">{d.last_sync_at ? new Date(d.last_sync_at).toLocaleString("ar") : "—"}</TableCell>
                   {(() => {
                     const sync = syncByDevice.get(d.id);
-                    const connected = !!sync?.auto_last_sync_at && Date.now() - Date.parse(sync.auto_last_sync_at) <= 15 * 60_000;
-                    return <TableCell><Badge variant={connected ? "default" : "destructive"}>{connected ? "متصل" : sync?.has_active_key ? "متوقف" : "غير مربوط"}</Badge>{sync?.auto_last_sync_at && <div className="mt-1 text-xs text-muted-foreground">{new Date(sync.auto_last_sync_at).toLocaleString("ar")}</div>}</TableCell>;
+                    const connected = isConnected(d);
+                    return <TableCell><Badge variant={connected ? "default" : "destructive"}>{connected ? "متصل" : !sync ? "غير متصل" : sync.has_active_key ? "متوقف" : "غير مربوط"}</Badge>{lastContact(d) > 0 && <div className="mt-1 text-xs text-muted-foreground">{new Date(lastContact(d)).toLocaleString("ar")}</div>}</TableCell>;
                   })()}
                   <TableCell>{(syncByDevice.get(d.id)?.auto_synced_logs_total ?? 0).toLocaleString("ar-IQ")}</TableCell>
                   <TableCell>
@@ -394,6 +409,7 @@ function DevicesPage() {
 type SyncRecordStatus = "all" | "inserted" | "duplicate" | "unmatched" | "unprocessed" | "pending" | "error";
 const verificationFields = "id, device_id, user_pin, employee_no, employee_id, verify_time, verify_type, status, external_log_id, processing_status, error_message, sync_batch_id, employee:employees(full_name), device:devices(name), batch:sync_batches(received_at), upload:uploaded_files(file_name)";
 function DeviceSyncRecords({ devices, canView, canDelete }: { devices: Device[]; canView: boolean; canDelete: boolean }) {
+  const [assignment, setAssignment] = useState<{ id: string; pin: string } | null>(null);
   const qc = useQueryClient();
   const [status, setStatus] = useState<SyncRecordStatus>("all");
   const [deviceId, setDeviceId] = useState("all");
@@ -585,7 +601,9 @@ function DeviceSyncRecords({ devices, canView, canDelete }: { devices: Device[];
               <TableCell>{row.employee_id ? <div>{row.employee?.full_name ?? "موظف مرتبط"}<div className="text-xs text-muted-foreground">{row.employee_no ?? ""}</div></div> : <span className="text-warning">غير مرتبط</span>}</TableCell>
               <TableCell><button type="button" dir="ltr" className="text-primary underline" title="تصفية بهذه القيمة" onClick={() => {setPair(`${row.verify_type ?? "—"} / ${row.status ?? "—"}`); setPage(0);}}>{row.verify_type ?? "—"} / {row.status ?? "—"}</button></TableCell>
               <TableCell>{row.external_log_id ?? "—"}</TableCell>
-              <TableCell><Badge variant={row.processing_status === "inserted" ? "default" : row.processing_status === "unmatched" || row.processing_status === "error" ? "destructive" : "secondary"}>{statusLabel(row.processing_status)}</Badge></TableCell>
+              <TableCell><Badge variant={row.processing_status === "inserted" ? "default" : row.processing_status === "unmatched" || row.processing_status === "error" ? "destructive" : "secondary"}>{statusLabel(row.processing_status)}</Badge>
+                {row.processing_status === "unmatched" && row.user_pin?.trim() && row.user_pin.trim() !== "0" && <Button size="sm" variant="outline" className="mt-1 block" onClick={() => setAssignment({id:row.id,pin:row.user_pin.trim()})}>تنسيب لموظف</Button>}
+              </TableCell>
               <TableCell className="max-w-64 whitespace-normal break-words text-xs text-muted-foreground">{row.error_message ?? "—"}</TableCell>
               <TableCell className="font-mono text-xs">{row.sync_batch_id?.slice(0, 8) ?? "—"}</TableCell>
             </TableRow>)}
@@ -596,5 +614,6 @@ function DeviceSyncRecords({ devices, canView, canDelete }: { devices: Device[];
         <div className="flex items-center justify-between text-sm"><span>عدد النتائج: {(query.data?.count ?? 0).toLocaleString("ar-IQ")}</span><div className="flex items-center gap-2"><Button variant="outline" size="sm" disabled={page <= 0} onClick={() => setPage((value) => value - 1)}>السابق</Button><span>صفحة {(page + 1).toLocaleString("ar-IQ")} من {totalPages.toLocaleString("ar-IQ")}</span><Button variant="outline" size="sm" disabled={page + 1 >= totalPages} onClick={() => setPage((value) => value + 1)}>التالي</Button></div></div>
       </>}
     </CardContent>
+    {assignment && canView && <AssignDevicePinDialog record={assignment} close={() => setAssignment(null)} />}
   </Card>;
 }

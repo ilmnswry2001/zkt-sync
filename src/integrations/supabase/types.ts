@@ -5186,6 +5186,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      assign_unmatched_device_pin: {
+        Args: { p_record_id: string; p_employee_id: string; p_previous_pin: string | null }
+        Returns: number
+      }
       payroll_read_schedules: { Args: { p_start: string; p_end: string }; Returns: Pick<Database["public"]["Tables"]["employee_weekly_schedules"]["Row"], "employee_id" | "weekday" | "start_time" | "end_time" | "grace_minutes" | "effective_from" | "effective_until"> [] }
       payroll_read_overtime: { Args: { p_start: string; p_end: string }; Returns: Pick<Database["public"]["Tables"]["attendance_daily_overtime"]["Row"], "employee_id" | "work_date" | "overtime_hours"> [] }
       payroll_read_vehicles: { Args: Record<PropertyKey, never>; Returns: Pick<Database["public"]["Tables"]["vehicles"]["Row"], "id" | "vehicle_no" | "name" | "vehicle_class" | "daily_rate" | "currency" | "is_active"> [] }
