@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedAccountsRouteImport } from './routes/_authenticated/accounts'
+import { Route as AuthenticatedAdvancesRouteImport } from './routes/_authenticated/advances'
 import { Route as AuthenticatedAttendanceRouteImport } from './routes/_authenticated/attendance'
 import { Route as AuthenticatedAttendanceFormsRouteImport } from './routes/_authenticated/attendance-forms'
 import { Route as AuthenticatedCertificationsRouteImport } from './routes/_authenticated/certifications'
@@ -79,6 +80,11 @@ const AuthRoute = AuthRouteImport.update({
 const AuthenticatedAccountsRoute = AuthenticatedAccountsRouteImport.update({
   id: '/accounts',
   path: '/accounts',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedAdvancesRoute = AuthenticatedAdvancesRouteImport.update({
+  id: '/advances',
+  path: '/advances',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedAttendanceRoute = AuthenticatedAttendanceRouteImport.update({
@@ -339,6 +345,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/accounts': typeof AuthenticatedAccountsRoute
+  '/advances': typeof AuthenticatedAdvancesRoute
   '/attendance': typeof AuthenticatedAttendanceRoute
   '/attendance-forms': typeof AuthenticatedAttendanceFormsRoute
   '/certifications': typeof AuthenticatedCertificationsRoute
@@ -392,6 +399,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/accounts': typeof AuthenticatedAccountsRoute
+  '/advances': typeof AuthenticatedAdvancesRoute
   '/attendance': typeof AuthenticatedAttendanceRoute
   '/attendance-forms': typeof AuthenticatedAttendanceFormsRoute
   '/certifications': typeof AuthenticatedCertificationsRoute
@@ -446,6 +454,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/_authenticated/accounts': typeof AuthenticatedAccountsRoute
+  '/_authenticated/advances': typeof AuthenticatedAdvancesRoute
   '/_authenticated/attendance': typeof AuthenticatedAttendanceRoute
   '/_authenticated/attendance-forms': typeof AuthenticatedAttendanceFormsRoute
   '/_authenticated/certifications': typeof AuthenticatedCertificationsRoute
@@ -501,6 +510,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/accounts'
+    | '/advances'
     | '/attendance'
     | '/attendance-forms'
     | '/certifications'
@@ -554,6 +564,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/accounts'
+    | '/advances'
     | '/attendance'
     | '/attendance-forms'
     | '/certifications'
@@ -607,6 +618,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/_authenticated/accounts'
+    | '/_authenticated/advances'
     | '/_authenticated/attendance'
     | '/_authenticated/attendance-forms'
     | '/_authenticated/certifications'
@@ -698,6 +710,13 @@ declare module '@tanstack/react-router' {
       path: '/accounts'
       fullPath: '/accounts'
       preLoaderRoute: typeof AuthenticatedAccountsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/advances': {
+      id: '/_authenticated/advances'
+      path: '/advances'
+      fullPath: '/advances'
+      preLoaderRoute: typeof AuthenticatedAdvancesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/attendance': {
@@ -1071,6 +1090,7 @@ const AuthenticatedFormsRouteWithChildren =
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAccountsRoute: typeof AuthenticatedAccountsRoute
+  AuthenticatedAdvancesRoute: typeof AuthenticatedAdvancesRoute
   AuthenticatedAttendanceRoute: typeof AuthenticatedAttendanceRoute
   AuthenticatedAttendanceFormsRoute: typeof AuthenticatedAttendanceFormsRoute
   AuthenticatedCertificationsRoute: typeof AuthenticatedCertificationsRoute
@@ -1112,6 +1132,7 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAccountsRoute: AuthenticatedAccountsRoute,
+  AuthenticatedAdvancesRoute: AuthenticatedAdvancesRoute,
   AuthenticatedAttendanceRoute: AuthenticatedAttendanceRoute,
   AuthenticatedAttendanceFormsRoute: AuthenticatedAttendanceFormsRoute,
   AuthenticatedCertificationsRoute: AuthenticatedCertificationsRoute,

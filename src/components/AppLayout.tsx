@@ -90,7 +90,8 @@ const nav = [
   { to: "/procurement", label: "المشتريات", icon: ShoppingCart, access: "procurement" },
   { to: "/sites", label: "المواقع", icon: MapPinned, access: "planning" },
   { to: "/wages", label: "الأجور", icon: Wallet, access: "finance" },
-  { to: "/payroll", label: "الرواتب والسلف", icon: Wallet, access: "finance" },
+  { to: "/payroll", label: "الرواتب", icon: Wallet, access: "finance" },
+  { to: "/advances", label: "السلف", icon: Wallet, access: "finance" },
   { to: "/vehicles", label: "المركبات", icon: Truck, access: "hr" },
   { to: "/fuel", label: "إدارة الوقود", icon: Fuel, access: "hr" },
   { to: "/maintenance", label: "الصيانة", icon: Wrench, access: "maintenance" },
@@ -141,7 +142,7 @@ const NAV_GROUPS = [
     key: "finance",
     label: "المالية والمشاريع",
     icon: Wallet,
-    tos: ["/payroll", "/wages", "/projects", "/procurement", "/sites", "/planning", "/requests"],
+    tos: ["/payroll", "/advances", "/wages", "/projects", "/procurement", "/sites", "/planning", "/requests"],
   },
   {
     key: "inventory",

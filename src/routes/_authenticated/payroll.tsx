@@ -1,4 +1,5 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { requireFinanceRouteAccess } from "@/lib/finance-route-access";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -32,21 +33,7 @@ import {
 
 export const Route = createFileRoute("/_authenticated/payroll")({
   head: () => ({ meta: [{ title: "الرواتب" }] }),
-  beforeLoad: async () => {
-    const { data } = await supabase.auth.getUser();
-    if (!data.user) throw redirect({ to: "/auth" });
-    const { data: roles } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", data.user.id);
-    const { data: formRoles } = await supabase
-      .from("form_role_assignments")
-      .select("role")
-      .eq("user_id", data.user.id)
-      .eq("role", "ceo");
-    if (!roles?.some((r) => r.role === "admin" || r.role === "hr" || r.role === "accountant") && !formRoles?.length)
-      throw redirect({ to: "/dashboard" });
-  },
+  beforeLoad: requireFinanceRouteAccess,
   component: PayrollPage,
 });
 
@@ -179,8 +166,7 @@ function PayrollPage() {
   const [auditFlags, setAuditFlags] = useState<PayrollAuditFlag[]>([]);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [advanceEmployeeId, setAdvanceEmployeeId] = useState("");
-  const [advancePaymentMethod, setAdvancePaymentMethod] = useState("cash");
+  const [paymentMethod, setPaymentMethod] = useState("cash");
   const pageSize = 20;
   const nextMonth = useMemo(() => {
     const date = new Date(`${month}-01T00:00:00Z`);
@@ -531,7 +517,7 @@ function PayrollPage() {
       if (action === "pay") {
         const reference=window.prompt("رقم مرجع التحويل أو سند الصرف (اختياري)");
         if(reference===null) return;
-        const {error}=await supabase.rpc("pay_payroll_with_advances",{p_run:payrollRun!.id,p_method:advancePaymentMethod,p_reference:reference||null});
+        const {error}=await supabase.rpc("pay_payroll_with_advances",{p_run:payrollRun!.id,p_method:paymentMethod,p_reference:reference||null});
         if(error) throw error;
         return;
       }
@@ -570,31 +556,6 @@ function PayrollPage() {
       await queryClient.invalidateQueries({ queryKey: ["payroll", month] });
       toast.success("تم تحديث دورة الرواتب");
     },
-    onError: (error: Error) => toast.error(error.message),
-  });
-  const createAdvance = useMutation({
-    mutationFn: async (form: FormData) => {
-      const amount = Number(form.get("amount"));
-      const installmentAmount = Number(form.get("installment_amount"));
-      const count = Math.ceil(amount / installmentAmount);
-      const firstMonth = String(form.get("first_month") ?? "");
-      if (!advanceEmployeeId || amount <= 0 || installmentAmount <= 0 || count > 120 || firstMonth < currentMonthInBaghdad()) throw new Error("تحقق من الموظف والمبلغ والقسط وشهر بدء الخصم (الحد الأقصى 120 قسطًا)");
-      const { data: auth } = await supabase.auth.getUser();
-      const { data: advance, error } = await (supabase as any).from("employee_advances").insert({
-        employee_id: advanceEmployeeId, amount, installment_amount: installmentAmount,
-        installments_count: count, first_deduction_month: `${firstMonth}-01`,
-        purpose: form.get("purpose") || null, created_by: auth.user?.id,
-      }).select("id").single();
-      if (error) throw error;
-      const first = new Date(`${firstMonth}-01T00:00:00Z`);
-      const installments = Array.from({ length: count }, (_, index) => {
-        const date = new Date(first); date.setUTCMonth(date.getUTCMonth() + index);
-        return { advance_id: advance.id, month: date.toISOString().slice(0, 10), amount: index === count - 1 ? amount - installmentAmount * (count - 1) : installmentAmount };
-      });
-      const { error: installmentError } = await (supabase as any).from("employee_advance_installments").insert(installments);
-      if (installmentError) throw installmentError;
-    },
-    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["payroll", month] }); toast.success("تم تسجيل السلفة وجدولة أقساطها"); },
     onError: (error: Error) => toast.error(error.message),
   });
   const vehicleRows = (kind: Vehicle["vehicle_class"]) =>
@@ -856,7 +817,7 @@ function PayrollPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Select value={advancePaymentMethod} onValueChange={setAdvancePaymentMethod}>
+            <Select value={paymentMethod} onValueChange={setPaymentMethod}>
               <SelectTrigger className="w-40"><SelectValue placeholder="طريقة الصرف" /></SelectTrigger>
               <SelectContent><SelectItem value="cash">نقدًا</SelectItem><SelectItem value="bank">تحويل مصرفي</SelectItem></SelectContent>
             </Select>
@@ -870,24 +831,7 @@ function PayrollPage() {
             <Badge variant="secondary">الإجمالي الصافي: {money(total)}</Badge>
           </div>
         </CardHeader>
-        <CardContent className="grid gap-4 p-4 lg:grid-cols-[1fr_2fr]">
-          <form className="grid gap-3 rounded-xl border p-4 sm:grid-cols-2 lg:grid-cols-1" onSubmit={(event) => {
-            event.preventDefault();
-            if (payrollRun && payrollRun.status !== "draft") { toast.error("لا يمكن إضافة سلفة بعد بدء مراجعة المسير"); return; }
-            createAdvance.mutate(new FormData(event.currentTarget));
-            event.currentTarget.reset(); setAdvanceEmployeeId("");
-          }}>
-            <h3 className="font-semibold sm:col-span-2 lg:col-span-1">تسجيل سلفة وجدولة أقساط</h3>
-            <Select value={advanceEmployeeId} onValueChange={setAdvanceEmployeeId}>
-              <SelectTrigger className="sm:col-span-2 lg:col-span-1"><SelectValue placeholder="اختر الموظف" /></SelectTrigger>
-              <SelectContent>{(query.data?.employees ?? []).map((employee) => <SelectItem key={employee.id} value={employee.id}>{employee.employee_no} — {employee.full_name}</SelectItem>)}</SelectContent>
-            </Select>
-            <Input name="amount" type="number" min="1" step="0.01" placeholder="مبلغ السلفة بالدينار" required />
-            <Input name="installment_amount" type="number" min="1" step="0.01" placeholder="مبلغ القسط الشهري" required />
-            <Input name="first_month" type="month" defaultValue={month} required />
-            <Input name="purpose" placeholder="سبب السلفة (اختياري)" />
-            <Button type="submit" disabled={!isPayrollOperator || createAdvance.isPending || isLocked} className="sm:col-span-2 lg:col-span-1">تسجيل السلفة</Button>
-          </form>
+        <CardContent className="space-y-3 p-4">
           <div className="overflow-x-auto rounded-xl border">
             <table className="w-full min-w-[520px] text-sm">
               <thead><tr className="border-b bg-muted/40 text-right"><th className="p-3">الموظف</th><th className="p-3">القسط المستحق هذا الشهر</th><th className="p-3">الصافي بعد الخصم</th></tr></thead>
@@ -896,7 +840,7 @@ function PayrollPage() {
               </tbody>
             </table>
           </div>
-          {payrollRun?.payment_reference && <p className="text-sm text-muted-foreground lg:col-span-2">مرجع الصرف: {payrollRun.payment_reference}</p>}
+          {payrollRun?.payment_reference && <p className="text-sm text-muted-foreground">مرجع الصرف: {payrollRun.payment_reference}</p>}
         </CardContent>
       </Card>
       <Tabs defaultValue="employees" dir="rtl" className="space-y-5">
