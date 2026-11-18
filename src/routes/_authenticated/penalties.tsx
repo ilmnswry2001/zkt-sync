@@ -11,6 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import {
   Select,
   SelectContent,
@@ -23,6 +25,7 @@ import {
   CalendarDays,
   CheckCircle2,
   CircleDollarSign,
+  Check,
   FileWarning,
   Plus,
   Search,
@@ -77,6 +80,8 @@ function PenaltiesPage() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
+  const [employeePickerOpen, setEmployeePickerOpen] = useState(false);
+  const [employeeSearch, setEmployeeSearch] = useState("");
   const [penaltyType, setPenaltyType] = useState<Penalty["penalty_type"]>("absence");
   const [penaltyDate, setPenaltyDate] = useState(today);
 
@@ -385,6 +390,7 @@ function PenaltiesPage() {
         onOpenChange={(value) => {
           setOpen(value);
           if (!value) setSelectedEmployees([]);
+          if (!value) setEmployeeSearch("");
         }}
       >
         <DialogContent dir="rtl" className="max-w-2xl">
@@ -414,36 +420,38 @@ function PenaltiesPage() {
             className="space-y-5"
           >
             <div className="rounded-xl border bg-muted/20 p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <Label>اختيار موظفين من قاعدة البيانات (يمكن اختيار أكثر من اسم)</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label>الموظف المرتبط بالعقوبة</Label>
                 <Badge variant="outline">{selectedEmployees.length} محدد</Badge>
               </div>
-              <div className="max-h-48 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {employees.map((employee) => (
-                  <label
-                    key={employee.id}
-                    className="flex items-center gap-2 rounded-lg border bg-background p-2 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedEmployees.includes(employee.id)}
-                      onChange={(event) =>
-                        setSelectedEmployees((current) =>
-                          event.target.checked
-                            ? [...current, employee.id]
-                            : current.filter((id) => id !== employee.id),
-                        )
-                      }
-                    />
-                    <span>
-                      {employee.full_name}
-                      <small className="block text-muted-foreground">
-                        {employee.employee_no} · {employee.position || "بدون تخصص"}
-                      </small>
-                    </span>
-                  </label>
-                ))}
-              </div>
+              <Popover open={employeePickerOpen} onOpenChange={setEmployeePickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button type="button" variant="outline" className="w-full justify-start min-h-11" disabled={employeesQuery.isLoading}>
+                    <Search className="ml-2 h-4 w-4" />
+                    {employeesQuery.isLoading ? "جارٍ تحميل الموظفين..." : "ابحث واختر موظفاً مسجلاً"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent dir="rtl" align="start" className="w-[min(32rem,calc(100vw-2rem))] p-0">
+                  <Command shouldFilter={false}>
+                    <CommandInput value={employeeSearch} onValueChange={setEmployeeSearch} placeholder="ابحث بالاسم أو الرقم الوظيفي أو المسمى..." />
+                    <CommandList className="max-h-64">
+                      <CommandEmpty>{employeesQuery.isError ? "تعذر تحميل الموظفين." : "لا يوجد موظف مطابق للبحث."}</CommandEmpty>
+                      <CommandGroup>
+                        {employees.filter((employee) => `${employee.full_name} ${employee.employee_no} ${employee.position ?? ""}`.toLocaleLowerCase("ar").includes(employeeSearch.trim().toLocaleLowerCase("ar"))).slice(0, 50).map((employee) => {
+                          const selected = selectedEmployees.includes(employee.id);
+                          return <CommandItem key={employee.id} value={employee.id} onSelect={() => {
+                            setSelectedEmployees((current) => selected ? current.filter((id) => id !== employee.id) : [...current, employee.id]);
+                          }}>
+                            <div className="min-w-0 flex-1 text-right"><p className="font-semibold">{employee.full_name}</p><p className="text-xs text-muted-foreground">{employee.employee_no} · {employee.position || "بدون مسمى"}</p></div>
+                            {selected && <Check className="h-4 w-4 text-primary" />}
+                          </CommandItem>;
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              {!!selectedEmployees.length && <div className="flex flex-wrap gap-2">{employees.filter((employee) => selectedEmployees.includes(employee.id)).map((employee) => <Badge key={employee.id} variant="secondary" className="gap-2 py-1">{employee.full_name} · {employee.employee_no}<button type="button" aria-label={`إزالة ${employee.full_name}`} onClick={() => setSelectedEmployees((current) => current.filter((id) => id !== employee.id))}>×</button></Badge>)}</div>}
               <div className="text-center text-xs text-muted-foreground">أو</div>
               <div>
                 <Label>إدخال اسم مباشر</Label>

@@ -5,6 +5,7 @@ Minimize unnecessary context, token usage, repeated work, and unrelated changes 
 
 ## Before Every Task
 - Read this file first.
+- Read `PROJECT_MEMORY.md` before starting work. Record completed changes and verification results in `PROGRESS.md` before committing.
 - Inspect only files directly relevant to the requested task; use targeted searches and focused excerpts.
 - Check existing implementations, database schema, permissions, and related tests before changing anything.
 - Do not scan or summarize the entire repository unless explicitly requested.
