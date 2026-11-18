@@ -1,3 +1,6 @@
+import { payrollSlipReportsDb, type PayrollSlipRow } from "@/lib/payroll-slip-reports-client";
+import { useDirectorySearch } from "@/hooks/use-directory-search";
+import { formatErrorMessage } from "@/lib/error-message";
 import { requireFinanceRouteAccess } from "@/lib/finance-route-access";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -12,13 +15,14 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { AlertTriangle, Banknote, ClipboardCheck, Download, Eye, Printer, RefreshCw, Search, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { printReport, escapeHtml } from "@/lib/report-print";
 import { amountInArabicIqd } from "@/lib/arabic-currency";
-import { currentMonthInBaghdad, monthInstantRangeInBaghdad, todayInBaghdad } from "@/lib/date-time";
+import { COMPANY_TIME_ZONE, currentMonthInBaghdad, monthInstantRangeInBaghdad, todayInBaghdad } from "@/lib/date-time";
 import { resolvePayrollWage, allocateAdvanceInstallments } from "@/lib/payroll-wage-resolution";
 import {
   type AttendanceDailyOvertime,
@@ -91,15 +95,6 @@ type VehicleOperation = { vehicle_id: string; operating_days: number };
 type Machinery = { id: string; code: string; asset_number: string | null; name: string; category: string | null; status: string; daily_rent: number | null };
 type MachineryOperation = { machinery_id: string; operating_days: number; operating_dates: string[] };
 
-type PayrollSlipRow = {
-  employee: { full_name: string; employee_no: string; departments?: { name: string } | null };
-  payroll: { basePay: number; overtimeHours: number; overtimePay: number };
-  additions: number;
-  deductions: number;
-  total: number;
-  summary: { presentDays: number };
-  penalties: Array<{ deduction_amount: number | null; notes: string | null }>;
-};
 type PayrollAuditFlag = {
   id: string;
   anomaly_type: string;
@@ -156,9 +151,261 @@ function PayrollSlipPreview({ row, month }: { row: PayrollSlipRow; month: string
   );
 }
 
+async function readPayroll(month: string, includeAssets = true) {
+  const next = new Date(`${month}-01T00:00:00Z`);
+  next.setUTCMonth(next.getUTCMonth() + 1);
+  const nextMonth = next.toISOString().slice(0, 10);
+  const attendanceRange = monthInstantRangeInBaghdad(month);
+  const payroll = supabase;
+  const employeeQuery = payroll.rpc("payroll_employee_directory")
+    .order("employee_no")
+    .order("id");
+  const employees = await loadAllRows((from, to) => employeeQuery.range(from, to)) as Employee[];
+  const [additions, penalties, logs, overrides, weeklySchedules, storedOvertime, vehicles, vehicleOperations, leaveCalendar] =
+    await Promise.all([
+      loadAllRows((from, to) =>
+        supabase
+          .from("salary_additions")
+          .select("employee_id, amount, kind")
+          .eq("month", `${month}-01`)
+          .order("id")
+          .range(from, to),
+      ),
+      loadAllRows((from, to) =>
+        supabase
+          .from("employee_penalties")
+          .select("id, employee_id, deduction_amount, penalty_date, notes")
+          .gte("penalty_date", `${month}-01`)
+          .lt("penalty_date", nextMonth)
+          .order("id")
+          .range(from, to),
+      ),
+      loadAllRows((from, to) =>
+        payroll.rpc("payroll_read_logs", {p_start:attendanceRange.start,p_end:attendanceRange.end})
+          .select("employee_no, verify_time, status, source, self_event_type")
+          .gte("verify_time", attendanceRange.start)
+          .lt("verify_time", attendanceRange.end)
+          .order("verify_time")
+          .order("id")
+          .range(from, to),
+      ),
+      loadAllRows((from, to) =>
+        payroll.rpc("payroll_read_days", {p_start:`${month}-01`,p_end:nextMonth})
+          .select("employee_id, work_date, status, notes, overtime_hours")
+          .gte("work_date", `${month}-01`)
+          .lt("work_date", nextMonth)
+          .order("employee_id")
+          .order("work_date")
+          .range(from, to),
+      ),
+      loadAllRows((from, to) =>
+        payroll.rpc("payroll_read_schedules", {p_start:`${month}-01`,p_end:nextMonth})
+          .select("employee_id, weekday, start_time, end_time, grace_minutes, effective_from, effective_until")
+          .lt("effective_from", nextMonth)
+          .or(`effective_until.is.null,effective_until.gte.${month}-01`)
+          .order("effective_from", { ascending: false })
+          .range(from, to),
+      ),
+      loadAllRows((from, to) =>
+        payroll.rpc("payroll_read_overtime", {p_start:`${month}-01`,p_end:nextMonth})
+          .select("employee_id, work_date, overtime_hours")
+          .gte("work_date", `${month}-01`)
+          .lt("work_date", nextMonth)
+          .order("employee_id")
+          .order("work_date")
+          .range(from, to),
+      ),
+      includeAssets ? loadAllRows((from, to) =>
+        payroll.rpc("payroll_read_vehicles")
+          .select("id, vehicle_no, name, vehicle_class, daily_rate, currency, is_active")
+          .eq("is_active", true)
+          .order("vehicle_no")
+          .range(from, to),
+      ) : [],
+      includeAssets ? loadAllRows((from, to) =>
+        payroll.rpc("payroll_read_vehicle_ops", {p_start:`${month}-01`})
+          .select("vehicle_id, operating_days")
+          .eq("month", `${month}-01`)
+          .order("vehicle_id")
+          .range(from, to),
+      ) : [],
+      loadAllRows((from, to) =>
+        supabase
+          .from("forms")
+          .select("employee_id, work_date, leave_end_date, status, leave_type_id")
+          .eq("kind", "leave")
+          .in("status", ["pending_execution", "executed"])
+          .lt("work_date", nextMonth)
+          .gte("leave_end_date", `${month}-01`)
+          .range(from, to),
+      ),
+    ]);
+  const [machineryData, machineryOperationsData, wageRates, leaveTypes] = await Promise.all([
+    includeAssets ? loadAllRows((from, to) => payroll.rpc("payroll_read_machinery")
+      .select("id, code, asset_number, name, category, status, daily_rent")
+      .eq("status", "active").order("code").range(from, to)) : [],
+    includeAssets ? loadAllRows((from, to) => payroll.rpc("payroll_read_machinery_ops",{p_start:`${month}-01`})
+      .select("machinery_id, operating_days, operating_dates")
+      .eq("month", `${month}-01`).order("machinery_id").range(from, to)) : [],
+    loadAllRows((from,to)=>supabase.from("wage_rates").select("id,title,monthly_rate,daily_rate,overtime_hour_rate,currency").order("id").range(from,to)),
+    loadAllRows<{id:string;is_paid:boolean;count_non_working_days:boolean}>((from,to)=>payroll.rpc("payroll_read_leave_types").order("id").range(from,to)),
+  ]);
+  const [{ data: runData, error: runError }, { data: advanceData }] = await Promise.all([
+    (supabase as any).from("payroll_runs").select("*").eq("month", `${month}-01`).maybeSingle(),
+    loadAllRows((from,to)=>(supabase as any).from("employee_advance_installments").select("id,advance_id,amount,deducted_amount,employee_advances!inner(employee_id,status)").eq("month",`${month}-01`).eq("status","scheduled").eq("employee_advances.status","active").order("id").range(from,to)).then(data=>({data,error:null})),
+  ]);
+  if (runError) throw new Error(runError.message);
+
+  const payrollLines = runData ? await loadAllRows((from,to)=>(supabase as any).from("payroll_run_lines").select("employee_id,base_amount,overtime_hours,overtime_amount,additions_amount,deductions_amount,advance_deduction,net_amount,calculation_snapshot").eq("payroll_run_id",runData.id).order("id").range(from,to)) : [];
+  const approvedLeaveDays: AttendanceOverride[] = (leaveCalendar as any[]).flatMap((form) => {
+    const leaveType = leaveTypes.find(type=>type.id===form.leave_type_id);
+    const end = form.leave_end_date || form.work_date;
+    const dates: AttendanceOverride[] = [];
+    for (let date = new Date(`${form.work_date}T00:00:00Z`); date <= new Date(`${end}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + 1)) {
+      const workDate = date.toISOString().slice(0, 10);
+      if (workDate < `${month}-01` || workDate >= nextMonth) continue;
+      if (!leaveType?.count_non_working_days && [0, 5].includes(date.getUTCDay())) continue;
+      dates.push({ employee_id: form.employee_id, work_date: workDate, status: "leave", notes: `إجازة ${leaveType?.is_paid ? "مدفوعة" : "بدون راتب"}`, overtime_hours: 0, is_paid: Boolean(leaveType?.is_paid) });
+    }
+    return dates;
+  });
+  return {
+    employees,
+    wageRates,
+    employeeCount: employees.length,
+    additions: additions as Addition[],
+    penalties: penalties as Penalty[],
+    logs: logs as AttendanceLog[],
+    overrides: [...(overrides as AttendanceOverride[]), ...approvedLeaveDays],
+    weeklySchedules: weeklySchedules as WeeklyShiftSchedule[],
+    storedOvertime: storedOvertime as AttendanceDailyOvertime[],
+    vehicles: vehicles as Vehicle[],
+    vehicleOperations: vehicleOperations as VehicleOperation[],
+    machinery: machineryData as Machinery[],
+    machineryOperations: machineryOperationsData as MachineryOperation[],
+    payrollRun: runData,
+    payrollLines: payrollLines ?? [],
+    advanceInstallments: (advanceData ?? []) as Array<{ id: string; amount: number; deducted_amount:number; employee_advances: { employee_id: string; status: string } | Array<{ employee_id: string; status: string }> }>,
+  };
+}
+
+type PayrollData = Awaited<ReturnType<typeof readPayroll>>;
+
+function groupPayrollInputs(data: PayrollData | undefined) {
+  const groupBy = <T,>(items: T[], key: (item: T) => string) => {
+    const groups = new Map<string, T[]>();
+    for (const item of items) {
+      const groupKey = key(item);
+      const group = groups.get(groupKey);
+      if (group) group.push(item);
+      else groups.set(groupKey, [item]);
+    }
+    return groups;
+  };
+  return {
+    logs: groupBy(data?.logs ?? [], (item) => item.employee_no),
+    overrides: groupBy(data?.overrides ?? [], (item) => item.employee_id),
+    schedules: groupBy(data?.weeklySchedules ?? [], (item) => item.employee_id),
+    overtime: groupBy(data?.storedOvertime ?? [], (item) => item.employee_id),
+    additions: groupBy(data?.additions ?? [], (item) => item.employee_id),
+    penalties: groupBy(data?.penalties ?? [], (item) => item.employee_id ?? ""),
+    advances: groupBy(data?.advanceInstallments ?? [], (item) => {
+      const advance = Array.isArray(item.employee_advances) ? item.employee_advances[0] : item.employee_advances;
+      return advance?.employee_id ?? "";
+    }),
+  };
+}
+
+function calculatePayrollRows(data: PayrollData | undefined, month: string) {
+  const dataByEmployee = groupPayrollInputs(data);
+  return (data?.employees ?? []).map((employee) => {
+    const wage = resolvePayrollWage(employee,data?.wageRates ?? []);
+    const payType = wage.payType;
+    const days = buildAttendanceDays(
+      monthDates(month),
+      dataByEmployee.logs.get(employee.employee_no) ?? [],
+      dataByEmployee.overrides.get(employee.id) ?? [],
+      employee.shifts?.end_time,
+      todayInBaghdad(),
+      payType,
+      employee.shifts?.grace_minutes ?? 0,
+      dataByEmployee.schedules.get(employee.id) ?? [],
+      dataByEmployee.overtime.get(employee.id) ?? [],
+    );
+    const summary = summarizeDays(days);
+    const {monthlySalary,dailyRate,overtimeHourlyRate} = wage;
+    const additions = (dataByEmployee.additions.get(employee.id) ?? [])
+      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const employeePenalties = dataByEmployee.penalties.get(employee.id) ?? [];
+    const deductions = employeePenalties
+      .reduce((sum, item) => sum + Number(item.deduction_amount || 0), 0);
+    const payroll = calculatePayroll({
+      payType,
+      monthlySalary,
+      dailyRate,
+      daysInMonth: days.length,
+      summary,
+      holidayDays: days.filter((day) => day.status === "holiday").length,
+      overtimeHourlyRate,
+      additions,
+      deductions,
+    });
+    const advanceInstallments = dataByEmployee.advances.get(employee.id) ?? [];
+    const advanceAllocations=allocateAdvanceInstallments(payroll.netPay,advanceInstallments);
+    const advanceDeduction=roundMoney(advanceAllocations.reduce((sum,item)=>sum+item.amount,0));
+    const total=roundMoney(Math.max(0,payroll.netPay-advanceDeduction));
+    return { employee,payType,wage,payroll,summary,additions,deductions,penalties:employeePenalties,advanceDeduction,advanceInstallments,advanceAllocations,total };
+
+  });
+}
+
+function resolvePayrollRows(data: PayrollData | undefined, recalculatedRows: ReturnType<typeof calculatePayrollRows>) {
+  if (!["approved", "paid"].includes(data?.payrollRun?.status ?? ""))
+    return recalculatedRows;
+  const savedLines = new Map(
+    (data?.payrollLines ?? []).map((line: any) => [line.employee_id, line]),
+  );
+  return recalculatedRows.map((row) => {
+    const saved = savedLines.get(row.employee.id) as any;
+    if (!saved)
+      return {
+        ...row,
+        payroll: {
+          ...row.payroll,
+          basePay: 0,
+          overtimePay: 0,
+          overtimeHours: 0,
+          grossPay: 0,
+          netPay: 0,
+        },
+        additions: 0,
+        deductions: 0,
+        total: 0,
+        advanceDeduction: 0,
+      };
+    return {
+      ...row,
+      payroll: {
+        ...row.payroll,
+        basePay: Number(saved.base_amount),
+        overtimeHours: Number(saved.overtime_hours),
+        overtimePay: Number(saved.overtime_amount),
+        grossPay: roundMoney(Number(saved.base_amount) + Number(saved.overtime_amount)),
+        netPay: Number(saved.net_amount) + Number(saved.advance_deduction),
+      },
+      summary: saved.calculation_snapshot?.summary ?? row.summary,
+      additions: Number(saved.additions_amount),
+      deductions: Number(saved.deductions_amount),
+      advanceDeduction: Number(saved.advance_deduction),
+      total: Number(saved.net_amount),
+    };
+  });
+}
+
 function PayrollPage() {
+  const { financeUserId, canManageAdvances: canManageSlips } = Route.useRouteContext();
   const queryClient = useQueryClient();
-  const [previewRow, setPreviewRow] = useState<PayrollSlipRow | null>(null);
+  const [previewRow, setPreviewRow] = useState<{ row: PayrollSlipRow; month: string } | null>(null);
   const [recalculationSearch,setRecalculationSearch] = useState("");
   const [recalculateOpen, setRecalculateOpen] = useState(false);
   const [month, setMonth] = useState(currentMonthInBaghdad);
@@ -166,262 +413,35 @@ function PayrollPage() {
   const [auditFlags, setAuditFlags] = useState<PayrollAuditFlag[]>([]);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [activeTab, setActiveTab] = useState("slips");
+  const [slipPage, setSlipPage] = useState(0);
+  const [slipSearch, setSlipSearch] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<{ revision: string; month: string } | null>(null);
+  const slipLookup = useDirectorySearch(slipSearch);
+  const slipPageSize = 20;
+  const slipQueryKey = ["payroll-slip-reports", financeUserId];
+  const savedSlips = useQuery({
+    queryKey: [...slipQueryKey, slipPage, slipLookup.term],
+    enabled: activeTab === "slips" && !slipLookup.waiting,
+    queryFn: async ({ signal }) => {
+      const { data, error } = await payrollSlipReportsDb.rpc("read_latest_payroll_slips", {
+        p_page: slipPage, p_search: slipLookup.term,
+      }).abortSignal(signal);
+      if (error) throw error;
+      return data;
+    },
+  });
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const pageSize = 20;
-  const nextMonth = useMemo(() => {
-    const date = new Date(`${month}-01T00:00:00Z`);
-    date.setUTCMonth(date.getUTCMonth() + 1);
-    return date.toISOString().slice(0, 10);
-  }, [month]);
   const query = useQuery({
     queryKey: ["payroll", month],
     staleTime: 60_000,
-    queryFn: async () => {
-      const attendanceRange = monthInstantRangeInBaghdad(month);
-      const payroll = supabase;
-      const employeeQuery = payroll.rpc("payroll_employee_directory")
-        .order("employee_no")
-        .order("id");
-      const employees = await loadAllRows((from, to) => employeeQuery.range(from, to)) as Employee[];
-      const [additions, penalties, logs, overrides, weeklySchedules, storedOvertime, vehicles, vehicleOperations, leaveCalendar] =
-        await Promise.all([
-          loadAllRows((from, to) =>
-            supabase
-              .from("salary_additions")
-              .select("employee_id, amount, kind")
-              .eq("month", `${month}-01`)
-              .order("id")
-              .range(from, to),
-          ),
-          loadAllRows((from, to) =>
-            supabase
-              .from("employee_penalties")
-              .select("id, employee_id, deduction_amount, penalty_date, notes")
-              .gte("penalty_date", `${month}-01`)
-              .lt("penalty_date", nextMonth)
-              .order("id")
-              .range(from, to),
-          ),
-          loadAllRows((from, to) =>
-            payroll.rpc("payroll_read_logs", {p_start:attendanceRange.start,p_end:attendanceRange.end})
-              .select("employee_no, verify_time, status, source, self_event_type")
-              .gte("verify_time", attendanceRange.start)
-              .lt("verify_time", attendanceRange.end)
-              .order("verify_time")
-              .order("id")
-              .range(from, to),
-          ),
-          loadAllRows((from, to) =>
-            payroll.rpc("payroll_read_days", {p_start:`${month}-01`,p_end:nextMonth})
-              .select("employee_id, work_date, status, notes, overtime_hours")
-              .gte("work_date", `${month}-01`)
-              .lt("work_date", nextMonth)
-              .order("employee_id")
-              .order("work_date")
-              .range(from, to),
-          ),
-          loadAllRows((from, to) =>
-            payroll.rpc("payroll_read_schedules", {p_start:`${month}-01`,p_end:nextMonth})
-              .select("employee_id, weekday, start_time, end_time, grace_minutes, effective_from, effective_until")
-              .lt("effective_from", nextMonth)
-              .or(`effective_until.is.null,effective_until.gte.${month}-01`)
-              .order("effective_from", { ascending: false })
-              .range(from, to),
-          ),
-          loadAllRows((from, to) =>
-            payroll.rpc("payroll_read_overtime", {p_start:`${month}-01`,p_end:nextMonth})
-              .select("employee_id, work_date, overtime_hours")
-              .gte("work_date", `${month}-01`)
-              .lt("work_date", nextMonth)
-              .order("employee_id")
-              .order("work_date")
-              .range(from, to),
-          ),
-          loadAllRows((from, to) =>
-            payroll.rpc("payroll_read_vehicles")
-              .select("id, vehicle_no, name, vehicle_class, daily_rate, currency, is_active")
-              .eq("is_active", true)
-              .order("vehicle_no")
-              .range(from, to),
-          ),
-          loadAllRows((from, to) =>
-            payroll.rpc("payroll_read_vehicle_ops", {p_start:`${month}-01`})
-              .select("vehicle_id, operating_days")
-              .eq("month", `${month}-01`)
-              .order("vehicle_id")
-              .range(from, to),
-          ),
-          loadAllRows((from, to) =>
-            supabase
-              .from("forms")
-              .select("employee_id, work_date, leave_end_date, status, leave_type_id")
-              .eq("kind", "leave")
-              .in("status", ["pending_execution", "executed"])
-              .lt("work_date", nextMonth)
-              .gte("leave_end_date", `${month}-01`)
-              .range(from, to),
-          ),
-        ]);
-      const [machineryData, machineryOperationsData, wageRates, leaveTypes] = await Promise.all([
-        loadAllRows((from, to) => payroll.rpc("payroll_read_machinery")
-          .select("id, code, asset_number, name, category, status, daily_rent")
-          .eq("status", "active").order("code").range(from, to)),
-        loadAllRows((from, to) => payroll.rpc("payroll_read_machinery_ops",{p_start:`${month}-01`})
-          .select("machinery_id, operating_days, operating_dates")
-          .eq("month", `${month}-01`).order("machinery_id").range(from, to)),
-        loadAllRows((from,to)=>supabase.from("wage_rates").select("id,title,monthly_rate,daily_rate,overtime_hour_rate,currency").order("id").range(from,to)),
-        loadAllRows<{id:string;is_paid:boolean;count_non_working_days:boolean}>((from,to)=>payroll.rpc("payroll_read_leave_types").order("id").range(from,to)),
-      ]);
-      const [{ data: runData, error: runError }, { data: advanceData }] = await Promise.all([
-        (supabase as any).from("payroll_runs").select("*").eq("month", `${month}-01`).maybeSingle(),
-        loadAllRows((from,to)=>(supabase as any).from("employee_advance_installments").select("id,advance_id,amount,deducted_amount,employee_advances!inner(employee_id,status)").eq("month",`${month}-01`).eq("status","scheduled").eq("employee_advances.status","active").order("id").range(from,to)).then(data=>({data,error:null})),
-      ]);
-      if (runError) throw new Error(runError.message);
-
-      const payrollLines = runData ? await loadAllRows((from,to)=>(supabase as any).from("payroll_run_lines").select("employee_id,base_amount,overtime_hours,overtime_amount,additions_amount,deductions_amount,advance_deduction,net_amount,calculation_snapshot").eq("payroll_run_id",runData.id).order("id").range(from,to)) : [];
-      const approvedLeaveDays: AttendanceOverride[] = (leaveCalendar as any[]).flatMap((form) => {
-        const leaveType = leaveTypes.find(type=>type.id===form.leave_type_id);
-        const end = form.leave_end_date || form.work_date;
-        const dates: AttendanceOverride[] = [];
-        for (let date = new Date(`${form.work_date}T00:00:00Z`); date <= new Date(`${end}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + 1)) {
-          const workDate = date.toISOString().slice(0, 10);
-          if (workDate < `${month}-01` || workDate >= nextMonth) continue;
-          if (!leaveType?.count_non_working_days && [0, 5].includes(date.getUTCDay())) continue;
-          dates.push({ employee_id: form.employee_id, work_date: workDate, status: "leave", notes: `إجازة ${leaveType?.is_paid ? "مدفوعة" : "بدون راتب"}`, overtime_hours: 0, is_paid: Boolean(leaveType?.is_paid) });
-        }
-        return dates;
-      });
-      return {
-        employees,
-        wageRates,
-        employeeCount: employees.length,
-        additions: additions as Addition[],
-        penalties: penalties as Penalty[],
-        logs: logs as AttendanceLog[],
-        overrides: [...(overrides as AttendanceOverride[]), ...approvedLeaveDays],
-        weeklySchedules: weeklySchedules as WeeklyShiftSchedule[],
-        storedOvertime: storedOvertime as AttendanceDailyOvertime[],
-        vehicles: vehicles as Vehicle[],
-        vehicleOperations: vehicleOperations as VehicleOperation[],
-        machinery: machineryData as Machinery[],
-        machineryOperations: machineryOperationsData as MachineryOperation[],
-        payrollRun: runData,
-        payrollLines: payrollLines ?? [],
-        advanceInstallments: (advanceData ?? []) as Array<{ id: string; amount: number; deducted_amount:number; employee_advances: { employee_id: string; status: string } | Array<{ employee_id: string; status: string }> }>,
-      };
-    },
+    enabled: activeTab !== "slips",
+    queryFn: () => readPayroll(month),
   });
-  const dataByEmployee = useMemo(() => {
-    const groupBy = <T,>(items: T[], key: (item: T) => string) => {
-      const groups = new Map<string, T[]>();
-      for (const item of items) {
-        const groupKey = key(item);
-        const group = groups.get(groupKey);
-        if (group) group.push(item);
-        else groups.set(groupKey, [item]);
-      }
-      return groups;
-    };
-    const data = query.data;
-    return {
-      logs: groupBy(data?.logs ?? [], (item) => item.employee_no),
-      overrides: groupBy(data?.overrides ?? [], (item) => item.employee_id),
-      schedules: groupBy(data?.weeklySchedules ?? [], (item) => item.employee_id),
-      overtime: groupBy(data?.storedOvertime ?? [], (item) => item.employee_id),
-      additions: groupBy(data?.additions ?? [], (item) => item.employee_id),
-      penalties: groupBy(data?.penalties ?? [], (item) => item.employee_id ?? ""),
-      advances: groupBy(data?.advanceInstallments ?? [], (item) => {
-        const advance = Array.isArray(item.employee_advances) ? item.employee_advances[0] : item.employee_advances;
-        return advance?.employee_id ?? "";
-      }),
-    };
-  }, [query.data]);
-  const recalculatedRows = useMemo(
-    () => {
-      return (query.data?.employees ?? []).map((employee) => {
-        const wage = resolvePayrollWage(employee,query.data?.wageRates ?? []);
-        const payType = wage.payType;
-        const days = buildAttendanceDays(
-          monthDates(month),
-          dataByEmployee.logs.get(employee.employee_no) ?? [],
-          dataByEmployee.overrides.get(employee.id) ?? [],
-          employee.shifts?.end_time,
-          todayInBaghdad(),
-          payType,
-          employee.shifts?.grace_minutes ?? 0,
-          dataByEmployee.schedules.get(employee.id) ?? [],
-          dataByEmployee.overtime.get(employee.id) ?? [],
-        );
-        const summary = summarizeDays(days);
-        const {monthlySalary,dailyRate,overtimeHourlyRate} = wage;
-        const additions = (dataByEmployee.additions.get(employee.id) ?? [])
-          .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-        const employeePenalties = dataByEmployee.penalties.get(employee.id) ?? [];
-        const deductions = employeePenalties
-          .reduce((sum, item) => sum + Number(item.deduction_amount || 0), 0);
-        const payroll = calculatePayroll({
-          payType,
-          monthlySalary,
-          dailyRate,
-          daysInMonth: days.length,
-          summary,
-          holidayDays: days.filter((day) => day.status === "holiday").length,
-          overtimeHourlyRate,
-          additions,
-          deductions,
-        });
-        const advanceInstallments = dataByEmployee.advances.get(employee.id) ?? [];
-        const advanceAllocations=allocateAdvanceInstallments(payroll.netPay,advanceInstallments);
-        const advanceDeduction=roundMoney(advanceAllocations.reduce((sum,item)=>sum+item.amount,0));
-        const total=roundMoney(Math.max(0,payroll.netPay-advanceDeduction));
-        return { employee,payType,wage,payroll,summary,additions,deductions,penalties:employeePenalties,advanceDeduction,advanceInstallments,advanceAllocations,total };
-
-      });
-    },
-    [query.data?.employees, query.data?.wageRates, dataByEmployee, month],
-  );
-  const rows = useMemo(() => {
-    if (!["approved", "paid"].includes(query.data?.payrollRun?.status ?? ""))
-      return recalculatedRows;
-    const savedLines = new Map(
-      (query.data?.payrollLines ?? []).map((line: any) => [line.employee_id, line]),
-    );
-    return recalculatedRows.map((row) => {
-      const saved = savedLines.get(row.employee.id) as any;
-      if (!saved)
-        return {
-          ...row,
-          payroll: {
-            ...row.payroll,
-            basePay: 0,
-            overtimePay: 0,
-            overtimeHours: 0,
-            grossPay: 0,
-            netPay: 0,
-          },
-          additions: 0,
-          deductions: 0,
-          total: 0,
-          advanceDeduction: 0,
-        };
-      return {
-        ...row,
-        payroll: {
-          ...row.payroll,
-          basePay: Number(saved.base_amount),
-          overtimeHours: Number(saved.overtime_hours),
-          overtimePay: Number(saved.overtime_amount),
-          grossPay: roundMoney(Number(saved.base_amount) + Number(saved.overtime_amount)),
-          netPay: Number(saved.net_amount) + Number(saved.advance_deduction),
-        },
-        summary: saved.calculation_snapshot?.summary ?? row.summary,
-        additions: Number(saved.additions_amount),
-        deductions: Number(saved.deductions_amount),
-        advanceDeduction: Number(saved.advance_deduction),
-        total: Number(saved.net_amount),
-      };
-    });
-  }, [recalculatedRows, query.data?.payrollLines, query.data?.payrollRun?.status]);
+  const activePayroll = activeTab === "slips" ? undefined : query.data;
+  const recalculatedRows = useMemo(() => calculatePayrollRows(activePayroll, month), [activePayroll, month]);
+  const rows = useMemo(() => resolvePayrollRows(activePayroll, recalculatedRows), [activePayroll, recalculatedRows]);
   const filteredRows = search.trim()
     ? rows.filter(({ employee }) => `${employee.full_name} ${employee.employee_no}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
     : rows;
@@ -466,6 +486,59 @@ function PayrollPage() {
       else toast.success("اكتمل التدقيق الذكي، ولا توجد مؤشرات معلقة");
     },
     onError: (error) => toast.error(`تعذر تدقيق الرواتب: ${error.message}`),
+  });
+  const generateSlips = useMutation({
+    mutationFn: async (reportMonth: string) => {
+      const source = await readPayroll(reportMonth, false);
+      const calculated = resolvePayrollRows(source, calculatePayrollRows(source, reportMonth));
+      if (!calculated.length) throw new Error("لا توجد رواتب لهذا الشهر لإنشاء القصاصات.");
+      const { error: auditError } = await supabase.rpc("run_pre_payroll_audit", {
+        p_month: `${reportMonth}-01`,
+      });
+      if (auditError) throw auditError;
+      const snapshot: PayrollSlipRow[] = calculated.map((row) => ({
+        employee: {
+          employee_no: row.employee.employee_no,
+          full_name: row.employee.full_name,
+          departments: row.employee.departments,
+        },
+        payroll: {
+          basePay: row.payroll.basePay,
+          overtimeHours: row.payroll.overtimeHours,
+          overtimePay: row.payroll.overtimePay,
+        },
+        additions: row.additions,
+        deductions: row.deductions,
+        total: row.total,
+        summary: { presentDays: Number(row.summary.presentDays) },
+        penalties: row.penalties.map(({ deduction_amount, notes }) => ({ deduction_amount, notes })),
+      }));
+      const { error } = await payrollSlipReportsDb.rpc("save_payroll_slips", {
+        p_month: `${reportMonth}-01`, p_rows: snapshot,
+      });
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      setSlipPage(0);
+      setSlipSearch("");
+      await queryClient.invalidateQueries({ queryKey: slipQueryKey });
+      toast.success("تم إنشاء قصاصات الرواتب وحفظها");
+    },
+    onError: (error) => toast.error(formatErrorMessage(error, "تعذر إنشاء القصاصات")),
+  });
+  const deleteSlips = useMutation({
+    mutationFn: async (revision: string) => {
+      const { error } = await payrollSlipReportsDb.rpc("delete_payroll_slips", { p_revision: revision });
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      setDeleteTarget(null);
+      setSlipPage(0);
+      setSlipSearch("");
+      await queryClient.invalidateQueries({ queryKey: slipQueryKey });
+      toast.success("تم حذف تقرير القصاصات");
+    },
+    onError: (error) => toast.error(formatErrorMessage(error, "تعذر حذف القصاصات")),
   });
   const isLocked = payrollRun?.status === "approved" || payrollRun?.status === "paid";
   const recalculatePayroll = useMutation({
@@ -717,12 +790,8 @@ function PayrollPage() {
       </style></head><body>${pageMarkup}<script>window.onload=()=>{window.focus();window.print()}</script></body></html>`);
     printWindow.document.close();
   };
-  const printSlip = (row: (typeof rows)[number]) => {
-    if (auditedMonth !== month) {
-      toast.error("أكمل التدقيق الذكي لهذا الشهر قبل إصدار قصاصات الرواتب");
-      return;
-    }
-    const html = buildPayrollSlipHtml(row, month);
+  const printSlip = (row: PayrollSlipRow, slipMonth: string) => {
+    const html = buildPayrollSlipHtml(row, slipMonth);
     const printWindow = window.open("about:blank", "_blank", "width=520,height=760");
     if (!printWindow) {
       toast.error("اسمح بالنوافذ المنبثقة لطباعة القصاصة");
@@ -752,7 +821,8 @@ function PayrollPage() {
               <Truck className="ml-2 h-4 w-4" /> إدارة المركبات
             </a>
           </Button>
-          <Button variant="outline" onClick={() => query.refetch()} disabled={query.isFetching}>
+          <Button variant="outline" onClick={() => activeTab === "slips" ? savedSlips.refetch() : query.refetch()}
+            disabled={query.isFetching || savedSlips.isFetching}>
             <RefreshCw className={`ml-2 h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} /> تحديث
           </Button>
           <Button variant="outline" onClick={() => auditMutation.mutate()} disabled={auditMutation.isPending || query.isLoading}>
@@ -807,7 +877,7 @@ function PayrollPage() {
           )}
         </Card>
       )}
-      <Card>
+      {activeTab !== "slips" && <Card>
         <CardHeader className="gap-3 border-b sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle>دورة راتب {month}</CardTitle>
@@ -822,7 +892,7 @@ function PayrollPage() {
               <SelectContent><SelectItem value="cash">نقدًا</SelectItem><SelectItem value="bank">تحويل مصرفي</SelectItem></SelectContent>
             </Select>
             {isPayrollOperator && !isLocked && <>
-              <Button variant="outline" disabled={savePayrollRun.isPending || query.isLoading} onClick={() => savePayrollRun.mutate("draft")}>حفظ المسودة</Button>
+              <Button variant="outline" disabled={savePayrollRun.isPending || !query.data || query.isLoading} onClick={() => savePayrollRun.mutate("draft")}>حفظ المسودة</Button>
               <Button disabled={savePayrollRun.isPending || query.isLoading || !rows.length} onClick={() => savePayrollRun.mutate("review")}>إرسال للمراجعة</Button>
             </>}
             {(isPayrollOperator || isCeo) && payrollRun && payrollRun.status !== "paid" && <Button variant="outline" disabled={query.isFetching || recalculatePayroll.isPending} onClick={()=>setRecalculateOpen(true)}><RefreshCw className="h-4 w-4" />إعادة احتساب وتحديث المسير من أجور التخصصات</Button>}
@@ -842,9 +912,29 @@ function PayrollPage() {
           </div>
           {payrollRun?.payment_reference && <p className="text-sm text-muted-foreground">مرجع الصرف: {payrollRun.payment_reference}</p>}
         </CardContent>
-      </Card>
-      <Tabs defaultValue="employees" dir="rtl" className="space-y-5">
-        <TabsList className="grid h-auto w-full grid-cols-1 gap-2 bg-transparent sm:grid-cols-2 xl:grid-cols-4">
+      </Card>}
+            <Card>
+              <CardContent className="p-4">
+                <Label htmlFor="payroll-month">شهر الراتب</Label>
+                <Input
+                  id="payroll-month"
+                  type="month"
+                  disabled={generateSlips.isPending}
+                  value={month}
+                  onChange={(e) => {
+                    if (!/^[1-9]\d{3}-(0[1-9]|1[0-2])$/.test(e.target.value)) return;
+                    setMonth(e.target.value);
+                    setPage(1);
+                    setAuditedMonth(null);
+                    setAuditFlags([]);
+                  }}
+                  className="mt-2 max-w-xs"
+                />
+              </CardContent>
+            </Card>
+      <Tabs value={activeTab} onValueChange={setActiveTab} dir="rtl" className="space-y-5">
+        <TabsList className="grid h-auto w-full grid-cols-1 gap-2 bg-transparent sm:grid-cols-2 xl:grid-cols-5">
+          <TabsTrigger value="slips" className="min-h-11 rounded-xl border bg-card">قصاصات الرواتب المحفوظة</TabsTrigger>
           <TabsTrigger value="employees" className="min-h-11 rounded-xl border bg-card">
             رواتب الموظفين
           </TabsTrigger>
@@ -858,25 +948,89 @@ function PayrollPage() {
             رواتب الآليات الثقيلة
           </TabsTrigger>
         </TabsList>
+        <TabsContent value="slips">
+          <Card>
+            <CardHeader className="gap-3 border-b sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <CardTitle>آخر تقرير قصاصات محفوظ</CardTitle>
+                {savedSlips.data && (
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    شهر {savedSlips.data.month} · {savedSlips.data.employee_count} موظف
+                    {" · "}
+                    {new Date(savedSlips.data.generated_at).toLocaleString("ar-IQ", {
+                      dateStyle: "medium", timeStyle: "short", timeZone: COMPANY_TIME_ZONE,
+                    })}
+                  </p>
+                )}
+              </div>
+              {canManageSlips && <div className="flex flex-wrap gap-2">
+                <Button disabled={generateSlips.isPending || deleteSlips.isPending}
+                  onClick={() => generateSlips.mutate(month)}>
+                  {generateSlips.isPending ? "جارٍ إنشاء القصاصات…" : `إنشاء قصاصات الرواتب · ${month}`}
+                </Button>
+                {savedSlips.data && (
+                  <Button variant="outline" className="text-destructive" disabled={generateSlips.isPending || deleteSlips.isPending}
+                    onClick={() => {
+                      const report = savedSlips.data;
+                      if (report) setDeleteTarget({ revision: report.revision, month: report.month });
+                    }}>
+                    حذف تقرير القصاصات
+                  </Button>
+                )}
+              </div>}
+            </CardHeader>
+            <CardContent className="space-y-4 p-4">
+              {(savedSlips.data || slipSearch) && (
+                <div className="flex max-w-sm flex-col gap-2">
+                  <Label htmlFor="saved-slip-search">بحث في القصاصات المحفوظة</Label>
+                  <Input id="saved-slip-search" maxLength={100} value={slipSearch}
+                    onChange={(event) => { setSlipSearch(event.target.value); setSlipPage(0); }}
+                    placeholder="الاسم أو الرقم الوظيفي" />
+                </div>
+              )}
+              {slipLookup.waiting || savedSlips.isPending ? <p role="status">جارٍ تحميل القصاصات…</p> :
+                savedSlips.isError ? <p role="alert" className="text-destructive">{formatErrorMessage(savedSlips.error, "تعذر تحميل القصاصات")}</p> :
+                !savedSlips.data ? <p className="text-muted-foreground">لا يوجد تقرير قصاصات محفوظ.</p> : (
+                  <>
+                    {savedSlips.data.rows.length ? (
+                      <div className="overflow-x-auto rounded-xl border">
+                        <table className="w-full min-w-[32rem] text-sm">
+                          <thead className="border-b bg-muted/40 text-right"><tr>
+                            {["الموظف", "صافي الراتب", "القصاصة"].map((label) => <th key={label} scope="col" className="p-3">{label}</th>)}
+                          </tr></thead>
+                          <tbody>{savedSlips.data.rows.map((row, index) => {
+                            const reportMonth = savedSlips.data!.month;
+                            return <tr key={`${row.employee.employee_no}-${index}`} className="border-b last:border-0">
+                              <td className="p-3">{row.employee.full_name}<div className="text-xs text-muted-foreground">{row.employee.employee_no}</div></td>
+                              <td className="p-3 font-medium">{money(row.total)}</td>
+                              <td className="p-3"><div className="flex flex-wrap gap-2">
+                                <Button size="sm" variant="outline" onClick={() => setPreviewRow({ row, month: reportMonth })}>
+                                  <Eye className="h-4 w-4" /> عرض القصاصة
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => printSlip(row, reportMonth)}>
+                                  <Printer className="h-4 w-4" /> طباعة
+                                </Button>
+                              </div></td>
+                            </tr>;
+                          })}</tbody>
+                        </table>
+                      </div>
+                    ) : <p className="text-muted-foreground">لا توجد قصاصات مطابقة للبحث.</p>}
+                    {(slipPage > 0 || savedSlips.data.matching_count > slipPageSize) && (
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Button variant="outline" disabled={slipPage === 0} onClick={() => setSlipPage(slipPage - 1)}>السابق</Button>
+                        <span>صفحة {slipPage + 1}</span>
+                        <Button variant="outline" disabled={(slipPage + 1) * slipPageSize >= savedSlips.data.matching_count}
+                          onClick={() => setSlipPage(slipPage + 1)}>التالي</Button>
+                      </div>
+                    )}
+                  </>
+                )}
+            </CardContent>
+          </Card>
+        </TabsContent>
         <TabsContent value="employees" className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2">
-            <Card>
-              <CardContent className="p-4">
-                <Label htmlFor="payroll-month">شهر الراتب</Label>
-                <Input
-                  id="payroll-month"
-                  type="month"
-                  value={month}
-                  onChange={(e) => {
-                    setMonth(e.target.value);
-                    setPage(1);
-                    setAuditedMonth(null);
-                    setAuditFlags([]);
-                  }}
-                  className="mt-2 max-w-xs"
-                />
-              </CardContent>
-            </Card>
             <Card>
               <CardContent className="flex h-full items-center justify-between p-4">
                 <div>
@@ -931,7 +1085,6 @@ function PayrollPage() {
                         <th className="p-3">الإضافات</th>
                         <th className="p-3">الاستقطاعات</th>
                         <th className="p-3">الصافي</th>
-                        <th className="p-3">القصاصة</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -963,16 +1116,6 @@ function PayrollPage() {
                           <td className="p-3 text-emerald-700">{money(row.additions)}</td>
                           <td className="p-3 text-red-600">{money(row.deductions)}</td>
                           <td className="p-3 font-bold">{money(row.total)}</td>
-                          <td className="p-3">
-                            <div className="flex items-center gap-2">
-                              <Button size="sm" variant="outline" onClick={() => setPreviewRow(row)}>
-                                <Eye className="ml-2 h-4 w-4" /> عرض القصاصة
-                              </Button>
-                            <Button size="sm" variant="outline" onClick={() => printSlip(row)} disabled={auditedMonth !== month}>
-                              <Printer className="ml-2 h-4 w-4" /> طباعة
-                            </Button>
-                            </div>
-                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1099,14 +1242,29 @@ function PayrollPage() {
           </Card>
         </TabsContent>
       </Tabs>
+      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open && !deleteSlips.isPending) setDeleteTarget(null); }}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>حذف تقرير القصاصات لشهر {deleteTarget?.month}؟</AlertDialogTitle>
+            <AlertDialogDescription>سيُحذف تقرير القصاصات المحفوظ لهذا الشهر. يبقى مسير الرواتب وسجل الصرف محفوظين.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteSlips.isPending}>إلغاء</AlertDialogCancel>
+            <AlertDialogAction disabled={deleteSlips.isPending} onClick={(event) => {
+              event.preventDefault();
+              if (deleteTarget) deleteSlips.mutate(deleteTarget.revision);
+            }}>{deleteSlips.isPending ? "جارٍ الحذف…" : "حذف التقرير"}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <Dialog open={previewRow !== null} onOpenChange={(open) => !open && setPreviewRow(null)}>
         <DialogContent dir="rtl" className="max-h-[95vh] w-[calc(100vw-2rem)] max-w-[680px] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>قصاصة راتب — {previewRow?.employee.full_name}</DialogTitle>
+            <DialogTitle>قصاصة راتب — {previewRow?.row.employee.full_name}</DialogTitle>
           </DialogHeader>
           {previewRow && (
             <div className="max-h-[78vh] w-full overflow-auto rounded-lg bg-slate-100 p-3 sm:p-5">
-              <PayrollSlipPreview row={previewRow} month={month} />
+              <PayrollSlipPreview row={previewRow.row} month={previewRow.month} />
             </div>
           )}
         </DialogContent>
