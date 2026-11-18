@@ -27,6 +27,7 @@ import {
   CircleDollarSign,
   Check,
   FileWarning,
+  Download,
   Plus,
   Search,
   Trash2,
@@ -76,6 +77,7 @@ function PenaltiesPage() {
   const { isAdmin, isHR } = useAuth();
   const canManageFinancialPenalties = isAdmin || isHR;
   const [open, setOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [month, setMonth] = useState(today.slice(0, 7));
   const [typeFilter, setTypeFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -120,6 +122,35 @@ function PenaltiesPage() {
       (typeFilter === "all" || penalty.penalty_type === typeFilter) &&
       penalty.employee_name.includes(search.trim()),
   );
+  const exportPenalties = async () => {
+    setExporting(true);
+    try {
+      const { downloadPenaltiesExcel } = await import("@/lib/penalties-export");
+      await downloadPenaltiesExcel(
+        visiblePenalties.map((penalty) => ({
+          employee: penalty.employee_name,
+          type: typeLabel[penalty.penalty_type],
+          date: penalty.penalty_date,
+          amount: Number(penalty.deduction_amount || 0),
+          status: penalty.executed_at
+            ? "تم التنفيذ"
+            : penalty.penalty_type === "absence"
+              ? "لم يُنفذ"
+              : "مسجلة",
+          notes: penalty.notes,
+        })),
+        {
+          month,
+          type: typeFilter === "all" ? "الكل" : typeLabel[typeFilter as Penalty["penalty_type"]],
+          search: search.trim(),
+        },
+      );
+    } catch (error) {
+      toast.error(formatErrorMessage(error, "تعذر تصدير العقوبات إلى Excel"));
+    } finally {
+      setExporting(false);
+    }
+  };
   const stats = useMemo(
     () => ({
       total: penalties.length,
@@ -287,6 +318,15 @@ function PenaltiesPage() {
           <div className="text-sm text-muted-foreground flex items-center gap-2">
             <CalendarDays className="w-4 h-4" /> {visiblePenalties.length} سجل في التقرير
           </div>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={exporting || penaltiesQuery.isError || !visiblePenalties.length}
+            onClick={exportPenalties}
+          >
+            <Download className="h-4 w-4" />
+            {exporting ? "جارٍ التصدير..." : "تصدير Excel"}
+          </Button>
         </CardContent>
       </Card>
       <Card>
