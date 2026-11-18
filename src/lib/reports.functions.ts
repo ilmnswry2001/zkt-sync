@@ -73,6 +73,7 @@ export const getMonthlySheet = createServerFn({ method: "GET" })
   .inputValidator((d: unknown) => z.object({
     month: monthValue,
     page: z.number().int().min(0).default(0),
+    page_size: z.union([z.literal(20), z.literal(50)]).default(50),
     employee_id: z.string().uuid().optional(),
     department_id: z.string().uuid().optional(),
     site_id: z.string().uuid().optional(),
@@ -93,12 +94,15 @@ export const getMonthlySheet = createServerFn({ method: "GET" })
     if (data.department_id) employeeQuery = employeeQuery.eq("department_id", data.department_id);
     if (data.site_id) employeeQuery = employeeQuery.eq("site_id", data.site_id);
     if (data.shift_id) employeeQuery = employeeQuery.eq("shift_id", data.shift_id);
-    const search = data.search?.trim().replace(/[^\p{L}\p{N}\s-]/gu, "");
-    if (search) employeeQuery = employeeQuery.or(`full_name.ilike.%${search}%,employee_no.ilike.%${search}%`);
+    const terms = data.search?.match(/[\p{L}\p{M}\p{N}-]+/gu) ?? [];
+    for (const term of terms) {
+      employeeQuery = employeeQuery.or(`full_name.ilike.%${term}%,employee_no.ilike.%${term}%`);
+    }
+    const offset = data.page * data.page_size;
     const { data: employees, error: employeesError, count } = await employeeQuery
       .order("employee_no")
       .order("id")
-      .range(data.page * 50, data.page * 50 + 49);
+      .range(offset, offset + data.page_size - 1);
     if (employeesError) throw new Error(employeesError.message);
     const rows = [];
     for (let i = 0; i < (employees ?? []).length; i += 100) {

@@ -1,3 +1,4 @@
+import { useDirectorySearch } from "@/hooks/use-directory-search";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -85,18 +86,8 @@ const summaryColumns = [
   { key: "totalOvertimeHours", label: "الإضافي", className: "" },
 ] as const;
 type SheetRow = Awaited<ReturnType<typeof getMonthlySheet>>["rows"][number];
-type EmployeeOption = Pick<
-  SheetRow["employee"],
-  | "id"
-  | "employee_no"
-  | "full_name"
-  | "department_id"
-  | "site_id"
-  | "shift_id"
-  | "departments"
-  | "sites"
-  | "shifts"
->;
+type EmployeeOption = Pick<SheetRow["employee"], "id" | "employee_no" | "full_name">;
+const MONTHLY_EMPLOYEE_LIMIT = 20;
 type MonthlyVehicle = {
   id: string;
   vehicle_no: string;
@@ -137,20 +128,6 @@ const formatTime = (time: string | null) =>
       })
     : "—";
 
-function optionsFor(
-  employees: EmployeeOption[],
-  field: "departments" | "sites" | "shifts",
-  idField: "department_id" | "site_id" | "shift_id",
-) {
-  const options = new Map<string, string>();
-  for (const employee of employees) {
-    const id = employee[idField];
-    const name = employee[field]?.name;
-    if (id && name) options.set(id, name);
-  }
-  return [...options].sort((a, b) => a[1].localeCompare(b[1], "ar"));
-}
-
 function MonthlyPage() {
   const qc = useQueryClient();
   const [month, setMonth] = useState(currentMonthInBaghdad);
@@ -160,7 +137,7 @@ function MonthlyPage() {
   const [site, setSite] = useState("");
   const [shift, setShift] = useState("");
   const [summarized, setSummarized] = useState(false);
-  const [page, setPage] = useState(0);
+  const [selectedEmployee, setSelectedEmployee] = useState<EmployeeOption | null>(null);
   const [selection, setSelection] = useState<{ employeeId: string; date: string } | null>(null);
   const [vehicleSearch, setVehicleSearch] = useState("");
   const [machinerySearch, setMachinerySearch] = useState("");
@@ -170,39 +147,57 @@ function MonthlyPage() {
   const [activeVehicle, setActiveVehicle] = useState<MonthlyVehicle | null>(null);
   const [vehicleDatesDraft, setVehicleDatesDraft] = useState<string[]>([]);
   const fetchSheet = useServerFn(getMonthlySheet);
-  const { data: allEmployees = [] } = useQuery<EmployeeOption[]>({
-    queryKey: ["monthly", "employee-options"],
+  const lookup = useDirectorySearch(search);
+  const searchTerm = lookup.valid ? lookup.term : "";
+  const { data: filters, error: filtersError } = useQuery({
+    queryKey: ["monthly", "filter-options"],
     queryFn: async () => {
-      const employees: EmployeeOption[] = [];
-      for (let from = 0; ; from += 1000) {
-        const { data: batch, error } = await (supabase as any)
-          .from("employees")
-          .select(
-            "id, employee_no, full_name, department_id, site_id, shift_id, departments(name), sites!employees_site_id_fkey(name), shifts(name)",
-          )
-          .order("employee_no")
-          .order("id")
-          .range(from, from + 999);
-        if (error) throw error;
-        employees.push(...(batch ?? []));
-        if (!batch || batch.length < 1000) return employees;
-      }
+      const [departments, sites, shifts] = await Promise.all([
+        supabase.from("departments").select("id, name").order("name"),
+        supabase.from("sites").select("id, name").order("name"),
+        supabase.from("shifts").select("id, name").order("name"),
+      ]);
+      if (departments.error) throw departments.error;
+      if (sites.error) throw sites.error;
+      if (shifts.error) throw shifts.error;
+      const options = (rows: { id: string; name: string }[]) =>
+        rows.map(({ id, name }) => [id, name] as const);
+      return { departments: options(departments.data), sites: options(sites.data), shifts: options(shifts.data) };
     },
   });
+  const employeeLookup = useQuery({
+    queryKey: ["monthly", "employee-options", department, site, shift, searchTerm],
+    enabled: !lookup.waiting,
+    staleTime: 30_000,
+    queryFn: async ({ signal }) => {
+      let query = supabase.from("employees").select("id, employee_no, full_name");
+      if (department) query = query.eq("department_id", department);
+      if (site) query = query.eq("site_id", site);
+      if (shift) query = query.eq("shift_id", shift);
+      for (const term of searchTerm.split(" ").filter(Boolean)) {
+        query = query.or(`full_name.ilike.%${term}%,employee_no.ilike.%${term}%`);
+      }
+      const { data, error } = await query.order("employee_no").order("id").limit(MONTHLY_EMPLOYEE_LIMIT).abortSignal(signal);
+      if (error) throw error;
+      return data;
+    },
+  });
+  const employeeOptions = lookup.waiting ? [] : (employeeLookup.data ?? []);
   const { data, isPending, isFetching, error, refetch } = useQuery({
-    queryKey: ["monthly", "sheet", month, page, employeeId, department, site, shift, search],
-    queryFn: () =>
-      fetchSheet({
-        data: {
-      month,
-      page,
-      employee_id: employeeId || undefined,
-      department_id: department || undefined,
-      site_id: site || undefined,
-      shift_id: shift || undefined,
-      search,
-        },
-      }),
+    queryKey: ["monthly", "sheet", month, employeeId, department, site, shift, searchTerm],
+    enabled: !lookup.waiting,
+    queryFn: ({ signal }) => fetchSheet({
+      signal,
+      data: {
+        month,
+        page_size: MONTHLY_EMPLOYEE_LIMIT,
+        employee_id: employeeId || undefined,
+        department_id: department || undefined,
+        site_id: site || undefined,
+        shift_id: shift || undefined,
+        search: searchTerm,
+      },
+    }),
   });
   const vehicleReport = useQuery({
     queryKey: ["monthly", "vehicle-report", month],
@@ -416,33 +411,16 @@ function MonthlyPage() {
     if (!printReport(`التقرير الشهري للمركبات — ${month}`, body))
       toast.error("اسمح بالنوافذ المنبثقة لطباعة التقرير");
   };
-  const filters = useMemo(
-    () => ({
-      departments: optionsFor(allEmployees, "departments", "department_id"),
-      sites: optionsFor(allEmployees, "sites", "site_id"),
-      shifts: optionsFor(allEmployees, "shifts", "shift_id"),
-    }),
-    [allEmployees],
-  );
   const rows = useMemo(() => data?.rows ?? [], [data?.rows]);
   const chart = useMemo(
     () => dailyTotals(data?.dates ?? [], rows, data?.today ?? ""),
     [data, rows],
   );
-  const pageCount = Math.max(1, Math.ceil((data?.totalRows ?? 0) / 50));
-  const currentPage = Math.min(page, pageCount - 1);
   const visibleRows = rows;
-  const employeeOptions = allEmployees.filter(
-    (employee) =>
-      !search.trim() ||
-      `${employee.employee_no} ${employee.full_name}`
-      .toLocaleLowerCase("ar")
-      .includes(search.trim().toLocaleLowerCase("ar")),
-  );
-  const selectedEmployee = allEmployees.find((employee) => employee.id === employeeId);
   const setFilter = (setter: (value: string) => void, value: string) => {
     setter(value);
-    setPage(0);
+    setEmployeeId("");
+    setSelectedEmployee(null);
   };
 
   return (
@@ -494,7 +472,6 @@ function MonthlyPage() {
               onChange={(e) => {
                 if (/^[1-9]\d{3}-(0[1-9]|1[0-2])$/.test(e.target.value)) {
                   setMonth(e.target.value);
-                  setPage(0);
                   setSelection(null);
                 }
               }}
@@ -507,7 +484,8 @@ function MonthlyPage() {
               <Input
                 id="employee-search"
                 className="pr-9"
-                placeholder="الاسم أو الرقم الوظيفي"
+                placeholder="حرفان على الأقل من الاسم أو الرقم"
+                maxLength={100}
                 value={search}
                 onChange={(e) => setFilter(setSearch, e.target.value)}
               />
@@ -519,12 +497,18 @@ function MonthlyPage() {
               id="employee-filter"
               className={selectClass}
               value={employeeId}
-              onChange={(e) => setFilter(setEmployeeId, e.target.value)}
+              onChange={(e) => {
+                const id = e.target.value;
+                setEmployeeId(id);
+                setSelectedEmployee(employeeOptions.find((employee) => employee.id === id) ?? null);
+              }}
             >
-              <option value="">جميع الموظفين</option>
-                  {selectedEmployee &&
-                    !employeeOptions.some((employee) => employee.id === employeeId) && (
-                <option value={employeeId}>{selectedEmployee.full_name}</option>
+              <option value="">أول 20 موظفاً مطابقاً</option>
+              {selectedEmployee &&
+                !employeeOptions.some((employee) => employee.id === employeeId) && (
+                <option value={employeeId}>
+                  {selectedEmployee.employee_no} — {selectedEmployee.full_name}
+                </option>
               )}
               {employeeOptions.map((employee) => (
                 <option key={employee.id} value={employee.id}>
@@ -532,7 +516,13 @@ function MonthlyPage() {
                 </option>
               ))}
             </select>
+            {lookup.waiting || employeeLookup.isFetching ? (
+              <p role="status" className="text-xs text-muted-foreground">جارٍ البحث عن الموظفين…</p>
+            ) : employeeLookup.isError ? (
+              <p role="alert" className="text-xs text-destructive">تعذر البحث عن الموظفين.</p>
+            ) : null}
           </div>
+          {filtersError && <p role="alert" className="text-xs text-destructive">تعذر تحميل خيارات الفلاتر.</p>}
           {[
             {
               id: "department",
@@ -540,7 +530,7 @@ function MonthlyPage() {
               all: "جميع الأقسام",
               value: department,
               setter: setDepartment,
-              options: filters.departments,
+              options: filters?.departments ?? [],
             },
             {
               id: "site",
@@ -548,7 +538,7 @@ function MonthlyPage() {
               all: "جميع المواقع",
               value: site,
               setter: setSite,
-              options: filters.sites,
+              options: filters?.sites ?? [],
             },
             {
               id: "shift",
@@ -556,7 +546,7 @@ function MonthlyPage() {
               all: "جميع الدوامات",
               value: shift,
               setter: setShift,
-              options: filters.shifts,
+              options: filters?.shifts ?? [],
             },
           ].map((filter) => (
             <div key={filter.id} className="space-y-1.5">
@@ -595,7 +585,7 @@ function MonthlyPage() {
                 setDepartment("");
                 setSite("");
                 setShift("");
-                setPage(0);
+                setSelectedEmployee(null);
               }}
             >
               مسح الفلاتر
@@ -630,7 +620,7 @@ function MonthlyPage() {
           </span>
         </div>
 
-        {isPending ? (
+        {lookup.waiting || isPending ? (
           <p role="status" className="py-20 text-center text-muted-foreground">
             جارٍ تحميل كشف الحضور...
           </p>
@@ -651,13 +641,13 @@ function MonthlyPage() {
           <>
             <section className="border-b p-4" aria-labelledby="attendance-chart-title">
               <h2 id="attendance-chart-title" className="mb-3 text-sm font-medium">
-                الحضور والغياب خلال الشهر — موظفو الصفحة الحالية
+                الحضور والغياب خلال الشهر — الموظفون المعروضون
               </h2>
               <div
                 dir="ltr"
                 className="h-56 w-full"
                 role="img"
-                aria-label="رسم يومي للحضور والغياب والإجازات لموظفي الصفحة الحالية"
+                aria-label="رسم يومي للحضور والغياب والإجازات للموظفين المعروضين"
               >
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chart} margin={{ top: 8, right: 12, left: -20, bottom: 5 }}>
@@ -840,30 +830,12 @@ function MonthlyPage() {
               <span>
                 {summarized
                   ? "اضغط على اسم الموظف لعرض تفاصيل الأيام"
-                  : "اسحب الجدول أفقيًا لعرض بقية أيام الشهر"}{" "}
-                · {(data?.totalRows ?? 0).toLocaleString("ar")} موظف
+                  : "اسحب الجدول أفقيًا لعرض بقية أيام الشهر"}
               </span>
-              <div className="flex items-center gap-3">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={currentPage === 0}
-                  onClick={() => setPage(currentPage - 1)}
-                >
-                  السابق
-                </Button>
-                <span>
-                  صفحة {currentPage + 1} من {pageCount}
-                </span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={currentPage + 1 >= pageCount}
-                  onClick={() => setPage(currentPage + 1)}
-                >
-                  التالي
-                </Button>
-              </div>
+              <span>
+                عرض {rows.length} من {data?.totalRows ?? 0}
+                {(data?.totalRows ?? 0) > MONTHLY_EMPLOYEE_LIMIT && " · استخدم البحث للوصول إلى بقية الموظفين"}
+              </span>
             </footer>
           </>
         )}
