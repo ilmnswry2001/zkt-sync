@@ -182,7 +182,7 @@ async function readPayroll(month: string, includeAssets = true) {
       ),
       loadAllRows((from, to) =>
         payroll.rpc("payroll_read_logs", {p_start:attendanceRange.start,p_end:attendanceRange.end})
-          .select("employee_no, verify_time, status, source, self_event_type")
+          .select("id, employee_no, verify_time, status, source, self_event_type")
           .gte("verify_time", attendanceRange.start)
           .lt("verify_time", attendanceRange.end)
           .order("verify_time")
@@ -431,6 +431,8 @@ function PayrollPage() {
       return data;
     },
   });
+  const slipsSchemaUnavailable =
+    !!savedSlips.error && "code" in savedSlips.error && savedSlips.error.code === "PGRST202";
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const pageSize = 20;
   const query = useQuery({
@@ -964,7 +966,7 @@ function PayrollPage() {
                 )}
               </div>
               {canManageSlips && <div className="flex flex-wrap gap-2">
-                <Button disabled={generateSlips.isPending || deleteSlips.isPending}
+                <Button disabled={generateSlips.isPending || deleteSlips.isPending || slipsSchemaUnavailable}
                   onClick={() => generateSlips.mutate(month)}>
                   {generateSlips.isPending ? "جارٍ إنشاء القصاصات…" : `إنشاء قصاصات الرواتب · ${month}`}
                 </Button>
@@ -989,7 +991,18 @@ function PayrollPage() {
                 </div>
               )}
               {slipLookup.waiting || savedSlips.isPending ? <p role="status">جارٍ تحميل القصاصات…</p> :
-                savedSlips.isError ? <p role="alert" className="text-destructive">{formatErrorMessage(savedSlips.error, "تعذر تحميل القصاصات")}</p> :
+                savedSlips.isError ? (
+                  <div role="alert" className="space-y-3">
+                    <p className="text-destructive">
+                      {slipsSchemaUnavailable
+                        ? "دالة القصاصات غير متاحة في قاعدة البيانات المتصلة. تحقق من تطبيق ترحيل القصاصات وتحديث مخطط Supabase."
+                        : formatErrorMessage(savedSlips.error, "تعذر تحميل القصاصات")}
+                    </p>
+                    <Button variant="outline" onClick={() => void savedSlips.refetch()}>
+                      إعادة المحاولة
+                    </Button>
+                  </div>
+                ) :
                 !savedSlips.data ? <p className="text-muted-foreground">لا يوجد تقرير قصاصات محفوظ.</p> : (
                   <>
                     {savedSlips.data.rows.length ? (
