@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AdvanceDetailsDialog } from "@/components/AdvanceDetailsDialog";
+import { advanceInstallmentStatus } from "@/lib/advance-closures-client";
 
 export const Route = createFileRoute("/_authenticated/advances")({
   head: () => ({ meta: [{ title: "السلف" }] }),
@@ -30,6 +32,10 @@ function AdvancesPage() {
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
   const [employee, setEmployee] = useState<EmployeeOption | null>(null);
+  const [selectedAdvance, setSelectedAdvance] = useState<{
+    id: string;
+    employeeName: string;
+  } | null>(null);
   const lookup = useDirectorySearch(search);
 
   const employees = useQuery({
@@ -54,7 +60,7 @@ function AdvancesPage() {
     queryFn: async ({ signal }) => {
       const { data, count, error } = await supabase
         .from("employee_advance_installments")
-        .select("id, amount, status, deducted_amount, employee_advances(employee_id)", {
+        .select("id, advance_id, amount, status, deducted_amount, employee_advances(employee_id)", {
           count: "exact",
         })
         .eq("month", `${month}-01`)
@@ -302,7 +308,7 @@ function AdvancesPage() {
               <table className="w-full min-w-[32rem] text-sm">
                 <thead className="border-b bg-muted/40 text-right">
                   <tr>
-                    {["الموظف", "مبلغ القسط", "المخصوم", "الحالة"].map((heading) => (
+                    {["الموظف", "مبلغ القسط", "المخصوم", "الحالة", "السلفة"].map((heading) => (
                       <th key={heading} scope="col" className="p-3">
                         {heading}
                       </th>
@@ -315,9 +321,21 @@ function AdvancesPage() {
                       <td className="p-3">{row.employeeName}</td>
                       <td className="p-3">{money(row.amount)}</td>
                       <td className="p-3">{money(row.deducted_amount)}</td>
+                      <td className="p-3">{advanceInstallmentStatus[row.status] ?? row.status}</td>
                       <td className="p-3">
-                        {{ scheduled: "مجدول", deducted: "مخصوم", waived: "معفى" }[row.status] ??
-                          row.status}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          aria-label={`عرض تفاصيل سلفة ${row.employeeName}`}
+                          onClick={() =>
+                            setSelectedAdvance({
+                              id: row.advance_id,
+                              employeeName: row.employeeName,
+                            })
+                          }
+                        >
+                          عرض التفاصيل
+                        </Button>
                       </td>
                     </tr>
                   ))}
@@ -349,6 +367,16 @@ function AdvancesPage() {
           )}
         </CardContent>
       </Card>
+      {selectedAdvance && (
+        <AdvanceDetailsDialog
+          key={selectedAdvance.id}
+          advanceId={selectedAdvance.id}
+          employeeName={selectedAdvance.employeeName}
+          financeUserId={financeUserId}
+          canManage={canManageAdvances}
+          onClose={() => setSelectedAdvance(null)}
+        />
+      )}
     </div>
   );
 }
