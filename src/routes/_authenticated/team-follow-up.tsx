@@ -3,8 +3,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { dateKeyInTimeZone } from "@/lib/date-time";
-import { summarizeAttendancePunches, type AttendancePunch } from "@/lib/monthly-report";
+import { useServerFn } from "@tanstack/react-start";
+import { getTeamAttendance } from "@/lib/team-attendance.functions";
 import { permissionsDb } from "@/lib/permissions-client";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -199,7 +199,7 @@ const isSiteAdministrator = (employee: Employee) =>
   /ادار|إدار|site\s*admin|administrator/i.test(employee.position ?? "");
 
 function TeamFollowUpPage() {
-  const { user, isAdmin, isHR, roles, isDepartmentManager } = useAuth();
+  const { user, isAdmin, isHR, roles, isDepartmentManager, permissionsLoading } = useAuth();
   const queryClient = useQueryClient();
   const [date, setDate] = useState(today);
   const [departmentId, setDepartmentId] = useState("all");
@@ -233,8 +233,8 @@ function TeamFollowUpPage() {
   });
   const departments = departmentsQuery.data ?? [];
   const assignedDepartmentsQuery = useQuery({
-    queryKey: ["team-follow-up-assigned-departments"],
-    enabled: !canSeeAll,
+    queryKey: ["team-follow-up-assigned-departments", user?.id],
+    enabled: !!user && !permissionsLoading && !canSeeAll,
     queryFn: async () => {
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) return [] as string[];
@@ -263,21 +263,21 @@ function TeamFollowUpPage() {
       return [...departmentIds];
     },
   });
-  const allowedDepartmentIds = canSeeAll
-    ? departments.map((department) => department.id)
-    : (assignedDepartmentsQuery.data ?? []);
+  const allowedDepartmentIds = useMemo(() => canSeeAll
+    ? (departmentsQuery.data ?? []).map((department) => department.id)
+    : (assignedDepartmentsQuery.data ?? []), [canSeeAll, departmentsQuery.data, assignedDepartmentsQuery.data]);
   const effectiveDepartmentId =
     departmentId !== "all" && allowedDepartmentIds.includes(departmentId) ? departmentId : "all";
 
   const employeesQuery = useQuery({
-    queryKey: ["team-follow-up-employees", allowedDepartmentIds],
+    queryKey: ["team-follow-up-employees", user?.id, effectiveDepartmentId, canSeeAll, allowedDepartmentIds],
     enabled: allowedDepartmentIds.length > 0,
     queryFn: async () => {
       const query = supabase
         .from("employees")
         .select("id, employee_no, full_name, email, position, department_id, site_id, status")
         .eq("status", "active");
-      const { data, error } = await (canSeeAll
+      const { data, error } = await (effectiveDepartmentId !== "all" ? query.eq("department_id", effectiveDepartmentId) : canSeeAll
         ? query
         : query.in("department_id", allowedDepartmentIds));
       if (error) throw error;
@@ -329,11 +329,12 @@ function TeamFollowUpPage() {
   const reportCoverage = siteIds.length ? Math.round((coveredSites / siteIds.length) * 100) : 0;
 
   const monthStart = `${date.slice(0, 7)}-01`;
-  const monthEndDate = new Date(`${monthStart}T00:00:00`);
-  monthEndDate.setMonth(monthEndDate.getMonth() + 1);
-  const monthEnd = new Date(monthEndDate.getTime() - 86400000).toISOString().slice(0, 10);
+  const monthEnd = new Date(Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)), 0)).toISOString().slice(0, 10);
+  const needsMonthlyStats = ["stats", "team", "evaluation"].includes(activeTab);
+  const taskStart = needsMonthlyStats ? monthStart : date;
+  const taskEnd = needsMonthlyStats ? monthEnd : date;
   const teamTasksQuery = useQuery({
-    queryKey: ["team-follow-up-tasks", allowedDepartmentIds, monthStart, monthEnd],
+    queryKey: ["team-follow-up-tasks", user?.id, allowedDepartmentIds, taskStart, taskEnd],
     enabled: allowedDepartmentIds.length > 0,
     queryFn: async () => {
       let query = (supabase as unknown as { from: (table: string) => any })
@@ -341,8 +342,8 @@ function TeamFollowUpPage() {
         .select(
           "id, task_date, title, description, status, duration_minutes, created_by, employee_id, department_id, manager_note, task_type, priority, due_date",
         )
-        .gte("task_date", monthStart)
-        .lte("task_date", monthEnd)
+        .gte("task_date", taskStart)
+        .lte("task_date", taskEnd)
         .order("task_date", { ascending: false })
         .order("created_at", { ascending: false });
       if (!canSeeAll) query = query.in("department_id", allowedDepartmentIds);
@@ -352,7 +353,7 @@ function TeamFollowUpPage() {
     },
   });
   const profilesQuery = useQuery({
-    queryKey: ["team-follow-up-task-profiles"],
+    queryKey: ["team-follow-up-task-profiles", user?.id],
     queryFn: async () => {
       const { data, error } = await supabase.from("profiles").select("id, full_name, email");
       if (error) throw error;
@@ -457,59 +458,38 @@ function TeamFollowUpPage() {
     ? allowedDepartmentIds.length === 1 ? allowedDepartmentIds[0] : null
     : effectiveDepartmentId;
   const employeeIds = visibleEmployees.map((employee) => employee.id);
+  const fetchAttendance = useServerFn(getTeamAttendance);
   const attendanceMonthQuery = useQuery({
     queryKey: ["team-follow-up-attendance", employeeIds, monthStart, monthEnd],
-    enabled: employeeIds.length > 0,
+    enabled: needsMonthlyStats && employeeIds.length > 0,
     queryFn: async () => {
-      // تحميل كل السجلات على دفعات (الحد الافتراضي 1000 صف كان يُسقط بيانات)
-      const rows: ({ employee_id: string | null } & AttendancePunch)[] = [];
-      for (let i = 0; i < employeeIds.length; i += 100) {
-        const ids = employeeIds.slice(i, i + 100);
-        for (let from = 0; ; from += 1000) {
-          const { data, error } = await supabase
-            .from("attendance_logs")
-            .select("employee_id, verify_time, status, source, self_event_type")
-            .in("employee_id", ids)
-            .gte("verify_time", `${monthStart}T00:00:00`)
-            .lte("verify_time", `${monthEnd}T23:59:59`)
-            .order("verify_time")
-            .range(from, from + 999);
-          if (error) throw error;
-          rows.push(...((data ?? []) as typeof rows));
-          if (!data || data.length < 1000) break;
-        }
+      const summary: Record<string, number> = {};
+      for (let offset = 0; offset < employeeIds.length; offset += 100) {
+        Object.assign(summary, await fetchAttendance({ data: {
+          month: monthStart.slice(0, 7), employeeIds: employeeIds.slice(offset, offset + 100),
+        } }));
       }
-      return rows;
+      return summary;
     },
   });
   const evaluationsQuery = useQuery({
     queryKey: ["team-follow-up-evaluations", employeeIds, monthStart],
-    enabled: employeeIds.length > 0,
+    enabled: needsMonthlyStats && employeeIds.length > 0,
     queryFn: async () => {
-      const { data, error } = await (supabase as unknown as { from: (table: string) => any })
-        .from("employee_monthly_evaluations")
-        .select("id, employee_id, evaluation_month, score, created_by, created_at")
-        .in("employee_id", employeeIds)
-        .eq("evaluation_month", monthStart);
-      if (error) throw error;
-      return (data ?? []) as Evaluation[];
+      const evaluations: Evaluation[] = [];
+      for (let offset = 0; offset < employeeIds.length; offset += 80) {
+        const { data, error } = await supabase.from("employee_monthly_evaluations")
+          .select("id, employee_id, evaluation_month, score, created_by, created_at")
+          .in("employee_id", employeeIds.slice(offset, offset + 80))
+          .eq("evaluation_month", monthStart);
+        if (error) throw error;
+        evaluations.push(...data);
+      }
+      return evaluations;
     },
   });
   // يحتسب الحضور من دخول وخروج متوافقين، لا من مجرد عدد الحركات.
-  const punchesByEmployeeDay = new Map<string, Map<string, AttendancePunch[]>>();
-  (attendanceMonthQuery.data ?? []).forEach((row) => {
-    if (!row.employee_id) return;
-    const m = punchesByEmployeeDay.get(row.employee_id) ?? new Map<string, AttendancePunch[]>();
-    const d = dateKeyInTimeZone(row.verify_time);
-    const punches = m.get(d) ?? [];
-    punches.push(row);
-    m.set(d, punches);
-    punchesByEmployeeDay.set(row.employee_id, m);
-  });
-  const attendanceByEmployee = new Map<string, Set<string>>();
-  punchesByEmployeeDay.forEach((m, id) =>
-    attendanceByEmployee.set(id, new Set([...m].filter(([, punches]) => summarizeAttendancePunches(punches).complete).map(([d]) => d))),
-  );
+  const attendanceByEmployee = attendanceMonthQuery.data ?? {};
   const evaluationByEmployee = new Map(
     (evaluationsQuery.data ?? []).map((evaluation) => [evaluation.employee_id, evaluation]),
   );
@@ -530,7 +510,7 @@ function TeamFollowUpPage() {
       total: tasks.length,
       today: tasks.filter((task) => task.task_date === date).length,
       completed: tasks.filter((task) => task.status === "completed").length,
-      daysPresent: attendanceByEmployee.get(employee.id)?.size ?? 0,
+      daysPresent: attendanceByEmployee[employee.id] ?? 0,
       evaluation: evaluationByEmployee.get(employee.id),
       departmentName: departmentById.get(employee.department_id ?? "")?.name ?? "غير محدد",
       siteName: siteById.get(employee.site_id ?? "")?.name ?? "غير محدد",
@@ -659,45 +639,25 @@ function TeamFollowUpPage() {
     })
     .sort((a, b) => (a.site?.name ?? "").localeCompare(b.site?.name ?? "", "ar"));
 
-  const queryErrors = [
-    departmentsQuery,
-    assignedDepartmentsQuery,
-    employeesQuery,
-    sitesQuery,
-    reportsQuery,
-    teamTasksQuery,
-    profilesQuery,
-    attendanceMonthQuery,
-    evaluationsQuery,
-    ...(activeTab === "scheduled" ? [taskTemplatesQuery] : []),
+  const queries = [
+    { label: "الأقسام", query: departmentsQuery },
+    ...(!canSeeAll ? [{ label: "الأقسام المسموحة", query: assignedDepartmentsQuery }] : []),
+    ...(activeTab !== "scheduled" ? [
+      { label: "الموظفون", query: employeesQuery },
+      { label: "حسابات الفريق", query: profilesQuery },
+    ] : []),
+    ...(activeTab === "team" ? [{ label: "تقارير المواقع", query: reportsQuery }] : []),
+    ...(activeTab === "team" || activeTab === "stats" ? [{ label: "المواقع", query: sitesQuery }] : []),
+    ...(activeTab === "tasks" || needsMonthlyStats ? [{ label: "المهام", query: teamTasksQuery }] : []),
+    ...(needsMonthlyStats ? [
+      { label: "الحضور الشهري", query: attendanceMonthQuery },
+      { label: "التقييمات", query: evaluationsQuery },
+    ] : []),
+    ...(activeTab === "scheduled" ? [{ label: "المهام المجدولة", query: taskTemplatesQuery }] : []),
   ];
-  const pageError = queryErrors.find((query) => query.isError);
-  const isPageLoading = queryErrors.some((query) => query.isLoading);
-
-  useEffect(() => {
-    if (pageError?.error) {
-      const message =
-        pageError.error instanceof Error
-          ? pageError.error.message
-          : "تعذر تحميل بيانات متابعة الفريق.";
-      toast.error(`تعذرت قراءة بيانات متابعة الفريق: ${message}`);
-    }
-  }, [pageError]);
-
-  const retryPageLoad = async () => {
-    await Promise.allSettled([
-      departmentsQuery.refetch(),
-      assignedDepartmentsQuery.refetch(),
-      employeesQuery.refetch(),
-      sitesQuery.refetch(),
-      reportsQuery.refetch(),
-      teamTasksQuery.refetch(),
-      profilesQuery.refetch(),
-      attendanceMonthQuery.refetch(),
-      evaluationsQuery.refetch(),
-      ...(activeTab === "scheduled" ? [taskTemplatesQuery.refetch()] : []),
-    ]);
-  };
+  const failures = queries.filter(({ query }) => query.isError);
+  const isTabLoading = queries.some(({ query }) => query.isLoading);
+  const retryPageLoad = () => Promise.allSettled(failures.map(({ query }) => query.refetch()));
 
   const tasks = (
     <div className="space-y-4">
@@ -898,7 +858,7 @@ function TeamFollowUpPage() {
                   </div>
 
                   <div className="mt-3 grid gap-2 text-sm text-muted-foreground md:grid-cols-3">
-                    <span>أيام الحضور: {attendanceByEmployee.get(employee.id)?.size ?? 0}</span>
+                    <span>أيام الحضور: {attendanceByEmployee[employee.id] ?? 0}</span>
                     <span>مهام هذا الشهر: {employeeTaskCount}</span>
                     <span>
                       القسم: {departmentById.get(employee.department_id ?? "")?.name ?? "غير محدد"}
@@ -957,7 +917,7 @@ function TeamFollowUpPage() {
     </TabsContent>
   );
 
-  if (isPageLoading) {
+  if (permissionsLoading) {
     return (
       <div className="space-y-6">
         <Card>
@@ -970,26 +930,7 @@ function TeamFollowUpPage() {
     );
   }
 
-  if (pageError) {
-    return (
-      <div className="space-y-6">
-        <Card className="border-destructive/40">
-          <CardContent className="flex flex-col items-start gap-4 p-8">
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="h-5 w-5 text-destructive" />
-              <h2 className="text-xl font-bold">تعذرت قراءة البيانات</h2>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              لا يمكن عرض متابعة الفريق حالياً. حاول إعادة المحاولة بعد قليل.
-            </p>
-            <Button onClick={retryPageLoad}>إعادة المحاولة</Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (!canSeeAll && !allowedDepartmentIds.length) {
+  if (!isTabLoading && !failures.length && !canSeeAll && !allowedDepartmentIds.length) {
     return (
       <div className="space-y-6">
         <Card className="border-warning/40">
@@ -1050,7 +991,7 @@ function TeamFollowUpPage() {
           </div>
           <div className="w-full sm:w-48">
             <Label>تاريخ التقارير</Label>
-            <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+            <Input type="date" value={date} onChange={(event) => setDate(event.target.value || today)} />
           </div>
           <Button
             variant="outline"
@@ -1072,6 +1013,14 @@ function TeamFollowUpPage() {
           <TabsTrigger className="rounded-xl py-2.5" value="evaluation">تقييم الموظفين</TabsTrigger>
           {isDepartmentManager && <TabsTrigger className="rounded-xl py-2.5" value="guidance">إرسال التوجيه</TabsTrigger>}
         </TabsList>
+        {failures.length > 0 ? <Card role="alert"><CardContent className="space-y-3 p-5">
+          {failures.map(({ label, query }) => <p key={label}>تعذر تحميل {label}: {formatErrorMessage(query.error)}</p>)}
+          <Button variant="outline" onClick={retryPageLoad}>إعادة المحاولة</Button>
+        </CardContent></Card> : isTabLoading ? (
+          <Card><CardContent className="flex items-center gap-3 p-5 text-muted-foreground" role="status">
+            <Clock3 className="h-5 w-5 animate-pulse" /> جارٍ تحميل بيانات التبويب…
+          </CardContent></Card>
+        ) : <>
         <TabsContent value="tasks" className="space-y-5">
           <Card className="border-primary/20">
             <CardHeader>
@@ -1290,7 +1239,7 @@ function TeamFollowUpPage() {
                     Boolean(taskOwner && isNameMatch(employee.full_name, taskOwner.full_name ?? ""))
                   );
                 });
-                const employeeDays = attendanceByEmployee.get(employee.id)?.size ?? 0;
+                const employeeDays = attendanceByEmployee[employee.id] ?? 0;
                 const existingEvaluation = evaluationByEmployee.get(employee.id);
                 return (
                   <div
@@ -1368,6 +1317,7 @@ function TeamFollowUpPage() {
           </Card>
         </TabsContent>
         {evaluation}
+        </>}
       </Tabs>
 
       <Dialog

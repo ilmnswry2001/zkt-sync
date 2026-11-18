@@ -1,6 +1,9 @@
+import { useDirectorySearch } from "@/hooks/use-directory-search";
+import { useServerFn } from "@tanstack/react-start";
+import { getPenaltyTotals } from "@/lib/penalty-totals.functions";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -83,19 +86,11 @@ function PenaltiesPage() {
   const [selectedEmployees, setSelectedEmployees] = useState<Employee[]>([]);
   const [employeePickerOpen, setEmployeePickerOpen] = useState(false);
   const [employeeSearch, setEmployeeSearch] = useState("");
-  const [debouncedEmployeeSearch, setDebouncedEmployeeSearch] = useState("");
   const [penaltyType, setPenaltyType] = useState<Penalty["penalty_type"]>("absence");
   const [penaltyDate, setPenaltyDate] = useState(today);
 
-  // Limit raw PostgREST filter terms to letters, marks, digits and hyphens.
-  const searchText = (employeeSearch.match(/[\p{L}\p{M}\p{N}-]+/gu) ?? []).join(" ");
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedEmployeeSearch(searchText), 300);
-    return () => window.clearTimeout(timer);
-  }, [searchText]);
-
-  const canSearchEmployees = searchText.replace(/[^\p{L}\p{N}]/gu, "").length >= 2;
-  const waitingForSearch = searchText !== debouncedEmployeeSearch;
+  const { term: debouncedEmployeeSearch, valid: canSearchEmployees, waiting: waitingForSearch } =
+    useDirectorySearch(employeeSearch);
   const employeesQuery = useQuery({
     queryKey: ["penalty-employees", debouncedEmployeeSearch],
     enabled: open && employeePickerOpen && canSearchEmployees && !waitingForSearch,
@@ -117,34 +112,47 @@ function PenaltiesPage() {
       : employeesQuery.isError
         ? "تعذر البحث عن الموظفين."
         : "لا يوجد موظف مطابق للبحث.";
+  const [page, setPage] = useState(0);
+  const pageSize = 50;
+  const readTotals = useServerFn(getPenaltyTotals);
+  const totals = useQuery({
+    queryKey: ["employee-penalties", "totals", month],
+    queryFn: () => readTotals({ data: { month } }),
+  });
+  const filteredQuery = () => {
+    let query = supabase.from("employee_penalties")
+      .select("id, employee_id, employee_name, penalty_type, penalty_date, deduction_amount, notes, executed_at, executed_by", { count: "exact" })
+      .gte("penalty_date", monthStart(month)).lte("penalty_date", monthEnd(month));
+    if (typeFilter !== "all") query = query.eq("penalty_type", typeFilter);
+    if (search.trim()) query = query.ilike("employee_name", `%${search.trim().replace(/[\\%_]/g, "\\$&")}%`);
+    return query.order("penalty_date", { ascending: false }).order("created_at", { ascending: false }).order("id");
+  };
   const penaltiesQuery = useQuery({
-    queryKey: ["employee-penalties", month],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("employee_penalties")
-        .select(
-          "id, employee_id, employee_name, penalty_type, penalty_date, deduction_amount, notes, executed_at, executed_by",
-        )
-        .gte("penalty_date", monthStart(month))
-        .lte("penalty_date", monthEnd(month))
-        .order("penalty_date", { ascending: false })
-        .order("created_at", { ascending: false });
+    queryKey: ["employee-penalties", month, typeFilter, search.trim(), page],
+    queryFn: async ({ signal }) => {
+      const { data, error, count } = await filteredQuery().range(page * pageSize, (page + 1) * pageSize - 1).abortSignal(signal);
       if (error) throw error;
-      return (data ?? []) as Penalty[];
+      return { records: data as Penalty[], count: count ?? 0 };
     },
   });
-  const penalties = useMemo(() => penaltiesQuery.data ?? [], [penaltiesQuery.data]);
-  const visiblePenalties = penalties.filter(
-    (penalty) =>
-      (typeFilter === "all" || penalty.penalty_type === typeFilter) &&
-      penalty.employee_name.includes(search.trim()),
-  );
+  const visiblePenalties = penaltiesQuery.data?.records ?? [];
+  const count = penaltiesQuery.data?.count ?? 0;
+  useEffect(() => {
+    if (penaltiesQuery.data && page > 0 && page * pageSize >= count) setPage(Math.max(0, Math.ceil(count / pageSize) - 1));
+  }, [count, page, penaltiesQuery.data]);
   const exportPenalties = async () => {
     setExporting(true);
     try {
       const { downloadPenaltiesExcel } = await import("@/lib/penalties-export");
+      const records: Penalty[] = [];
+      for (let offset = 0; ; offset += 500) {
+        const { data, error } = await filteredQuery().range(offset, offset + 499);
+        if (error) throw error;
+        records.push(...(data as Penalty[]));
+        if (data.length < 500) break;
+      }
       await downloadPenaltiesExcel(
-        visiblePenalties.map((penalty) => ({
+        records.map((penalty) => ({
           employee: penalty.employee_name,
           type: typeLabel[penalty.penalty_type],
           date: penalty.penalty_date,
@@ -168,16 +176,7 @@ function PenaltiesPage() {
       setExporting(false);
     }
   };
-  const stats = useMemo(
-    () => ({
-      total: penalties.length,
-      absence: penalties.filter((item) => item.penalty_type === "absence").length,
-      deduction: penalties.filter((item) => item.penalty_type === "deduction").length,
-      warning: penalties.filter((item) => item.penalty_type === "warning").length,
-      amount: penalties.reduce((sum, item) => sum + Number(item.deduction_amount || 0), 0),
-    }),
-    [penalties],
-  );
+  const stats = totals.data ?? { total: 0, absence: 0, deduction: 0, warning: 0, amount: 0 };
 
   const addPenalty = useMutation({
     mutationFn: async (payload: {
@@ -260,6 +259,7 @@ function PenaltiesPage() {
 
   return (
     <div className="space-y-6">
+      {totals.isError && <p role="alert">تعذر تحميل إجماليات العقوبات الشهرية.</p>}
       {penaltiesQuery.error && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
           تعذر قراءة سجل العقوبات:{" "}
@@ -298,11 +298,11 @@ function PenaltiesPage() {
         <CardContent className="p-5 flex flex-wrap items-end gap-4">
           <div>
             <Label>شهر التقرير</Label>
-            <Input type="month" value={month} onChange={(event) => setMonth(event.target.value)} />
+            <Input type="month" value={month} onChange={(event) => { setMonth(event.target.value || today.slice(0, 7)); setPage(0); }} />
           </div>
           <div className="w-44">
             <Label>التصنيف</Label>
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <Select value={typeFilter} onValueChange={(value) => { setTypeFilter(value); setPage(0); }}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -322,12 +322,12 @@ function PenaltiesPage() {
                 className="pr-9"
                 placeholder="ابحث في التقرير..."
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(event) => { setSearch(event.target.value); setPage(0); }}
               />
             </div>
           </div>
           <div className="text-sm text-muted-foreground flex items-center gap-2">
-            <CalendarDays className="w-4 h-4" /> {visiblePenalties.length} سجل في التقرير
+            <CalendarDays className="w-4 h-4" /> {count} سجل في التقرير
           </div>
           <Button
             type="button"
@@ -436,6 +436,11 @@ function PenaltiesPage() {
           </div>
         </CardContent>
       </Card>
+      {(count > pageSize || page > 0) && <div className="flex items-center justify-center gap-3">
+        <Button variant="outline" disabled={page === 0} onClick={() => setPage(page - 1)}>السابق</Button>
+        <span>صفحة {page + 1}</span>
+        <Button variant="outline" disabled={(page + 1) * pageSize >= count} onClick={() => setPage(page + 1)}>التالي</Button>
+      </div>}
       <Dialog
         open={open}
         onOpenChange={(value) => {

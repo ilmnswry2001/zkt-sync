@@ -180,7 +180,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   } = useAuth();
   const navigate = useNavigate();
   const operationalAlertsQuery = useOperationalAlerts();
-  const operationalAlerts = operationalAlertsQuery.data ?? [];
+  const operationalAlerts = operationalAlertsQuery.data?.recent ?? [];
+  const alertCount = operationalAlertsQuery.data?.count ?? 0;
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [hasLinkedEmployee, setHasLinkedEmployee] = useState(false);
   useEffect(() => {
@@ -830,13 +831,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       variant="outline"
                       size="icon"
                       className="relative"
-                      aria-label={`مركز التنبيهات: ${operationalAlerts.length} تنبيه`}
+                      aria-label={`مركز التنبيهات: ${alertCount} تنبيه`}
                       title="مركز التنبيهات"
                     >
                       <Bell className="h-4 w-4" />
-                      {operationalAlerts.length > 0 && (
+                      {alertCount > 0 && (
                         <span className="absolute -left-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
-                          {operationalAlerts.length > 99 ? "99+" : operationalAlerts.length}
+                          {alertCount > 99 ? "99+" : alertCount}
                         </span>
                       )}
                     </Button>
@@ -849,7 +850,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     <div className="border-b px-4 py-3">
                       <p className="text-sm font-bold">التنبيهات التشغيلية</p>
                       <p className="text-xs text-muted-foreground">
-                        {operationalAlerts.length} تنبيه حالي
+                        {alertCount} تنبيه حالي
                       </p>
                     </div>
                     <div className="max-h-[min(65vh,28rem)] overflow-y-auto p-2">
@@ -857,7 +858,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         <p className="p-3 text-sm text-muted-foreground">جارٍ فحص المؤشرات...</p>
                       ) : operationalAlertsQuery.error ? (
                         <p className="p-3 text-sm text-destructive">تعذر تحميل التنبيهات.</p>
-                      ) : operationalAlerts.length ? (
+                      ) : alertCount ? (
                         operationalAlerts.slice(0, 6).map((alert) => (
                           <Link
                             key={alert.id}

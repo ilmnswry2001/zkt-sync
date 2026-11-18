@@ -1,3 +1,4 @@
+import { useDirectorySearch } from "@/hooks/use-directory-search";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -116,6 +117,7 @@ function FormsPage() {
   const [kind, setKind] = useState<"attendance" | "overtime" | "leave" | "early_exit">("attendance");
   const [leaveTypeId, setLeaveTypeId] = useState("");
   const [employeeId, setEmployeeId] = useState("");
+  const [employeeLabel, setEmployeeLabel] = useState("");
   const [search, setSearch] = useState("");
   const [selectedForm, setSelectedForm] = useState<FormRow | null>(null);
 
@@ -134,20 +136,21 @@ function FormsPage() {
     },
   });
 
-  const { data: employees = [] } = useQuery({
-    queryKey: ["employees-search", search],
-    queryFn: async () => {
-      let q = supabase
-        .from("employees")
-        .select("id, employee_no, full_name")
-        .order("employee_no")
-        .limit(30);
-      if (search.trim()) q = q.or(`full_name.ilike.%${search.trim()}%,employee_no.ilike.%${search.trim()}%`);
-      const { data, error } = await q;
+  const lookup = useDirectorySearch(search);
+  const { data: employeeResults, isError: employeeSearchFailed } = useQuery({
+    queryKey: ["employees-search", lookup.term],
+    enabled: open && lookup.valid && !lookup.waiting,
+    queryFn: async ({ signal }) => {
+      let query = supabase.from("employees").select("id, employee_no, full_name");
+      for (const term of lookup.term.split(" ")) {
+        query = query.or(`full_name.ilike.%${term}%,employee_no.ilike.%${term}%`);
+      }
+      const { data, error } = await query.order("employee_no").limit(20).abortSignal(signal);
       if (error) throw error;
-      return data as { id: string; employee_no: string; full_name: string }[];
+      return data;
     },
   });
+  const employees = lookup.valid && !lookup.waiting ? employeeResults ?? [] : [];
 
   const { data: leaveTypes = [] } = useQuery({
     queryKey: ["forms", "leave-types"],
@@ -205,6 +208,7 @@ function FormsPage() {
       qc.invalidateQueries({ queryKey: ["forms"] });
       setOpen(false);
       setEmployeeId("");
+      setEmployeeLabel("");
       toast.success("تم إرسال الاستمارة إلى مسار الموافقة");
     },
     onError: (e: any) => toast.error(formatErrorMessage(e) ?? "فشل إرسال الاستمارة"),
@@ -278,13 +282,20 @@ function FormsPage() {
             >
               <div className="col-span-2">
                 <Label>بحث الموظف (رقم أو اسم)</Label>
-                <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="اكتب للبحث..." />
+                <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ابحث بحرفين أو رقمين على الأقل..." />
               </div>
               <div className="col-span-2">
                 <Label>الموظف</Label>
-                <Select value={employeeId} onValueChange={setEmployeeId}>
+                {employeeSearchFailed && <p role="alert">تعذر البحث عن الموظفين.</p>}
+                <Select value={employeeId} onValueChange={(id) => {
+                  const employee = employees.find((item) => item.id === id);
+                  if (employee) {
+                    setEmployeeId(id);
+                    setEmployeeLabel(`${employee.employee_no} — ${employee.full_name}`);
+                  }
+                }}>
                   <SelectTrigger>
-                    <SelectValue placeholder="اختر الموظف من قاعدة البيانات" />
+                    <SelectValue placeholder="اختر الموظف من قاعدة البيانات">{employeeLabel || undefined}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {employees.map((e) => (

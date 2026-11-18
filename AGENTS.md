@@ -13,6 +13,7 @@ Minimize unnecessary context, token usage, repeated work, and unrelated changes 
 - If essential information is missing, ask one concise question.
 
 ## Implementation Rules
+- Fetch data for the active workflow only. Query large pickers on demand with a result limit. Filter and paginate large lists in the database, and calculate totals on the server across the full scope. Load details and full export datasets only when requested.
 - Make the smallest complete change that satisfies the request.
 - Reuse existing components, types, utilities, database tables, and conventions.
 - Do not rebuild working features, rewrite whole files, or refactor unrelated code.

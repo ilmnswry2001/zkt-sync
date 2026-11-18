@@ -1,3 +1,4 @@
+import { useDirectorySearch } from "@/hooks/use-directory-search";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search, Check, Phone } from "lucide-react";
@@ -12,13 +13,18 @@ export function PlanEmployeePicker({ specialty, assignments, onSelect }: {
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const directory = useQuery(planEmployeeDirectoryOptions);
-  const suggestions = suggestStaffEmployees(directory.data ?? [], specialty, search);
+  const lookup = useDirectorySearch(search);
+  const ready = !search.trim() || lookup.valid;
+  const directory = useQuery({
+    ...planEmployeeDirectoryOptions(lookup.term, specialty),
+    enabled: open && ready && !lookup.waiting,
+  });
+  const suggestions = suggestStaffEmployees(ready && !lookup.waiting ? directory.data ?? [] : [], specialty, search);
   return <Popover open={open} onOpenChange={(value) => { setOpen(value); if (value) setSearch(""); }}>
     <PopoverTrigger asChild><Button type="button" variant="outline" className="min-h-11 w-full justify-start" aria-label={`اختيار موظف لتخصص ${specialty}`}><Search className="ml-2 h-4 w-4" />اختر موظفاً مسجلاً</Button></PopoverTrigger>
     <PopoverContent dir="rtl" align="start" className="w-[min(25rem,calc(100vw-2rem))] p-0">
       <Command shouldFilter={false}><CommandInput value={search} onValueChange={setSearch} placeholder="ابحث بالاسم أو الرقم الوظيفي أو المسمى أو القسم..." />
-        <CommandList><CommandEmpty>{directory.isPending ? "جارٍ تحميل الموظفين..." : directory.error ? "تعذر تحميل الموظفين" : "لا يوجد موظف مطابق للبحث."}</CommandEmpty>
+        <CommandList><CommandEmpty>{!ready ? "اكتب حرفين على الأقل" : lookup.waiting || directory.isPending ? "جارٍ تحميل الموظفين..." : directory.error ? "تعذر تحميل الموظفين" : "لا يوجد موظف مطابق للبحث."}</CommandEmpty>
           <CommandGroup>{suggestions.map((employee) => {
             const assigned = isStaffEmployeeAssigned(assignments, employee);
             return <CommandItem key={employee.id} value={employee.id} disabled={assigned} onSelect={() => { onSelect(employee); setOpen(false); }}>
