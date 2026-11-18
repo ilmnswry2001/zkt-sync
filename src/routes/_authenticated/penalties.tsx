@@ -1,6 +1,6 @@
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -80,37 +80,43 @@ function PenaltiesPage() {
   const [month, setMonth] = useState(today.slice(0, 7));
   const [typeFilter, setTypeFilter] = useState("all");
   const [search, setSearch] = useState("");
-  const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
+  const [selectedEmployees, setSelectedEmployees] = useState<Employee[]>([]);
   const [employeePickerOpen, setEmployeePickerOpen] = useState(false);
   const [employeeSearch, setEmployeeSearch] = useState("");
+  const [debouncedEmployeeSearch, setDebouncedEmployeeSearch] = useState("");
   const [penaltyType, setPenaltyType] = useState<Penalty["penalty_type"]>("absence");
   const [penaltyDate, setPenaltyDate] = useState(today);
 
+  // Limit raw PostgREST filter terms to letters, marks, digits and hyphens.
+  const searchText = (employeeSearch.match(/[\p{L}\p{M}\p{N}-]+/gu) ?? []).join(" ");
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedEmployeeSearch(searchText), 300);
+    return () => window.clearTimeout(timer);
+  }, [searchText]);
+
+  const canSearchEmployees = searchText.replace(/[^\p{L}\p{N}]/gu, "").length >= 2;
+  const waitingForSearch = searchText !== debouncedEmployeeSearch;
   const employeesQuery = useQuery({
-    queryKey: ["penalty-employees"],
-    enabled: open,
-    queryFn: async () => {
-      const directory: Employee[] = [];
-      const pageSize = 500;
-      for (let offset = 0; ; offset += pageSize) {
-        const { data, error } = await supabase
-          .from("employees")
-          .select("id, employee_no, full_name, position")
-          .order("full_name")
-          .order("id")
-          .range(offset, offset + pageSize - 1);
-        if (error) throw error;
-        directory.push(...data);
-        if (data.length < pageSize) return directory;
+    queryKey: ["penalty-employees", debouncedEmployeeSearch],
+    enabled: open && employeePickerOpen && canSearchEmployees && !waitingForSearch,
+    queryFn: async ({ signal }) => {
+      let query = supabase.from("employees").select("id, employee_no, full_name, position");
+      for (const term of debouncedEmployeeSearch.split(" ")) {
+        query = query.or(`full_name.ilike.%${term}%,employee_no.ilike.%${term}%,position.ilike.%${term}%`);
       }
+      const { data, error } = await query.order("full_name").order("id").limit(20).abortSignal(signal);
+      if (error) throw error;
+      return data;
     },
   });
-  const employees = employeesQuery.data ?? [];
-  const employeeSearchTerms = employeeSearch.trim().toLocaleLowerCase("ar").split(/\s+/).filter(Boolean);
-  const matchingEmployees = employees.filter((employee) => {
-    const searchable = `${employee.full_name} ${employee.employee_no} ${employee.position ?? ""}`.toLocaleLowerCase("ar");
-    return employeeSearchTerms.every((term) => searchable.includes(term));
-  }).slice(0, 50);
+  const matchingEmployees = canSearchEmployees && !waitingForSearch ? (employeesQuery.data ?? []) : [];
+  const employeeSearchMessage = !canSearchEmployees
+    ? "اكتب حرفين أو رقمين على الأقل للبحث."
+    : waitingForSearch || employeesQuery.isFetching
+      ? "جارٍ البحث عن الموظفين..."
+      : employeesQuery.isError
+        ? "تعذر البحث عن الموظفين."
+        : "لا يوجد موظف مطابق للبحث.";
   const penaltiesQuery = useQuery({
     queryKey: ["employee-penalties", month],
     queryFn: async () => {
@@ -175,17 +181,15 @@ function PenaltiesPage() {
 
   const addPenalty = useMutation({
     mutationFn: async (payload: {
-      employeeIds: string[];
+      employees: Employee[];
       directName: string;
       type: Penalty["penalty_type"];
       date: string;
       amount: number;
       notes: string;
     }) => {
-      const chosen = payload.employeeIds.length
-        ? employees
-            .filter((employee) => payload.employeeIds.includes(employee.id))
-            .map((employee) => ({ employee_id: employee.id, employee_name: employee.full_name }))
+      const chosen = payload.employees.length
+        ? payload.employees.map((employee) => ({ employee_id: employee.id, employee_name: employee.full_name }))
         : [{ employee_id: null, employee_name: payload.directName.trim() }];
       const rows = chosen.map((person) => ({
         ...person,
@@ -204,6 +208,8 @@ function PenaltiesPage() {
       qc.invalidateQueries({ queryKey: ["employee-penalties"] });
       setOpen(false);
       setSelectedEmployees([]);
+      setEmployeePickerOpen(false);
+      setEmployeeSearch("");
       setPenaltyType("absence");
       setPenaltyDate(today);
       toast.success("تمت إضافة العقوبة بنجاح");
@@ -258,12 +264,6 @@ function PenaltiesPage() {
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
           تعذر قراءة سجل العقوبات:{" "}
           {(penaltiesQuery.error as any).message ?? "تحقق من جدول employee_penalties وصلاحيات RLS"}
-        </div>
-      )}
-      {employeesQuery.error && (
-        <div className="rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm">
-          تعذر قراءة الموظفين:{" "}
-          {(employeesQuery.error as any).message ?? "تحقق من اتصال قاعدة البيانات وصلاحية القراءة"}
         </div>
       )}
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -440,8 +440,11 @@ function PenaltiesPage() {
         open={open}
         onOpenChange={(value) => {
           setOpen(value);
-          if (!value) setSelectedEmployees([]);
-          if (!value) setEmployeeSearch("");
+          if (!value) {
+            setSelectedEmployees([]);
+            setEmployeePickerOpen(false);
+            setEmployeeSearch("");
+          }
         }}
       >
         <DialogContent dir="rtl" className="max-w-2xl">
@@ -460,7 +463,7 @@ function PenaltiesPage() {
                 return toast.error("أدخل مبلغ الاستقطاع");
               if (!penaltyDate) return toast.error("حدد تاريخ العقوبة");
               addPenalty.mutate({
-                employeeIds: selectedEmployees,
+                employees: selectedEmployees,
                 directName,
                 type: penaltyType,
                 date: penaltyDate,
@@ -477,21 +480,21 @@ function PenaltiesPage() {
               </div>
               <Popover open={employeePickerOpen} onOpenChange={setEmployeePickerOpen}>
                 <PopoverTrigger asChild>
-                  <Button type="button" variant="outline" className="w-full justify-start min-h-11" disabled={employeesQuery.isLoading}>
+                  <Button type="button" variant="outline" className="w-full justify-start min-h-11">
                     <Search className="ml-2 h-4 w-4" />
-                    {employeesQuery.isLoading ? "جارٍ تحميل الموظفين..." : "ابحث واختر موظفاً مسجلاً"}
+                    ابحث واختر موظفاً مسجلاً
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent dir="rtl" align="start" className="w-[min(32rem,calc(100vw-2rem))] p-0">
                   <Command shouldFilter={false}>
-                    <CommandInput value={employeeSearch} onValueChange={setEmployeeSearch} placeholder="ابحث بالاسم أو الرقم الوظيفي أو المسمى..." />
+                    <CommandInput maxLength={100} value={employeeSearch} onValueChange={setEmployeeSearch} placeholder="ابحث بالاسم أو الرقم الوظيفي أو المسمى..." />
                     <CommandList className="max-h-64">
-                      <CommandEmpty>{employeesQuery.isError ? "تعذر تحميل الموظفين." : "لا يوجد موظف مطابق للبحث."}</CommandEmpty>
+                      <CommandEmpty>{employeeSearchMessage}</CommandEmpty>
                       <CommandGroup>
                         {matchingEmployees.map((employee) => {
-                          const selected = selectedEmployees.includes(employee.id);
+                          const selected = selectedEmployees.some((item) => item.id === employee.id);
                           return <CommandItem key={employee.id} value={employee.id} onSelect={() => {
-                            setSelectedEmployees((current) => selected ? current.filter((id) => id !== employee.id) : [...current, employee.id]);
+                            setSelectedEmployees((current) => selected ? current.filter((item) => item.id !== employee.id) : [...current, employee]);
                           }}>
                             <div className="min-w-0 flex-1 text-right"><p className="font-semibold">{employee.full_name}</p><p className="text-xs text-muted-foreground">{employee.employee_no} · {employee.position || "بدون مسمى"}</p></div>
                             {selected && <Check className="h-4 w-4 text-primary" />}
@@ -502,7 +505,7 @@ function PenaltiesPage() {
                   </Command>
                 </PopoverContent>
               </Popover>
-              {!!selectedEmployees.length && <div className="flex flex-wrap gap-2">{employees.filter((employee) => selectedEmployees.includes(employee.id)).map((employee) => <Badge key={employee.id} variant="secondary" className="gap-2 py-1">{employee.full_name} · {employee.employee_no}<button type="button" aria-label={`إزالة ${employee.full_name}`} onClick={() => setSelectedEmployees((current) => current.filter((id) => id !== employee.id))}>×</button></Badge>)}</div>}
+              {!!selectedEmployees.length && <div className="flex flex-wrap gap-2">{selectedEmployees.map((employee) => <Badge key={employee.id} variant="secondary" className="gap-2 py-1">{employee.full_name} · {employee.employee_no}<button type="button" aria-label={`إزالة ${employee.full_name}`} onClick={() => setSelectedEmployees((current) => current.filter((item) => item.id !== employee.id))}>×</button></Badge>)}</div>}
               <div className="text-center text-xs text-muted-foreground">أو</div>
               <div>
                 <Label>إدخال اسم مباشر</Label>
