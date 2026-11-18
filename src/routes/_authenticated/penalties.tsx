@@ -47,7 +47,6 @@ type Employee = {
   employee_no: string;
   full_name: string;
   position: string | null;
-  department_id: string | null;
 };
 type Penalty = {
   id: string;
@@ -89,17 +88,29 @@ function PenaltiesPage() {
 
   const employeesQuery = useQuery({
     queryKey: ["penalty-employees"],
+    enabled: open,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("employees")
-        .select("id, employee_no, full_name, position, department_id")
-        .eq("status", "active")
-        .order("full_name");
-      if (error) throw error;
-      return (data ?? []) as Employee[];
+      const directory: Employee[] = [];
+      const pageSize = 500;
+      for (let offset = 0; ; offset += pageSize) {
+        const { data, error } = await supabase
+          .from("employees")
+          .select("id, employee_no, full_name, position")
+          .order("full_name")
+          .order("id")
+          .range(offset, offset + pageSize - 1);
+        if (error) throw error;
+        directory.push(...data);
+        if (data.length < pageSize) return directory;
+      }
     },
   });
   const employees = employeesQuery.data ?? [];
+  const employeeSearchTerms = employeeSearch.trim().toLocaleLowerCase("ar").split(/\s+/).filter(Boolean);
+  const matchingEmployees = employees.filter((employee) => {
+    const searchable = `${employee.full_name} ${employee.employee_no} ${employee.position ?? ""}`.toLocaleLowerCase("ar");
+    return employeeSearchTerms.every((term) => searchable.includes(term));
+  }).slice(0, 50);
   const penaltiesQuery = useQuery({
     queryKey: ["employee-penalties", month],
     queryFn: async () => {
@@ -477,7 +488,7 @@ function PenaltiesPage() {
                     <CommandList className="max-h-64">
                       <CommandEmpty>{employeesQuery.isError ? "تعذر تحميل الموظفين." : "لا يوجد موظف مطابق للبحث."}</CommandEmpty>
                       <CommandGroup>
-                        {employees.filter((employee) => `${employee.full_name} ${employee.employee_no} ${employee.position ?? ""}`.toLocaleLowerCase("ar").includes(employeeSearch.trim().toLocaleLowerCase("ar"))).slice(0, 50).map((employee) => {
+                        {matchingEmployees.map((employee) => {
                           const selected = selectedEmployees.includes(employee.id);
                           return <CommandItem key={employee.id} value={employee.id} onSelect={() => {
                             setSelectedEmployees((current) => selected ? current.filter((id) => id !== employee.id) : [...current, employee.id]);
