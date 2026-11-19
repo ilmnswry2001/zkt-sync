@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { matchZktecoPins, unmatchedZktecoPinMessage } from "@/lib/zkteco-employee-matching";
+import { mobileBatch, mobileKeyPrefix, syncDigest } from "@/lib/mobile-sync";
 
 const schema = z.object({
   serial: z.string().trim().min(1).max(64),
@@ -49,6 +50,25 @@ export const Route = createFileRoute("/api/public/zk-sync")({
     const raw = await request.text();
     if (new TextEncoder().encode(raw).byteLength > 2_000_000) return json({ error: "Payload too large" }, 413);
     if (!safeEqual(signature, await hmac(secret, `${timestamp}.${raw}`))) return json({ error: "Unauthorized" }, 401);
+    if (secret.startsWith(mobileKeyPrefix)) {
+      let batch: z.infer<typeof mobileBatch>;
+      try { batch = mobileBatch.parse(JSON.parse(raw)); } catch { return json({ error: "Invalid payload" }, 400); }
+      try {
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        const { data, error } = await supabaseAdmin.rpc("ingest_mobile_device_sync", {
+          p_key_hash: await syncDigest(secret), p_device_id: batch.device_id, p_serial: batch.serial,
+          p_batch_id: batch.batch_id, p_payload_hash: await syncDigest(raw), p_pulled_at: batch.pulled_at, p_logs: batch.logs,
+        });
+        if (error?.code === "42501") return json({ error: "Unauthorized" }, 401);
+        if (error?.code === "23505") return json({ error: "Batch conflict" }, 409);
+        if (error || !data || typeof data !== "object" || Array.isArray(data) || data.failed) {
+          return json({ error: "Sync service unavailable" }, 503);
+        }
+        return json(data);
+      } catch {
+        return json({ error: "Sync service unavailable" }, 503);
+      }
+    }
     let payload: z.infer<typeof schema>;
     try { payload = schema.parse(JSON.parse(raw)); } catch { return json({ error: "Invalid payload" }, 400); }
     let batchDeviceId: string | null = null;

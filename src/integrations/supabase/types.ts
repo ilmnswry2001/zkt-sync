@@ -4386,6 +4386,12 @@ export type Database = {
           },
         ]
       }
+      mobile_device_sync_keys: {
+        Row: { key_hash: string; device_id: string; operator_id: string; expires_at: string; revoked_at: string | null }
+        Insert: { key_hash: string; device_id: string; operator_id: string; expires_at: string; revoked_at?: string | null }
+        Update: { revoked_at?: string | null }
+        Relationships: []
+      }
       sync_batches: {
         Row: {
           device_id: string | null
@@ -4397,6 +4403,11 @@ export type Database = {
           received_at: string
           record_count: number
           unmatched_count: number
+          mobile_operator_id: string | null
+          mobile_operator_name: string | null
+          mobile_payload_hash: string | null
+          mobile_pulled_at: string | null
+          mobile_status: "succeeded" | "failed" | null
         }
         Insert: {
           device_id?: string | null
@@ -5352,6 +5363,10 @@ export type Database = {
       }
       hse_is_manager: { Args: { _user_id: string }; Returns: boolean }
       hse_is_staff: { Args: { _user_id: string }; Returns: boolean }
+      ingest_mobile_device_sync: {
+        Args: { p_key_hash: string; p_device_id: string; p_serial: string; p_batch_id: string; p_payload_hash: string; p_pulled_at: string; p_logs: Json }
+        Returns: Json
+      }
       ingest_uploaded_attendance_chunk: {
         Args: { p_logs: Json; p_offset: number; p_upload_id: string }
         Returns: Json

@@ -97,6 +97,7 @@ const nav = [
   { to: "/maintenance", label: "الصيانة", icon: Wrench, access: "maintenance" },
   { to: "/warehouses", label: "المخازن", icon: Boxes },
   { to: "/devices", label: "الأجهزة", icon: Fingerprint },
+  { to: "/mobile-sync", label: "سحب البصمة بالهاتف", icon: Smartphone, access: "mobileSync" },
   { to: "/upload", label: "رفع ملفات البصمة", icon: Upload },
   { to: "/files", label: "سجل الملفات", icon: FileBox },
   { to: "/safety", label: "السلامة والبلاغات", icon: ShieldAlert },
@@ -148,7 +149,7 @@ const NAV_GROUPS = [
     key: "inventory",
     label: "المخازن والأجهزة",
     icon: Boxes,
-    tos: ["/warehouses", "/devices", "/upload", "/files"],
+    tos: ["/warehouses", "/devices", "/mobile-sync", "/upload", "/files"],
   },
   {
     key: "settings",
@@ -275,6 +276,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const visibleNav = nav.filter((item) => {
     if (!canAccessSection(item.to) && !(item.to === "/attendance-forms" && canAccessSection("/forms"))) return false;
     if ("access" in item && item.access === "admin" && !isAdmin) return false;
+    if ("access" in item && item.access === "mobileSync" && !roles.some((role) => ["admin", "hr", "supervisor", "site_admin"].includes(role))) return false;
     if ("access" in item && item.access === "hr" && !isHR) return false;
     if (
       "access" in item &&

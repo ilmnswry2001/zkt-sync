@@ -28,6 +28,7 @@ import { Route as AuthenticatedFormsRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedFuelRouteImport } from './routes/_authenticated/fuel'
 import { Route as AuthenticatedLeavesRouteImport } from './routes/_authenticated/leaves'
 import { Route as AuthenticatedMaintenanceRouteImport } from './routes/_authenticated/maintenance'
+import { Route as AuthenticatedMobileSyncRouteImport } from './routes/_authenticated/mobile-sync'
 import { Route as AuthenticatedMonthlyRouteImport } from './routes/_authenticated/monthly'
 import { Route as AuthenticatedPayrollRouteImport } from './routes/_authenticated/payroll'
 import { Route as AuthenticatedPenaltiesRouteImport } from './routes/_authenticated/penalties'
@@ -162,6 +163,11 @@ const AuthenticatedMaintenanceRoute =
     path: '/maintenance',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedMobileSyncRoute = AuthenticatedMobileSyncRouteImport.update({
+  id: '/mobile-sync',
+  path: '/mobile-sync',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedMonthlyRoute = AuthenticatedMonthlyRouteImport.update({
   id: '/monthly',
   path: '/monthly',
@@ -360,6 +366,7 @@ export interface FileRoutesByFullPath {
   '/fuel': typeof AuthenticatedFuelRoute
   '/leaves': typeof AuthenticatedLeavesRoute
   '/maintenance': typeof AuthenticatedMaintenanceRoute
+  '/mobile-sync': typeof AuthenticatedMobileSyncRoute
   '/monthly': typeof AuthenticatedMonthlyRoute
   '/payroll': typeof AuthenticatedPayrollRoute
   '/penalties': typeof AuthenticatedPenaltiesRoute
@@ -413,6 +420,7 @@ export interface FileRoutesByTo {
   '/fuel': typeof AuthenticatedFuelRoute
   '/leaves': typeof AuthenticatedLeavesRoute
   '/maintenance': typeof AuthenticatedMaintenanceRoute
+  '/mobile-sync': typeof AuthenticatedMobileSyncRoute
   '/monthly': typeof AuthenticatedMonthlyRoute
   '/payroll': typeof AuthenticatedPayrollRoute
   '/penalties': typeof AuthenticatedPenaltiesRoute
@@ -469,6 +477,7 @@ export interface FileRoutesById {
   '/_authenticated/fuel': typeof AuthenticatedFuelRoute
   '/_authenticated/leaves': typeof AuthenticatedLeavesRoute
   '/_authenticated/maintenance': typeof AuthenticatedMaintenanceRoute
+  '/_authenticated/mobile-sync': typeof AuthenticatedMobileSyncRoute
   '/_authenticated/monthly': typeof AuthenticatedMonthlyRoute
   '/_authenticated/payroll': typeof AuthenticatedPayrollRoute
   '/_authenticated/penalties': typeof AuthenticatedPenaltiesRoute
@@ -525,6 +534,7 @@ export interface FileRouteTypes {
     | '/fuel'
     | '/leaves'
     | '/maintenance'
+    | '/mobile-sync'
     | '/monthly'
     | '/payroll'
     | '/penalties'
@@ -578,6 +588,7 @@ export interface FileRouteTypes {
     | '/fuel'
     | '/leaves'
     | '/maintenance'
+    | '/mobile-sync'
     | '/monthly'
     | '/payroll'
     | '/penalties'
@@ -633,6 +644,7 @@ export interface FileRouteTypes {
     | '/_authenticated/fuel'
     | '/_authenticated/leaves'
     | '/_authenticated/maintenance'
+    | '/_authenticated/mobile-sync'
     | '/_authenticated/monthly'
     | '/_authenticated/payroll'
     | '/_authenticated/penalties'
@@ -815,6 +827,13 @@ declare module '@tanstack/react-router' {
       path: '/maintenance'
       fullPath: '/maintenance'
       preLoaderRoute: typeof AuthenticatedMaintenanceRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/mobile-sync': {
+      id: '/_authenticated/mobile-sync'
+      path: '/mobile-sync'
+      fullPath: '/mobile-sync'
+      preLoaderRoute: typeof AuthenticatedMobileSyncRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/monthly': {
@@ -1105,6 +1124,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedFuelRoute: typeof AuthenticatedFuelRoute
   AuthenticatedLeavesRoute: typeof AuthenticatedLeavesRoute
   AuthenticatedMaintenanceRoute: typeof AuthenticatedMaintenanceRoute
+  AuthenticatedMobileSyncRoute: typeof AuthenticatedMobileSyncRoute
   AuthenticatedMonthlyRoute: typeof AuthenticatedMonthlyRoute
   AuthenticatedPayrollRoute: typeof AuthenticatedPayrollRoute
   AuthenticatedPenaltiesRoute: typeof AuthenticatedPenaltiesRoute
@@ -1147,6 +1167,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedFuelRoute: AuthenticatedFuelRoute,
   AuthenticatedLeavesRoute: AuthenticatedLeavesRoute,
   AuthenticatedMaintenanceRoute: AuthenticatedMaintenanceRoute,
+  AuthenticatedMobileSyncRoute: AuthenticatedMobileSyncRoute,
   AuthenticatedMonthlyRoute: AuthenticatedMonthlyRoute,
   AuthenticatedPayrollRoute: AuthenticatedPayrollRoute,
   AuthenticatedPenaltiesRoute: AuthenticatedPenaltiesRoute,

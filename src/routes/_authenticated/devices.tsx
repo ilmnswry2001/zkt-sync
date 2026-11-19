@@ -1,5 +1,5 @@
 import { formatErrorMessage } from "@/lib/error-message";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { createZktecoSyncKey, getZktecoSyncStatus, requestZktecoSync, revokeZktecoSyncKey, reprocessZktecoSyncRecords } from "@/lib/zkteco-sync.functions";
@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { MetricCard } from "@/components/MetricCard";
 import { AssignDevicePinDialog } from "@/components/AssignDevicePinDialog";
-import { Trash2, Plus, Pencil, KeyRound, Copy, Download, RefreshCw, Ban } from "lucide-react";
+import { Trash2, Plus, Pencil, KeyRound, Copy, Download, RefreshCw, Ban, Smartphone } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import agentScript from "../../../scripts/agent.py?raw";
@@ -33,7 +33,7 @@ type SyncStatus = { device_id: string; auto_last_sync_at: string | null; auto_sy
 
 function DevicesPage() {
   const qc = useQueryClient();
-  const { isAdmin, isHR } = useAuth();
+  const { isAdmin, isHR, roles } = useAuth();
   const [createdKey, setCreatedKey] = useState<{ deviceId: string; key: string; serial: string } | null>(null);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Device | null>(null);
@@ -224,6 +224,9 @@ function DevicesPage() {
 
   return (
     <Tabs defaultValue="devices" dir="rtl" className="space-y-5">
+      {(isHR || roles.some((role) => role === "supervisor" || role === "site_admin")) && (
+        <Button asChild variant="outline"><Link to="/mobile-sync"><Smartphone className="size-4" /> سحب البصمة بالهاتف</Link></Button>
+      )}
       <div className="grid gap-3 sm:grid-cols-2">
         <MetricCard title="الأجهزة المتصلة" value={devicesError ? "—" : onlineCount} loading={devicesLoading} tone="success" detail="آخر مزامنة خلال 15 دقيقة" />
         <MetricCard title="الأجهزة غير المتصلة" value={devicesError ? "—" : devices.length - onlineCount} loading={devicesLoading} tone="warning" detail="تشمل الأجهزة التي لم تزامن بعد" />

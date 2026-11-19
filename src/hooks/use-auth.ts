@@ -80,6 +80,7 @@ export function useAuth() {
   const isAdmin = roles.includes("admin");
   const isEngineer = roles.includes("engineer") && !isAdmin;
   const roleSections = [
+    ...(roles.some((role) => ["hr", "supervisor", "site_admin"].includes(role)) ? ["/mobile-sync"] : []),
     ...(roles.includes("planning_officer") || roles.some((role) => ["supervisor", "department_manager", "site_admin"].includes(role)) || isCompanyManager
       ? ["/planning"]
       : []),
