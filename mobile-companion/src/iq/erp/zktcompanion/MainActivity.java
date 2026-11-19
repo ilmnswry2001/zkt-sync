@@ -1,10 +1,8 @@
 package iq.erp.zktcompanion;
 
-import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.ConnectivityManager;
 import android.net.Network;
@@ -14,14 +12,17 @@ import android.os.Bundle;
 import android.text.InputType;
 import android.view.View;
 import android.widget.Button;
+import android.widget.ArrayAdapter;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
+import android.widget.Spinner;
 import android.widget.TextView;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -33,18 +34,22 @@ import org.json.JSONObject;
 
 @SuppressWarnings("deprecation")
 public final class MainActivity extends Activity {
-    private static final int SCAN = 101, CAMERA = 102;
+    private static final int IMPORT_SETTINGS = 101;
+    private static final String[] TRANSPORTS = {"auto", "tcp", "udp"};
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private ConnectivityManager connectivity;
     private LocalStore store;
     private JSONObject settings;
     private LinearLayout layout;
-    private TextView pairingState, networkState, counts, feedback;
+    private TextView configurationState, networkState, counts, feedback;
     private EditText address, port, password;
     private CheckBox utc;
-    private Button pair, manualPair, pull, retry;
+    private Spinner transport;
+    private Button importSettings, testConnection, pull, retry;
     private ProgressBar progress;
     private boolean busy;
+    private boolean foreground;
+    private Network observedInternet;
     private final ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
         @Override public void onAvailable(Network network) { updateNetwork(); }
         @Override public void onLost(Network network) { updateNetwork(); }
@@ -67,19 +72,25 @@ public final class MainActivity extends Activity {
             return insets;
         });
         setContentView(scroll);
-        TextView title = addText("سحب البصمة بالهاتف", 26);
+        TextView title = addText("وكيل البصمة الميداني", 26);
         title.setTextColor(Color.rgb(23, 60, 51));
-        pairingState = addText("امسح رمز الربط من نظام إدارة الحضور.", 15);
-        pair = button("مسح رمز الربط QR", this::scan);
-        manualPair = button("إدخال رمز الربط يدويًا", this::enterPairingManually);
+        configurationState = addText("نزّل ملف إعداد الوكيل من النظام ثم استورده هنا.", 15);
+        importSettings = button("استيراد ملف إعداد الجهاز", this::chooseConfiguration);
         address = field("عنوان الجهاز", "192.168.1.201", InputType.TYPE_CLASS_PHONE);
         port = field("منفذ الاتصال", "4370", InputType.TYPE_CLASS_NUMBER);
         password = field("مفتاح الاتصال بالجهاز (اختياري)", "", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        TextView transportLabel = addText("وسيلة الاتصال بالجهاز", 15);
+        transport = new Spinner(this);
+        transport.setId(View.generateViewId());
+        transportLabel.setLabelFor(transport.getId());
+        transport.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, new String[] {"تلقائي (TCP ثم UDP)", "TCP", "UDP"}));
+        layout.addView(transport);
         utc = new CheckBox(this);
         utc.setText("ساعة الجهاز مضبوطة على UTC (الافتراضي توقيت بغداد)");
         layout.addView(utc);
         networkState = addText("", 15);
-        pull = button("فحص الاتصال وسحب الحركات الآن", this::startPull);
+        testConnection = button("اختبار اتصال الجهاز", () -> startSync(true));
+        pull = button("سحب الحركات الآن", () -> startSync(false));
         progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         progress.setVisibility(View.GONE);
         layout.addView(progress, new LinearLayout.LayoutParams(-1, dp(8)));
@@ -91,7 +102,7 @@ public final class MainActivity extends Activity {
             settings = store.configuration();
             showConfiguration();
         } catch (Exception error) {
-            feedback.setText("تعذر قراءة إعدادات الربط المحفوظة. أعد ربط التطبيق.");
+            feedback.setText("تعذر قراءة الإعدادات المحفوظة. استورد ملف الجهاز مجددًا.");
         }
         controls(false);
         updateNetwork();
@@ -99,13 +110,12 @@ public final class MainActivity extends Activity {
             .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN).build(), networkCallback);
     }
 
-    private void startPull() {
+    private void startSync(boolean testOnly) {
         JSONObject active = settings;
         if (active == null) {
-            new AlertDialog.Builder(this).setTitle("اربط جهاز البصمة أولًا")
-                .setMessage("اختر الجهاز في صفحة «سحب البصمة بالهاتف» في النظام ثم امسح رمز الربط أو أدخله يدويًا.")
-                .setPositiveButton("مسح QR", (dialog, option) -> scan())
-                .setNeutralButton("إدخال يدوي", (dialog, option) -> enterPairingManually())
+            new AlertDialog.Builder(this).setTitle("استورد ملف إعداد الجهاز أولًا")
+                .setMessage("نزّل ملف إعداد الوكيل من صفحة «سحب البصمة بالهاتف» في النظام.")
+                .setPositiveButton("استيراد الملف", (dialog, option) -> chooseConfiguration())
                 .setNegativeButton("إغلاق", null).show();
             return;
         }
@@ -116,19 +126,20 @@ public final class MainActivity extends Activity {
         try {
             devicePort = Integer.parseInt(portText);
             devicePassword = passwordText.isEmpty() ? 0 : Integer.parseInt(passwordText);
-            if (!Pairing.isLan(ip) || devicePort < 1 || devicePort > 65535 || devicePassword < 0) throw new IllegalArgumentException();
+            if (!AgentConfiguration.isLan(ip) || devicePort < 1 || devicePort > 65535 || devicePassword < 0) throw new IllegalArgumentException();
         } catch (IllegalArgumentException error) {
             feedback.setText("أدخل عنوان IPv4 محليًا ومنفذًا صالحًا ومفتاح اتصال رقميًا.");
             return;
         }
         boolean utcSelected = utc.isChecked();
+        String mode = TRANSPORTS[transport.getSelectedItemPosition()];
         runWork("جارٍ الاتصال بجهاز البصمة…", () -> {
-            active.put("device_ip", ip).put("device_port", devicePort).put("device_password", devicePassword).put("utc", utcSelected);
+            active.put("device_ip", ip).put("device_port", devicePort).put("device_password", devicePassword).put("utc", utcSelected).put("transport", mode);
             store.configure(active);
             int[] pulled = {0};
-            try (ZkReader reader = connect(ip, devicePort, devicePassword, active.getString("serial"))) {
-                postFeedback("تم الاتصال بالجهاز. جارٍ قراءة الحركات…");
-                reader.readAttendance(ZoneId.of(utcSelected ? "UTC" : "Asia/Baghdad"), logs -> {
+            ZoneId zone = ZoneId.of(utcSelected ? "UTC" : "Asia/Baghdad");
+            String serial = active.getString("serial");
+            ZkReader.Records save = logs -> {
                     String id = UUID.randomUUID().toString();
                     String body = new JSONObject().put("device_id", active.getString("device_id"))
                         .put("pulled_at", java.time.Instant.now().toString())
@@ -136,37 +147,54 @@ public final class MainActivity extends Activity {
                     store.enqueue(active, body, id, logs.length());
                     pulled[0] += logs.length();
                     postCounts(pulled[0], 0, 0);
-                });
+            };
+            String first = "udp".equals(mode) ? "UDP" : "TCP";
+            try {
+                readDevice(ip, devicePort, devicePassword, serial, first, testOnly, zone, save);
+            } catch (IOException failure) {
+                if (!"auto".equals(mode) || pulled[0] > 0 || failure instanceof ZkReader.DeviceIdentityException) throw failure;
+                readDevice(ip, devicePort, devicePassword, serial, "UDP", testOnly, zone, save);
             }
-            upload(pulled[0]);
+            if (!testOnly) {
+                if (pulled[0] == 0 && store.pending().length == 0) postFeedback("نجح الاتصال، ولم يرجع الجهاز أي حركات حضور.");
+                else upload(pulled[0]);
+            }
         });
     }
 
-    private ZkReader connect(String ip, int devicePort, int devicePassword, String serial) throws IOException {
+    private void readDevice(String ip, int port, int password, String serial, String protocol, boolean testOnly,
+                            ZoneId zone, ZkReader.Records destination) throws Exception {
+        postFeedback("جارٍ الاتصال عبر " + protocol + " بـ " + ip + ":" + port + "…");
+        try (ZkReader reader = connect(ip, port, protocol)) {
+            reader.start(password, serial);
+            if (testOnly) {
+                postFeedback("نجح الاتصال عبر " + protocol + " وتطابق رقم الجهاز " + serial + ".");
+                return;
+            }
+            postFeedback("نجح الاتصال عبر " + protocol + ". جارٍ قراءة الحركات…");
+            reader.readAttendance(zone, destination);
+        } catch (java.net.SocketTimeoutException | java.net.ConnectException | java.net.NoRouteToHostException failure) {
+            throw new IOException("تعذر الوصول إلى " + ip + ":" + port + " عبر " + protocol + ". تحقق من شبكة الهاتف وعنوان الجهاز والمنفذ.", failure);
+        } catch (ZkReader.DeviceException failure) {
+            throw new IOException(failure.getMessage() + " (" + protocol + ")", failure);
+        }
+    }
+
+    private ZkReader connect(String ip, int devicePort, String protocol) throws IOException {
         Network wifi = network(false);
         InetSocketAddress endpoint = new InetSocketAddress(ip, devicePort);
-        Socket socket = wifi == null ? new Socket() : wifi.getSocketFactory().createSocket();
-        try {
-            socket.connect(endpoint, 3500);
-            ZkReader reader = new ZkReader(socket);
-            reader.start(devicePassword, serial);
-            return reader;
-        } catch (IOException failure) {
-            socket.close();
-            if (failure instanceof ZkReader.DeviceIdentityException) throw failure;
+        if ("TCP".equals(protocol)) {
+            Socket socket = wifi == null ? new Socket() : wifi.getSocketFactory().createSocket();
+            try {
+                socket.connect(endpoint, 5000);
+                return new ZkReader(socket);
+            } catch (IOException failure) { socket.close(); throw failure; }
         }
-        postFeedback("تعذر الاتصال عبر TCP. جارٍ تجربة UDP…");
         DatagramSocket datagram = new DatagramSocket();
         try {
             if (wifi != null) wifi.bindSocket(datagram);
-            ZkReader reader = new ZkReader(datagram, endpoint);
-            reader.start(devicePassword, serial);
-            return reader;
-        } catch (IOException failure) {
-            datagram.close();
-            if (failure instanceof ZkReader.DeviceIdentityException || failure instanceof ZkReader.DeviceException) throw failure;
-            throw new IOException("تعذر الوصول إلى جهاز البصمة. تحقق من الشبكة المحلية وعنوان الجهاز والمنفذ " + devicePort + ".", failure);
-        }
+            return new ZkReader(datagram, endpoint);
+        } catch (IOException failure) { datagram.close(); throw failure; }
     }
 
     private void startRetry() { runWork("جارٍ رفع الحركات المحفوظة…", () -> upload(0)); }
@@ -242,8 +270,12 @@ public final class MainActivity extends Activity {
     private void updateNetwork() {
         runOnUiThread(() -> {
             if (isDestroyed()) return;
+            Network internet = network(true);
+            boolean cameOnline = internet != null && !internet.equals(observedInternet);
+            observedInternet = internet;
             networkState.setText((network(false) == null ? "شبكة الجهاز: تحقق من الواي فاي أو نقطة الاتصال" : "شبكة محلية متاحة؛ اختبر اتصال الجهاز")
-                + "\n" + (network(true) == null ? "الإنترنت: غير متاح" : "الإنترنت: متصل"));
+                + "\n" + (internet == null ? "الإنترنت: غير متاح" : "الإنترنت: متصل"));
+            if (foreground && cameOnline && !busy && store.pending().length > 0) startRetry();
         });
     }
     private void postFeedback(String value) { runOnUiThread(() -> { if (!isDestroyed()) feedback.setText(value); }); }
@@ -258,92 +290,54 @@ public final class MainActivity extends Activity {
 
     private void controls(boolean active) {
         busy = active;
-        pair.setEnabled(!active);
-        manualPair.setEnabled(!active);
+        importSettings.setEnabled(!active);
+        testConnection.setEnabled(!active);
         pull.setEnabled(!active);
         retry.setEnabled(!active && store.pending().length > 0);
         progress.setVisibility(active ? View.VISIBLE : View.GONE);
     }
 
-    private void scan() {
-        if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[] {Manifest.permission.CAMERA}, CAMERA);
-        } else { startActivityForResult(new Intent(this, ScannerActivity.class), SCAN); }
-    }
-
-    @Override public void onRequestPermissionsResult(int id, String[] permissions, int[] grants) {
-        super.onRequestPermissionsResult(id, permissions, grants);
-        if (id == CAMERA && grants.length > 0 && grants[0] == PackageManager.PERMISSION_GRANTED) scan();
-        else if (id == CAMERA) feedback.setText("فَعّل إذن الكاميرا لمسح رمز الربط.");
+    private void chooseConfiguration() {
+        Intent select = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*");
+        try { startActivityForResult(select, IMPORT_SETTINGS); }
+        catch (android.content.ActivityNotFoundException failure) { feedback.setText("تعذر فتح مدير الملفات في الهاتف."); }
     }
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
-        if (request != SCAN || result != RESULT_OK || data == null) return;
-        if (data.getBooleanExtra("manual", false)) {
-            enterPairingManually();
-            return;
-        }
-        String qr = data.getStringExtra("qr");
-        if (qr != null) promptUnlock(qr);
-    }
-
-    private void enterPairingManually() {
-        EditText payload = new EditText(this);
-        payload.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-        payload.setTextDirection(View.TEXT_DIRECTION_LTR);
-        payload.setMaxLines(4);
-        payload.setHint("ZKT1.…");
-        payload.setFilters(new android.text.InputFilter[] {new android.text.InputFilter.LengthFilter(4096)});
-        new AlertDialog.Builder(this).setTitle("الصق رمز الربط من صفحة النظام").setView(payload)
-            .setNegativeButton("إلغاء", null).setPositiveButton("متابعة", (dialog, which) -> {
-                String qr = payload.getText().toString().trim();
-                if (qr.startsWith("ZKT1.")) promptUnlock(qr);
-                else feedback.setText("انسخ رمز الربط المشفّر من صفحة النظام ثم الصقه هنا.");
-            }).show();
-    }
-
-    private void promptUnlock(String qr) {
-        EditText code = new EditText(this);
-        code.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
-        code.setHint("12 رقمًا");
-        code.setFilters(new android.text.InputFilter[] {new android.text.InputFilter.LengthFilter(12)});
-        new AlertDialog.Builder(this).setTitle("أدخل رمز الفتح الظاهر في النظام").setView(code)
-            .setNegativeButton("إلغاء", null).setPositiveButton("فتح", (dialog, which) -> unlock(qr, code.getText().toString())).show();
-    }
-
-    private void unlock(String qr, String code) {
+        if (request != IMPORT_SETTINGS || result != RESULT_OK || data == null || data.getData() == null) return;
         worker.execute(() -> {
-            try {
-                JSONObject scanned = Pairing.open(qr, code);
-                String origin = scanned.getString("server_url"), serial = scanned.getString("serial");
+            try (InputStream source = getContentResolver().openInputStream(data.getData())) {
+                JSONObject imported = AgentConfiguration.read(source);
+                String origin = imported.getString("server_url"), serial = imported.getString("serial");
                 runOnUiThread(() -> {
                     if (isDestroyed()) return;
-                    new AlertDialog.Builder(this).setTitle("تأكيد ربط الجهاز")
+                    new AlertDialog.Builder(this).setTitle("تأكيد إعداد الوكيل")
                         .setMessage("تحقق من عنوان نظامك قبل إرسال الحركات.\n" + origin + "\nالجهاز " + serial)
-                        .setNegativeButton("إلغاء", null).setPositiveButton("ربط", (dialog, which) -> {
+                        .setNegativeButton("إلغاء", null).setPositiveButton("حفظ الإعداد", (dialog, which) -> {
                             try {
-                                store.configure(scanned);
-                                settings = scanned;
+                                store.configure(imported);
+                                settings = imported;
                                 showConfiguration();
                                 controls(false);
-                                feedback.setText("تم ربط الجهاز. اتصل بشبكته ثم اضغط فحص الاتصال وسحب الحركات الآن.");
+                                feedback.setText("تم حفظ الإعداد. اتصل بشبكة الجهاز واضغط «اختبار اتصال الجهاز».");
                             }
-                            catch (Exception failure) { feedback.setText("تعذر حفظ الربط على الهاتف."); }
+                            catch (Exception failure) { feedback.setText("تعذر حفظ إعداد الوكيل على الهاتف."); }
                         }).show();
                 });
-            } catch (Exception failure) { postFeedback("تعذر فتح رمز الربط. تحقق من رمز الفتح ومدة صلاحيته."); }
+            } catch (Exception failure) { postFeedback("تعذر استيراد الملف. اختر ملف إعداد الوكيل الذي نزّلته من النظام."); }
         });
     }
 
     private void showConfiguration() throws Exception {
         if (settings == null) return;
-        pairingState.setText("الجهاز المرتبط " + settings.getString("serial") + "\n" + settings.getString("server_url"));
+        configurationState.setText("الجهاز الحالي " + settings.getString("serial") + "\n" + settings.getString("server_url"));
         address.setText(settings.getString("device_ip"));
         port.setText(Integer.toString(settings.optInt("device_port", 4370)));
         int devicePass = settings.optInt("device_password", 0);
         password.setText(devicePass == 0 ? "" : Integer.toString(devicePass));
         utc.setChecked(settings.optBoolean("utc", false));
+        transport.setSelection("tcp".equals(settings.optString("transport")) ? 1 : "udp".equals(settings.optString("transport")) ? 2 : 0);
     }
 
     private TextView addText(String value, int size) {
@@ -375,6 +369,8 @@ public final class MainActivity extends Activity {
         return button;
     }
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
+    @Override protected void onStart() { super.onStart(); foreground = true; observedInternet = null; updateNetwork(); }
+    @Override protected void onStop() { foreground = false; super.onStop(); }
     @Override protected void onDestroy() {
         connectivity.unregisterNetworkCallback(networkCallback);
         worker.shutdown();

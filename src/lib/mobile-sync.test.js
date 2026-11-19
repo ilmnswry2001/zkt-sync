@@ -1,48 +1,35 @@
 import { test, expect, mock } from "bun:test";
-import { createHmac, webcrypto } from "node:crypto";
-import { encryptMobilePairing } from "./mobile-sync";
+import { createHmac } from "node:crypto";
+import { mobileAgentFile } from "./mobile-sync";
 
 const device = "00000000-0000-4000-8000-000000000002";
 const batch = "00000000-0000-4000-8000-000000000003";
 const key = `zkm_${"a".repeat(64)}`;
 const instant = "2026-11-19T07:15:00+03:00";
 
-test("pairing QR encrypts credentials and needs the separate unlock code", async () => {
+test("the Android agent file contains the scoped configuration for the HTTPS endpoint", () => {
   const payload = {
-    server_url: "https://erp.example.test",
     device_id: device,
     operator_id: batch,
     serial: "TEST-001",
     device_ip: "192.168.1.201",
     sync_key: key,
-    pair_until: Date.now() + 300_000,
   };
-  const { qr, code } = await encryptMobilePairing(payload);
-  const [format, salt64, iv64, data64] = qr.split(".");
-  expect(format).toBe("ZKT1");
-  expect(code).toMatch(/^\d{12}$/);
-  expect(qr).not.toContain(payload.sync_key);
-  const params = { name: "AES-GCM", iv: Buffer.from(iv64, "base64url") };
-  async function decrypt(pin) {
-    const root = await webcrypto.subtle.importKey("raw", Buffer.from(pin), "PBKDF2", false, [
-      "deriveKey",
-    ]);
-    const secret = await webcrypto.subtle.deriveKey(
-      {
-        name: "PBKDF2",
-        hash: "SHA-256",
-        salt: Buffer.from(salt64, "base64url"),
-        iterations: 150_000,
-      },
-      root,
-      { name: "AES-GCM", length: 256 },
-      false,
-      ["decrypt"],
-    );
-    return webcrypto.subtle.decrypt(params, secret, Buffer.from(data64, "base64url"));
-  }
-  expect(JSON.parse(new TextDecoder().decode(await decrypt(code)))).toEqual(payload);
-  await expect(decrypt(code === "000000000000" ? "000000000001" : "000000000000")).rejects.toThrow();
+  expect(JSON.parse(mobileAgentFile(payload, "https://erp.example.test"))).toEqual({
+    format: "zkteco-mobile-agent-v1",
+    sync_url: "https://erp.example.test/api/public/zk-sync",
+    device_id: device,
+    operator_id: batch,
+    serial: "TEST-001",
+    device_ip: "192.168.1.201",
+    device_key: key,
+    device_port: 4370,
+    device_password: 0,
+    transport: "auto",
+    time_zone: "Asia/Baghdad",
+  });
+  expect(() => mobileAgentFile(payload, "http://erp.example.test")).toThrow();
+  expect(() => mobileAgentFile(payload, "https://name@erp.example.test")).toThrow();
 });
 
 test("the actual public POST handler enforces signatures and routes mobile batches to the scoped RPC", async () => {

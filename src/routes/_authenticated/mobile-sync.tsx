@@ -1,8 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Download, QrCode, Smartphone } from "lucide-react";
-import { QRCodeSVG } from "qrcode.react";
+import { Download, FileDown, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,7 +25,7 @@ import {
 } from "@/components/ui/table";
 import { useAuth } from "@/hooks/use-auth";
 import { formatErrorMessage } from "@/lib/error-message";
-import { encryptMobilePairing, mobileApk, mobileOperators, mobileVersion } from "@/lib/mobile-sync";
+import { mobileAgentFile, mobileApk, mobileOperators, mobileVersion } from "@/lib/mobile-sync";
 import {
   configureMobileSync,
   listMobileSyncDevices,
@@ -63,7 +62,7 @@ function MobileSync() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Smartphone className="size-5" /> تطبيق أندرويد الميداني
+              <Smartphone className="size-5" /> وكيل البصمة لأندرويد
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -73,16 +72,15 @@ function MobileSync() {
               </a>
             </Button>
             <ol className="list-decimal space-y-2 ps-5 text-sm leading-6 text-muted-foreground">
-              <li>اتصل بشبكة الواي فاي أو نقطة الاتصال التي يتصل بها جهاز البصمة.</li>
-              <li>امسح رمز الربط في التطبيق وأدخل رمز الفتح الظاهر في صفحة الربط.</li>
+              <li>ثبّت الوكيل واستورد ملف إعداد الجهاز الذي ينزّله مدير النظام.</li>
+              <li>اتصل بشبكة جهاز البصمة واضغط «اختبار اتصال الجهاز».</li>
               <li>
-                اضغط «فحص الاتصال وسحب الحركات الآن». تُحفظ الحركات في الهاتف إلى أن تتوفر تغطية
-                إنترنت للرفع.
+                اضغط «سحب الحركات الآن». يحفظ الوكيل الحركات محليًا ويرفعها عند توفر الإنترنت.
               </li>
             </ol>
           </CardContent>
         </Card>
-        {isAdmin && <PairDevice key={user?.id} />}
+        {isAdmin && <AgentSettings key={user?.id} />}
       </div>
       <Card>
         <CardHeader>
@@ -140,55 +138,43 @@ function MobileSync() {
   );
 }
 
-function PairDevice() {
+function AgentSettings() {
   const [search, setSearch] = useState("");
   const [term, setTerm] = useState("");
   const [device, setDevice] = useState("");
   const [email, setEmail] = useState("");
-  const [pairing, setPairing] = useState<{ qr: string; code: string; until: number } | null>(null);
   useEffect(() => {
     const timer = setTimeout(() => setTerm(search.trim()), 250);
     return () => clearTimeout(timer);
   }, [search]);
-  useEffect(() => {
-    if (!pairing) return;
-    const timer = setTimeout(() => setPairing(null), Math.max(0, pairing.until - Date.now()));
-    return () => clearTimeout(timer);
-  }, [pairing]);
   const devices = useQuery({
     queryKey: ["mobile-sync-devices", term],
     queryFn: ({ signal }) => listMobileSyncDevices({ signal, data: { search: term } }),
   });
   const configure = useMutation({
-    mutationFn: async (action: "pair" | "revoke") => {
-      if (action === "pair" && (window.location.protocol !== "https:" || !crypto.subtle))
-        throw new Error("افتح النظام عبر HTTPS لإنشاء رمز الربط");
+    mutationFn: async (action: "provision" | "revoke") => {
+      if (action === "provision" && window.location.protocol !== "https:")
+        throw new Error("افتح النظام عبر HTTPS لتنزيل ملف الوكيل");
       const result = await configureMobileSync({
         data: { action, device_id: device, operator_email: email.trim() || undefined },
       });
-      if (!result) return null;
-      const until = Date.now() + 5 * 60_000;
-      return {
-        ...(await encryptMobilePairing({
-          ...result,
-          server_url: window.location.origin,
-          pair_until: until,
-        })),
-        until,
-      };
+      if (!result) return toast.success("أُلغي تصريح الوكيل للحساب والجهاز المحددين");
+      const file = mobileAgentFile(result, window.location.origin);
+      const url = URL.createObjectURL(new Blob([file], { type: "application/json" }));
+      const download = document.createElement("a");
+      download.href = url;
+      download.download = "zkteco-mobile-agent.json";
+      download.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
     },
-    onSuccess: (result) => {
-      setPairing(result);
-      if (!result) toast.success("أُلغي ربط الهاتف بالحساب والجهاز المحددين");
-    },
-    onError: (error) => toast.error(formatErrorMessage(error, "تعذر تحديث ربط الهاتف")),
+    onError: (error) => toast.error(formatErrorMessage(error, "تعذر تحديث إعداد الوكيل")),
   });
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <QrCode className="size-5" /> ربط الجهاز بالمشرف
+          <FileDown className="size-5" /> إعداد وكيل الهاتف
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -201,7 +187,6 @@ function PairDevice() {
             onChange={(event) => {
               setSearch(event.target.value);
               setDevice("");
-              setPairing(null);
             }}
             disabled={configure.isPending}
           />
@@ -210,7 +195,6 @@ function PairDevice() {
             value={device}
             onValueChange={(value) => {
               setDevice(value);
-              setPairing(null);
             }}
             disabled={configure.isPending || !devices.data?.length}
           >
@@ -251,70 +235,27 @@ function PairDevice() {
             disabled={configure.isPending}
             onChange={(event) => {
               setEmail(event.target.value);
-              setPairing(null);
             }}
           />
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
             disabled={!device || configure.isPending}
-            onClick={() => configure.mutate("pair")}
+            onClick={() => configure.mutate("provision")}
           >
-            إنشاء رمز الربط
+            تنزيل ملف إعداد الوكيل
           </Button>
           <Button
             variant="outline"
             disabled={!device || configure.isPending}
             onClick={() => configure.mutate("revoke")}
           >
-            إلغاء ربط الحساب بهذا الجهاز
+            إلغاء تصريح الوكيل لهذا الجهاز
           </Button>
         </div>
-        {pairing && (
-          <div className="grid justify-items-center gap-3 rounded-lg border p-4 text-center">
-            <QRCodeSVG
-              value={pairing.qr}
-              level="M"
-              marginSize={4}
-              size={336}
-              className="h-auto max-w-full"
-              title="رمز ربط الجهاز بالهاتف"
-            />
-            <p className="text-sm">
-              رمز الفتح <bdi className="font-mono text-lg font-semibold">{pairing.code}</bdi>
-            </p>
-            <p className="text-sm text-muted-foreground">
-              امسح الرمز وأدخل رمز الفتح خلال خمس دقائق. ربط الهاتف صالح لمدة 30 يومًا.
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(pairing.qr);
-                  toast.success("تم نسخ الرمز المشفّر. الصقه في الإدخال اليدوي بالتطبيق.");
-                } catch {
-                  toast.error("تعذر نسخ الرمز تلقائيًا. حدّد النص وانسخه من حقل رمز الربط.");
-                }
-              }}
-            >
-              نسخ رمز الربط المشفّر
-            </Button>
-            <details className="w-full text-start text-sm">
-              <summary className="cursor-pointer text-muted-foreground">
-                عرض رمز الربط النصي
-              </summary>
-              <Input
-                className="mt-2 font-mono"
-                readOnly
-                dir="ltr"
-                aria-label="رمز الربط المشفّر"
-                value={pairing.qr}
-                onFocus={(event) => event.currentTarget.select()}
-              />
-            </details>
-          </div>
-        )}
+        <p className="text-sm text-muted-foreground">
+          يتضمن الملف تصريحًا خاصًا بالحساب والجهاز صالحًا لمدة 30 يومًا. سلّمه للمشرف المعني فقط.
+        </p>
       </CardContent>
     </Card>
   );

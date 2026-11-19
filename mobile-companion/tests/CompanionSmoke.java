@@ -1,8 +1,6 @@
 package iq.erp.zktcompanion;
 
-import com.google.zxing.BarcodeFormat;
-import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
-import com.google.zxing.qrcode.QRCodeWriter;
+import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -23,42 +21,28 @@ import org.json.JSONObject;
 public final class CompanionSmoke {
     public static void main(String[] args) throws Exception {
         JSONObject fixture = new JSONObject(new String(Files.readAllBytes(Paths.get(args[0])), java.nio.charset.StandardCharsets.UTF_8));
-        verifyPairing(fixture);
+        verifyConfiguration(fixture);
         verifyTcp();
         verifyUdp();
-        System.out.println("QR decoding, Java/TypeScript encryption compatibility, HMAC, TCP and UDP passed");
+        System.out.println("Agent file import, HMAC, TCP and UDP passed");
     }
 
-    private static void verifyPairing(JSONObject fixture) throws Exception {
-        String qr = fixture.getString("qr"), code = fixture.getString("code");
-        String decoded = scanFrame(qr, 480, false, false);
-        check(qr.equals(decoded), "Normal preview frame not decoded");
-        check(qr.equals(scanFrame(qr, 60, true, false)), "Rotated off-center preview frame not decoded");
-        check(qr.equals(scanFrame(qr, 480, true, true)), "Inverted rotated preview frame not decoded");
-        check(scanFrame("https://example.test/other-qr", 480, false, false) == null, "Unrelated QR accepted");
-        check(PairingQrReader.read(new byte[15], 1280, 720) == null, "Incomplete camera frame accepted");
-        check(Pairing.open(decoded, code).getString("serial").equals("TEST-001"), "Could not decode pairing");
+    private static void verifyConfiguration(JSONObject fixture) throws Exception {
+        String file = fixture.getString("file");
+        JSONObject imported = readConfig("\uFEFF" + file);
+        check(imported.getString("serial").equals("TEST-001"), "Could not import agent configuration");
+        check(imported.getInt("device_port") == 4370 && imported.getString("transport").equals("auto"), "Incorrect agent defaults");
+        check(imported.getString("server_url").equals("https://erp.example.test"), "Incorrect upload destination");
         try {
-            Pairing.open(decoded, code.equals("000000000000") ? "000000000001" : "000000000000");
-            throw new AssertionError("Incorrect unlock code accepted");
-        } catch (javax.crypto.AEADBadTagException expected) { /* Expected authenticated decryption failure. */ }
-        check(SyncClient.signature(fixture.getString("key"), fixture.getString("timestamp"), fixture.getString("body"))
+            readConfig(file.replace("https://", "http://"));
+            throw new AssertionError("Insecure upload destination accepted");
+        } catch (java.io.IOException expected) { /* Invalid configuration. */ }
+        check(SyncClient.signature(imported.getString("sync_key"), fixture.getString("timestamp"), fixture.getString("body"))
             .equals(fixture.getString("signature")), "Request signature mismatch");
     }
 
-    private static String scanFrame(String text, int left, boolean rotate, boolean invert) throws Exception {
-        final int width = 1280, height = 720, side = 336, top = 180;
-        com.google.zxing.common.BitMatrix matrix = new QRCodeWriter().encode(text, BarcodeFormat.QR_CODE,
-            side, side, java.util.Collections.singletonMap(com.google.zxing.EncodeHintType.ERROR_CORRECTION, ErrorCorrectionLevel.M));
-        byte[] luma = new byte[width * height];
-        Arrays.fill(luma, (byte) (invert ? 25 : 210));
-        for (int y = 0; y < side; y++) {
-            for (int x = 0; x < side; x++) {
-                boolean dark = rotate ? matrix.get(y, side - 1 - x) : matrix.get(x, y);
-                luma[(top + y) * width + left + x] = (byte) ((dark ^ invert) ? 25 : 210);
-            }
-        }
-        return PairingQrReader.read(luma, width, height);
+    private static JSONObject readConfig(String file) throws Exception {
+        return AgentConfiguration.read(new ByteArrayInputStream(file.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
     }
 
     private static void verifyTcp() throws Exception {

@@ -38,7 +38,7 @@ export const listMobileSyncDevices = createServerFn({ method: "GET" })
 
 export const configureMobileSync = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(binding.extend({ action: z.enum(["pair", "revoke"]) }))
+  .inputValidator(binding.extend({ action: z.enum(["provision", "revoke"]) }))
   .handler(async ({ context, data }) => {
     const { data: isAdmin, error: permissionError } = await context.supabase.rpc("is_admin", {
       _user_id: context.userId,

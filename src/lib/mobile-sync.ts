@@ -3,7 +3,7 @@ import { z } from "zod";
 export const mobileOperators = ["admin", "hr", "supervisor", "site_admin"] as const;
 export const mobileKeyPrefix = "zkm_";
 export const mobileApk = "/downloads/ZKTeco-Mobile-Companion.apk";
-export const mobileVersion = "1.0.1";
+export const mobileVersion = "1.1.0";
 
 export function isLanDeviceIp(ip: string) {
   if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) return false;
@@ -38,15 +38,36 @@ export const mobileBatch = z
   })
   .strict();
 
-export type MobilePairing = {
-  server_url: string;
+type MobileCredential = {
   device_id: string;
   operator_id: string;
   serial: string;
   device_ip: string;
   sync_key: string;
-  pair_until: number;
 };
+
+export function mobileAgentFile(credential: MobileCredential, origin: string) {
+  const url = new URL(origin);
+  if (url.protocol !== "https:" || url.origin !== origin)
+    throw new Error("افتح النظام عبر HTTPS لتنزيل ملف الوكيل");
+  return JSON.stringify(
+    {
+      format: "zkteco-mobile-agent-v1",
+      sync_url: `${url.origin}/api/public/zk-sync`,
+      device_id: credential.device_id,
+      operator_id: credential.operator_id,
+      device_ip: credential.device_ip,
+      serial: credential.serial,
+      device_key: credential.sync_key,
+      device_port: 4370,
+      device_password: 0,
+      transport: "auto",
+      time_zone: "Asia/Baghdad",
+    },
+    null,
+    2,
+  );
+}
 
 export const toHex = (bytes: Uint8Array) =>
   Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -54,34 +75,4 @@ export async function syncDigest(value: string) {
   return toHex(
     new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))),
   );
-}
-
-export async function encryptMobilePairing(pairing: MobilePairing) {
-  const code = Array.from(crypto.getRandomValues(new Uint32Array(3)), (value) =>
-    String(value % 10_000).padStart(4, "0"),
-  ).join("");
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const encoder = new TextEncoder();
-  const pin = await crypto.subtle.importKey("raw", encoder.encode(code), "PBKDF2", false, [
-    "deriveKey",
-  ]);
-  const cipher = await crypto.subtle.deriveKey(
-    { name: "PBKDF2", hash: "SHA-256", salt, iterations: 150_000 },
-    pin,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["encrypt"],
-  );
-  const bytes = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
-    cipher,
-    encoder.encode(JSON.stringify(pairing)),
-  );
-  const encode = (value: Uint8Array) =>
-    btoa(String.fromCharCode(...value))
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, "");
-  return { code, qr: ["ZKT1", encode(salt), encode(iv), encode(new Uint8Array(bytes))].join(".") };
 }

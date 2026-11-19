@@ -11,10 +11,10 @@ import javax.net.ssl.HttpsURLConnection;
 import org.json.JSONObject;
 
 final class SyncClient {
-    static void send(Network internet, JSONObject pairing, String body, int count) throws Exception {
+    static void send(Network internet, JSONObject settings, String body, int count) throws Exception {
         String timestamp = Long.toString(System.currentTimeMillis());
-        String secret = pairing.getString("sync_key");
-        URL url = new URL(pairing.getString("server_url") + "/api/public/zk-sync");
+        String secret = settings.getString("sync_key");
+        URL url = new URL(settings.getString("server_url") + "/api/public/zk-sync");
         HttpsURLConnection request = (HttpsURLConnection) internet.openConnection(url);
         try {
             request.setConnectTimeout(12000);
@@ -30,8 +30,8 @@ final class SyncClient {
             request.setFixedLengthStreamingMode(bytes.length);
             try (java.io.OutputStream stream = request.getOutputStream()) { stream.write(bytes); }
             int status = request.getResponseCode();
-            if (status == 401) throw new IOException("انتهى تصريح الهاتف أو أُلغي. أعد ربط الجهاز وتحقق من ضبط ساعة الهاتف.");
-            if (status == 409) throw new IOException("تعارضت هوية الدفعة. راجع ربط الجهاز بالمشرف الذي بدأ السحب.");
+            if (status == 401) throw new IOException("تعذر اعتماد الوكيل. استورد ملف إعداد حديثًا وتحقق من ضبط ساعة الهاتف.");
+            if (status == 409) throw new IOException("تعارضت هوية الدفعة. استعمل ملف الجهاز والمشرف اللذين بدأا السحب.");
             if (status != 200) throw new IOException("تعذر رفع الدفعة. الحركات محفوظة في الهاتف. (" + status + ")");
             JSONObject result;
             try (java.io.InputStream input = request.getInputStream()) {
