@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 const { PGlite } = await import(process.env.PGLITE_MODULE ?? "@electric-sql/pglite");
 const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
-test("employee archive paginates and enforces ownership, attachment paths and storage policies", async (t) => {
+test("employee archive and branding enforce storage and settings access", async (t) => {
   const db = new PGlite();
   t.after(() => db.close());
   await db.exec(`
@@ -27,24 +27,34 @@ test("employee archive paginates and enforces ownership, attachment paths and st
     create function public.set_updated_at() returns trigger language plpgsql as $$ begin new.updated_at := now(); return new; end $$;
     create table public.departments(id uuid primary key, name text);
     create table public.employees(id uuid primary key, full_name text, employee_no text, position text, department_id uuid);
+    create table public.user_roles(user_id uuid not null, role text not null);
+    alter table public.user_roles enable row level security;
+    grant select on public.user_roles to authenticated;
+    create policy own_roles on public.user_roles for select to authenticated using (user_id = auth.uid());
     create table storage.buckets(id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
-    create table storage.objects(bucket_id text, name text, primary key (bucket_id, name));
+    create table storage.objects(bucket_id text, name text, owner_id text, primary key (bucket_id, name));
     alter table storage.objects enable row level security;
     grant select on public.departments, public.employees to authenticated;
     grant select, insert, update, delete on storage.objects to authenticated, anon;
     create policy broad_storage_test on storage.objects for all using (true) with check (true);
-    insert into auth.users values ('${id(1)}'), ('${id(2)}'), ('${id(3)}'), ('${id(4)}');
+    insert into auth.users values ('${id(1)}'), ('${id(2)}'), ('${id(3)}'), ('${id(4)}'), ('${id(5)}'), ('${id(6)}'), ('${id(7)}');
+    insert into public.user_roles values ('${id(4)}', 'hr'), ('${id(5)}', 'data_entry');
     insert into departments values ('${id(100)}', 'الموارد البشرية');
     insert into employees values
       ('${id(12)}', 'حسين علي جوري', '0012', 'عامل', '${id(100)}'),
       ('${id(13)}', 'موظف آخر', '0013', null, null);
   `);
-  await db.exec(
-    await readFile(
-      new URL("../migrations/20261119140000_employee_documents_archive.sql", import.meta.url),
-      "utf8",
-    ),
-  );
+  for (const migration of [
+    "20261114150000_electronic_forms.sql",
+    "20261119140000_employee_documents_archive.sql",
+    "20261119150000_fix_security_storage_and_site_settings.sql",
+  ]) {
+    await db.exec(await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8"));
+  }
+  await db.exec(`
+    update public.site_settings set company_name_ar = 'شركة تجريبية';
+    insert into public.form_links(template_id, token) select id, 'test-token' from public.form_templates;
+  `);
   await db.exec("set role authenticated");
   const actor = (n) => db.query("select set_config('test.archive_actor', $1, false)", [id(n)]);
   const list = async (search = "", page = 0, type = null) =>
@@ -70,7 +80,7 @@ test("employee archive paginates and enforces ownership, attachment paths and st
     db.query("insert into storage.objects values ('employee-documents','unlinked')"),
     { code: "42501" },
   );
-  await db.query("insert into storage.objects values ('employee-documents',$1)", [path]);
+  await db.query("insert into storage.objects values ('employee-documents',$1,$2)", [path, id(6)]);
   await db.query("update storage.objects set name = 'changed' where name = $1", [path]);
   assert.deepEqual((await db.query("select name from storage.objects")).rows, [{ name: path }]);
   assert.equal((await list()).totalCount, 22);
@@ -93,10 +103,48 @@ test("employee archive paginates and enforces ownership, attachment paths and st
   await actor(3);
   assert.equal((await list("حسين")).totalCount, 0);
   assert.equal((await db.query("select name from storage.objects")).rows.length, 0);
+  const branding = async () =>
+    (await db.query("select company_name_ar from public.site_settings")).rows;
+  const expectedBranding = [{ company_name_ar: "شركة تجريبية" }];
+  await actor(7);
+  assert.deepEqual(await branding(), []);
+  assert.deepEqual(
+    (await db.query("select name from storage.objects where name = $1", [path])).rows,
+    [],
+  );
+  await actor(5);
+  assert.deepEqual(await branding(), expectedBranding);
+  assert.deepEqual((await db.query("select name from storage.objects")).rows, []);
+  await actor(6);
+  assert.deepEqual(await branding(), []);
+  assert.deepEqual((await db.query("select name from storage.objects")).rows, [{ name: path }]);
+  await actor(2);
+  assert.deepEqual(await branding(), expectedBranding);
+  await actor(1);
+  assert.deepEqual(await branding(), expectedBranding);
+  await db.exec(
+    "reset role; insert into storage.objects values ('other-test-bucket', 'unrelated', null); set role authenticated",
+  );
+  await actor(7);
+  assert.deepEqual((await db.query("select name from storage.objects")).rows, [
+    { name: "unrelated" },
+  ]);
+  await db.exec("reset role; delete from storage.objects where bucket_id = 'other-test-bucket'");
   await db.exec("reset role; set role anon");
   assert.equal((await db.query("select name from storage.objects")).rows.length, 0);
+  await assert.rejects(branding(), { code: "42501" });
+  const publicForm = await db.query("select public.get_public_form('test-token') as form");
+  assert.equal(
+    publicForm.rows[0].form.branding.company_name_ar,
+    expectedBranding[0].company_name_ar,
+  );
+  assert.equal(
+    (await db.query("select public.get_public_form('missing-token') as form")).rows[0].form,
+    null,
+  );
   await db.exec("reset role; set role authenticated");
   await actor(4);
+  assert.deepEqual((await db.query("select name from storage.objects")).rows, [{ name: path }]);
   await db.query("delete from storage.objects where name = $1", [path]);
   await db.query("delete from employee_documents where id = $1", [id(20)]);
   assert.equal((await list()).totalCount, 21);
