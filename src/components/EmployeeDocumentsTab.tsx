@@ -257,10 +257,12 @@ function EmployeeDocumentRepository({
       id,
       title,
       download,
+      previewTab,
     }: {
       id: string;
       title: string;
       download: boolean;
+      previewTab?: Window | null;
     }) => {
       const link = await sign({ data: { id, download } });
       if (download) {
@@ -269,12 +271,29 @@ function EmployeeDocumentRepository({
         linkElement.download = link.fileName ?? "document";
         linkElement.rel = "noopener noreferrer";
         linkElement.click();
-      } else {
-        setPreview({ ...link, title });
+        return;
       }
+      if (previewTab && !previewTab.closed) {
+        try {
+          previewTab.location.replace(link.url);
+          return;
+        } catch {
+          // The browser may disallow navigating the tab after it was opened.
+        }
+      }
+      setPreview({ ...link, title });
     },
-    onError: (error) => toast.error(formatErrorMessage(error, "تعذر فتح المرفق")),
+    onError: (error, { previewTab }) => {
+      previewTab?.close();
+      toast.error(formatErrorMessage(error, "تعذر فتح المرفق"));
+    },
   });
+  const openPreview = (id: string, title: string) => {
+    // Open during the click so navigation can follow the authenticated request.
+    const previewTab = window.open("about:blank", "_blank");
+    if (previewTab) previewTab.opener = null;
+    accessFile.mutate({ id, title, download: false, previewTab });
+  };
   const stats = records.data?.stats;
   const rows = records.data?.rows ?? [];
   const total = records.data?.totalCount ?? 0;
@@ -492,13 +511,7 @@ function EmployeeDocumentRepository({
                                 size="sm"
                                 variant="outline"
                                 disabled={accessFile.isPending}
-                                onClick={() =>
-                                  accessFile.mutate({
-                                    id: row.id,
-                                    title: row.title,
-                                    download: false,
-                                  })
-                                }
+                                onClick={() => openPreview(row.id, row.title)}
                               >
                                 <Eye className="h-4 w-4" /> معاينة
                               </Button>
@@ -590,20 +603,16 @@ function EmployeeDocumentRepository({
           if (!open) setPreview(null);
         }}
       >
-        <DialogContent dir="rtl" className="max-h-[90dvh] max-w-4xl overflow-y-auto">
+        <DialogContent dir="rtl">
           <DialogHeader>
             <DialogTitle>{preview?.title}</DialogTitle>
             <DialogDescription>{preview?.fileName}</DialogDescription>
           </DialogHeader>
           {preview && (
             <>
-              <iframe
-                className="h-[65dvh] w-full rounded-lg border"
-                sandbox=""
-                src={preview.url}
-                title={preview.title}
-                referrerPolicy="no-referrer"
-              />
+              <p className="text-sm text-muted-foreground">
+                رابط المعاينة جاهز. اضغط لفتح المرفق في المتصفح.
+              </p>
               <Button asChild variant="outline">
                 <a href={preview.url} target="_blank" rel="noopener noreferrer">
                   فتح المرفق في تبويب جديد
