@@ -30,6 +30,7 @@ import {
   calculatePayroll,
   loadAllRows,
   monthDates,
+  payrollAttendancePenalties,
   roundMoney,
   summarizeDays,
   type WeeklyShiftSchedule,
@@ -70,6 +71,7 @@ type Penalty = {
   employee_id: string | null;
   deduction_amount: number;
   penalty_date: string;
+  penalty_type: string;
   notes: string | null;
 };
 type AttendanceLog = { employee_no: string; verify_time: string; status: number | null; source: string | null; self_event_type: string | null };
@@ -174,7 +176,7 @@ async function readPayroll(month: string, includeAssets = true) {
       loadAllRows((from, to) =>
         supabase
           .from("employee_penalties")
-          .select("id, employee_id, deduction_amount, penalty_date, notes")
+          .select("id, employee_id, deduction_amount, penalty_date, penalty_type, notes")
           .gte("penalty_date", `${month}-01`)
           .lt("penalty_date", nextMonth)
           .order("id")
@@ -336,7 +338,11 @@ function calculatePayrollRows(data: PayrollData | undefined, month: string) {
     const {monthlySalary,dailyRate,overtimeHourlyRate} = wage;
     const additions = (dataByEmployee.additions.get(employee.id) ?? [])
       .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-    const employeePenalties = dataByEmployee.penalties.get(employee.id) ?? [];
+    const employeePenalties = payrollAttendancePenalties(
+      dataByEmployee.penalties.get(employee.id) ?? [],
+      payType,
+      dataByEmployee.overrides.get(employee.id) ?? [],
+    );
     const deductions = employeePenalties
       .reduce((sum, item) => sum + Number(item.deduction_amount || 0), 0);
     const payroll = calculatePayroll({

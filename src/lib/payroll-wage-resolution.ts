@@ -1,4 +1,4 @@
-import { getEmployeePayType, normalizeWageTitle } from "./employee-pay-type.ts";
+import { getEmployeePayType, isDailyPosition, normalizeWageTitle } from "./employee-pay-type.ts";
 import { getDefaultWage } from "./wage-defaults.ts";
 export type PayrollWageRate = {
   id?: string;
@@ -46,7 +46,8 @@ export function resolvePayrollWage(
     (Number(employee.wage_rates.daily_rate) > 0 || Number(employee.wage_rates.monthly_rate) > 0)
       ? employee.wage_rates
       : null;
-  const wage = linked ?? matched;
+  const useSpecialtyDailyRate = isDailyPosition(employee.position) && Number(matched?.daily_rate) > 0;
+  const wage = useSpecialtyDailyRate ? matched : linked ?? matched;
   const fallback = getDefaultWage(employee.position ?? "");
   const payType = getEmployeePayType({ ...employee, wage_rates: wage });
   const base = Number(employee.base_salary) || 0;
@@ -78,7 +79,7 @@ export function resolvePayrollWage(
     source:
       base > 0 && (payType === "monthly" || !(Number(wage?.daily_rate) > 0))
         ? "base"
-        : linked
+        : wage && wage === linked
           ? "linked"
           : matched
             ? "specialty"

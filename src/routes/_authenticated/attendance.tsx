@@ -1,6 +1,7 @@
 import { useProjectExecution } from "@/lib/use-project-execution";
 import { MetricCard, type MetricTone } from "@/components/MetricCard";
 import { formatErrorMessage } from "@/lib/error-message";
+import { clearBiometricApproval } from "@/lib/project-execution-costs";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -49,9 +50,11 @@ import { getDefaultWage } from "@/lib/wage-defaults";
 import { PlanBiometricMatch, type BiometricMatchResults } from "@/components/PlanBiometricMatch";
 
 export const Route = createFileRoute("/_authenticated/attendance")({
-  validateSearch: (search: Record<string,unknown>): {workshop?:string;site?:string} => ({
+  validateSearch: (search: Record<string,unknown>): {workshop?:string;site?:string;date?:string;publish?:boolean} => ({
     workshop: typeof search.workshop==="string" ? search.workshop : undefined,
     site: typeof search.site==="string" ? search.site : undefined,
+    date: typeof search.date === "string" && /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(search.date) ? search.date : undefined,
+    publish: search.publish === true ? true : undefined,
   }),
   head: () => ({ meta: [{ title: "التقارير اليومية" }] }),
   component: AttendancePage,
@@ -119,10 +122,16 @@ const today = todayInBaghdad();
 
 function AttendancePage() {
   const search=Route.useSearch();
-  const [activeTab, setActiveTab] = useState<"attendance" | "sites" | "publish" | "inventory">(search.workshop ? "inventory" : "sites");
-  const [date, setDate] = useState(today);
+  const [activeTab, setActiveTab] = useState<"attendance" | "sites" | "publish" | "inventory">(search.workshop ? "inventory" : search.publish ? "publish" : "sites");
+  const [date, setDate] = useState(search.date ?? today);
   const execution = useProjectExecution(date, activeTab === "publish");
   const [siteId, setSiteId] = useState(search.site ?? "");
+  useEffect(() => {
+    if (!search.publish) return;
+    setActiveTab("publish");
+    if (search.site) setSiteId(search.site);
+    if (search.date) setDate(search.date);
+  }, [search.date, search.publish, search.site]);
   const [notes, setNotes] = useState("");
   const [rows, setRows] = useState<ReportLine[]>([]);
   const [editingReportId, setEditingReportId] = useState<string | null>(null);
@@ -442,7 +451,7 @@ function AttendancePage() {
           id: editingReportId ?? undefined,
           site_id: siteId,
           report_date: date,
-          notes: notes.trim() || null,
+          notes: clearBiometricApproval(notes) || null,
         },
         { onConflict: "site_id,report_date" },
       )
@@ -468,6 +477,7 @@ function AttendancePage() {
     if (linesError) return toast.error(formatErrorMessage(linesError));
     setEditingReportId(header.id);
     await queryClient.invalidateQueries({ queryKey: ["site-daily-reports"] });
+    await queryClient.invalidateQueries({ queryKey: ["projects-dashboard"] });
     toast.success("تم حفظ التقرير بنجاح");
   };
   const editReport = (report: SiteReport) => {

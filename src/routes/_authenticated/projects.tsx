@@ -1,5 +1,9 @@
+import { normalizeWageTitle } from "@/lib/employee-pay-type";
 import { useProjectExecution } from "@/lib/use-project-execution";
 import {
+  approvedBiometricCosts,
+  isBiometricApprovedReport,
+  projectCostVariancePercent,
   verifiedSpecialtyCosts,
   projectDailyRate,
   projectCostCrew,
@@ -54,6 +58,7 @@ type ProjectLine = {
   kind: string;
   item_name: string;
   total_count: number;
+  working_count: number | null;
 };
 type WageRate = { title: string; daily_rate: number; monthly_rate: number; currency: string };
 type PlanSpecialty = { specialty: string; quantity: number };
@@ -158,7 +163,7 @@ function ProjectsPage() {
             ...((await loadAllRows((a, b) =>
               supabase
                 .from("site_daily_report_lines")
-                .select("report_id,kind,item_name,total_count")
+                .select("report_id,kind,item_name,total_count,working_count")
                 .in("report_id", reportIds.slice(offset, offset + 100))
                 .order("id")
                 .range(a, b),
@@ -228,7 +233,10 @@ function ProjectsPage() {
         const siteCrewAssignments = costCrew.filter(
           (person) => person.site_id === project.id && !person.conflicting,
         );
-        const specialtyCosts = verifiedSpecialtyCosts(siteCrewAssignments, data.wages);
+        const biometricApproved = isBiometricApprovedReport(report?.notes);
+        const specialtyCosts = biometricApproved
+          ? approvedBiometricCosts(lines, data.wages)
+          : verifiedSpecialtyCosts(siteCrewAssignments, data.wages);
         const siteDailyCost = specialtyCosts.reduce((sum, item) => sum + item.cost, 0);
         const plan = finalPlanByProject.get(project.id);
         const plannedSpecialties = plan?.final_plan?.specialties?.length
@@ -244,10 +252,10 @@ function ProjectsPage() {
           };
         });
         const actualBySpecialty = new Map(
-          specialtyCosts.map((item) => [item.name.trim().toLocaleLowerCase("ar"), item.count]),
+          specialtyCosts.map((item) => [normalizeWageTitle(item.name), item.count]),
         );
         const plannedCoverage = plannedSpecialtyCosts.map((item) => {
-          const actualCount = actualBySpecialty.get(item.name.trim().toLocaleLowerCase("ar")) ?? 0;
+          const actualCount = actualBySpecialty.get(normalizeWageTitle(item.name)) ?? 0;
           return {
             ...item,
             actualCount,
@@ -258,7 +266,8 @@ function ProjectsPage() {
         return {
           project,
           report,
-          actualAvailable: execution.isSuccess,
+          biometricApproved,
+          actualAvailable: biometricApproved || execution.isSuccess,
           lines,
           workerTotal: specialtyCosts.reduce((sum, item) => sum + item.count, 0),
           reportedWorkerTotal: lines
@@ -314,10 +323,13 @@ function ProjectsPage() {
       sum + card.specialtyCosts.filter((item) => item.count > 0 && !item.hasRate).length,
     0,
   );
-  const comparableProjects = projectCards.filter((card) => card.plan && card.actualAvailable);
+  const comparableProjects = projectCards.filter((card) => card.plan && card.biometricApproved);
   const plannedDailyCost = comparableProjects.reduce((sum, card) => sum + card.plannedDailyCost, 0);
   const comparableDailyCost = comparableProjects.reduce((sum, card) => sum + card.siteDailyCost, 0);
   const dailyCostVariance = comparableDailyCost - plannedDailyCost;
+  const variancePercent = projectCostVariancePercent(comparableDailyCost, plannedDailyCost);
+  const percentLabel = (value: number | null) => value === null ? "" :
+    ` · ${value.toLocaleString("ar-IQ", { maximumFractionDigits: 1, signDisplay: "exceptZero" })}%`;
   const sitesWithFinalPlan = projectCards.filter((card) => card.plan).length;
 
   const refresh = async () => {
@@ -325,17 +337,17 @@ function ProjectsPage() {
     if (results.every((result) => !result.error)) toast.success("تم تحديث لوحة المشاريع");
   };
 
-  if (query.isPending || execution.isPending)
+  if (query.isPending)
     return (
       <p className="p-8 text-muted-foreground">جارٍ ربط البصمات بالتكليفات والخطط والتكاليف...</p>
     );
-  if (query.isError || execution.isError)
+  if (query.isError)
     return (
       <Card>
         <CardContent className="space-y-4 p-6">
           <p className="text-destructive">
             تعذر تحميل بيانات التنفيذ؛ لا يمكن عرض تكلفة موثوقة.{" "}
-            {String((query.error ?? execution.error)?.message ?? "")}
+            {String(query.error?.message ?? "")}
           </p>
           <Button onClick={refresh}>إعادة المحاولة</Button>
         </CardContent>
@@ -422,10 +434,10 @@ function ProjectsPage() {
         <StatCard title="الحاضرون المسندون" value={workerTotal} icon={Users} tone="bg-indigo-600" />
       </div>
       <p className="rounded-lg border border-warning/30 bg-warning/5 p-4 text-xs leading-6">
-        التكلفة المعروضة تخص الحاضرين المسندين من الجرد أو البصمة وفق جدول الأجور الحالي أو الأجر
-        الافتراضي الموضح، ولا تشمل الآليات والمواد. تأخر مزامنة الأجهزة قد يخفض العدد مؤقتاً؛ فرق
-        التكلفة لا يثبت وفراً نهائياً قبل اكتمال الحضور.
+        التكلفة المعتمدة تُحسب من العاملين في التقرير الميداني وفق أجور التخصصات بالدينار العراقي.
+        المواقع بانتظار الاعتماد تعرض تقديراً أولياً عند توفر بيانات الحضور.
       </p>
+      {execution.isError && <p role="alert" className="text-sm text-destructive">تعذر تحميل التقدير المباشر للحضور. التقارير المعتمدة متاحة.</p>}
       <Card className="border-primary/20">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
@@ -433,7 +445,7 @@ function ProjectsPage() {
             {reportDate}
           </CardTitle>
           <p className="text-xs text-muted-foreground">
-            تقارن أحدث خطة معتمدة لا تتجاوز التاريخ المحدد بالحضور المسند للموقع (
+            تقارن أحدث خطة معتمدة لا تتجاوز التاريخ المحدد بالتقارير المعتمدة من البصمة (
             {comparableProjects.length}). تتوفر خطة نهائية لـ {sitesWithFinalPlan} من أصل{" "}
             {projectCards.length} مشاريع.
           </p>
@@ -456,12 +468,12 @@ function ProjectsPage() {
               comparableProjects.length
                 ? dailyCostVariance > 0
                   ? "تجاوز عن الخطة"
-                  : "أقل من الخطة"
+                  : dailyCostVariance < 0 ? "أقل من الخطة" : "مطابق للخطة"
                 : "لا توجد مقارنة متاحة"
             }
             value={
               comparableProjects.length
-                ? `${Math.abs(dailyCostVariance).toLocaleString("ar-IQ")} د.ع`
+                ? `${Math.abs(dailyCostVariance).toLocaleString("ar-IQ")} د.ع${percentLabel(variancePercent)}`
                 : "—"
             }
             icon={dailyCostVariance > 0 ? TriangleAlert : CheckCircle2}
@@ -506,7 +518,7 @@ function ProjectsPage() {
                 </p>
                 <CardTitle className="pt-2 text-lg leading-7">{card.project.name}</CardTitle>
                 <div className="flex flex-wrap gap-2 pt-2">
-                  <Badge variant="outline">حضور مسند: {card.actualWorkerTotal}</Badge>
+                  <Badge variant="outline">{card.biometricApproved ? "معتمد من البصمة" : "بانتظار اعتماد البصمة"}</Badge>
                   <Badge variant="secondary">
                     تقرير الموقع: {card.report ? card.reportedWorkerTotal : "غير مرفوع"}
                   </Badge>
@@ -523,9 +535,9 @@ function ProjectsPage() {
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">تكلفة العمالة الفعلية</p>
+                    <p className="text-xs text-muted-foreground">{card.biometricApproved ? "تكلفة العمالة الفعلية" : "تكلفة العمالة التقديرية"}</p>
                     <p className="mt-2 font-bold text-primary">
-                      {card.siteDailyCost.toLocaleString("ar-IQ")} د.ع
+                      {card.actualAvailable ? `${card.siteDailyCost.toLocaleString("ar-IQ")} د.ع` : "—"}
                     </p>
                   </div>
                 </div>
@@ -534,7 +546,7 @@ function ProjectsPage() {
                     المطلوب: {card.plan ? card.plannedWorkerTotal : "—"} · الحضور المسند:{" "}
                     {card.actualWorkerTotal}
                   </span>
-                  {card.plan && (
+                  {card.plan && card.biometricApproved && (
                     <span
                       className={
                         variance > 0
@@ -545,7 +557,7 @@ function ProjectsPage() {
                       }
                     >
                       {variance > 0 ? "زيادة" : variance < 0 ? "فرق أقل من الخطة" : "مطابق للخطة"}:{" "}
-                      {Math.abs(variance).toLocaleString("ar-IQ")} د.ع
+                      {Math.abs(variance).toLocaleString("ar-IQ")} د.ع{percentLabel(projectCostVariancePercent(card.siteDailyCost, card.plannedDailyCost))}
                     </span>
                   )}
                 </div>
@@ -641,7 +653,7 @@ function ProjectsPage() {
                                   <>
                                     <b>{card.actualWorkerTotal}</b>
                                     <span className="block text-xs text-muted-foreground">
-                                      تقرير الموقع (مرجع):{" "}
+                                      {card.biometricApproved ? "معتمد من البصمة: " : "تقدير أولي · التقرير: "}
                                       {card.report ? card.reportedWorkerTotal : "غير مرفوع"}
                                     </span>
                                     <span className="block text-xs text-muted-foreground">
@@ -681,8 +693,8 @@ function ProjectsPage() {
                               <td
                                 className={`px-4 py-3 text-center font-semibold tabular-nums ${variance > 0 ? "text-destructive" : "text-emerald-700 dark:text-emerald-300"}`}
                               >
-                                {card.plan && card.actualAvailable
-                                  ? `${variance > 0 ? "+" : "−"}${Math.abs(variance).toLocaleString("ar-IQ")} د.ع`
+                                {card.plan && card.biometricApproved
+                                  ? `${variance.toLocaleString("ar-IQ", { signDisplay: "exceptZero" })} د.ع${percentLabel(projectCostVariancePercent(card.siteDailyCost, card.plannedDailyCost))}`
                                   : "—"}
                               </td>
                               <td className="px-4 py-3 text-center">

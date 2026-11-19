@@ -1,4 +1,52 @@
 import { getDefaultWage } from "./wage-defaults.ts";
+import { normalizeWageTitle } from "./employee-pay-type.ts";
+
+const biometricApprovalNote = "تم الاعتماد آلياً من مطابقة البصمة";
+type Wage = { title: string; daily_rate: number; monthly_rate: number; currency: string };
+type SpecialtyCount = { name: string; count: number };
+
+export function isBiometricApprovedReport(notes?: string | null) {
+  return notes?.split("\n").some((line) => line.trim() === biometricApprovalNote) ?? false;
+}
+
+export function clearBiometricApproval(notes: string) {
+  return notes.split("\n").filter((line) => line.trim() !== biometricApprovalNote).join("\n").trim();
+}
+
+function specialtyCosts(entries: SpecialtyCount[], wages: Wage[]) {
+  const counts = new Map<string, SpecialtyCount>();
+  for (const entry of entries) {
+    const key = normalizeWageTitle(entry.name);
+    const item = counts.get(key) ?? { name: entry.name, count: 0 };
+    item.count += entry.count;
+    counts.set(key, item);
+  }
+  return Array.from(counts, ([key, item]) => {
+    const matches = wages.filter((w) => w.currency === "IQD" && normalizeWageTitle(w.title) === key);
+    const wage = matches.find((w) => Number(w.daily_rate) > 0) ??
+      matches.find((w) => Number(w.monthly_rate) > 0);
+    const dailyRate = wage
+      ? Number(wage.daily_rate) > 0 ? Number(wage.daily_rate) : Number(wage.monthly_rate) / 26
+      : getDefaultWage(item.name).daily_rate;
+    return { ...item, dailyRate, cost: item.count * dailyRate, hasRate: !!wage, usedDefault: !wage };
+  });
+}
+
+export function approvedBiometricCosts(
+  lines: { kind: string; item_name: string; working_count: number | null; total_count: number }[],
+  wages: Wage[],
+) {
+  return specialtyCosts(
+    lines.filter((line) => line.kind === "worker_specialty").map((line) => ({
+      name: line.item_name.trim() || "بدون صفة",
+      count: Math.max(0, Number(line.working_count ?? line.total_count) || 0),
+    })),
+    wages,
+  );
+}
+
+export const projectCostVariancePercent = (actual: number, planned: number) =>
+  planned > 0 ? ((actual - planned) / planned) * 100 : null;
 
 type CostAssignment = {
   employee_id: string;
@@ -41,37 +89,21 @@ export function projectCostCrew(verified: CostAssignment[], attendance: Workshop
 }
 export function verifiedSpecialtyCosts(
   crew: { employee_id: string; specialty: string }[],
-  wages: { title: string; daily_rate: number; monthly_rate: number; currency: string }[],
+  wages: Wage[],
 ) {
-  const counts = new Map<string, { name: string; count: number }>();
   const seen = new Set<string>();
+  const entries: SpecialtyCount[] = [];
   for (const person of crew) {
     if (seen.has(person.employee_id)) continue;
     seen.add(person.employee_id);
-    const name = person.specialty.trim() || "بدون صفة";
-    const key = name.toLocaleLowerCase("ar");
-    const item = counts.get(key) ?? { name, count: 0 };
-    item.count++;
-    counts.set(key, item);
+    entries.push({ name: person.specialty.trim() || "بدون صفة", count: 1 });
   }
-  return Array.from(counts, ([key, item]) => {
-    const wage = wages.find(
-      (w) => w.title.trim().toLocaleLowerCase("ar") === key && w.currency === "IQD",
-    );
-    const hasRate = Number(wage?.daily_rate) > 0 || Number(wage?.monthly_rate) > 0;
-    const dailyRate =
-      Number(wage?.daily_rate) > 0
-        ? Number(wage!.daily_rate)
-        : Number(wage?.monthly_rate) > 0
-          ? Number(wage!.monthly_rate) / 26
-          : getDefaultWage(item.name).daily_rate;
-    return { ...item, dailyRate, cost: item.count * dailyRate, hasRate, usedDefault: !hasRate };
-  });
+  return specialtyCosts(entries, wages);
 }
 
 export function projectDailyRate(
   specialty: string,
-  wages: { title: string; daily_rate: number; monthly_rate: number; currency: string }[],
+  wages: Wage[],
 ) {
   return verifiedSpecialtyCosts([{ employee_id: "rate", specialty }], wages)[0].dailyRate;
 }

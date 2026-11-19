@@ -13,6 +13,12 @@ export const DAILY_ROLE_NAMES = [
   "صباغ",
   "فابريكيشن",
 ];
+const dailyTitleVariants: Record<string, string> = {
+  عمال: "عامل", عاملة: "عامل", عاملات: "عامل", عاملان: "عامل", عاملين: "عامل", عاملون: "عامل",
+  ريكور: "ريكر", ريكرات: "ريكر",
+  مسعفة: "مسعف", مسعفات: "مسعف", مسعفين: "مسعف", مسعفون: "مسعف",
+  منقذة: "منقذ", منقذات: "منقذ", منقذين: "منقذ", منقذون: "منقذ",
+};
 export function normalizeWageTitle(value: string | null | undefined): string {
   return (value ?? "")
     .toLocaleLowerCase("ar")
@@ -23,6 +29,7 @@ export function normalizeWageTitle(value: string | null | undefined): string {
     .trim()
     .split(/\s+/)
     .map((word) => word.replace(/^ال/, ""))
+    .map((word) => dailyTitleVariants[word] ?? word)
     .join(" ");
 }
 export function isDailyPosition(position?: string | null): boolean {

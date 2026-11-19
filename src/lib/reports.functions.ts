@@ -1,4 +1,5 @@
 import { resolvePayrollWage } from "./payroll-wage-resolution.ts";
+import { getEmployeePayType } from "./employee-pay-type.ts";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -9,6 +10,7 @@ import {
   calculatePayroll,
   loadAllRows,
   monthDates,
+  payrollAttendancePenalties,
   reportLeaveDates,
   summarizeDays,
   type WeeklyShiftSchedule,
@@ -87,7 +89,7 @@ export const getMonthlySheet = createServerFn({ method: "GET" })
     let employeeQuery = supabase
       .from("employees")
       .select(
-        "id, employee_no, full_name, status, pay_type, department_id, site_id, shift_id, departments(name), sites!employees_site_id_fkey(name), shifts(name, start_time, end_time, grace_minutes)",
+        "id, employee_no, full_name, status, pay_type, salary_type, position, department_id, site_id, shift_id, departments(name), sites!employees_site_id_fkey(name), shifts(name, start_time, end_time, grace_minutes)",
         { count: "exact" },
       );
     if (data.employee_id) employeeQuery = employeeQuery.eq("id", data.employee_id);
@@ -176,7 +178,7 @@ export const getMonthlySheet = createServerFn({ method: "GET" })
           overridesByEmployee.get(employee.id) ?? [],
           employee.shifts?.end_time,
           today,
-          employee.pay_type === "daily" ? "daily" : "monthly",
+          getEmployeePayType(employee),
           employee.shifts?.grace_minutes ?? 0,
           (weeklySchedules as WeeklyShiftSchedule[]).filter((schedule) => schedule.employee_id === employee.id),
           (storedOvertime as AttendanceDailyOvertime[]).filter((item) => item.employee_id === employee.id),
@@ -237,7 +239,7 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
       loadAllRows((from, to) =>
         supabase
           .from("employee_penalties")
-          .select("id, deduction_amount")
+          .select("id, deduction_amount, penalty_date, penalty_type")
           .eq("employee_id", data.employee_id)
           .gte("penalty_date", start)
           .lt("penalty_date", endDate)
@@ -282,7 +284,7 @@ export const getEmployeeMonthly = createServerFn({ method: "GET" })
     const summary = summarizeDays(days);
     const monthly = resolvedWage.monthlySalary;
     const additionsTotal = additions.reduce((sum, a) => sum + Number(a.amount ?? 0), 0);
-    const deductionsTotal = penalties.reduce(
+    const deductionsTotal = payrollAttendancePenalties(penalties, payType, overrides).reduce(
       (sum, penalty) => sum + Number(penalty.deduction_amount ?? 0),
       0,
     );

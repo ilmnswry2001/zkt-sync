@@ -8,13 +8,16 @@ import {
   buildAttendanceDays,
   summarizeDays,
   monthDates,
+  payrollAttendancePenalties,
 } from "./monthly-report.ts";
 test("daily specialty detection handles Arabic normalization, separators and rate-only grades", () => {
   for (const position of [
     "عامل/مدني",
     "عاملة نظافة",
     "عاملين سقالات",
+    "العمال",
     "مسعف+انقاذ",
+    "مسعفون ميدانيون",
     "عامل سقالات",
     "الريكر",
     "إِنْقَاذ",
@@ -28,6 +31,44 @@ test("daily specialty detection handles Arabic normalization, separators and rat
   assert.equal(getEmployeePayType({ position: "مهندس", salary_type: "DAILY worker" }), "daily");
   assert.equal(getEmployeePayType({ wage_rates: { daily_rate: 30000, monthly_rate: 0 } }), "daily");
   assert.equal(getEmployeePayType({ position: "متعامل تجاري" }), "monthly");
+});
+test("field workers use the normalized specialty day rate ahead of a legacy monthly grade", () => {
+  const grade = { title: "عامل", daily_rate: 44000, monthly_rate: 0, overtime_hour_rate: 5000, currency: "IQD" };
+  const wage = resolvePayrollWage({
+    position: "العمال / تجهيز", pay_type: "monthly", salary_type: "راتب شهري", base_salary: 800000,
+    wage_rates: { ...grade, title: "اداري", daily_rate: 0, monthly_rate: 800000 },
+  }, [grade]);
+  assert.equal(wage.payType, "daily");
+  assert.equal(wage.dailyRate, 44000);
+  assert.equal(wage.source, "specialty");
+});
+test("unworked Fridays and recorded holidays do not generate daily absences or absence deductions", () => {
+  const dates = ["2026-11-06", "2026-11-07", "2026-11-08", "2026-11-13", "2026-11-14"];
+  const overrides = [
+    { work_date: dates[0], status: "absent", notes: "Old override" },
+    { work_date: dates[1], status: "holiday", notes: null },
+    { work_date: dates[4], status: "holiday", notes: null },
+  ] as const;
+  const punches = dates.slice(3).flatMap((date) => [
+    { verify_time: `${date}T05:00:00Z`, status: 0 },
+    { verify_time: `${date}T13:00:00Z`, status: 1 },
+  ]);
+  const days = buildAttendanceDays(dates, punches, [...overrides], "16:00", "2026-11-15", "daily");
+  assert.deepEqual(days.map(({ status }) => status), ["rest", "holiday", "absent", "present", "present"]);
+  assert.ok(days[3].overtime_hours > 0);
+  const penalties = payrollAttendancePenalties([
+    ...dates.slice(0, 3).map((date) => ({ penalty_date: date, penalty_type: "absence", amount: 1000 })),
+    { penalty_date: dates[0], penalty_type: "deduction", amount: 500 },
+  ], "daily", [...overrides]);
+  assert.deepEqual(penalties.map(({ amount }) => amount), [1000, 500]);
+  const summary = summarizeDays(days);
+  assert.equal(summary.absentDays, 1);
+  const pay = calculatePayroll({
+    payType: "daily", monthlySalary: 0, dailyRate: 30000, daysInMonth: 30, summary,
+    overtimeHourlyRate: 1000, deductions: penalties.reduce((sum, row) => sum + row.amount, 0),
+  });
+  assert.equal(pay.basePay, 60000);
+  assert.equal(pay.netPay, 60000 + pay.overtimePay - 1500);
 });
 test("specialty resolution replaces missing and zero salaries without overriding a positive base", () => {
   const rates = [

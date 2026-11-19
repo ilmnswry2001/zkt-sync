@@ -4,7 +4,32 @@ import {
   verifiedSpecialtyCosts,
   projectDailyRate,
   projectCostCrew,
+  approvedBiometricCosts,
+  isBiometricApprovedReport,
+  clearBiometricApproval,
+  projectCostVariancePercent,
 } from "./project-execution-costs.ts";
+test("approved CTR cost uses stored working counts and compares them against the finalized plan", () => {
+  const notes = "ملاحظة الموقع\nتم الاعتماد آلياً من مطابقة البصمة";
+  assert.equal(isBiometricApprovedReport(notes), true);
+  assert.equal(isBiometricApprovedReport(clearBiometricApproval(notes)), false);
+  const wages = [{ title: "عامل", daily_rate: 40000, monthly_rate: 0, currency: "IQD" }];
+  const approved = approvedBiometricCosts([
+    { kind: "worker_specialty", item_name: "العمال", working_count: 2, total_count: 8 },
+    { kind: "worker_specialty", item_name: "عامل", working_count: 0, total_count: 3 },
+    { kind: "equipment_type", item_name: "عامل", working_count: 7, total_count: 7 },
+  ], wages);
+  const actual = approved.reduce((sum, line) => sum + line.cost, 0);
+  const planned = 4 * projectDailyRate("عامل", wages);
+  assert.equal(approved[0].count, 2);
+  assert.equal(actual, 80000);
+  assert.equal(planned, 160000);
+  assert.equal(projectCostVariancePercent(actual, planned), -50);
+  assert.equal(projectCostVariancePercent(actual, 0), null);
+  assert.equal(approvedBiometricCosts([
+    { kind: "worker_specialty", item_name: "ريكر", working_count: 2, total_count: 2 },
+  ], [])[0].cost, 60000);
+});
 test("saved workshop attendance charges one site once with or without a punch", () => {
   const line = (employee_id: string, workshop: string, site_id: string | null = null) => ({
     employee_id,

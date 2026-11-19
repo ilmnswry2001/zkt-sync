@@ -181,6 +181,7 @@ export function buildAttendanceDays(
     byDay.set(date, dayPunches);
   }
   const manualDays = new Map(overrides.map((day) => [day.work_date, day]));
+  const officialHolidays = new Set(overrides.filter((day) => day.status === "holiday").map((day) => day.work_date));
   const storedOvertimeByDate = new Map(storedOvertime.map((item) => [item.work_date, item.overtime_hours]));
   return dates.map((date) => {
     const times = byDay.get(date) ?? [];
@@ -196,6 +197,7 @@ export function buildAttendanceDays(
     );
     const complete = attendance.complete;
     const friday = isFriday(date);
+    const dailyRestDay = payType === "daily" && (friday || officialHolidays.has(date));
     const override = manualDays.get(date);
     const manualOvertime = Number(override?.overtime_hours ?? 0);
     const calculatedOvertime = attendance.inferred_checkout ? undefined : storedOvertimeByDate.get(date);
@@ -206,14 +208,15 @@ export function buildAttendanceDays(
         : 0;
     // دوام فعلي يوم الجمعة يُمنح 10 ساعات وقت إضافي لأي موظف
     if (friday && complete && manualOvertime <= 0) overtime = FRIDAY_OVERTIME_HOURS;
+    if (dailyRestDay && !complete) overtime = 0;
     const hasAnyPunch = attendance.has_punch;
     const auto: ComputedStatus | null =
       date > today
         ? null
         : hasAnyPunch
           ? complete ? "present" : "incomplete"
-          : friday && payType === "monthly"
-            ? "rest" // WO: راحة أسبوعية للشهري فقط؛ اليومي يُعامل الجمعة كيوم عادي
+          : friday
+            ? "rest"
             : date <= today
               ? "absent"
               : null;
@@ -223,7 +226,9 @@ export function buildAttendanceDays(
       check_out: attendance.check_out,
       hours: Math.round(attendance.hours * 100) / 100,
       overtime_hours: Math.max(0, Math.round(overtime * 100) / 100),
-      status: override?.status ?? auto,
+      status: dailyRestDay && date <= today
+        ? hasAnyPunch ? auto : officialHolidays.has(date) ? "holiday" : "rest"
+        : override?.status ?? auto,
       manual: !!override,
       notes: override?.notes ?? null,
       punches: attendance.punches,
@@ -233,6 +238,17 @@ export function buildAttendanceDays(
 }
 
 export const isFriday = (date: string) => new Date(`${date}T00:00:00Z`).getUTCDay() === 5;
+
+export function payrollAttendancePenalties<T extends { penalty_type: string; penalty_date: string }>(
+  penalties: T[],
+  payType: PayType,
+  overrides: { work_date: string; status: string }[],
+): T[] {
+  if (payType !== "daily") return penalties;
+  const holidays = new Set(overrides.filter((day) => day.status === "holiday").map((day) => day.work_date));
+  return penalties.filter((penalty) => penalty.penalty_type !== "absence" ||
+    (!isFriday(penalty.penalty_date) && !holidays.has(penalty.penalty_date)));
+}
 
 export const roundMoney = (value: number) =>
   Number.isFinite(value) ? Math.round(value * 100) / 100 : 0;

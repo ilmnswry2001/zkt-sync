@@ -1,6 +1,6 @@
 import { ProjectExecutionPanel } from "@/components/ProjectExecutionPanel";
 import { formatErrorMessage } from "@/lib/error-message";
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -630,6 +630,8 @@ function PlanningPage() {
   const [requestSiteSearch, setRequestSiteSearch] = useState("");
   const [planSearch, setPlanSearch] = useState("");
   const [planDateFilter, setPlanDateFilter] = useState("");
+  const [biometricPlan, setBiometricPlan] = useState<SiteWorkPlan | null>(null);
+  const [biometricDate, setBiometricDate] = useState("");
   const [planCreatorFilter, setPlanCreatorFilter] = useState("all");
   const [planApplicantFilter, setPlanApplicantFilter] = useState("all");
   const [planSiteFilter, setPlanSiteFilter] = useState("all");
@@ -2298,15 +2300,22 @@ function PlanningPage() {
                     </p>
                   </div>
                   {visibleFinalPlans.map((plan) => (
-                    <FinalPlanDocument
-                      key={plan.id}
-                      plan={plan}
-                      site={sites.find((site) => site.id === plan.site_id)}
-                      staffSearch={finalStaffSearch}
-                      onStaffSearchChange={setFinalStaffSearch}
-                      onExport={() => exportPlanPdf(plan)}
-                      issued
-                    />
+                    <div key={plan.id} className="space-y-3">
+                      <FinalPlanDocument
+                        plan={plan}
+                        site={sites.find((site) => site.id === plan.site_id)}
+                        staffSearch={finalStaffSearch}
+                        onStaffSearchChange={setFinalStaffSearch}
+                        onExport={() => exportPlanPdf(plan)}
+                        issued
+                      />
+                      <Button type="button" variant="outline" onClick={() => {
+                        setBiometricDate(plan.request_date);
+                        setBiometricPlan(plan);
+                      }}>
+                        مطابقة حضور الكادر الميداني
+                      </Button>
+                    </div>
                   ))}
                 </div>
               )}
@@ -2314,6 +2323,34 @@ function PlanningPage() {
           )}
         </CardContent>
       </Card>
+      <Dialog open={biometricPlan !== null} onOpenChange={(open) => { if (!open) setBiometricPlan(null); }}>
+        <DialogContent dir="rtl" className="max-h-[90dvh] max-w-4xl overflow-y-auto">
+          <DialogHeader><DialogTitle>مطابقة حضور الكادر الميداني</DialogTitle></DialogHeader>
+          {biometricPlan && (
+            <div className="space-y-4">
+              <p className="font-medium">{biometricPlan.site_name}</p>
+              <div className="flex max-w-xs flex-col gap-3">
+                <Label htmlFor="final-plan-match-date">تاريخ المطابقة</Label>
+                <Input id="final-plan-match-date" type="date" min={biometricPlan.request_date} max={todayInBaghdad()}
+                  value={biometricDate} onChange={(event) => setBiometricDate(event.target.value)} />
+              </div>
+              {biometricDate >= biometricPlan.request_date && biometricDate <= todayInBaghdad() ? (
+                <>
+                  {biometricPlan.assigned_staff.some((group) => group.employees.length) ? (
+                    <PlanBiometricMatch key={biometricDate} planDate={biometricDate} assignments={biometricPlan.assigned_staff} autoLoad />
+                  ) : <p className="text-sm text-muted-foreground">لا يوجد موظفون مسندون بأرقام وظيفية لهذه الخطة.</p>}
+                  <Button variant="outline" asChild>
+                    <Link to="/attendance" search={{ site: biometricPlan.site_id, date: biometricDate, publish: true }}>
+                      فتح اعتماد التقرير الميداني
+                    </Link>
+                  </Button>
+                  <p className="text-xs text-muted-foreground">يعتمد التقرير أحدث خطة سارية للموقع في التاريخ المحدد.</p>
+                </>
+              ) : <p className="text-sm text-muted-foreground">اختر تاريخاً بين تاريخ سريان الخطة واليوم.</p>}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <p className="text-sm text-muted-foreground">
         لإدارة بيانات المواقع وإداريي المواقع، استخدم قسم «المواقع» المستقل من القائمة الجانبية.
