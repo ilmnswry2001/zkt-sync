@@ -1,7 +1,9 @@
+import { supabase } from "@/integrations/supabase/client";
+import { useDirectorySearch } from "@/hooks/use-directory-search";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Download, Eye, Plus, Trash2 } from "lucide-react";
+import { Download, Eye, FolderOpen, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { EmployeeDocumentForm } from "@/components/EmployeeDocumentForm";
 import { MetricCard } from "@/components/MetricCard";
@@ -40,6 +42,9 @@ import { formatErrorMessage } from "@/lib/error-message";
 import {
   documentTypeLabels,
   employeeDocumentTypes,
+  employeeDocumentMimeTypes,
+  employeeDocumentsDb,
+  isEmployeeDocumentAttachment,
   type DocumentEmployee,
   type EmployeeDocumentType,
 } from "@/lib/employee-documents";
@@ -62,9 +67,129 @@ const badgeStyles: Record<EmployeeDocumentType, string> = {
 const pageSize = 20;
 const money = new Intl.NumberFormat("ar-IQ", { maximumFractionDigits: 2 });
 
-export function EmployeeDocumentsTab({ employee }: { employee?: DocumentEmployee }) {
-  const { user, isAdmin, isHR } = useAuth();
+type ArchiveEmployee = DocumentEmployee & {
+  position?: string | null;
+  departments?: { name: string } | null;
+};
+
+export function EmployeeDocumentsTab({ employee }: { employee?: ArchiveEmployee }) {
+  const { user, isAdmin, isHR, permissionsLoading } = useAuth();
   const canManage = isAdmin || isHR;
+  const [selected, setSelected] = useState<{ userId: string; employee: ArchiveEmployee } | null>(
+    null,
+  );
+  const [search, setSearch] = useState("");
+  const lookup = useDirectorySearch(search);
+  const person = employee ?? (selected?.userId === user?.id ? selected?.employee : undefined);
+  const directory = useQuery({
+    queryKey: ["employee-document-directory", user?.id, canManage, lookup.term],
+    enabled: !!user && !permissionsLoading && !person && lookup.valid && !lookup.waiting,
+    queryFn: async ({ signal }) => {
+      let query = supabase
+        .from("employees")
+        .select("id, full_name, employee_no, position, departments(name)");
+      if (!canManage) {
+        const { data: ownId, error } = await employeeDocumentsDb(supabase)
+          .rpc("erp_own_employee_id")
+          .abortSignal(signal);
+        if (error) throw error;
+        if (!ownId) return [];
+        query = query.eq("id", ownId);
+      }
+      for (const term of lookup.term.split(" ")) {
+        query = query.or(`full_name.ilike.%${term}%,employee_no.ilike.%${term}%`);
+      }
+      const { data, error } = await query
+        .order("full_name")
+        .order("id")
+        .limit(50)
+        .abortSignal(signal);
+      if (error) throw error;
+      return data;
+    },
+  });
+  if (!user || permissionsLoading)
+    return (
+      <p role="status" className="text-muted-foreground">
+        جارٍ تحميل صلاحيات الأرشيف…
+      </p>
+    );
+  if (person)
+    return (
+      <EmployeeDocumentRepository
+        key={`${user.id}:${person.id}`}
+        employee={person}
+        userId={user.id}
+        canManage={canManage}
+        onBack={employee ? undefined : () => setSelected(null)}
+      />
+    );
+  const candidates = lookup.valid && !lookup.waiting ? (directory.data ?? []) : [];
+  return (
+    <Card dir="rtl">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <FolderOpen className="h-5 w-5" /> مستودع مستندات الموظفين
+        </CardTitle>
+        <p className="text-sm text-muted-foreground">اختر موظفاً لفتح ملف مستنداته.</p>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex max-w-md flex-col gap-3">
+          <Label htmlFor="archive-employee-search">بحث عن الموظف</Label>
+          <Input
+            id="archive-employee-search"
+            maxLength={100}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="الاسم أو الرقم الوظيفي"
+          />
+        </div>
+        {!lookup.valid ? (
+          <p className="text-sm text-muted-foreground">اكتب حرفين أو رقمين على الأقل للبحث.</p>
+        ) : lookup.waiting || directory.isFetching ? (
+          <p role="status" className="text-sm text-muted-foreground">
+            جارٍ البحث…
+          </p>
+        ) : directory.isError ? (
+          <p role="alert" className="text-sm text-destructive">
+            {formatErrorMessage(directory.error, "تعذر البحث عن الموظفين")}
+          </p>
+        ) : !candidates.length ? (
+          <p className="text-sm text-muted-foreground">لا يوجد موظف مطابق متاح لحسابك.</p>
+        ) : (
+          <ul className="grid max-h-96 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2 xl:grid-cols-3">
+            {candidates.map((item) => (
+              <li key={item.id}>
+                <button
+                  type="button"
+                  className="flex h-full w-full flex-col gap-1 rounded-lg border bg-background p-3 text-right hover:border-primary focus-visible:outline-primary"
+                  onClick={() => setSelected({ userId: user.id, employee: item })}
+                >
+                  <span className="break-words font-semibold">{item.full_name}</span>
+                  <span className="text-sm text-muted-foreground">
+                    {item.employee_no} {item.position ? `· ${item.position}` : ""}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function EmployeeDocumentRepository({
+  employee,
+  userId,
+  canManage,
+  onBack,
+}: {
+  employee: ArchiveEmployee;
+  userId: string;
+  canManage: boolean;
+  onBack?: () => void;
+}) {
   const queryClient = useQueryClient();
   const list = useServerFn(listEmployeeDocuments);
   const remove = useServerFn(deleteEmployeeDocument);
@@ -75,7 +200,16 @@ export function EmployeeDocumentsTab({ employee }: { employee?: DocumentEmployee
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [page, setPage] = useState(0);
-  const [formOpen, setFormOpen] = useState(false);
+  const [batch, setBatch] = useState<{ files: File[]; index: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const addFiles = (files: FileList | null) => {
+    if (!canManage || batch || !files?.length) return;
+    const supplied = Array.from(files);
+    const valid = supplied.filter(isEmployeeDocumentAttachment);
+    if (valid.length !== supplied.length)
+      toast.error("بعض الملفات غير مدعومة. اختر PDF أو صورة بحجم لا يتجاوز 15 ميغابايت للملف.");
+    if (valid.length) setBatch({ files: valid, index: 0 });
+  };
   const [preview, setPreview] = useState<{
     url: string;
     title: string;
@@ -91,13 +225,13 @@ export function EmployeeDocumentsTab({ employee }: { employee?: DocumentEmployee
     return () => window.clearTimeout(timer);
   }, [search]);
   const records = useQuery({
-    queryKey: ["employee-document-archive", user?.id, employee?.id, type, term, from, to, page],
-    enabled: !!user && !invalidDates,
+    queryKey: ["employee-document-archive", userId, employee.id, type, term, from, to, page],
+    enabled: !invalidDates,
     queryFn: ({ signal }) =>
       list({
         signal,
         data: {
-          employee_id: employee?.id,
+          employee_id: employee.id,
           document_type: type || undefined,
           search: term,
           from: from || undefined,
@@ -107,7 +241,7 @@ export function EmployeeDocumentsTab({ employee }: { employee?: DocumentEmployee
       }),
   });
   const refresh = () =>
-    queryClient.invalidateQueries({ queryKey: ["employee-document-archive", user?.id] });
+    queryClient.invalidateQueries({ queryKey: ["employee-document-archive", userId] });
   const deleteDocument = useMutation({
     mutationFn: (id: string) => remove({ data: { id } }),
     onSuccess: async () => {
@@ -147,42 +281,88 @@ export function EmployeeDocumentsTab({ employee }: { employee?: DocumentEmployee
 
   return (
     <section dir="rtl" className="space-y-4">
-      {!employee && (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard
-            title="إجمالي المستندات"
-            value={stats?.total ?? "—"}
-            loading={records.isLoading}
-          />
-          <MetricCard
-            title="مباشرات العمل"
-            value={stats?.work_commencement ?? "—"}
-            loading={records.isLoading}
-            tone="info"
-          />
-          <MetricCard
-            title="الأوامر الإدارية"
-            value={stats?.administrative_order ?? "—"}
-            loading={records.isLoading}
-            tone="warning"
-          />
-          <MetricCard
-            title="الزيادات المسجلة"
-            value={stats?.wage_increase ?? "—"}
-            loading={records.isLoading}
-            tone="success"
-          />
-        </div>
-      )}
       <Card>
         <CardHeader className="gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>
-            {employee ? "الأرشيف الإداري ومباشرات العمل للموظف" : "المستندات والأوامر الإدارية"}
-          </CardTitle>
-          {canManage && user && (
-            <Button onClick={() => setFormOpen(true)}>
-              <Plus className="h-4 w-4" />{" "}
-              {employee ? "إضافة كتاب لهذا الموظف" : "إدراج مستند إداري"}
+          <div>
+            <p className="mb-1 text-sm text-muted-foreground">ملف مستندات الموظف</p>
+            <CardTitle className="break-words">{employee.full_name}</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {employee.employee_no} {employee.position ? `· ${employee.position}` : ""}
+              {employee.departments?.name ? ` · ${employee.departments.name}` : ""}
+            </p>
+          </div>
+          {onBack && (
+            <Button variant="outline" onClick={onBack}>
+              اختيار موظف آخر
+            </Button>
+          )}
+        </CardHeader>
+        {canManage && (
+          <CardContent>
+            <label
+              className={`flex min-h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-5 text-center focus-within:ring-2 focus-within:ring-primary ${dragging ? "border-primary bg-primary/10" : "border-border bg-muted/25 hover:border-primary/60"}`}
+              onDragOver={(event) => {
+                event.preventDefault();
+                if (!batch) setDragging(true);
+              }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={(event) => {
+                event.preventDefault();
+                setDragging(false);
+                addFiles(event.dataTransfer.files);
+              }}
+            >
+              <Upload className="h-6 w-6 text-primary" aria-hidden="true" />
+              <span className="font-semibold">أفلت ملفات هذا الموظف هنا أو اضغط لاختيارها</span>
+              <span className="text-sm text-muted-foreground">
+                PDF أو JPEG أو PNG أو WebP · حتى 15 ميغابايت لكل ملف
+              </span>
+              <Input
+                className="sr-only"
+                type="file"
+                multiple
+                disabled={!!batch}
+                accept={employeeDocumentMimeTypes.join(",")}
+                onChange={(event) => {
+                  addFiles(event.target.files);
+                  event.target.value = "";
+                }}
+              />
+            </label>
+          </CardContent>
+        )}
+      </Card>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          title="إجمالي المستندات"
+          value={stats?.total ?? "—"}
+          loading={records.isLoading}
+        />
+        <MetricCard
+          title="مباشرات العمل"
+          value={stats?.work_commencement ?? "—"}
+          loading={records.isLoading}
+          tone="info"
+        />
+        <MetricCard
+          title="الأوامر الإدارية"
+          value={stats?.administrative_order ?? "—"}
+          loading={records.isLoading}
+          tone="warning"
+        />
+        <MetricCard
+          title="الزيادات المسجلة"
+          value={stats?.wage_increase ?? "—"}
+          loading={records.isLoading}
+          tone="success"
+        />
+      </div>
+      <Card>
+        <CardHeader className="gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle>الأرشيف الإداري ومباشرات العمل للموظف</CardTitle>
+          {canManage && (
+            <Button onClick={() => setBatch({ files: [], index: 0 })}>
+              <Plus className="h-4 w-4" /> إضافة كتاب لهذا الموظف
             </Button>
           )}
         </CardHeader>
@@ -194,7 +374,7 @@ export function EmployeeDocumentsTab({ employee }: { employee?: DocumentEmployee
                 maxLength={100}
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder={employee ? "رقم الكتاب أو الموضوع" : "رقم الكتاب أو الموضوع أو الموظف"}
+                placeholder={"رقم الكتاب أو الموضوع"}
               />
             </label>
             <div className="flex flex-col gap-2">
@@ -261,18 +441,13 @@ export function EmployeeDocumentsTab({ employee }: { employee?: DocumentEmployee
               <Table className="min-w-[42rem]">
                 <TableHeader>
                   <TableRow>
-                    {[
-                      "تاريخ الصدور",
-                      "رقم الكتاب",
-                      "النوع",
-                      ...(!employee ? ["الموظف"] : []),
-                      "الموضوع",
-                      "الإجراءات",
-                    ].map((label) => (
-                      <TableHead key={label} className="text-right">
-                        {label}
-                      </TableHead>
-                    ))}
+                    {["تاريخ الصدور", "رقم الكتاب", "النوع", "الموضوع", "الإجراءات"].map(
+                      (label) => (
+                        <TableHead key={label} className="text-right">
+                          {label}
+                        </TableHead>
+                      ),
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -289,16 +464,6 @@ export function EmployeeDocumentsTab({ employee }: { employee?: DocumentEmployee
                           {documentTypeLabels[row.document_type]}
                         </Badge>
                       </TableCell>
-                      {!employee && (
-                        <TableCell>
-                          {row.employee?.full_name ?? "—"}
-                          {row.employee && (
-                            <p className="text-xs text-muted-foreground">
-                              {row.employee.employee_no}
-                            </p>
-                          )}
-                        </TableCell>
-                      )}
                       <TableCell className="min-w-44 whitespace-normal break-words">
                         <p className="font-medium">{row.title}</p>
                         {row.amount_iqd !== null && (
@@ -397,15 +562,26 @@ export function EmployeeDocumentsTab({ employee }: { employee?: DocumentEmployee
           )}
         </CardContent>
       </Card>
-      {formOpen && user && canManage && (
+      {batch && canManage && (
         <EmployeeDocumentForm
+          key={batch.index}
           employee={employee}
-          userId={user.id}
-          onClose={() => setFormOpen(false)}
+          initialFile={batch.files[batch.index]}
+          batchPosition={
+            batch.files.length > 1 ? `${batch.index + 1} / ${batch.files.length}` : undefined
+          }
+          onClose={() => setBatch(null)}
           onChanged={async () => {
             setPage(0);
             await refresh();
           }}
+          onSaved={() =>
+            setBatch((current) =>
+              current && current.index + 1 < current.files.length
+                ? { ...current, index: current.index + 1 }
+                : null,
+            )
+          }
         />
       )}
       <Dialog

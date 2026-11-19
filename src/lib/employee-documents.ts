@@ -9,6 +9,15 @@ export const employeeDocumentMimeTypes = [
   "image/png",
   "image/webp",
 ] as const;
+export function isEmployeeDocumentAttachment(file: Pick<File, "name" | "size" | "type">) {
+  return (
+    file.name.trim().length > 0 &&
+    file.name.length <= 255 &&
+    file.size >= 1 &&
+    file.size <= employeeDocumentMaxSize &&
+    employeeDocumentMimeTypes.some((mime) => mime === file.type)
+  );
+}
 export const employeeDocumentTypes = [
   "work_commencement",
   "administrative_order",
@@ -83,6 +92,7 @@ type ArchiveDb = {
     };
     Views: Record<string, never>;
     Functions: {
+      erp_own_employee_id: { Args: Record<string, never>; Returns: string | null };
       can_manage_employee_documents: { Args: Record<string, never>; Returns: boolean };
       list_employee_documents: {
         Args: {

@@ -1,15 +1,4 @@
-import { Check, ChevronsUpDown } from "lucide-react";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useState, type FormEvent } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -26,12 +15,11 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
-import { useDirectorySearch } from "@/hooks/use-directory-search";
 import { todayInBaghdad } from "@/lib/date-time";
 import { formatErrorMessage } from "@/lib/error-message";
 import {
   documentTypeLabels,
-  employeeDocumentMaxSize,
+  isEmployeeDocumentAttachment,
   employeeDocumentMimeTypes,
   employeeDocumentTypes,
   employeeDocumentsBucket,
@@ -79,51 +67,31 @@ async function uploadAttachment(path: string, file: File, onProgress: (value: nu
 
 export function EmployeeDocumentForm({
   employee,
-  userId,
+  initialFile,
+  batchPosition,
   onClose,
   onChanged,
+  onSaved,
 }: {
-  employee?: DocumentEmployee;
-  userId: string;
+  employee: DocumentEmployee;
+  initialFile?: File;
+  batchPosition?: string;
   onClose: () => void;
   onChanged: () => Promise<void>;
+  onSaved: () => void;
 }) {
   const createDocument = useServerFn(createEmployeeDocument);
   const deleteDocument = useServerFn(deleteEmployeeDocument);
-  const [person, setPerson] = useState<DocumentEmployee | null>(employee ?? null);
-  const [search, setSearch] = useState("");
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const lookup = useDirectorySearch(search);
-  const [type, setType] = useState<EmployeeDocumentType>("work_commencement");
-  const [file, setFile] = useState<File | null>(null);
+  const [type, setType] = useState<EmployeeDocumentType>(
+    initialFile ? "other" : "work_commencement",
+  );
+  const [file, setFile] = useState<File | null>(initialFile ?? null);
   const [busy, setBusy] = useState(false);
   const [uploadPercent, setUploadPercent] = useState<number | null>(null);
-  const directory = useQuery({
-    queryKey: ["employee-document-directory", userId, lookup.term],
-    enabled: !employee && pickerOpen && lookup.valid && !lookup.waiting,
-    queryFn: async ({ signal }) => {
-      let query = supabase.from("employees").select("id, full_name, employee_no");
-      for (const term of lookup.term.split(" ")) {
-        query = query.or(`full_name.ilike.%${term}%,employee_no.ilike.%${term}%`);
-      }
-      const { data, error } = await query
-        .order("full_name")
-        .order("id")
-        .limit(50)
-        .abortSignal(signal);
-      if (error) throw error;
-      return data;
-    },
-  });
   type SupportedMime = (typeof employeeDocumentMimeTypes)[number];
   const chooseFile = (candidate?: File) => {
     if (!candidate) return;
-    if (
-      !employeeDocumentMimeTypes.some((mime) => candidate.type === mime) ||
-      candidate.size < 1 ||
-      candidate.size > employeeDocumentMaxSize ||
-      candidate.name.length > 255
-    ) {
+    if (!isEmployeeDocumentAttachment(candidate)) {
       toast.error("اختر ملف PDF أو صورة JPEG أو PNG أو WebP بحجم لا يتجاوز 15 ميغابايت");
       return;
     }
@@ -131,7 +99,7 @@ export function EmployeeDocumentForm({
   };
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (busy || !person) return;
+    if (busy) return;
     const form = new FormData(event.currentTarget);
     const value = (name: string) => String(form.get(name) ?? "").trim();
     setBusy(true);
@@ -139,7 +107,7 @@ export function EmployeeDocumentForm({
     try {
       const created = await createDocument({
         data: {
-          employee_id: person.id,
+          employee_id: employee.id,
           document_type: type,
           document_number: value("number"),
           document_date: value("date"),
@@ -173,14 +141,13 @@ export function EmployeeDocumentForm({
       }
       toast.success("تم إدراج المستند في الأرشيف");
       await onChanged();
-      onClose();
+      onSaved();
     } catch (error) {
       toast.error(formatErrorMessage(error, "تعذر حفظ المستند"));
     } finally {
       setBusy(false);
     }
   };
-  const candidates = lookup.valid && !lookup.waiting ? (directory.data ?? []) : [];
   return (
     <Dialog
       open
@@ -190,89 +157,18 @@ export function EmployeeDocumentForm({
     >
       <DialogContent dir="rtl" className="max-h-[90dvh] max-w-2xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{employee ? "إضافة كتاب لهذا الموظف" : "إدراج مستند إداري"}</DialogTitle>
-          <DialogDescription>سجّل بيانات الكتاب وأرفق نسخة منه عند توفرها.</DialogDescription>
+          <DialogTitle>إضافة كتاب لهذا الموظف</DialogTitle>
+          <DialogDescription>
+            {batchPosition
+              ? `ملف ${batchPosition} من الدفعة · سجّل بيانات المستند لحفظه.`
+              : "سجّل بيانات الكتاب وأرفق نسخة منه عند توفرها."}
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={(event) => void submit(event)}>
           <fieldset disabled={busy} className="grid gap-5 sm:grid-cols-2">
-            {employee ? (
-              <p className="rounded-lg border p-3 sm:col-span-2">
-                {employee.full_name} · {employee.employee_no}
-              </p>
-            ) : (
-              <div className={`${fieldClass} sm:col-span-2`}>
-                <Label htmlFor="archive-person">الموظف</Label>
-                <Popover
-                  open={pickerOpen}
-                  onOpenChange={(open) => {
-                    setPickerOpen(open);
-                    if (!open) setSearch("");
-                  }}
-                >
-                  <PopoverTrigger asChild>
-                    <Button
-                      id="archive-person"
-                      type="button"
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={pickerOpen}
-                      aria-required="true"
-                      className="min-h-10 justify-between font-normal"
-                    >
-                      <span className="truncate">
-                        {person ? `${person.full_name} · ${person.employee_no}` : "اختر موظفًا"}
-                      </span>
-                      <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-70" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    dir="rtl"
-                    align="start"
-                    className="w-[--radix-popover-trigger-width] p-0"
-                  >
-                    <Command shouldFilter={false}>
-                      <CommandInput
-                        value={search}
-                        onValueChange={setSearch}
-                        maxLength={100}
-                        placeholder="الاسم أو الرقم الوظيفي"
-                      />
-                      <CommandList>
-                        <CommandEmpty>
-                          {!lookup.valid
-                            ? "اكتب حرفين أو رقمين على الأقل."
-                            : lookup.waiting || directory.isFetching
-                              ? "جارٍ البحث…"
-                              : directory.isError
-                                ? "تعذر البحث عن الموظفين."
-                                : "لا توجد نتائج مطابقة."}
-                        </CommandEmpty>
-                        <CommandGroup>
-                          {candidates.map((item) => (
-                            <CommandItem
-                              key={item.id}
-                              value={item.id}
-                              onSelect={() => {
-                                setPerson(item);
-                                setPickerOpen(false);
-                                setSearch("");
-                              }}
-                            >
-                              <Check
-                                className={`h-4 w-4 shrink-0 ${person?.id === item.id ? "opacity-100" : "opacity-0"}`}
-                              />
-                              <span className="break-words">
-                                {item.full_name} · {item.employee_no}
-                              </span>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-            )}
+            <p className="rounded-lg border p-3 sm:col-span-2">
+              {employee.full_name} · {employee.employee_no}
+            </p>
             <div className={fieldClass}>
               <Label htmlFor="archive-type">نوع المستند</Label>
               <select
@@ -308,7 +204,13 @@ export function EmployeeDocumentForm({
             </div>
             <div className={`${fieldClass} sm:col-span-2`}>
               <Label htmlFor="archive-title">الموضوع</Label>
-              <Input id="archive-title" name="title" maxLength={240} required />
+              <Input
+                id="archive-title"
+                name="title"
+                maxLength={240}
+                defaultValue={initialFile?.name.replace(/\.[^.]+$/, "").slice(0, 240)}
+                required
+              />
             </div>
             <div className={fieldClass}>
               <Label htmlFor="archive-authority">الجهة المصدرة</Label>
@@ -372,7 +274,7 @@ export function EmployeeDocumentForm({
             <Button variant="outline" type="button" disabled={busy} onClick={onClose}>
               إلغاء
             </Button>
-            <Button type="submit" disabled={busy || !person}>
+            <Button type="submit" disabled={busy}>
               {busy ? "جارٍ الحفظ…" : "حفظ المستند"}
             </Button>
           </DialogFooter>
