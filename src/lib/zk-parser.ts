@@ -2,6 +2,7 @@
 // Format: 3072-byte ZK header → GZIP → TAR → ZKDB.db (SQLite).
 import { inflate } from "pako";
 import initSqlJs, { type Database, type SqlJsStatic } from "sql.js";
+import { parsePunchTime, type PunchTimeZone } from "./uploaded-attendance";
 
 export interface ZkUser {
   user_pin: string;
@@ -12,7 +13,7 @@ export interface ZkUser {
 export interface ZkAttLog {
   external_id: number;
   user_pin: string;
-  verify_time: string; // ISO
+  verify_time: string; // Raw device timestamp unless an interpretation is requested.
   verify_type: number;
   status: number;
 }
@@ -87,7 +88,7 @@ function queryAll(db: Database, sql: string): Record<string, unknown>[] {
   });
 }
 
-export async function parseZkBackup(buffer: ArrayBuffer): Promise<ZkParseResult> {
+export async function parseZkBackup(buffer: ArrayBuffer, timeZone?: PunchTimeZone): Promise<ZkParseResult> {
   const all = new Uint8Array(buffer);
   const { serial, gzipOffset } = readZkHeader(all);
   const gz = all.slice(gzipOffset);
@@ -111,7 +112,9 @@ export async function parseZkBackup(buffer: ArrayBuffer): Promise<ZkParseResult>
     ).map((r) => ({
       external_id: Number(r.ID ?? 0),
       user_pin: String(r.User_PIN ?? ""),
-      verify_time: String(r.Verify_Time ?? ""),
+      verify_time: timeZone
+        ? parsePunchTime(String(r.Verify_Time ?? ""), timeZone)
+        : String(r.Verify_Time ?? "").trim(),
       verify_type: Number(r.Verify_Type ?? 0),
       status: Number(r.Status ?? 0),
     }));

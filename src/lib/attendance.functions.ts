@@ -1,7 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { summarizeAttendancePunches } from "./monthly-report";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { processUploadedAttendance } from "@/lib/uploaded-attendance";
+import { processUploadedAttendance, resolveUploadPunchTimeZone } from "@/lib/uploaded-attendance";
+import { uploadedFilesTable } from "@/lib/uploaded-files-client";
 import { z } from "zod";
 
 const ingestSchema = z.object({
@@ -33,9 +34,14 @@ export const ingestZkData = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase } = context;
 
-    // mark processing
-    await supabase.from("uploaded_files").update({ status: "processing", device_serial: data.serial })
-      .eq("id", data.upload_id);
+    const { data: upload, error: readError } = await uploadedFilesTable(supabase)
+      .select("status, punch_time_zone").eq("id", data.upload_id).single();
+    if (readError) throw readError;
+    const timeZone = resolveUploadPunchTimeZone(upload.punch_time_zone, upload.status);
+    const { error: startError } = await uploadedFilesTable(supabase)
+      .update({ status: "processing", device_serial: data.serial, punch_time_zone: timeZone })
+      .eq("id", data.upload_id).select("id").single();
+    if (startError) throw startError;
 
     try {
       // Audit and attendance are committed together; all unique conflicts are
@@ -46,7 +52,7 @@ export const ingestZkData = createServerFn({ method: "POST" })
         });
         if (error) throw error;
         return result as { inserted: number; duplicates: number; unmatched: number };
-      });
+      }, timeZone);
 
       await supabase.from("uploaded_files").update({
         status: "completed",

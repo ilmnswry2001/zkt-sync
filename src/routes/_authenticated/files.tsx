@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Loader2, Play } from "lucide-react";
 import { toast } from "sonner";
+import { uploadedFilesTable } from "@/lib/uploaded-files-client";
 
 export const Route = createFileRoute("/_authenticated/files")({
   head: () => ({ meta: [{ title: "سجل ملفات البصمة | إدارة الحضور" }, { name: "description", content: "معالجة ملفات أجهزة البصمة ومتابعة نتائج استيراد الحركات." }, { property: "og:title", content: "سجل ملفات البصمة | إدارة الحضور" }, { property: "og:description", content: "متابعة الملفات المرفوعة ونتائج معالجة الحضور." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" }] }),
@@ -28,14 +29,14 @@ function FilesPage() {
   const { data: rows = [] } = useQuery({
     queryKey: ["uploaded_files"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("uploaded_files")
+      const { data, error } = await uploadedFilesTable(supabase)
         .select("*, devices(name)").order("created_at", { ascending: false }).limit(100);
       if (error) throw error;
-      return data as any[];
+      return data;
     },
   });
 
-  const processFile = async (row: any) => {
+  const processFile = async (row: (typeof rows)[number]) => {
     if (processingId) return;
     setProcessingId(row.id);
     try {
@@ -45,6 +46,7 @@ function FilesPage() {
       if (downloadError) throw downloadError;
       if (!file) throw new Error("تعذر تنزيل الملف من التخزين");
 
+      // Interpret wall time on the server using the saved setting for this file.
       const parsed = await parseZkBackup(await file.arrayBuffer());
       if (!parsed.logs.length) throw new Error("لم يتم العثور على سجلات بصمة داخل الملف");
 
@@ -75,9 +77,15 @@ function FilesPage() {
     failed: "bg-destructive",
     pending: "bg-muted",
   };
+  const statusLabel: Record<string, string> = {
+    completed: "مكتمل",
+    processing: "قيد المعالجة",
+    failed: "فشل",
+    pending: "بانتظار المعالجة",
+  };
 
   return (
-    <div className="space-y-6">
+    <div dir="rtl" className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">سجل الملفات المرفوعة</h1>
         <p className="text-muted-foreground mt-1">آخر 100 ملف</p>
@@ -102,13 +110,20 @@ function FilesPage() {
             <TableBody>
               {rows.map((r) => (
                 <TableRow key={r.id}>
-                  <TableCell className="font-mono text-sm">{r.file_name}</TableCell>
+                  <TableCell>
+                    <span className="font-mono text-sm">{r.file_name}</span>
+                    {r.punch_time_zone && (
+                      <p className="text-xs text-muted-foreground">
+                        {r.punch_time_zone === "UTC" ? "توقيت عالمي UTC" : "توقيت العراق المحلي"}
+                      </p>
+                    )}
+                  </TableCell>
                   <TableCell>{r.devices?.name ?? "—"}</TableCell>
                   <TableCell className="font-mono text-sm">{r.device_serial ?? "—"}</TableCell>
                   <TableCell>{r.users_count ?? 0}</TableCell>
                   <TableCell>{r.logs_count ?? 0}</TableCell>
                   <TableCell className="font-semibold text-success">{r.inserted_logs ?? 0}</TableCell>
-                  <TableCell><Badge className={statusColor[r.status] ?? ""}>{r.status}</Badge></TableCell>
+                  <TableCell><Badge className={statusColor[r.status] ?? ""}>{statusLabel[r.status] ?? r.status}</Badge></TableCell>
                   <TableCell className="text-sm text-muted-foreground">{new Date(r.created_at).toLocaleString("ar")}</TableCell>
                   <TableCell>
                     {r.status !== "completed" && (

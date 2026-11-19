@@ -19,6 +19,8 @@ import {
 } from "@/components/ui/dialog";
 import { Upload, AlertCircle, FileCheck2 } from "lucide-react";
 import { toast } from "sonner";
+import { punchTimeZones, type PunchTimeZone } from "@/lib/uploaded-attendance";
+import { uploadedFilesTable } from "@/lib/uploaded-files-client";
 
 export const Route = createFileRoute("/_authenticated/upload")({
   head: () => ({
@@ -39,6 +41,7 @@ function UploadPage() {
   const { user, isAdmin } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [deviceId, setDeviceId] = useState<string>("none");
+  const [timeZone, setTimeZone] = useState<PunchTimeZone>("Asia/Baghdad");
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [step, setStep] = useState("");
@@ -63,7 +66,7 @@ function UploadPage() {
       if (upErr) throw upErr;
       setProgress(70);
       setStep("حفظ سجل الملف...");
-      const { error: rowErr } = await supabase.from("uploaded_files").insert({
+      const { error: rowErr } = await uploadedFilesTable(supabase).insert({
         device_id: deviceId === "none" ? null : deviceId,
         file_name: file.name,
         storage_path: path,
@@ -72,6 +75,7 @@ function UploadPage() {
         uploaded_by: user.id,
         content_hash: hash,
         is_duplicate: isDuplicate,
+        punch_time_zone: timeZone,
       });
       if (rowErr) {
         // Do not leave an object in Storage when its database record could not
@@ -118,7 +122,7 @@ function UploadPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div dir="rtl" className="space-y-6 max-w-3xl">
       <div>
         <h1 className="text-3xl font-bold">رفع ملف البصمة</h1>
         <p className="text-muted-foreground mt-1">
@@ -148,6 +152,20 @@ function UploadPage() {
                     {d.name} {d.serial_number ? `(${d.serial_number})` : ""}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-3">
+            <Label htmlFor="punch-time-zone">توقيت السجلات في الملف</Label>
+            <Select dir="rtl" value={timeZone} disabled={busy || duplicate !== null}
+              onValueChange={(value) => {
+                const zone = punchTimeZones.find((item) => item === value);
+                if (zone) setTimeZone(zone);
+              }}>
+              <SelectTrigger id="punch-time-zone"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Asia/Baghdad">توقيت العراق المحلي (+03:00) — افتراضي</SelectItem>
+                <SelectItem value="UTC">توقيت عالمي UTC خام</SelectItem>
               </SelectContent>
             </Select>
           </div>

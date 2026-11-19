@@ -295,19 +295,35 @@ function AttendancePage() {
     setMatchState(results ? { key: matchKey, results } : null);
   }, [matchKey]);
   const approveBiometric = async () => {
-    if (!execution.isSuccess || !biometricMatch || !finalizedPlanQuery.data || approvingBiometric) return;
+    if (approvingBiometric) return;
+    const plan = finalizedPlanQuery.data;
+    if (!siteId || !date || !plan || plan.site_id !== siteId || plan.request_date > date) {
+      toast.error("اعتمد خطة نهائية سارية للموقع والتاريخ المحددين أولاً");
+      return;
+    }
+    if (!execution.isSuccess || !biometricMatch) {
+      toast.error("أكمل تحميل نتائج مطابقة البصمة قبل اعتماد التقرير");
+      return;
+    }
     setApprovingBiometric(true);
     try {
       const { error } = await supabase.rpc("approve_site_report_from_biometrics", {
-        p_plan_id: finalizedPlanQuery.data.id, p_report_date: date,
+        p_plan_id: plan.id, p_report_date: date,
       });
+      if (error?.message.includes("No effective finalized plan")) {
+        throw new Error("لا توجد خطة نهائية سارية لهذا التاريخ. راجع اعتماد الخطة وتاريخها.");
+      }
+      if (error?.code === "42501" || error?.message.includes("Not authorized")) {
+        throw new Error("لا تملك صلاحية اعتماد التقرير الميداني لهذا الموقع.");
+      }
       if (error) throw error;
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["site-daily-reports"] }),
         queryClient.invalidateQueries({ queryKey: ["projects-dashboard"] }),
         queryClient.invalidateQueries({ queryKey: ["plan-biometric-match"] }),
+        queryClient.invalidateQueries({ queryKey: ["project-execution", date] }),
       ]);
-      toast.success("تم اعتماد التقرير اليومي من البصمة وتحديث تكلفة المشروع");
+      toast.success("تم اعتماد التقرير الميداني وتحديث تكاليف الموقع بنجاح");
     } catch (error) {
       toast.error(formatErrorMessage(error, "تعذر اعتماد التقرير من البصمة"));
     } finally { setApprovingBiometric(false); }
