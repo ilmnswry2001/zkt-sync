@@ -6,6 +6,7 @@ import {
   dailyTotals,
   loadAllRows,
   monthDates,
+  reportLeaveDates,
   summarizeDays,
   summarizeAttendancePunches,
 } from "./monthly-report.ts";
@@ -15,6 +16,14 @@ test("calendar handles leap years, short months, and December", () => {
   assert.equal(monthDates("2026-02").length, 28);
   assert.equal(monthDates("2026-09").at(-1), "2026-09-30");
   assert.equal(monthDates("2026-12").at(-1), "2026-12-31");
+});
+
+test("report leave dates exclude only Fridays and stay inside the report period", () => {
+  const args = ["2026-10-29", "2026-11-08", "2026-11-05", "2026-11-08"] as const;
+  assert.deepEqual(reportLeaveDates(...args, false), ["2026-11-05", "2026-11-07"]);
+  assert.deepEqual(reportLeaveDates(...args, true), ["2026-11-05", "2026-11-06", "2026-11-07"]);
+  assert.deepEqual(reportLeaveDates("2026-11-07", "2026-11-07", "2026-11-01", "2026-12-01", false), ["2026-11-07"]);
+  assert.deepEqual(reportLeaveDates("2026-10-01", "2026-10-02", "2026-11-01", "2026-12-01", true), []);
 });
 
 test("absence penalties override live punches and show as absent in month summary", () => {

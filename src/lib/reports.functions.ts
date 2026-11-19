@@ -1,28 +1,34 @@
 import { resolvePayrollWage } from "./payroll-wage-resolution.ts";
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/integrations/supabase/types";
 import {
   type AttendanceDailyOvertime,
   buildAttendanceDays,
   calculatePayroll,
   loadAllRows,
   monthDates,
+  reportLeaveDates,
   summarizeDays,
   type WeeklyShiftSchedule,
 } from "./monthly-report.ts";
 import { z } from "zod";
 import { monthInstantRangeInBaghdad, todayInBaghdad } from "./date-time.ts";
 
-async function approvedLeaveOverrides(supabase: any, employeeIds: string[], start: string, endDate: string) {
+async function approvedLeaveOverrides(supabase: SupabaseClient<Database>, employeeIds: string[], start: string, endDate: string) {
   const rows: { employee_id: string; work_date: string; status: "leave"; notes: string; overtime_hours: number; is_paid: boolean }[] = [];
   for (let i = 0; i < employeeIds.length; i += 100) {
     const batch = employeeIds.slice(i, i + 100);
-    const { data, error } = await supabase.from("forms")
-      .select("employee_id, work_date, leave_end_date, reason, status, leave_type_id")
-      .eq("kind", "leave").in("status", ["pending_execution", "executed"])
-      .in("employee_id", batch).lt("work_date", endDate).gte("leave_end_date", start);
-    if (error) throw new Error(error.message);
-    const leaveTypeIds = [...new Set((data ?? []).map((form: any) => form.leave_type_id).filter(Boolean))];
+    const forms = await loadAllRows((from, to) =>
+      supabase.from("forms")
+        .select("employee_id, work_date, leave_end_date, reason, leave_type_id")
+        .eq("kind", "leave").in("status", ["pending_execution", "executed"])
+        .in("employee_id", batch).lt("work_date", endDate)
+        .or(`leave_end_date.gte.${start},and(leave_end_date.is.null,work_date.gte.${start})`)
+        .order("id").range(from, to),
+    );
+    const leaveTypeIds = [...new Set(forms.flatMap((form) => form.leave_type_id ?? []))];
     const leaveTypesById = new Map<string, { is_paid: boolean; count_non_working_days: boolean }>();
     if (leaveTypeIds.length) {
       const { data: leaveTypes, error: leaveTypesError } = await supabase
@@ -32,17 +38,11 @@ async function approvedLeaveOverrides(supabase: any, employeeIds: string[], star
       if (leaveTypesError) throw new Error(leaveTypesError.message);
       for (const leaveType of leaveTypes ?? []) leaveTypesById.set(leaveType.id, leaveType);
     }
-    for (const form of data ?? []) {
-      const leaveType = leaveTypesById.get(form.leave_type_id);
-      const { data: workDates, error: dateError } = await (supabase as any).rpc("leave_work_dates", {
-        _employee_id: form.employee_id,
-        _start_date: form.work_date,
-        _end_date: form.leave_end_date ?? form.work_date,
-        _count_non_working_days: leaveType?.count_non_working_days ?? true,
-      });
-      if (dateError) throw new Error(dateError.message);
-      for (const { work_date: date } of workDates ?? []) {
-        if (date >= start && date < endDate) rows.push({
+    for (const form of forms) {
+      const leaveType = form.leave_type_id ? leaveTypesById.get(form.leave_type_id) : undefined;
+      for (const date of reportLeaveDates(form.work_date, form.leave_end_date ?? form.work_date,
+        start, endDate, leaveType?.count_non_working_days ?? true)) {
+        rows.push({
           employee_id: form.employee_id,
           work_date: date,
           status: "leave",
@@ -107,7 +107,7 @@ export const getMonthlySheet = createServerFn({ method: "GET" })
     const rows = [];
     for (let i = 0; i < (employees ?? []).length; i += 100) {
       const batch = (employees ?? []).slice(i, i + 100);
-      const [logs, overrides, weeklySchedules, storedOvertime] = await Promise.all([
+      const [logs, overrides, weeklySchedules, storedOvertime, leaveOverrides] = await Promise.all([
         loadAllRows((from, to) =>
           supabase
             .from("attendance_logs")
@@ -155,8 +155,8 @@ export const getMonthlySheet = createServerFn({ method: "GET" })
             .lt("work_date", endDate)
             .range(from, to),
         ),
+        approvedLeaveOverrides(supabase, batch.map((employee) => employee.id), start, endDate),
       ]);
-      const leaveOverrides = await approvedLeaveOverrides(supabase, batch.map((employee) => employee.id), start, endDate);
       const logsByEmployee = new Map<string, typeof logs>();
       for (const log of logs) {
         const entries = logsByEmployee.get(log.employee_no) ?? [];

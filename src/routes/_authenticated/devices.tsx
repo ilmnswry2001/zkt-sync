@@ -460,52 +460,81 @@ function DeviceSyncRecords({ devices, canView, canDelete }: { devices: Device[];
     },
     onError: (error: Error) => toast.error(formatErrorMessage(error)),
   });
-  const query = useQuery({
-    queryKey: ["device-sync-records", filters, page],
-    enabled: canView && validPair,
-    refetchInterval: 15_000,
-    queryFn: async () => {
-      let fields: string = verificationFields;
+  const batchPrefix = filters.batch?.toLowerCase();
+  const uuidLayout = "00000000-0000-0000-0000-000000000000";
+  const invalidBatch = !!batchPrefix && (batchPrefix.length > uuidLayout.length || [...batchPrefix].some((c, i) =>
+    uuidLayout[i] === "-" ? c !== "-" : !/[0-9a-f]/.test(c)));
+  const needsBatch = !!(filters.receivedFrom || filters.receivedUntil);
+
+  const buildRequest = (countOnly: boolean) => {
+    const related = [
+      filters.employee && "employee:employees!inner(id)",
+      filters.file && "upload:uploaded_files!inner(id)",
+      needsBatch && "batch:sync_batches(id)",
+    ].filter(Boolean);
+    let fields = countOnly ? ["id", ...related].join(",") : verificationFields;
+    if (!countOnly) {
       if (filters.employee) fields = fields.replace("employee:employees(", "employee:employees!inner(");
       if (filters.file) fields = fields.replace("upload:uploaded_files(", "upload:uploaded_files!inner(");
-      if (filters.receivedFrom || filters.receivedUntil) fields = fields.replace("batch:sync_batches(", "batch:sync_batches!inner(");
-      let request = supabase.from("device_sync_records").select(fields, { count: "exact" }).is("archived_at", null);
-      if (filters.verify === null) request = request.is("verify_type", null);
-      else if (filters.verify !== undefined) request = request.eq("verify_type", Number(filters.verify));
-      if (filters.status === null) request = request.is("status", null);
-      else if (filters.status !== undefined) request = request.eq("status", Number(filters.status));
-      if (filters.device) request = request.eq("device_id", filters.device);
-      if (filters.processing === "unprocessed") request = request.in("processing_status", ["pending", "error", "unmatched"]);
-      else if (filters.processing) request = request.eq("processing_status", filters.processing);
-      if (filters.external) request = request.eq("external_log_id", Number(filters.external));
-      if (filters.search) {
-        const pattern = JSON.stringify(`%${filters.search}%`);
-        request = request.or(`user_pin.ilike.${pattern},employee_no.ilike.${pattern}`);
-      }
-      if (filters.from) request = request.gte("verify_time", filters.from);
-      if (filters.until) request = request.lt("verify_time", filters.until);
-      if (filters.error) request = request.ilike("error_message", `%${filters.error}%`);
-      if (filters.employee) request = request.ilike("employee.full_name", `%${filters.employee}%`);
-      if (filters.file) request = request.ilike("upload.file_name", `%${filters.file}%`);
-      if (filters.receivedFrom) request = request.gte("batch.received_at", filters.receivedFrom);
-      if (filters.receivedUntil) request = request.lt("batch.received_at", filters.receivedUntil);
-      if (filters.batch) {
-        // PostgreSQL UUIDs support range comparisons, but not ILIKE.
-        const prefix = filters.batch.toLowerCase();
-        const layout = "00000000-0000-0000-0000-000000000000";
-        if (prefix.length > layout.length || [...prefix].some((c, i) =>
-          layout[i] === "-" ? c !== "-" : !/[0-9a-f]/.test(c))) return { rows: [], count: 0 };
-        const suffix = layout.slice(prefix.length);
-        request = request.gte("sync_batch_id", prefix + suffix).lte("sync_batch_id", prefix + suffix.replaceAll("0", "f"));
-      }
-      const { data, error, count } = await request.order("verify_time", { ascending: false })
-        .order("id", { ascending: false }).range(page * pageSize, (page + 1) * pageSize - 1);
+    }
+    let request = supabase.from("device_sync_records")
+      .select(fields, countOnly ? { count: "exact", head: true } : undefined).is("archived_at", null);
+    if (filters.verify === null) request = request.is("verify_type", null);
+    else if (filters.verify !== undefined) request = request.eq("verify_type", Number(filters.verify));
+    if (filters.status === null) request = request.is("status", null);
+    else if (filters.status !== undefined) request = request.eq("status", Number(filters.status));
+    if (filters.device) request = request.eq("device_id", filters.device);
+    if (filters.processing === "unprocessed") request = request.in("processing_status", ["pending", "error", "unmatched"]);
+    else if (filters.processing) request = request.eq("processing_status", filters.processing);
+    if (filters.external) request = request.eq("external_log_id", Number(filters.external));
+    if (filters.search) {
+      const pattern = JSON.stringify(`%${filters.search}%`);
+      request = request.or(`user_pin.ilike.${pattern},employee_no.ilike.${pattern}`);
+    }
+    if (filters.from) request = request.gte("verify_time", filters.from);
+    if (filters.until) request = request.lt("verify_time", filters.until);
+    if (filters.error) request = request.ilike("error_message", `%${filters.error}%`);
+    if (filters.employee) request = request.ilike("employee.full_name", `%${filters.employee}%`);
+    if (filters.file) request = request.ilike("upload.file_name", `%${filters.file}%`);
+    if (filters.receivedFrom) request = request.gte("batch.received_at", filters.receivedFrom);
+    if (filters.receivedUntil) request = request.lt("batch.received_at", filters.receivedUntil);
+    if (needsBatch) request = request.not("batch", "is", null);
+    if (batchPrefix) {
+      const suffix = uuidLayout.slice(batchPrefix.length);
+      request = request.gte("sync_batch_id", batchPrefix + suffix)
+        .lte("sync_batch_id", batchPrefix + suffix.replaceAll("0", "f"));
+    }
+    return request;
+  };
+  const query = useQuery({
+    queryKey: ["device-sync-records", "page", filters, page],
+    enabled: canView && validPair,
+    refetchInterval: 15_000,
+    queryFn: async ({ signal }) => {
+      if (invalidBatch) return [];
+      const { data, error } = await buildRequest(false).order("verify_time", { ascending: false })
+        .order("id", { ascending: false }).range(page * pageSize, (page + 1) * pageSize)
+        .abortSignal(signal);
       if (error) throw error;
-      return { rows: data ?? [], count: count ?? 0 };
+      return data ?? [];
     },
   });
-  const rows = query.data?.rows ?? [];
-  const totalPages = Math.max(1, Math.ceil((query.data?.count ?? 0) / pageSize));
+  const countQuery = useQuery({
+    queryKey: ["device-sync-records", "count", filters],
+    enabled: canView && validPair,
+    staleTime: 60_000,
+    retry: false,
+    queryFn: async ({ signal }) => {
+      if (invalidBatch) return 0;
+      const { count, error } = await buildRequest(true).abortSignal(signal);
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+  const rows = (query.data ?? []).slice(0, pageSize);
+  const count = countQuery.data;
+  const totalPages = count === undefined ? undefined : Math.max(1, Math.ceil(count / pageSize));
+  const hasNextPage = (query.data?.length ?? 0) > pageSize;
   const resetFilters = () => { setStatus("all"); setDeviceId("all"); setSearch(""); setExternalId(""); setPair(""); setExtra({employee:"", file:"", batch:"", error:"", receivedFrom:"", receivedUntil:""}); setDateFrom(""); setDateTo(""); setPage(0); };
   const statusLabel = (value: string) => ({ inserted: "مسجلة", duplicate: "مكررة", unmatched: "رقم غير معرف", pending: "قيد المعالجة", error: "خطأ" }[value] ?? value);
   const exportMovements = useMutation({
@@ -585,9 +614,9 @@ function DeviceSyncRecords({ devices, canView, canDelete }: { devices: Device[];
         </div>
         {query.error && <p role="alert" className="text-sm text-destructive">تعذر تحميل السجلات. تحقق من تطبيق ترحيل سجلات التحقق.</p>}
         {canDelete && <div className="flex flex-wrap items-center gap-2">
-          <Button variant="destructive" disabled={!validPair || (!verifyType && !deviceStatus) || !query.data?.count || query.isError || archive.isPending || reprocess.isPending}
+          <Button variant="destructive" disabled={!validPair || (!verifyType && !deviceStatus) || !count || query.isError || archive.isPending || reprocess.isPending}
             onClick={() => {
-              if (confirm(`حذف الحركات المطابقة من سجل التحقق في جميع الصفحات؟\nنوع التحقق: ${verifyType || "الكل"} · حالة الجهاز: ${deviceStatus || "الكل"}\nعدد النتائج: ${query.data?.count} حسب الفلاتر الحالية. ستُحفظ نسخة للتدقيق ولن تتغير سجلات الحضور.`)) archive.mutate();
+              if (confirm(`حذف الحركات المطابقة من سجل التحقق في جميع الصفحات؟\nنوع التحقق: ${verifyType || "الكل"} · حالة الجهاز: ${deviceStatus || "الكل"}\nعدد النتائج: ${count} حسب الفلاتر الحالية. ستُحفظ نسخة للتدقيق ولن تتغير سجلات الحضور.`)) archive.mutate();
             }}><Trash2 className="ml-2 h-4 w-4" />{archive.isPending ? "جارٍ الحذف…" : "حذف الحركات المطابقة"}</Button>
           {!verifyType && !deviceStatus && <span className="text-sm text-muted-foreground">حدد نوع التحقق أو حالة الحركة بالجهاز لتفعيل الحذف.</span>}
         </div>}
@@ -607,11 +636,13 @@ function DeviceSyncRecords({ devices, canView, canDelete }: { devices: Device[];
               <TableCell className="max-w-64 whitespace-normal break-words text-xs text-muted-foreground">{row.error_message ?? "—"}</TableCell>
               <TableCell className="font-mono text-xs">{row.sync_batch_id?.slice(0, 8) ?? "—"}</TableCell>
             </TableRow>)}
-              {!rows.length && <TableRow><TableCell colSpan={10} className="py-8 text-center text-muted-foreground">{query.isLoading ? "جارٍ تحميل السجلات…" : query.error ? "تعذر جلب السجلات؛ راجع صلاحية الحساب وترحيل قاعدة البيانات." : query.data?.count === 0 && status === "all" && deviceId === "all" && !search && !externalId && !verifyType && !deviceStatus && !dateFrom && !dateTo ? "لا توجد تفاصيل مسجلة بعد. انتقل إلى تبويب الأجهزة والمزامنة واضغط «سحب الآن» لتسجيل تفاصيل الحركات الجديدة." : "لا توجد حركات مطابقة للفلاتر الحالية؛ امسح الفلاتر لعرض جميع السجلات."}</TableCell></TableRow>}
+              {!rows.length && <TableRow><TableCell colSpan={10} className="py-8 text-center text-muted-foreground">{query.isLoading ? "جارٍ تحميل السجلات…" : query.error ? "تعذر جلب السجلات؛ راجع صلاحية الحساب وترحيل قاعدة البيانات." : count === 0 && status === "all" && deviceId === "all" && !search && !externalId && !verifyType && !deviceStatus && !dateFrom && !dateTo ? "لا توجد تفاصيل مسجلة بعد. انتقل إلى تبويب الأجهزة والمزامنة واضغط «سحب الآن» لتسجيل تفاصيل الحركات الجديدة." : "لا توجد حركات مطابقة للفلاتر الحالية؛ امسح الفلاتر لعرض جميع السجلات."}</TableCell></TableRow>}
             </TableBody>
           </Table>
         </div>
-        <div className="flex items-center justify-between text-sm"><span>عدد النتائج: {(query.data?.count ?? 0).toLocaleString("ar-IQ")}</span><div className="flex items-center gap-2"><Button variant="outline" size="sm" disabled={page <= 0} onClick={() => setPage((value) => value - 1)}>السابق</Button><span>صفحة {(page + 1).toLocaleString("ar-IQ")} من {totalPages.toLocaleString("ar-IQ")}</span><Button variant="outline" size="sm" disabled={page + 1 >= totalPages} onClick={() => setPage((value) => value + 1)}>التالي</Button></div></div>
+        <div className="flex items-center justify-between text-sm"><span>{count === undefined
+          ? countQuery.isError ? "تعذر حساب عدد النتائج" : "جارٍ حساب عدد النتائج…"
+          : `عدد النتائج: ${count.toLocaleString("ar-IQ")}`}</span><div className="flex items-center gap-2"><Button variant="outline" size="sm" disabled={page <= 0} onClick={() => setPage((value) => value - 1)}>السابق</Button><span>صفحة {(page + 1).toLocaleString("ar-IQ")}{totalPages === undefined ? "" : ` من ${totalPages.toLocaleString("ar-IQ")}`}</span><Button variant="outline" size="sm" disabled={!hasNextPage} onClick={() => setPage((value) => value + 1)}>التالي</Button></div></div>
       </>}
     </CardContent>
     {assignment && canView && <AssignDevicePinDialog record={assignment} close={() => setAssignment(null)} />}

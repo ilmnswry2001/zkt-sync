@@ -1,3 +1,5 @@
+import { useDirectorySearch } from "@/hooks/use-directory-search";
+import { loadAllRows } from "@/lib/monthly-report";
 import { WorkshopManagement } from "@/components/WorkshopManagement";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -70,6 +72,7 @@ type Member = {
   employee_id: string;
   role_label: string | null;
   is_active: boolean;
+  employee: Employee | null;
 };
 type DailyReport = { id: string; workshop_id: string; report_date: string; notes: string | null };
 type AttendanceLine = {
@@ -92,19 +95,14 @@ const noMembers: Member[] = [];
 const noDevices: Device[] = [];
 const noAttendancePunches: AttendancePunch[] = [];
 
-async function loadActiveEmployees(): Promise<Employee[]> {
-  const rows: Employee[] = [];
-  for (let from = 0; ; from += 1000) {
-    const { data, error } = await supa
-      .from("employees")
-      .select("id, employee_no, full_name, position")
-      .eq("status", "active")
-      .order("full_name")
-      .range(from, from + 999);
-    if (error) throw error;
-    rows.push(...(data ?? []));
-    if (!data || data.length < 1000) return rows;
-  }
+const rosterFields = "id, workshop_id, employee_id, role_label, is_active, employee:employees(id, employee_no, full_name, position, status)";
+type RosterRow = Member & { employee: (Employee & { status: string }) | null };
+
+function activeRosterMembers(rows: RosterRow[]): Member[] {
+  return rows.map((member) => ({
+    ...member,
+    employee: member.employee?.status === "active" ? member.employee : null,
+  }));
 }
 
 type QueuedInventory = {
@@ -162,7 +160,9 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>(["all"]);
   const [workshopId, setWorkshopId] = useState(initialWorkshopId);
   const [additionalWorkshopId, setAdditionalWorkshopId] = useState("");
-  const [employeeId, setEmployeeId] = useState("");
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [employeeSearch, setEmployeeSearch] = useState("");
+  const employeeLookup = useDirectorySearch(employeeSearch);
   const [employeePickerOpen, setEmployeePickerOpen] = useState(false);
   const [roleLabel, setRoleLabel] = useState("");
   const [drafts, setDrafts] = useState<
@@ -229,71 +229,81 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
       return data ?? [];
     },
   });
-  const attendancePunchesQuery = useQuery<AttendancePunch[]>({
-    queryKey: ["daily-workshop-attendance-punches", date, selectedDeviceIds],
-    queryFn: async () => {
-      const start = new Date(`${date}T00:00:00+03:00`);
-      const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
-      const punches: AttendancePunch[] = [];
-      for (let from = 0; ; from += 1000) {
-        let request = supa
-          .from("attendance_logs")
-          .select(
-            "id, employee_id, employee_no, verify_time, device_id, status, verify_type, self_event_type, is_suspicious",
-          )
-          .gte("verify_time", start.toISOString())
-          .lt("verify_time", end.toISOString())
-          .order("verify_time")
-          .range(from, from + 999);
-        if (!selectedDeviceIds.includes("all")) {
-          request = request.in("device_id", selectedDeviceIds);
-        }
-        const { data, error } = await request;
-        if (error) throw error;
-        punches.push(...(data ?? []));
-        if (!data || data.length < 1000) break;
-      }
-      return punches.filter(
-        (punch) =>
-          !punch.is_suspicious &&
-          (punch.self_event_type === "check_in" ||
-            (punch.self_event_type == null &&
-              (punch.status === 0 || (punch.status == null && punch.verify_type === 0)))),
-      );
-    },
-  });
-  const activeWorkshopMembersQuery = useQuery<Array<{ workshop_id: string; employee_id: string }>>({
-    queryKey: ["daily-workshop-all-active-members"],
-    queryFn: async () => {
-      const rows: Array<{ workshop_id: string; employee_id: string }> = [];
-      for (let from = 0; ; from += 1000) {
-        const { data, error } = await supa
-          .from("daily_workshop_members")
-          .select("workshop_id, employee_id")
-          .eq("is_active", true)
-          .range(from, from + 999);
-        if (error) throw error;
-        rows.push(...(data ?? []));
-        if (!data || data.length < 1000) return rows;
-      }
-    },
-  });
-  const employeesQuery = useQuery<Employee[]>({
-    queryKey: ["daily-workshop-employees"],
-    queryFn: loadActiveEmployees,
-  });
   const membersQuery = useQuery<Member[]>({
     queryKey: ["daily-workshop-members", workshopId],
     enabled: !!workshopId,
     queryFn: async () => {
-      const { data, error } = await supa
-        .from("daily_workshop_members")
-        .select("id, workshop_id, employee_id, role_label, is_active")
-        .eq("workshop_id", workshopId)
-        .eq("is_active", true)
-        .order("created_at");
+      const rows = await loadAllRows<RosterRow>((from, to) => supa
+        .from("daily_workshop_members").select(rosterFields)
+        .eq("workshop_id", workshopId).eq("is_active", true)
+        .order("created_at").order("id").range(from, to));
+      return activeRosterMembers(rows);
+    },
+  });
+  const members = membersQuery.data ?? noMembers;
+  const bySelectedDevices = !selectedDeviceIds.includes("all");
+  const scopeIds = bySelectedDevices ? selectedDeviceIds : members.flatMap(({ employee }) => employee?.employee_no ?? []);
+  const attendancePunchesQuery = useQuery<AttendancePunch[]>({
+    queryKey: ["daily-workshop-attendance-punches", date, bySelectedDevices, scopeIds],
+    enabled: tab === "inventory" && !!date && scopeIds.length > 0,
+    queryFn: async () => {
+      const start = new Date(`${date}T00:00:00+03:00`);
+      const end = new Date(start.getTime() + 86400000);
+      const punches: AttendancePunch[] = [];
+      const ids = [...new Set(scopeIds)];
+      for (let offset = 0; offset < ids.length; offset += 100) {
+        const batch = ids.slice(offset, offset + 100);
+        punches.push(...await loadAllRows<AttendancePunch>((from, to) => supabase
+          .from("attendance_logs")
+          .select("id, employee_id, employee_no, verify_time, device_id, status, verify_type, self_event_type, is_suspicious")
+          .in(bySelectedDevices ? "device_id" : "employee_no", batch)
+          .gte("verify_time", start.toISOString()).lt("verify_time", end.toISOString())
+          .eq("is_suspicious", false)
+          .or("self_event_type.eq.check_in,and(self_event_type.is.null,or(status.eq.0,and(status.is.null,verify_type.eq.0)))")
+          .order("verify_time").order("id").range(from, to)));
+      }
+      return punches.sort((a, b) => a.verify_time.localeCompare(b.verify_time) || a.id.localeCompare(b.id));
+    },
+  });
+  const activeWorkshopMembersQuery = useQuery({
+    queryKey: ["daily-workshop-all-active-members"],
+    enabled: tab === "inventory" && bySelectedDevices,
+    queryFn: () => loadAllRows((from, to) => supabase
+      .from("daily_workshop_members").select("workshop_id, employee_id, employee:employees(employee_no)")
+      .eq("is_active", true).order("id").range(from, to)),
+  });
+  const attendancePunches = attendancePunchesQuery.data ?? noAttendancePunches;
+  const deviceEmployeeNumbers = useMemo(
+    () => bySelectedDevices ? [...new Set(attendancePunches.map((punch) => punch.employee_no))] : [],
+    [attendancePunches, bySelectedDevices],
+  );
+  const employeesQuery = useQuery<Employee[]>({
+    queryKey: ["daily-workshop-device-employees", deviceEmployeeNumbers],
+    enabled: tab === "inventory" && deviceEmployeeNumbers.length > 0,
+    queryFn: async ({ signal }) => {
+      const people: Employee[] = [];
+      for (let offset = 0; offset < deviceEmployeeNumbers.length; offset += 100) {
+        const { data, error } = await supabase.from("employees").select("id, employee_no, full_name, position")
+          .eq("status", "active").in("employee_no", deviceEmployeeNumbers.slice(offset, offset + 100))
+          .abortSignal(signal);
+        if (error) throw error;
+        people.push(...data);
+      }
+      return people;
+    },
+  });
+  const employeeSearchQuery = useQuery({
+    queryKey: ["daily-workshop-employee-search", employeeLookup.term],
+    enabled: employeePickerOpen && employeeLookup.valid && !employeeLookup.waiting,
+    queryFn: async ({ signal }) => {
+      let query = supabase.from("employees").select("id, employee_no, full_name, position")
+        .eq("status", "active");
+      for (const term of employeeLookup.term.split(" ")) {
+        query = query.or(`full_name.ilike.%${term}%,employee_no.ilike.%${term}%`);
+      }
+      const { data, error } = await query.order("full_name").order("id").limit(50).abortSignal(signal);
       if (error) throw error;
-      return data ?? [];
+      return data;
     },
   });
   const reportQuery = useQuery({
@@ -320,27 +330,18 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
   });
 
   const workshops = workshopsQuery.data ?? noWorkshops;
-  const employees = employeesQuery.data ?? noEmployees;
-  const members = membersQuery.data ?? noMembers;
+  const employees = useMemo(() => [
+    ...(employeesQuery.data ?? noEmployees),
+    ...members.flatMap(({ employee }) => employee ?? []),
+  ], [employeesQuery.data, members]);
   const devices = devicesQuery.data ?? noDevices;
-  const attendancePunches = attendancePunchesQuery.data ?? noAttendancePunches;
   const selectedWorkshop = workshops.find((workshop) => workshop.id === workshopId);
-  const activeRoster = useMemo(
-    () =>
-      members
-        .map((member) => ({
-          ...member,
-          employee: employees.find((employee) => employee.id === member.employee_id),
-        }))
-        .filter((member) => member.employee),
-    [members, employees],
-  );
+  const activeRoster = useMemo(() => members.filter((member) => member.employee), [members]);
   const savedReport = reportQuery.data?.reports.find((report) => report.workshop_id === workshopId);
   const savedLines = useMemo(
     () => reportQuery.data?.lines.filter((line) => line.report_id === savedReport?.id) ?? [],
     [reportQuery.data?.lines, savedReport?.id],
   );
-  const selectedEmployee = employees.find((employee) => employee.id === employeeId);
   const employeeById = useMemo(
     () => new Map(employees.map((employee) => [employee.id, employee])),
     [employees],
@@ -385,7 +386,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
   );
   const unmatchedPunches = useMemo(() => {
     if (
-      attendancePunchesQuery.isError ||
+      !bySelectedDevices || attendancePunchesQuery.isError ||
       activeWorkshopMembersQuery.isLoading ||
       activeWorkshopMembersQuery.isError
     ) {
@@ -414,6 +415,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
     activeWorkshopEmployeeIds,
     dismissedPunchEmployees,
     attendancePunchesQuery.isError,
+    bySelectedDevices,
     activeWorkshopMembersQuery.isLoading,
     activeWorkshopMembersQuery.isError,
   ]);
@@ -505,7 +507,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
   const markRosterFromBiometrics = async () => {
     const [punchesResult, membersResult, reportsResult] = await Promise.all([
       attendancePunchesQuery.refetch(),
-      activeWorkshopMembersQuery.refetch(),
+      bySelectedDevices ? activeWorkshopMembersQuery.refetch() : membersQuery.refetch(),
       reportQuery.refetch(),
     ]);
     const queryError = punchesResult.error ?? membersResult.error ?? reportsResult.error;
@@ -520,7 +522,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
       (member) =>
         activeWorkshopIds.has(member.workshop_id) &&
         (punchEmployeeIds.has(member.employee_id) ||
-          punchEmployeeNumbers.has(employeeById.get(member.employee_id)?.employee_no ?? "")),
+          punchEmployeeNumbers.has(member.employee?.employee_no ?? "")),
     );
     const reports = reportsResult.data?.reports ?? [];
     const lines = reportsResult.data?.lines ?? [];
@@ -576,7 +578,10 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
         ["daily-workshop-members", targetWorkshopId],
         (current = []) => [
           ...current.filter((member) => !ids.includes(member.employee_id)),
-          ...data,
+          ...(data as Omit<Member, "employee">[]).map((member) => ({
+            ...member,
+            employee: employees.find((employee) => employee.id === member.employee_id) ?? null,
+          })),
         ],
       );
       markEmployeePresentInWorkshop(targetWorkshopId, ids);
@@ -609,7 +614,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
 
   const addMember = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const employee = employees.find((item) => item.id === employeeId);
+    const employee = selectedEmployee;
     if (!workshopId || !employee) return toast.error("اختر الورشة والموظف");
     setSaving(true);
     try {
@@ -623,7 +628,8 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
         { onConflict: "workshop_id,employee_id" },
       );
       if (error) throw error;
-      setEmployeeId("");
+      setSelectedEmployee(null);
+      setEmployeeSearch("");
       setRoleLabel("");
       setAdditionalWorkshopId("");
       await queryClient.invalidateQueries({ queryKey: ["daily-workshop-all-active-members"] });
@@ -656,13 +662,10 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
       let allMembers: Member[] = members;
       const others = ids.filter((id) => id !== workshopId);
       if (others.length && navigator.onLine) {
-        const { data, error } = await supa
-          .from("daily_workshop_members")
-          .select("id, workshop_id, employee_id, role_label, is_active")
-          .in("workshop_id", others)
-          .eq("is_active", true);
-        if (error) throw error;
-        allMembers = [...members, ...(data ?? [])];
+        const otherMembers = await loadAllRows<RosterRow>((from, to) => supa
+          .from("daily_workshop_members").select(rosterFields)
+          .in("workshop_id", others).eq("is_active", true).order("id").range(from, to));
+        allMembers = [...members, ...activeRosterMembers(otherMembers)];
       } else {
         for (const id of others) {
           const cached = queryClient.getQueryData<Member[]>(["daily-workshop-members", id]);
@@ -680,7 +683,6 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
         const attended = drafts[id]?.attended ?? saved;
         const roster = allMembers
           .filter((m) => m.workshop_id === id)
-          .map((m) => ({ ...m, employee: employees.find((e) => e.id === m.employee_id) }))
           .filter((m) => m.employee);
         if (!roster.length) continue;
         payloads.push({
@@ -874,12 +876,12 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                         className={`${inputClass} justify-between font-normal`}
                       >
                         {selectedDeviceIds.includes("all")
-                          ? `كل الأجهزة (${devices.length})`
+                          ? "بصمات أعضاء الورشة"
                           : `${selectedDeviceIds.length} أجهزة محددة`}
                         <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-72 p-2" align="start">
+                    <PopoverContent dir="rtl" className="w-72 p-2" align="start">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2 rounded-md p-2 text-sm hover:bg-muted">
                           <Checkbox
@@ -890,7 +892,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                             }
                           />
                           <label htmlFor="all-attendance-devices" className="flex-1 cursor-pointer">
-                            كل الأجهزة المضافة ({devices.length})
+                            أعضاء الورشة من كل الأجهزة
                           </label>
                         </div>
                         {devices.map((device) => (
@@ -981,15 +983,15 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                       variant="outline"
                       onClick={() => void markRosterFromBiometrics()}
                       disabled={
-                        attendancePunchesQuery.isFetching ||
-                        activeWorkshopMembersQuery.isLoading ||
-                        activeWorkshopMembersQuery.isError
+                        !date || !scopeIds.length || attendancePunchesQuery.isFetching ||
+                        (bySelectedDevices && (activeWorkshopMembersQuery.isLoading ||
+                          activeWorkshopMembersQuery.isError || employeesQuery.isFetching || employeesQuery.isError))
                       }
                     >
                       <Fingerprint className="ml-2 h-4 w-4" />
                       {attendancePunchesQuery.isFetching
                         ? "جارٍ فحص البصمات..."
-                        : "تأشير كل الورش بالبصمة"}
+                        : bySelectedDevices ? "تأشير الورش من الأجهزة المحددة" : "تأشير الورشة بالبصمة"}
                     </Button>
                   </div>
                 </div>
@@ -1302,26 +1304,31 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent
+                        dir="rtl"
                         className="w-[--radix-popover-trigger-width] p-0"
                         align="start"
                       >
-                        <Command>
-                          <CommandInput placeholder="اكتب اسم الموظف أو رقمه الوظيفي..." />
+                        <Command shouldFilter={false}>
+                          <CommandInput value={employeeSearch} onValueChange={setEmployeeSearch} maxLength={100}
+                            placeholder="اكتب اسم الموظف أو رقمه الوظيفي..." />
                           <CommandList>
-                            <CommandEmpty>لا يوجد موظف مطابق للبحث.</CommandEmpty>
+                            <CommandEmpty>{!employeeLookup.valid ? "اكتب حرفين أو رقمين على الأقل." :
+                              employeeLookup.waiting || employeeSearchQuery.isFetching ? "جارٍ البحث…" :
+                              employeeSearchQuery.isError ? "تعذر البحث عن الموظفين." : "لا يوجد موظف مطابق للبحث."}</CommandEmpty>
                             <CommandGroup>
-                              {employees.map((employee) => (
+                              {(!employeeLookup.waiting && employeeLookup.valid ? employeeSearchQuery.data ?? [] : []).map((employee) => (
                                 <CommandItem
                                   key={employee.id}
-                                  value={`${employee.employee_no} ${employee.full_name}`}
+                                  value={employee.id}
                                   onSelect={() => {
-                                    setEmployeeId(employee.id);
+                                    setSelectedEmployee(employee);
+                                    setEmployeeSearch("");
                                     setRoleLabel(employee.position ?? "");
                                     setEmployeePickerOpen(false);
                                   }}
                                 >
                                   <Check
-                                    className={`h-4 w-4 ${employeeId === employee.id ? "opacity-100" : "opacity-0"}`}
+                                    className={`h-4 w-4 ${selectedEmployee?.id === employee.id ? "opacity-100" : "opacity-0"}`}
                                   />
                                   <span>
                                     {employee.employee_no} — {employee.full_name}
@@ -1350,7 +1357,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                       {workshops.filter(w => w.id !== workshopId).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                     </select>
                   </label>
-                  <Button type="submit" disabled={saving || !employeeId} className="self-end">
+                  <Button type="submit" disabled={saving || !selectedEmployee} className="self-end">
                     <Plus className="ml-2 h-4 w-4" />
                     إضافة للكادر
                   </Button>

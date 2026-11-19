@@ -343,6 +343,25 @@ export function dailyTotals(dates: string[], rows: { days: AttendanceDay[] }[], 
   });
 }
 
+export function reportLeaveDates(
+  start: string,
+  end: string,
+  reportStart: string,
+  reportEndExclusive: string,
+  countNonWorkingDays: boolean,
+): string[] {
+  const dates: string[] = [];
+  const day = new Date(`${start > reportStart ? start : reportStart}T00:00:00Z`);
+  for (
+    let date = day.toJSON()?.slice(0, 10);
+    date && date <= end && date < reportEndExclusive;
+    day.setUTCDate(day.getUTCDate() + 1), date = day.toJSON()?.slice(0, 10)
+  ) {
+    if (countNonWorkingDays || day.getUTCDay() !== 5) dates.push(date);
+  }
+  return dates;
+}
+
 export async function loadAllRows<T>(
   page: (
     from: number,

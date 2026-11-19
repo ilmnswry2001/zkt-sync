@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { summarizeAttendancePunches } from "./monthly-report";
+import { loadAllRows, summarizeAttendancePunches } from "./monthly-report";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { processUploadedAttendance, resolveUploadPunchTimeZone } from "@/lib/uploaded-attendance";
 import { uploadedFilesTable } from "@/lib/uploaded-files-client";
@@ -149,41 +149,60 @@ export const getDailyReport = createServerFn({ method: "GET" })
     const { supabase } = context;
     const start = new Date(data.date + "T00:00:00+03:00");
     const end = new Date(start.getTime() + 86400000);
-    const { data: logs, error: logsError } = await (supabase as any).from("attendance_logs")
-      .select("employee_no, employee_id, verify_time, device_id, source, status, self_event_type, is_suspicious, selfie_path")
-      .gte("verify_time", start.toISOString())
-      .lt("verify_time", end.toISOString())
-      .order("verify_time", { ascending: true });
-    if (logsError) throw new Error(logsError.message);
-    const { data: emps, error: employeesError } = await supabase.from("employees")
-      .select("id, employee_no, full_name, status, department_id, departments(name), shifts(start_time, end_time, grace_minutes)");
-    if (employeesError) throw new Error(employeesError.message);
-    const startOfDay = new Date(`${data.date}T00:00:00+03:00`).toISOString();
-    const startOfNextDay = new Date(new Date(startOfDay).getTime() + 86400000).toISOString();
-    const { data: attempts } = await (supabase as any).from("attendance_suspicious_attempts")
-      .select("employee_id, selfie_path, reason, attempted_at").gte("attempted_at", startOfDay).lt("attempted_at", startOfNextDay);
-    const attemptByEmployee = new Map((attempts ?? []).map((attempt: any) => [attempt.employee_id, attempt]));
-    const weekday = new Date(`${data.date}T00:00:00`).getDay();
-    const { data: schedules, error: scheduleError } = await (supabase as any).from("employee_weekly_schedules")
-      .select("employee_id, start_time, end_time, grace_minutes, effective_from, effective_until")
-      .eq("weekday", weekday).lte("effective_from", data.date).or(`effective_until.is.null,effective_until.gte.${data.date}`);
-    if (scheduleError) throw new Error(scheduleError.message);
-    const scheduleByEmployee = new Map((schedules ?? []).map((schedule: any) => [schedule.employee_id, schedule]));
+    const startOfDay = start.toISOString();
+    const startOfNextDay = end.toISOString();
+    const weekday = new Date(`${data.date}T00:00:00Z`).getUTCDay();
+    const [logs, emps, attempts, schedules] = await Promise.all([
+      loadAllRows((from, to) => supabase.from("attendance_logs")
+        .select("employee_no, employee_id, verify_time, device_id, source, status, self_event_type, is_suspicious, selfie_path")
+        .gte("verify_time", startOfDay).lt("verify_time", startOfNextDay).order("verify_time").order("id").range(from, to)),
+      loadAllRows((from, to) => supabase.from("employees")
+        .select("id, employee_no, full_name, status, departments(name), shifts(start_time, end_time, grace_minutes)")
+        .eq("status", "active").order("id").range(from, to)),
+      loadAllRows((from, to) => supabase.from("attendance_suspicious_attempts")
+        .select("employee_id, selfie_path, reason").gte("attempted_at", startOfDay).lt("attempted_at", startOfNextDay)
+        .order("attempted_at").order("id").range(from, to)),
+      loadAllRows((from, to) => supabase.from("employee_weekly_schedules")
+        .select("employee_id, start_time, end_time, grace_minutes")
+        .eq("weekday", weekday).lte("effective_from", data.date).or(`effective_until.is.null,effective_until.gte.${data.date}`)
+        .order("effective_from").order("id").range(from, to)),
+    ]);
+    const attemptByEmployee = new Map(attempts.map((attempt) => [attempt.employee_id, attempt]));
+    const scheduleByEmployee = new Map(schedules.map((schedule) => [schedule.employee_id, schedule]));
 
-    const byPin = new Map<string, { logs: any[]; devices: Set<string>; sources: Set<string>; suspicious: boolean }>();
-    (logs ?? []).forEach((l: any) => {
+    const photoByEmployeeNo = new Map<string, string>();
+    for (const log of logs) {
+      if (log.selfie_path && !photoByEmployeeNo.has(log.employee_no)) {
+        photoByEmployeeNo.set(log.employee_no, log.selfie_path);
+      }
+    }
+    const photoByEmployeeId = new Map<string, string>();
+    for (const employee of emps) {
+      const path = photoByEmployeeNo.get(employee.employee_no) ?? attemptByEmployee.get(employee.id)?.selfie_path;
+      if (path) photoByEmployeeId.set(employee.id, path);
+    }
+    const paths = [...new Set(photoByEmployeeId.values())];
+    const signedUrls = new Map<string, string>();
+    if (paths.length) {
+      const { data: signed } = await supabase.storage.from("attendance-selfies").createSignedUrls(paths, 3600);
+      for (const item of signed ?? []) {
+        if (item.path && item.signedUrl && !item.error) signedUrls.set(item.path, item.signedUrl);
+      }
+    }
+
+    const byPin = new Map<string, { logs: typeof logs; devices: Set<string>; sources: Set<string>; suspicious: boolean }>();
+    logs.forEach((l) => {
       const cur = byPin.get(l.employee_no);
       if (!cur) byPin.set(l.employee_no, { logs: [l], devices: new Set(l.device_id ? [l.device_id] : []), sources: new Set(l.source ? [l.source] : []), suspicious: !!l.is_suspicious });
       else { cur.logs.push(l); if (l.device_id) cur.devices.add(l.device_id); if (l.source) cur.sources.add(l.source); cur.suspicious ||= !!l.is_suspicious; }
     });
 
-    const rows = await Promise.all((emps ?? []).map(async (e: any) => {
+    const rows = emps.map((e) => {
       const rec = byPin.get(e.employee_no);
-      const attempt: any = attemptByEmployee.get(e.id);
-      const photoLog = (logs ?? []).find((log: any) => log.employee_no === e.employee_no && log.selfie_path);
-      const photoPath = photoLog?.selfie_path ?? attempt?.selfie_path;
-      const selfieUrl = photoPath ? (await supabase.storage.from("attendance-selfies").createSignedUrl(photoPath, 3600)).data?.signedUrl ?? null : null;
-      const shift: any = scheduleByEmployee.get(e.id) ?? e.shifts;
+      const attempt = attemptByEmployee.get(e.id);
+      const photoPath = photoByEmployeeId.get(e.id);
+      const selfieUrl = photoPath ? signedUrls.get(photoPath) ?? null : null;
+      const shift = scheduleByEmployee.get(e.id) ?? e.shifts;
       const attendance = summarizeAttendancePunches(rec?.logs ?? [], shift?.end_time, shift?.grace_minutes ?? 0);
       const late = attendance.check_in && shift?.start_time
         ? isLateArrival(data.date, attendance.check_in, shift.start_time, shift.end_time, shift.grace_minutes ?? 0)
@@ -207,16 +226,16 @@ export const getDailyReport = createServerFn({ method: "GET" })
         late,
         status: attendance.complete ? "present" : attendance.has_punch ? "incomplete" : "absent",
       };
-    }));
+    });
     const sourceCounts = { device: 0, mobile_self: 0, zk_agent: 0, manual: 0 };
-    for (const log of logs ?? []) {
-      const source = (log as any).source;
+    for (const log of logs) {
+      const source = log.source;
       if (source === "mobile_self") sourceCounts.mobile_self++;
       else if (source === "zk_agent" || source === "zkteco_auto_agent") sourceCounts.zk_agent++;
       else if (source === "manual") sourceCounts.manual++;
       else sourceCounts.device++;
     }
-    return { rows, sourceCounts, suspiciousCount: (logs ?? []).filter((log: any) => log.is_suspicious).length + (attempts ?? []).length };
+    return { rows, sourceCounts, suspiciousCount: logs.filter((log) => log.is_suspicious).length + attempts.length };
   });
 
 function isLateArrival(
