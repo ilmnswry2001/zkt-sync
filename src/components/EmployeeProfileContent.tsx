@@ -1,3 +1,4 @@
+import { EmployeeDocumentsTab } from "@/components/EmployeeDocumentsTab";
 import { formatErrorMessage } from "@/lib/error-message";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -1057,7 +1058,8 @@ export function EmployeeProfileContent({
             empty="لا توجد إضافات أو مكافآت لهذا الشهر."
           />
         </TabsContent>
-        <TabsContent value="identity">
+        <TabsContent value="identity" className="space-y-4">
+          <EmployeeDocumentsTab key={employee.id} employee={employee} />
           <Card>
             <CardHeader>
               <CardTitle>البيانات الوظيفية والشخصية</CardTitle>

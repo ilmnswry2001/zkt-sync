@@ -1,3 +1,4 @@
+import { EmployeeDocumentsTab } from "@/components/EmployeeDocumentsTab";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -398,9 +399,12 @@ function EmployeesPage() {
         </DialogContent>
       </Dialog>
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
-        <TabsList className="grid h-auto w-full grid-cols-2 gap-2 bg-transparent sm:w-fit">
+        <TabsList className="grid h-auto w-full grid-cols-1 gap-2 bg-transparent sm:w-fit sm:grid-cols-3">
           <TabsTrigger value="directory" className="min-h-11 rounded-xl border">دليل الموظفين</TabsTrigger>
           <TabsTrigger value="personal" className="min-h-11 rounded-xl border">التقرير الشخصي</TabsTrigger>
+          <TabsTrigger value="documents" className="min-h-11 whitespace-normal rounded-xl border">
+            المستندات والأوامر الإدارية
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="directory" className="mt-0 space-y-6">
       <div className="flex justify-between items-center">
@@ -854,6 +858,7 @@ function EmployeesPage() {
           </Card>
           {activeProfileId ? <EmployeeProfileContent employeeId={activeProfileId} embedded /> : <Card><CardContent className="p-10 text-center text-muted-foreground">اختر موظفاً من نتائج البحث لعرض التقرير الشخصي الكامل.</CardContent></Card>}
         </TabsContent>
+        <TabsContent value="documents" className="mt-0"><EmployeeDocumentsTab /></TabsContent>
       </Tabs>
     </div>
   );
