@@ -54,6 +54,7 @@ function EmployeesPage() {
   const { isAdmin } = useAuth();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Emp | null>(null);
+  const [createdEmployee, setCreatedEmployee] = useState<{ id: string; employee_no: string } | null>(null);
   const [blockedDeletion, setBlockedDeletion] = useState<{ employee: Emp; payroll: boolean } | null>(null);
   const [allowAllAttendanceSites, setAllowAllAttendanceSites] = useState(false);
   const [attendanceSiteIds, setAttendanceSiteIds] = useState<string[]>([]);
@@ -264,7 +265,7 @@ function EmployeesPage() {
     };
 
     return {
-      employee_no: String(raw.employee_no ?? "").trim(),
+      ...(editing ? { employee_no: String(raw.employee_no ?? "").trim() } : {}),
       full_name: String(raw.full_name ?? "").trim(),
       department_id: toNull(raw.department_id),
       site_id: toNull(raw.site_id),
@@ -312,6 +313,12 @@ function EmployeesPage() {
     };
   };
 
+  const closeEmployeeDialog = () => {
+    setCreatedEmployee(null);
+    setOpen(false);
+    setEditing(null);
+  };
+
   const save = useMutation({
     mutationFn: async (d: any) => {
       const payload = sanitizeEmployeePayload(d);
@@ -326,13 +333,17 @@ function EmployeesPage() {
       if (isAdmin && editing && employeeSiteAccessQuery.isError) {
         throw new Error("تعذر تحميل إعدادات الحضور السابقة؛ أعد فتح ملف الموظف قبل الحفظ");
       }
-      let employeeId = editing?.id;
+      let employeeNo = createdEmployee?.employee_no;
+      let employeeId = editing?.id ?? createdEmployee?.id;
       if (employeeId) {
         const { error } = await client.from("employees").update(payload).eq("id", employeeId);
         if (error) throw error;
       } else {
-        const { data, error } = await client.from("employees").insert(payload).select("id").single();
+        const { data, error } = await client.from("employees").insert(payload).select("id, employee_no").single();
         if (error) throw error;
+        // Retry attendance settings against the same employee if a later request fails.
+        setCreatedEmployee(data);
+        employeeNo = data.employee_no;
         employeeId = data.id;
       }
       if (isAdmin) {
@@ -348,8 +359,15 @@ function EmployeesPage() {
         });
         if (graceError) throw graceError;
       }
+      return employeeNo;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); qc.invalidateQueries({ queryKey: ["employees_count"] }); qc.invalidateQueries({ queryKey: ["employee-self-attendance-site-access"] }); setOpen(false); setEditing(null); toast.success("تم الحفظ"); },
+    onSuccess: (employeeNo) => {
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      qc.invalidateQueries({ queryKey: ["employees_count"] });
+      qc.invalidateQueries({ queryKey: ["employee-self-attendance-site-access"] });
+      closeEmployeeDialog();
+      toast.success(employeeNo ? `تم الحفظ · الرقم الوظيفي ${employeeNo}` : "تم الحفظ");
+    },
     onError: (e: any) => toast.error(formatErrorMessage(e)),
   });
   const del = useMutation({
@@ -493,7 +511,10 @@ function EmployeesPage() {
               </div>
             </DialogContent>
           </Dialog>
-        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setEditing(null); }}>
+        <Dialog open={open} onOpenChange={(o) => {
+          if (o) setOpen(true);
+          else if (!save.isPending) closeEmployeeDialog();
+        }}>
           <DialogTrigger asChild><Button><Plus className="w-4 h-4 ml-2" /> موظف جديد</Button></DialogTrigger>
           <DialogContent dir="rtl" className="flex max-h-[92vh] max-w-5xl flex-col overflow-hidden rounded-2xl border-0 p-0 shadow-2xl">
             <DialogHeader className="shrink-0 border-b bg-gradient-to-l from-teal-950 via-teal-800 to-cyan-700 px-6 py-5 text-white">
@@ -502,6 +523,7 @@ function EmployeesPage() {
             </DialogHeader>
             <form onSubmit={(e) => {
               e.preventDefault();
+              if (save.isPending) return;
               if (isAdmin && editing && (employeeSiteAccessQuery.isLoading || employeeSiteAccessQuery.isError)) {
                 toast.error("تعذر تحميل صلاحيات المواقع؛ أعد فتح ملف الموظف قبل الحفظ");
                 return;
@@ -555,9 +577,23 @@ function EmployeesPage() {
               <section className="space-y-3 rounded-xl border bg-card p-4 shadow-sm">
                 <div><h3 className="font-semibold">البيانات الأساسية</h3><p className="text-xs text-muted-foreground">الحقول ذات النجمة مطلوبة لإتمام الحفظ.</p></div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div><Label>الرقم الوظيفي *</Label><Input name="employee_no" required autoFocus placeholder="مثال: 10428" defaultValue={ed?.employee_no ?? ""} /></div>
+                  <div>
+                    <Label htmlFor="employee-no">الرقم الوظيفي{editing && " *"}</Label>
+                    <Input
+                      key={editing?.id ?? "new"}
+                      id="employee-no"
+                      name="employee_no"
+                      required={!!editing}
+                      autoFocus={!!editing}
+                      readOnly={!editing}
+                      placeholder="يُعيّن تلقائيًا عند الحفظ"
+                      {...(editing
+                        ? { defaultValue: editing.employee_no }
+                        : { value: createdEmployee?.employee_no ?? "" })}
+                    />
+                  </div>
                   <div><Label>رقم جهاز البصمة</Label><Input name="attendance_device_id" defaultValue={ed?.attendance_device_id ?? ""} /></div>
-                  <div className="md:col-span-2"><Label>الاسم الكامل *</Label><Input name="full_name" required placeholder="الاسم كما في المستندات الرسمية" defaultValue={ed?.full_name ?? ""} /></div>
+                  <div className="md:col-span-2"><Label>الاسم الكامل *</Label><Input name="full_name" required autoFocus={!editing} placeholder="الاسم كما في المستندات الرسمية" defaultValue={ed?.full_name ?? ""} /></div>
                   <div><Label>المسمى الوظيفي</Label><Input name="position" defaultValue={ed?.position ?? ""} /></div>
                   <div>
                     <Label>القسم</Label>
@@ -758,7 +794,7 @@ function EmployeesPage() {
                 </div>
               </details>
               <div className="sticky bottom-0 -mx-6 -mb-6 flex flex-col-reverse gap-2 border-t bg-background/95 p-4 backdrop-blur sm:flex-row sm:justify-end">
-                <Button type="button" variant="outline" onClick={() => { setOpen(false); setEditing(null); }}>إلغاء</Button>
+                <Button type="button" variant="outline" disabled={save.isPending} onClick={closeEmployeeDialog}>إلغاء</Button>
                 <Button type="submit" className="min-w-36 bg-gradient-to-l from-teal-800 to-emerald-600 shadow-md" disabled={save.isPending || (isAdmin && !!editing && (employeeSiteAccessQuery.isLoading || employeeSiteAccessQuery.isError))}>{save.isPending ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : null}{save.isPending ? "جارٍ الحفظ..." : editing ? "حفظ التعديلات" : "حفظ بيانات الموظف"}</Button>
               </div>
             </form>
