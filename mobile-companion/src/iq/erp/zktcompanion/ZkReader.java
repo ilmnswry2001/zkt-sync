@@ -49,13 +49,15 @@ final class ZkReader implements Closeable {
         Packet response = send(1000, new byte[0]);
         session = response.session;
         if (response.command == UNAUTHORIZED) response = send(1102, commKey(password, session));
-        if (response.command != ACK) throw new DeviceException("رفض الجهاز الاتصال. تحقق من مفتاح الاتصال.");
+        if (response.command == UNAUTHORIZED) throw new DeviceIdentityException("رفض الجهاز الاتصال. تحقق من مفتاح الاتصال.");
+        if (response.command != ACK) throw unsupported();
         response = send(11, "~SerialNumber\0".getBytes(StandardCharsets.US_ASCII));
         String serial = text(response.data, 0, response.data.length);
         int separator = serial.indexOf('=');
         if (separator >= 0) serial = serial.substring(separator + 1).trim();
-        if (response.command != ACK || !expectedSerial.equals(serial)) {
-            throw new DeviceException("الرقم التسلسلي للجهاز المتصل يختلف عن الجهاز المرتبط.");
+        if (response.command != ACK || serial.isEmpty()) throw unsupported();
+        if (!expectedSerial.equals(serial)) {
+            throw new DeviceIdentityException("الرقم التسلسلي للجهاز المتصل يختلف عن الجهاز المرتبط.");
         }
     }
 
@@ -264,6 +266,7 @@ final class ZkReader implements Closeable {
     }
 
     static final class DeviceException extends IOException { DeviceException(String message) { super(message); } }
+    static final class DeviceIdentityException extends IOException { DeviceIdentityException(String message) { super(message); } }
     private static final class Packet {
         final int command, session;
         final byte[] data;

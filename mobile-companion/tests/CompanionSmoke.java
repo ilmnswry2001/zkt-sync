@@ -1,10 +1,7 @@
 package iq.erp.zktcompanion;
 
 import com.google.zxing.BarcodeFormat;
-import com.google.zxing.BinaryBitmap;
-import com.google.zxing.PlanarYUVLuminanceSource;
-import com.google.zxing.common.HybridBinarizer;
-import com.google.zxing.qrcode.QRCodeReader;
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
 import com.google.zxing.qrcode.QRCodeWriter;
 import java.io.DataInputStream;
 import java.net.DatagramPacket;
@@ -34,14 +31,12 @@ public final class CompanionSmoke {
 
     private static void verifyPairing(JSONObject fixture) throws Exception {
         String qr = fixture.getString("qr"), code = fixture.getString("code");
-        int width = 500;
-        com.google.zxing.common.BitMatrix matrix = new QRCodeWriter().encode(qr, BarcodeFormat.QR_CODE, width, width);
-        byte[] pixels = new byte[width * width];
-        for (int y = 0; y < width; y++) {
-            for (int x = 0; x < width; x++) pixels[y * width + x] = (byte) (matrix.get(x, y) ? 0 : 255);
-        }
-        PlanarYUVLuminanceSource image = new PlanarYUVLuminanceSource(pixels, width, width, 0, 0, width, width, false);
-        String decoded = new QRCodeReader().decode(new BinaryBitmap(new HybridBinarizer(image))).getText();
+        String decoded = scanFrame(qr, 480, false, false);
+        check(qr.equals(decoded), "Normal preview frame not decoded");
+        check(qr.equals(scanFrame(qr, 60, true, false)), "Rotated off-center preview frame not decoded");
+        check(qr.equals(scanFrame(qr, 480, true, true)), "Inverted rotated preview frame not decoded");
+        check(scanFrame("https://example.test/other-qr", 480, false, false) == null, "Unrelated QR accepted");
+        check(PairingQrReader.read(new byte[15], 1280, 720) == null, "Incomplete camera frame accepted");
         check(Pairing.open(decoded, code).getString("serial").equals("TEST-001"), "Could not decode pairing");
         try {
             Pairing.open(decoded, code.equals("000000000000") ? "000000000001" : "000000000000");
@@ -49,6 +44,21 @@ public final class CompanionSmoke {
         } catch (javax.crypto.AEADBadTagException expected) { /* Expected authenticated decryption failure. */ }
         check(SyncClient.signature(fixture.getString("key"), fixture.getString("timestamp"), fixture.getString("body"))
             .equals(fixture.getString("signature")), "Request signature mismatch");
+    }
+
+    private static String scanFrame(String text, int left, boolean rotate, boolean invert) throws Exception {
+        final int width = 1280, height = 720, side = 336, top = 180;
+        com.google.zxing.common.BitMatrix matrix = new QRCodeWriter().encode(text, BarcodeFormat.QR_CODE,
+            side, side, java.util.Collections.singletonMap(com.google.zxing.EncodeHintType.ERROR_CORRECTION, ErrorCorrectionLevel.M));
+        byte[] luma = new byte[width * height];
+        Arrays.fill(luma, (byte) (invert ? 25 : 210));
+        for (int y = 0; y < side; y++) {
+            for (int x = 0; x < side; x++) {
+                boolean dark = rotate ? matrix.get(y, side - 1 - x) : matrix.get(x, y);
+                luma[(top + y) * width + left + x] = (byte) ((dark ^ invert) ? 25 : 210);
+            }
+        }
+        return PairingQrReader.read(luma, width, height);
     }
 
     private static void verifyTcp() throws Exception {

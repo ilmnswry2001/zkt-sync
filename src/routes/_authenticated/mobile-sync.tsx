@@ -276,7 +276,7 @@ function PairDevice() {
               value={pairing.qr}
               level="M"
               marginSize={4}
-              size={240}
+              size={336}
               className="h-auto max-w-full"
               title="رمز ربط الجهاز بالهاتف"
             />
@@ -286,6 +286,33 @@ function PairDevice() {
             <p className="text-sm text-muted-foreground">
               امسح الرمز وأدخل رمز الفتح خلال خمس دقائق. ربط الهاتف صالح لمدة 30 يومًا.
             </p>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(pairing.qr);
+                  toast.success("تم نسخ الرمز المشفّر. الصقه في الإدخال اليدوي بالتطبيق.");
+                } catch {
+                  toast.error("تعذر نسخ الرمز تلقائيًا. حدّد النص وانسخه من حقل رمز الربط.");
+                }
+              }}
+            >
+              نسخ رمز الربط المشفّر
+            </Button>
+            <details className="w-full text-start text-sm">
+              <summary className="cursor-pointer text-muted-foreground">
+                عرض رمز الربط النصي
+              </summary>
+              <Input
+                className="mt-2 font-mono"
+                readOnly
+                dir="ltr"
+                aria-label="رمز الربط المشفّر"
+                value={pairing.qr}
+                onFocus={(event) => event.currentTarget.select()}
+              />
+            </details>
           </div>
         )}
       </CardContent>
