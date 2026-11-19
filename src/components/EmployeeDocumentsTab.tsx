@@ -6,6 +6,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Download, Eye, FolderOpen, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { EmployeeDocumentForm } from "@/components/EmployeeDocumentForm";
+import { EmployeeDocumentPreview } from "@/components/EmployeeDocumentPreview";
 import { MetricCard } from "@/components/MetricCard";
 import {
   AlertDialog,
@@ -20,13 +21,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -211,9 +205,10 @@ function EmployeeDocumentRepository({
     if (valid.length) setBatch({ files: valid, index: 0 });
   };
   const [preview, setPreview] = useState<{
-    url: string;
+    id: string;
     title: string;
-    fileName: string | null;
+    fileName: string;
+    trigger: HTMLButtonElement;
   } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const invalidDates = !!from && !!to && from > to;
@@ -252,48 +247,17 @@ function EmployeeDocumentRepository({
     },
     onError: (error) => toast.error(formatErrorMessage(error, "تعذر حذف المستند")),
   });
-  const accessFile = useMutation({
-    mutationFn: async ({
-      id,
-      title,
-      download,
-      previewTab,
-    }: {
-      id: string;
-      title: string;
-      download: boolean;
-      previewTab?: Window | null;
-    }) => {
-      const link = await sign({ data: { id, download } });
-      if (download) {
-        const linkElement = document.createElement("a");
-        linkElement.href = link.url;
-        linkElement.download = link.fileName ?? "document";
-        linkElement.rel = "noopener noreferrer";
-        linkElement.click();
-        return;
-      }
-      if (previewTab && !previewTab.closed) {
-        try {
-          previewTab.location.replace(link.url);
-          return;
-        } catch {
-          // The browser may disallow navigating the tab after it was opened.
-        }
-      }
-      setPreview({ ...link, title });
+  const downloadFile = useMutation({
+    mutationFn: async (id: string) => {
+      const link = await sign({ data: { id, download: true } });
+      const linkElement = document.createElement("a");
+      linkElement.href = link.url;
+      linkElement.download = link.fileName ?? "document";
+      linkElement.rel = "noopener noreferrer";
+      linkElement.click();
     },
-    onError: (error, { previewTab }) => {
-      previewTab?.close();
-      toast.error(formatErrorMessage(error, "تعذر فتح المرفق"));
-    },
+    onError: (error) => toast.error(formatErrorMessage(error, "تعذر تنزيل المرفق")),
   });
-  const openPreview = (id: string, title: string) => {
-    // Open during the click so navigation can follow the authenticated request.
-    const previewTab = window.open("about:blank", "_blank");
-    if (previewTab) previewTab.opener = null;
-    accessFile.mutate({ id, title, download: false, previewTab });
-  };
   const stats = records.data?.stats;
   const rows = records.data?.rows ?? [];
   const total = records.data?.totalCount ?? 0;
@@ -510,22 +474,22 @@ function EmployeeDocumentRepository({
                               <Button
                                 size="sm"
                                 variant="outline"
-                                disabled={accessFile.isPending}
-                                onClick={() => openPreview(row.id, row.title)}
+                                onClick={(event) =>
+                                  setPreview({
+                                    id: row.id,
+                                    title: row.title,
+                                    fileName: row.file_name ?? row.title,
+                                    trigger: event.currentTarget,
+                                  })
+                                }
                               >
                                 <Eye className="h-4 w-4" /> معاينة
                               </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
-                                disabled={accessFile.isPending}
-                                onClick={() =>
-                                  accessFile.mutate({
-                                    id: row.id,
-                                    title: row.title,
-                                    download: true,
-                                  })
-                                }
+                                disabled={downloadFile.isPending}
+                                onClick={() => downloadFile.mutate(row.id)}
                               >
                                 <Download className="h-4 w-4" /> تنزيل
                               </Button>
@@ -597,31 +561,18 @@ function EmployeeDocumentRepository({
           }
         />
       )}
-      <Dialog
-        open={!!preview}
-        onOpenChange={(open) => {
-          if (!open) setPreview(null);
-        }}
-      >
-        <DialogContent dir="rtl">
-          <DialogHeader>
-            <DialogTitle>{preview?.title}</DialogTitle>
-            <DialogDescription>{preview?.fileName}</DialogDescription>
-          </DialogHeader>
-          {preview && (
-            <>
-              <p className="text-sm text-muted-foreground">
-                رابط المعاينة جاهز. اضغط لفتح المرفق في المتصفح.
-              </p>
-              <Button asChild variant="outline">
-                <a href={preview.url} target="_blank" rel="noopener noreferrer">
-                  فتح المرفق في تبويب جديد
-                </a>
-              </Button>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+      {preview && (
+        <EmployeeDocumentPreview
+          key={preview.id}
+          documentId={preview.id}
+          userId={userId}
+          title={preview.title}
+          fileName={preview.fileName}
+          loadAttachment={(signal) => sign({ signal, data: { id: preview.id, download: false } })}
+          onClose={() => setPreview(null)}
+          onRestoreFocus={() => preview.trigger.focus()}
+        />
+      )}
       <AlertDialog
         open={!!deleteTarget}
         onOpenChange={(open) => {

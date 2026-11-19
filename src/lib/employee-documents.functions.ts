@@ -131,7 +131,7 @@ export const getDocumentSignedUrl = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const { data: document, error } = await employeeDocumentsDb(context.supabase)
       .from("employee_documents")
-      .select("file_path, file_name")
+      .select("file_path, file_name, mime_type")
       .eq("id", data.id)
       .maybeSingle();
     if (error) throw error;
@@ -142,5 +142,5 @@ export const getDocumentSignedUrl = createServerFn({ method: "POST" })
         download: data.download ? document.file_name || true : false,
       });
     if (linkError) throw linkError;
-    return { url: link.signedUrl, fileName: document.file_name };
+    return { url: link.signedUrl, fileName: document.file_name, mimeType: document.mime_type };
   });
