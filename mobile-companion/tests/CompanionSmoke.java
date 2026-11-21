@@ -22,9 +22,10 @@ public final class CompanionSmoke {
     public static void main(String[] args) throws Exception {
         JSONObject fixture = new JSONObject(new String(Files.readAllBytes(Paths.get(args[0])), java.nio.charset.StandardCharsets.UTF_8));
         verifyConfiguration(fixture);
+        verifyDeviceProfiles(fixture);
         verifyTcp();
         verifyUdp();
-        System.out.println("Agent file import, HMAC, TCP and UDP passed");
+        System.out.println("Agent file import, device list, failure isolation, HMAC, TCP and UDP passed");
     }
 
     private static void verifyConfiguration(JSONObject fixture) throws Exception {
@@ -43,6 +44,31 @@ public final class CompanionSmoke {
 
     private static JSONObject readConfig(String file) throws Exception {
         return AgentConfiguration.read(new ByteArrayInputStream(file.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    private static void verifyDeviceProfiles(JSONObject fixture) throws Exception {
+        JSONObject legacy = readConfig(fixture.getString("file"));
+        AgentDevices upgraded = AgentDevices.read(null, legacy);
+        check(upgraded.selected() == legacy, "Previously configured device did not migrate");
+        JSONObject second = new JSONObject(legacy.toString())
+            .put("device_id", "00000000-0000-4000-8000-000000000008").put("serial", "TEST-002");
+        JSONObject renewed = new JSONObject(legacy.toString()).put("sync_key", "renewed-test-key");
+        AgentDevices saved = upgraded.withDevices(Arrays.asList(second, renewed)).select(second);
+        AgentDevices reopened = AgentDevices.read(saved.stored(), legacy);
+        check(reopened.all().size() == 2 && reopened.selected().getString("serial").equals("TEST-002"), "Device selection did not persist");
+        check(reopened.credentialFor(legacy).getString("sync_key").equals("renewed-test-key"), "Pending batch did not pick up the renewed key for its device");
+        JSONObject differentOperator = new JSONObject(legacy.toString()).put("operator_id", "other");
+        check(reopened.credentialFor(differentOperator) == differentOperator, "A pending batch must keep its original operator");
+        JSONObject differentServer = new JSONObject(legacy.toString()).put("server_url", "https://other.example.test");
+        check(reopened.credentialFor(differentServer) == differentServer, "A pending batch must keep its original ERP server");
+        java.util.List<String> failures = new java.util.ArrayList<>();
+        java.util.List<String> completed = new java.util.ArrayList<>();
+        int succeeded = reopened.pullAll(device -> {
+            if (device.getString("serial").equals("TEST-001")) throw new java.io.IOException("Fixture: unreachable");
+            completed.add(device.getString("serial"));
+        }, (device, failure) -> failures.add(device.optString("serial")));
+        check(succeeded == 1 && completed.equals(Arrays.asList("TEST-002")) && failures.equals(Arrays.asList("TEST-001")),
+            "One unreachable device stopped a later device from syncing");
     }
 
     private static void verifyTcp() throws Exception {

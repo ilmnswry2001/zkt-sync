@@ -23,12 +23,17 @@ final class LocalStore {
 
     LocalStore(Context context) { folder = context.getNoBackupFilesDir(); }
 
-    JSONObject configuration() throws Exception {
-        File target = new File(folder, "pairing");
-        return target.exists() || new File(folder, "pairing.bak").exists() ? read(target) : null;
+    AgentDevices configurations() throws Exception {
+        JSONObject saved = readIfPresent("devices");
+        return AgentDevices.read(saved, saved == null ? readIfPresent("pairing") : null);
     }
 
-    void configure(JSONObject settings) throws Exception { write(new File(folder, "pairing"), settings); }
+    private JSONObject readIfPresent(String name) throws Exception {
+        File target = new File(folder, name);
+        return target.exists() || new File(folder, name + ".bak").exists() ? read(target) : null;
+    }
+
+    void configure(AgentDevices settings) throws Exception { write(new File(folder, "devices"), settings.stored()); }
 
     File[] pending() {
         File[] files = folder.listFiles((dir, name) -> name.startsWith("batch-") && name.endsWith(".enc"));

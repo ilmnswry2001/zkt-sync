@@ -3,6 +3,8 @@ package iq.erp.zktcompanion;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.ClipData;
+import android.net.Uri;
 import android.graphics.Color;
 import android.net.ConnectivityManager;
 import android.net.Network;
@@ -13,6 +15,7 @@ import android.text.InputType;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ArrayAdapter;
+import android.widget.AdapterView;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -27,9 +30,13 @@ import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.IntConsumer;
 import org.json.JSONObject;
 
 @SuppressWarnings("deprecation")
@@ -39,13 +46,13 @@ public final class MainActivity extends Activity {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private ConnectivityManager connectivity;
     private LocalStore store;
-    private JSONObject settings;
+    private volatile AgentDevices configurations = AgentDevices.empty();
     private LinearLayout layout;
     private TextView configurationState, networkState, counts, feedback;
     private EditText address, port, password;
     private CheckBox utc;
-    private Spinner transport;
-    private Button importSettings, testConnection, pull, retry;
+    private Spinner transport, devicePicker;
+    private Button importSettings, testConnection, pull, pullAll, retry;
     private ProgressBar progress;
     private boolean busy;
     private boolean foreground;
@@ -75,7 +82,30 @@ public final class MainActivity extends Activity {
         TextView title = addText("وكيل البصمة الميداني", 26);
         title.setTextColor(Color.rgb(23, 60, 51));
         configurationState = addText("نزّل ملف إعداد الوكيل من النظام ثم استورده هنا.", 15);
-        importSettings = button("استيراد ملف إعداد الجهاز", this::chooseConfiguration);
+        importSettings = button("استيراد ملفات إعداد الأجهزة", this::chooseConfiguration);
+        TextView deviceLabel = addText("أجهزة البصمة المحفوظة", 15);
+        devicePicker = new Spinner(this);
+        devicePicker.setId(View.generateViewId());
+        deviceLabel.setLabelFor(devicePicker.getId());
+        layout.addView(devicePicker);
+        devicePicker.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent, View view, int index, long id) {
+                List<JSONObject> devices = configurations.all();
+                if (busy || parent.getSelectedItemPosition() != index || index >= devices.size()
+                    || devices.get(index) == configurations.selected()) return;
+                try {
+                    AgentDevices selected = configurations.select(devices.get(index));
+                    store.configure(selected);
+                    configurations = selected;
+                    showConfiguration();
+                    feedback.setText("");
+                } catch (Exception failure) {
+                    refreshDevicePicker();
+                    feedback.setText("تعذر تغيير الجهاز المحدد.");
+                }
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) {}
+        });
         address = field("عنوان الجهاز", "192.168.1.201", InputType.TYPE_CLASS_PHONE);
         port = field("منفذ الاتصال", "4370", InputType.TYPE_CLASS_NUMBER);
         password = field("مفتاح الاتصال بالجهاز (اختياري)", "", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
@@ -91,6 +121,7 @@ public final class MainActivity extends Activity {
         networkState = addText("", 15);
         testConnection = button("اختبار اتصال الجهاز", () -> startSync(true));
         pull = button("سحب الحركات الآن", () -> startSync(false));
+        pullAll = button("سحب الحركات من كل الأجهزة", this::startSyncAll);
         progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         progress.setVisibility(View.GONE);
         layout.addView(progress, new LinearLayout.LayoutParams(-1, dp(8)));
@@ -99,7 +130,8 @@ public final class MainActivity extends Activity {
         feedback.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
         retry = button("إعادة إرسال الحركات المحفوظة", this::startRetry);
         try {
-            settings = store.configuration();
+            configurations = store.configurations();
+            refreshDevicePicker();
             showConfiguration();
         } catch (Exception error) {
             feedback.setText("تعذر قراءة الإعدادات المحفوظة. استورد ملف الجهاز مجددًا.");
@@ -111,7 +143,8 @@ public final class MainActivity extends Activity {
     }
 
     private void startSync(boolean testOnly) {
-        JSONObject active = settings;
+        if (busy) return;
+        JSONObject active = configurations.selected();
         if (active == null) {
             new AlertDialog.Builder(this).setTitle("استورد ملف إعداد الجهاز أولًا")
                 .setMessage("نزّل ملف إعداد الوكيل من صفحة «سحب البصمة بالهاتف» في النظام.")
@@ -119,6 +152,26 @@ public final class MainActivity extends Activity {
                 .setNegativeButton("إغلاق", null).show();
             return;
         }
+        try {
+            JSONObject edited = selectedConfigurationWithEdits(active);
+            runWork("جارٍ الاتصال بجهاز البصمة…", () -> {
+                saveCurrentConfiguration(edited);
+                int[] pulled = {0};
+                readConfiguredDevice(edited, testOnly, count -> {
+                    pulled[0] += count;
+                    postCounts(pulled[0], 0, 0);
+                });
+                if (!testOnly) {
+                    if (pulled[0] == 0 && store.pending().length == 0) postFeedback("نجح الاتصال، ولم يرجع الجهاز أي حركات حضور.");
+                    else upload(pulled[0]);
+                }
+            });
+        } catch (Exception error) {
+            feedback.setText(failureMessage(error));
+        }
+    }
+
+    private JSONObject selectedConfigurationWithEdits(JSONObject active) throws Exception {
         String ip = address.getText().toString().trim();
         String portText = port.getText().toString().trim();
         String passwordText = password.getText().toString().trim();
@@ -128,38 +181,60 @@ public final class MainActivity extends Activity {
             devicePassword = passwordText.isEmpty() ? 0 : Integer.parseInt(passwordText);
             if (!AgentConfiguration.isLan(ip) || devicePort < 1 || devicePort > 65535 || devicePassword < 0) throw new IllegalArgumentException();
         } catch (IllegalArgumentException error) {
-            feedback.setText("أدخل عنوان IPv4 محليًا ومنفذًا صالحًا ومفتاح اتصال رقميًا.");
-            return;
+            throw new IOException("أدخل عنوان IPv4 محليًا ومنفذًا صالحًا ومفتاح اتصال رقميًا.", error);
         }
-        boolean utcSelected = utc.isChecked();
-        String mode = TRANSPORTS[transport.getSelectedItemPosition()];
-        runWork("جارٍ الاتصال بجهاز البصمة…", () -> {
-            active.put("device_ip", ip).put("device_port", devicePort).put("device_password", devicePassword).put("utc", utcSelected).put("transport", mode);
-            store.configure(active);
-            int[] pulled = {0};
-            ZoneId zone = ZoneId.of(utcSelected ? "UTC" : "Asia/Baghdad");
-            String serial = active.getString("serial");
-            ZkReader.Records save = logs -> {
-                    String id = UUID.randomUUID().toString();
-                    String body = new JSONObject().put("device_id", active.getString("device_id"))
-                        .put("pulled_at", java.time.Instant.now().toString())
-                        .put("batch_id", id).put("serial", active.getString("serial")).put("logs", logs).toString();
-                    store.enqueue(active, body, id, logs.length());
-                    pulled[0] += logs.length();
+        return new JSONObject(active.toString()).put("device_ip", ip).put("device_port", devicePort)
+            .put("device_password", devicePassword).put("utc", utc.isChecked())
+            .put("transport", TRANSPORTS[transport.getSelectedItemPosition()]);
+    }
+
+    private void saveCurrentConfiguration(JSONObject edited) throws Exception {
+        AgentDevices updated = configurations.withDevices(Collections.singletonList(edited));
+        store.configure(updated);
+        configurations = updated;
+    }
+
+    private void readConfiguredDevice(JSONObject active, boolean testOnly, IntConsumer onSaved) throws Exception {
+        String ip = active.getString("device_ip"), serial = active.getString("serial");
+        int port = active.optInt("device_port", 4370), password = active.optInt("device_password", 0);
+        ZoneId zone = ZoneId.of(active.optBoolean("utc", false) ? "UTC" : "Asia/Baghdad");
+        String mode = active.optString("transport", "auto");
+        boolean[] saved = {false};
+        ZkReader.Records save = logs -> {
+            String id = UUID.randomUUID().toString();
+            String body = new JSONObject().put("device_id", active.getString("device_id"))
+                .put("pulled_at", java.time.Instant.now().toString())
+                .put("batch_id", id).put("serial", serial).put("logs", logs).toString();
+            store.enqueue(active, body, id, logs.length());
+            saved[0] = true;
+            onSaved.accept(logs.length());
+        };
+        try {
+            readDevice(ip, port, password, serial, "udp".equals(mode) ? "UDP" : "TCP", testOnly, zone, save);
+        } catch (IOException failure) {
+            if (!"auto".equals(mode) || saved[0] || failure instanceof ZkReader.DeviceIdentityException) throw failure;
+            readDevice(ip, port, password, serial, "UDP", testOnly, zone, save);
+        }
+    }
+
+    private void startSyncAll() {
+        if (busy || configurations.selected() == null) return;
+        try {
+            JSONObject edited = selectedConfigurationWithEdits(configurations.selected());
+            runWork("جارٍ سحب الحركات من الأجهزة المحفوظة…", () -> {
+                saveCurrentConfiguration(edited);
+                AgentDevices devices = configurations;
+                int[] pulled = {0};
+                List<String> failures = new ArrayList<>();
+                int succeeded = devices.pullAll(device -> readConfiguredDevice(device, false, count -> {
+                    pulled[0] += count;
                     postCounts(pulled[0], 0, 0);
-            };
-            String first = "udp".equals(mode) ? "UDP" : "TCP";
-            try {
-                readDevice(ip, devicePort, devicePassword, serial, first, testOnly, zone, save);
-            } catch (IOException failure) {
-                if (!"auto".equals(mode) || pulled[0] > 0 || failure instanceof ZkReader.DeviceIdentityException) throw failure;
-                readDevice(ip, devicePort, devicePassword, serial, "UDP", testOnly, zone, save);
-            }
-            if (!testOnly) {
-                if (pulled[0] == 0 && store.pending().length == 0) postFeedback("نجح الاتصال، ولم يرجع الجهاز أي حركات حضور.");
-                else upload(pulled[0]);
-            }
-        });
+                }), (device, failure) -> failures.add(device.optString("serial") + " · " + failureMessage(failure)));
+                String summary = "تمت قراءة " + succeeded + " من " + devices.all().size() + " أجهزة."
+                    + (failures.isEmpty() ? "" : "\n" + String.join("\n", failures));
+                upload(pulled[0], summary + "\n");
+            });
+        } catch (Exception failure) { feedback.setText(failureMessage(failure)); }
     }
 
     private void readDevice(String ip, int port, int password, String serial, String protocol, boolean testOnly,
@@ -199,15 +274,17 @@ public final class MainActivity extends Activity {
 
     private void startRetry() { runWork("جارٍ رفع الحركات المحفوظة…", () -> upload(0)); }
 
-    private void upload(int pulled) throws Exception {
+    private void upload(int pulled) throws Exception { upload(pulled, ""); }
+
+    private void upload(int pulled, String summary) throws Exception {
         File[] pending = store.pending();
         if (pending.length == 0) {
-            postFeedback("لا توجد حركات محفوظة للإرسال.");
+            postFeedback(summary + "لا توجد حركات محفوظة للإرسال.");
             return;
         }
         Network internet = network(true);
         if (internet == null) {
-            postFeedback("الحركات محفوظة في الهاتف. أعد الإرسال عند توفر الإنترنت.");
+            postFeedback(summary + "الحركات محفوظة في الهاتف. أعد الإرسال عند توفر الإنترنت.");
             return;
         }
         postFeedback("جارٍ رفع الحركات إلى نظام إدارة الحضور…");
@@ -218,13 +295,9 @@ public final class MainActivity extends Activity {
             File file = pending[index];
             try {
                 JSONObject item = store.read(file);
-                JSONObject original = item.getJSONObject("configuration");
-                JSONObject active = settings;
-                if (active != null && active.getString("device_id").equals(original.getString("device_id"))
-                    && active.getString("server_url").equals(original.getString("server_url"))
-                    && active.getString("operator_id").equals(original.getString("operator_id"))) original = active;
+                JSONObject credential = configurations.credentialFor(item.getJSONObject("configuration"));
                 int count = item.getInt("count");
-                SyncClient.send(internet, original, item.getString("body"), count);
+                SyncClient.send(internet, credential, item.getString("body"), count);
                 if (!file.delete()) throw new IOException("استلم النظام الدفعة؛ تعذر حذف النسخة المؤقتة من الهاتف.");
                 uploaded += count;
             } catch (Exception failure) {
@@ -233,8 +306,8 @@ public final class MainActivity extends Activity {
             }
             postCounts(pulled, uploaded, (index + 1) * 100 / pending.length);
         }
-        if (firstFailure != null) throw firstFailure;
-        postFeedback("أكّد النظام استلام " + uploaded + " حركة.");
+        if (firstFailure != null) throw new IOException(summary + failureMessage(firstFailure), firstFailure);
+        postFeedback(summary + "أكّد النظام استلام " + uploaded + " حركة.");
     }
 
     private interface Work { void execute() throws Exception; }
@@ -245,12 +318,15 @@ public final class MainActivity extends Activity {
         postCounts(0, 0, 0);
         worker.execute(() -> {
             try { work.execute(); }
-            catch (Exception failure) {
-                String detail = failure.getMessage();
-                boolean arabic = detail != null && detail.matches("(?s).*[\\u0600-\\u06FF].*");
-                postFeedback(arabic ? detail : "تعذر إكمال الاتصال. تحقق من الشبكة والإعدادات ثم أعد المحاولة.");
-            } finally { runOnUiThread(() -> { if (!isDestroyed()) controls(false); }); }
+            catch (Exception failure) { postFeedback(failureMessage(failure)); }
+            finally { runOnUiThread(() -> { if (!isDestroyed()) controls(false); }); }
         });
+    }
+
+    private static String failureMessage(Exception failure) {
+        String detail = failure.getMessage();
+        return detail != null && detail.matches("(?s).*[\\u0600-\\u06FF].*")
+            ? detail : "تعذر إكمال الاتصال. تحقق من الشبكة والإعدادات ثم أعد المحاولة.";
     }
 
     private Network network(boolean internet) {
@@ -293,34 +369,60 @@ public final class MainActivity extends Activity {
         importSettings.setEnabled(!active);
         testConnection.setEnabled(!active);
         pull.setEnabled(!active);
+        pullAll.setEnabled(!active && configurations.selected() != null);
+        devicePicker.setEnabled(!active && configurations.selected() != null);
+        address.setEnabled(!active);
+        port.setEnabled(!active);
+        password.setEnabled(!active);
+        transport.setEnabled(!active);
+        utc.setEnabled(!active);
         retry.setEnabled(!active && store.pending().length > 0);
         progress.setVisibility(active ? View.VISIBLE : View.GONE);
     }
 
     private void chooseConfiguration() {
-        Intent select = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*");
+        Intent select = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
+            .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
         try { startActivityForResult(select, IMPORT_SETTINGS); }
         catch (android.content.ActivityNotFoundException failure) { feedback.setText("تعذر فتح مدير الملفات في الهاتف."); }
     }
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
-        if (request != IMPORT_SETTINGS || result != RESULT_OK || data == null || data.getData() == null) return;
+        if (request != IMPORT_SETTINGS || result != RESULT_OK || data == null) return;
+        List<Uri> files = new ArrayList<>();
+        ClipData selected = data.getClipData();
+        if (selected == null && data.getData() != null) files.add(data.getData());
+        if (selected != null) for (int i = 0; i < selected.getItemCount(); i++) files.add(selected.getItemAt(i).getUri());
+        if (files.isEmpty()) return;
         worker.execute(() -> {
-            try (InputStream source = getContentResolver().openInputStream(data.getData())) {
-                JSONObject imported = AgentConfiguration.read(source);
-                String origin = imported.getString("server_url"), serial = imported.getString("serial");
+            try {
+                List<JSONObject> imported = new ArrayList<>();
+                List<String> names = new ArrayList<>();
+                for (Uri file : files) {
+                    try (InputStream source = getContentResolver().openInputStream(file)) {
+                        JSONObject device = AgentConfiguration.read(source);
+                        imported.add(device);
+                        names.add(device.getString("serial") + " · " + device.getString("server_url"));
+                    }
+                }
                 runOnUiThread(() -> {
                     if (isDestroyed()) return;
                     new AlertDialog.Builder(this).setTitle("تأكيد إعداد الوكيل")
-                        .setMessage("تحقق من عنوان نظامك قبل إرسال الحركات.\n" + origin + "\nالجهاز " + serial)
+                        .setMessage("تحقق من عناوين النظام والأجهزة قبل إرسال الحركات.\n" + String.join("\n", names))
                         .setNegativeButton("إلغاء", null).setPositiveButton("حفظ الإعداد", (dialog, which) -> {
+                            if (busy) {
+                                feedback.setText("انتظر انتهاء المزامنة ثم استورد الملفات مجددًا.");
+                                return;
+                            }
                             try {
-                                store.configure(imported);
-                                settings = imported;
+                                AgentDevices updated = configurations.withDevices(imported);
+                                store.configure(updated);
+                                configurations = updated;
+                                refreshDevicePicker();
                                 showConfiguration();
                                 controls(false);
-                                feedback.setText("تم حفظ الإعداد. اتصل بشبكة الجهاز واضغط «اختبار اتصال الجهاز».");
+                                feedback.setText("تم حفظ الإعدادات. يمكنك سحب جهاز محدد أو كل الأجهزة المحفوظة.");
                             }
                             catch (Exception failure) { feedback.setText("تعذر حفظ إعداد الوكيل على الهاتف."); }
                         }).show();
@@ -329,7 +431,19 @@ public final class MainActivity extends Activity {
         });
     }
 
+    private void refreshDevicePicker() {
+        List<String> labels = new ArrayList<>();
+        int selectedIndex = 0;
+        for (JSONObject device : configurations.all()) {
+            if (device == configurations.selected()) selectedIndex = labels.size();
+            labels.add(device.optString("serial") + " · " + device.optString("device_ip"));
+        }
+        devicePicker.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, labels));
+        if (!labels.isEmpty()) devicePicker.setSelection(selectedIndex);
+    }
+
     private void showConfiguration() throws Exception {
+        JSONObject settings = configurations.selected();
         if (settings == null) return;
         configurationState.setText("الجهاز الحالي " + settings.getString("serial") + "\n" + settings.getString("server_url"));
         address.setText(settings.getString("device_ip"));
