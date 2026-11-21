@@ -1,8 +1,21 @@
 BEGIN;
 
-CREATE OR REPLACE FUNCTION public.get_employee_custody(emp_id uuid)
-RETURNS TABLE (item_id uuid, item_code text, item_name text, unit text, warehouse_id uuid, warehouse_name text, remaining_qty numeric, movement_id uuid, received_date date)
-LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = '' AS $$
+-- Preserve the deployed return order and custody calculations across schema versions.
+DO $migration$
+DECLARE
+  existing_body text;
+  existing_result text;
+  guarded_body text;
+BEGIN
+  SELECT p.prosrc, pg_get_function_result(p.oid)
+  INTO STRICT existing_body, existing_result
+  FROM pg_catalog.pg_proc p
+  JOIN pg_catalog.pg_language lang ON lang.oid = p.prolang
+  WHERE p.oid = to_regprocedure('public.get_employee_custody(uuid)')
+    AND lang.lanname = 'sql';
+
+  guarded_body := $body$
+#variable_conflict use_column
 BEGIN
   IF auth.uid() IS NULL OR (
     public.is_admin(auth.uid())
@@ -14,27 +27,15 @@ BEGIN
     RAISE EXCEPTION 'غير مصرح لك بالاطلاع على عهد هذا الموظف' USING ERRCODE = '42501';
   END IF;
   RETURN QUERY
-  WITH issued AS (
-    SELECT sm.item_id, sm.warehouse_id, sm.id AS movement_id, sm.movement_date AS received_date,
-      SUM(sm.qty_delta) AS issued_qty
-    FROM public.stock_movements sm
-    WHERE sm.employee_id = emp_id AND sm.movement_type = 'tool_out'
-    GROUP BY sm.item_id, sm.warehouse_id, sm.id, sm.movement_date
-  ), returned AS (
-    SELECT sm.item_id, SUM(ABS(sm.qty_delta)) AS returned_qty
-    FROM public.stock_movements sm
-    WHERE sm.employee_id = emp_id AND sm.movement_type = 'tool_back'
-    GROUP BY sm.item_id
-  )
-  SELECT wi.id, wi.code, wi.name, wi.unit, i.warehouse_id, w.name,
-    GREATEST(0, i.issued_qty - COALESCE(r.returned_qty, 0)), i.movement_id, i.received_date
-  FROM issued i
-  JOIN public.warehouse_items wi ON wi.id = i.item_id
-  JOIN public.warehouses w ON w.id = i.warehouse_id
-  LEFT JOIN returned r ON r.item_id = i.item_id
-  WHERE i.issued_qty - COALESCE(r.returned_qty, 0) > 0;
+$body$ || regexp_replace(existing_body, ';[[:space:]]*$', '') || '; END;';
+
+  EXECUTE format(
+    'CREATE OR REPLACE FUNCTION public.get_employee_custody(emp_id uuid) RETURNS %s
+      LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = '''' AS %L',
+    existing_result, guarded_body
+  );
 END;
-$$;
+$migration$;
 REVOKE ALL ON FUNCTION public.get_employee_custody(uuid) FROM PUBLIC, anon, service_role;
 GRANT EXECUTE ON FUNCTION public.get_employee_custody(uuid) TO authenticated;
 

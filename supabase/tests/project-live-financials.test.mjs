@@ -55,6 +55,18 @@ test("custody authorization fails closed and project financials honor site and d
       ('${id(22)}','equipment_type','عامل',90,90), ('${id(23)}','worker_specialty','عامل',90,90),
       ('${id(24)}','worker_specialty','عامل',90,90);
   `);
+  await db.exec(`
+    CREATE FUNCTION public.get_employee_custody(emp_id uuid)
+    RETURNS TABLE(movement_id uuid, item_id uuid, item_name text, item_code text,
+      unit text, received_date date, warehouse_id uuid, warehouse_name text, remaining_qty numeric)
+    LANGUAGE sql STABLE SECURITY DEFINER AS $$
+      SELECT m.id, i.id, i.name, i.code, i.unit, m.movement_date, w.id, w.name, m.qty_delta
+      FROM public.stock_movements m
+      JOIN public.warehouse_items i ON i.id = m.item_id
+      JOIN public.warehouses w ON w.id = m.warehouse_id
+      WHERE m.employee_id = emp_id AND m.movement_type = 'tool_out';
+    $$;
+  `);
   await db.exec(await readFile(migration, "utf8"));
   const grants = (await db.query(`SELECT role, has_function_privilege(role, 'public.get_employee_custody(uuid)', 'EXECUTE') AS allowed
       FROM unnest(ARRAY['anon','authenticated','service_role']) role`)).rows;
@@ -71,7 +83,9 @@ test("custody authorization fails closed and project financials honor site and d
   await assert.rejects(custody(), { code: "42501" });
   for (const person of [1, 2, 3, 4]) {
     await login(id(person));
-    assert.equal((await custody()).rows.length, 1);
+    const rows = (await custody()).rows;
+    assert.equal(rows.length, 1);
+    assert.equal(Object.keys(rows[0])[0], "movement_id");
   }
   await assert.rejects(custody(id(41)), { code: "42501" });
   await login(id(5));
