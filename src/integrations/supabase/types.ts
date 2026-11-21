@@ -5197,6 +5197,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      list_unassigned_workshop_punches: {
+        Args: {
+          p_date: string
+          p_device_ids?: string[]
+          p_excluded_employee_ids?: string[]
+          p_page?: number
+        }
+        Returns: Json
+      }
       assign_unmatched_device_pin: {
         Args: { p_record_id: string; p_employee_id: string; p_previous_pin: string | null }
         Returns: number

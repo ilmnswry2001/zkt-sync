@@ -91,7 +91,6 @@ type WageRate = { title: string; daily_rate: number; monthly_rate: number };
 const supa = supabase as any;
 const inputClass = "flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm";
 const noWorkshops: Workshop[] = [];
-const noEmployees: Employee[] = [];
 const noMembers: Member[] = [];
 const noDevices: Device[] = [];
 const noAttendancePunches: AttendancePunch[] = [];
@@ -99,6 +98,11 @@ const noAttendancePunches: AttendancePunch[] = [];
 const rosterFields = "id, workshop_id, employee_id, role_label, is_active, employee:employees(id, employee_no, full_name, position, status)";
 type RosterRow = Member & { employee: (Employee & { status: string }) | null };
 type WorkshopPunchMember = { workshop_id: string; employee_id: string; employee: { employee_no: string } };
+type UnassignedPunchPage = {
+  rows: { employee: Employee; punch: Pick<AttendancePunch, "id" | "device_id" | "verify_time"> }[];
+  totalCount: number;
+};
+const unassignedPageSize = 20;
 
 function activeRosterMembers(rows: RosterRow[]): Member[] {
   return rows.map((member) => ({
@@ -197,6 +201,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
   const [printOpen, setPrintOpen] = useState(false);
   const [printIds, setPrintIds] = useState<string[]>([]);
   const [selectedUnmatchedEmployeeIds, setSelectedUnmatchedEmployeeIds] = useState<string[]>([]);
+  const [unassignedPage, setUnassignedPage] = useState(0);
   const [bulkTargetWorkshopId, setBulkTargetWorkshopId] = useState("");
   const [saving, setSaving] = useState(false);
   const [markingBiometrics, setMarkingBiometrics] = useState(false);
@@ -208,6 +213,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
   );
   useEffect(() => setDrafts({}), [date]);
   useEffect(() => {
+    setUnassignedPage(0);
     setSelectedUnmatchedEmployeeIds([]);
     setDismissedPunchEmployees(new Set());
     setSelectedWorkshopByPunch({});
@@ -285,25 +291,38 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
       .order("id").range(from, to)),
   });
   const attendancePunches = attendancePunchesQuery.data ?? noAttendancePunches;
-  const deviceEmployeeNumbers = useMemo(
-    () => bySelectedDevices ? [...new Set(attendancePunches.map((punch) => punch.employee_no))] : [],
-    [attendancePunches, bySelectedDevices],
-  );
-  const employeesQuery = useQuery<Employee[]>({
-    queryKey: ["daily-workshop-device-employees", deviceEmployeeNumbers],
-    enabled: tab === "inventory" && deviceEmployeeNumbers.length > 0,
+  const excludedEmployees = [...dismissedPunchEmployees];
+  const unassignedPunchesQuery = useQuery<UnassignedPunchPage>({
+    queryKey: ["daily-workshop-unassigned-punches", date, selectedDeviceIds, unassignedPage, excludedEmployees],
+    enabled: tab === "inventory" && !!date,
     queryFn: async ({ signal }) => {
-      const people: Employee[] = [];
-      for (let offset = 0; offset < deviceEmployeeNumbers.length; offset += 100) {
-        const { data, error } = await supabase.from("employees").select("id, employee_no, full_name, position")
-          .eq("status", "active").in("employee_no", deviceEmployeeNumbers.slice(offset, offset + 100))
-          .abortSignal(signal);
-        if (error) throw error;
-        people.push(...data);
-      }
-      return people;
+      const { data, error } = await supabase.rpc("list_unassigned_workshop_punches", {
+        p_date: date,
+        p_device_ids: bySelectedDevices ? selectedDeviceIds : undefined,
+        p_excluded_employee_ids: excludedEmployees,
+        p_page: unassignedPage,
+      }).abortSignal(signal);
+      if (error) throw error;
+      return data as UnassignedPunchPage;
     },
   });
+  const unmatchedPunches = unassignedPunchesQuery.data?.rows ?? [];
+  const unassignedCount = unassignedPunchesQuery.data?.totalCount ?? 0;
+  const unassignedPages = Math.max(1, Math.ceil(unassignedCount / unassignedPageSize));
+  useEffect(() => {
+    if (unassignedPunchesQuery.isSuccess && unassignedPage >= unassignedPages) {
+      setSelectedUnmatchedEmployeeIds([]);
+      setUnassignedPage(unassignedPages - 1);
+    }
+  }, [unassignedPage, unassignedPages, unassignedPunchesQuery.isSuccess]);
+  const changeUnassignedPage = (page: number) => {
+    setSelectedUnmatchedEmployeeIds([]);
+    setUnassignedPage(page);
+  };
+  const dismissUnassigned = (ids: string[]) => {
+    setDismissedPunchEmployees((current) => new Set([...current, ...ids]));
+    changeUnassignedPage(0);
+  };
   const employeeSearchQuery = useQuery({
     queryKey: ["daily-workshop-employee-search", employeeLookup.term],
     enabled: employeePickerOpen && employeeLookup.valid && !employeeLookup.waiting,
@@ -341,10 +360,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
   });
 
   const workshops = workshopsQuery.data ?? noWorkshops;
-  const employees = useMemo(() => [
-    ...(employeesQuery.data ?? noEmployees),
-    ...members.flatMap(({ employee }) => employee ?? []),
-  ], [employeesQuery.data, members]);
+  const employees = useMemo(() => members.flatMap(({ employee }) => employee ?? []), [members]);
   const devices = devicesQuery.data ?? noDevices;
   const selectedWorkshop = workshops.find((workshop) => workshop.id === workshopId);
   const activeRoster = useMemo(() => members.filter((member) => member.employee), [members]);
@@ -387,45 +403,6 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
     }
     return punchesByEmployee;
   }, [attendancePunches, deviceById, employeeById, employeeByNumber]);
-  const activeWorkshopEmployeeIds = useMemo(
-    () => new Set((activeWorkshopMembersQuery.data ?? []).map((member) => member.employee_id)),
-    [activeWorkshopMembersQuery.data],
-  );
-  const unmatchedPunches = useMemo(() => {
-    if (
-      !bySelectedDevices || attendancePunchesQuery.isError ||
-      activeWorkshopMembersQuery.isLoading ||
-      activeWorkshopMembersQuery.isError
-    ) {
-      return [];
-    }
-    const seen = new Set<string>();
-    return attendancePunches.flatMap((punch) => {
-      const employee =
-        (punch.employee_id ? employeeById.get(punch.employee_id) : undefined) ??
-        employeeByNumber.get(punch.employee_no);
-      if (
-        !employee ||
-        activeWorkshopEmployeeIds.has(employee.id) ||
-        dismissedPunchEmployees.has(employee.id) ||
-        seen.has(employee.id)
-      ) {
-        return [];
-      }
-      seen.add(employee.id);
-      return [{ employee, punch }];
-    });
-  }, [
-    attendancePunches,
-    employeeById,
-    employeeByNumber,
-    activeWorkshopEmployeeIds,
-    dismissedPunchEmployees,
-    attendancePunchesQuery.isError,
-    bySelectedDevices,
-    activeWorkshopMembersQuery.isLoading,
-    activeWorkshopMembersQuery.isError,
-  ]);
   const sites = sitesQuery.data ?? [];
   const presentLines = (reportQuery.data?.lines ?? []).filter((line) => line.attended);
   const presentGroups = useMemo(() => {
@@ -514,6 +491,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
   const markRosterFromBiometrics = async () => {
     if (!date || markingBiometrics || saving) return;
     setMarkingBiometrics(true);
+    void unassignedPunchesQuery.refetch();
     try {
       const [membersResult, reportsResult, devicePunches] = await Promise.all([
         activeWorkshopMembersQuery.refetch({ throwOnError: true }),
@@ -586,12 +564,14 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
           })),
         ],
       );
-      markEmployeePresentInWorkshop(targetWorkshopId, ids);
-      setSelectedUnmatchedEmployeeIds((current) => current.filter((id) => !ids.includes(id)));
-      setDismissedPunchEmployees((current) => new Set([...current, ...ids]));
+      if (date === dateRef.current) {
+        markEmployeePresentInWorkshop(targetWorkshopId, ids);
+        changeUnassignedPage(0);
+      }
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["daily-workshop-members"] }),
         queryClient.invalidateQueries({ queryKey: ["daily-workshop-all-active-members"] }),
+        queryClient.invalidateQueries({ queryKey: ["daily-workshop-unassigned-punches"] }),
       ]);
       toast.success(
         `تمت إضافة ${employees.length === 1 ? employees[0].full_name : employees.length + " موظفين"} إلى الورشة وتسجيل الحضور`,
@@ -611,6 +591,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
       queryClient.invalidateQueries({ queryKey: ["daily-workshops"] }),
       queryClient.invalidateQueries({ queryKey: ["daily-workshop-members"] }),
       queryClient.invalidateQueries({ queryKey: ["daily-workshop-reports"] }),
+      queryClient.invalidateQueries({ queryKey: ["daily-workshop-unassigned-punches"] }),
     ]);
   };
 
@@ -822,7 +803,6 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
   return (
     <div className="space-y-4">
       {(workshopsQuery.error ||
-        employeesQuery.error ||
         membersQuery.error ||
         reportQuery.error) && (
         <p
@@ -831,7 +811,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
         >
           تعذر تحميل بيانات الجرد:{" "}
           {formatErrorMessage(
-            workshopsQuery.error ?? employeesQuery.error ?? membersQuery.error ?? reportQuery.error,
+            workshopsQuery.error ?? membersQuery.error ?? reportQuery.error,
           )}
         </p>
       )}
@@ -1050,7 +1030,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                   ))}
                 </div>
               )}
-              {unmatchedPunches.length > 0 && (
+              {date && (
                 <section className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
                   <div>
                     <h3 className="font-semibold">حاضرون بالبصمة غير مسجلين في الورش</h3>
@@ -1062,6 +1042,17 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                       .
                     </p>
                   </div>
+                  {unassignedPunchesQuery.isPending ? (
+                    <p role="status" className="text-sm text-muted-foreground">جارٍ تحميل الحاضرين غير المنسّبين…</p>
+                  ) : unassignedPunchesQuery.isError ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p role="alert" className="text-sm text-destructive">تعذر تحميل الحاضرين غير المنسّبين.</p>
+                      <Button size="sm" variant="outline" onClick={() => void unassignedPunchesQuery.refetch()}>إعادة المحاولة</Button>
+                    </div>
+                  ) : unassignedCount === 0 ? (
+                    <p className="text-sm text-muted-foreground">لا يوجد حاضرون غير منسّبين ضمن التاريخ والأجهزة المختارة.</p>
+                  ) : null}
+                  {unmatchedPunches.length > 0 && <>
                   <div className="flex flex-wrap gap-2 items-center">
                     <label className="flex gap-2 items-center">
                       <Checkbox
@@ -1080,7 +1071,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                       />
                       {selectedEmployees.length === unmatchedPunches.length
                         ? "إلغاء التحديد"
-                        : "تحديد الكل"}{" "}
+                        : "تحديد الصفحة"}{" "}
                       ({unmatchedPunches.length})
                     </label>
                     <Badge variant="secondary">المحددون: {selectedEmployees.length}</Badge>
@@ -1109,10 +1100,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                       variant="outline"
                       disabled={saving || !selectedEmployees.length}
                       onClick={() => {
-                        setDismissedPunchEmployees(
-                          (current) => new Set([...current, ...selectedEmployees.map((e) => e.id)]),
-                        );
-                        setSelectedUnmatchedEmployeeIds([]);
+                        dismissUnassigned(selectedEmployees.map((employee) => employee.id));
                         toast.success("تم إهمال الموظفين المحددين");
                       }}
                     >
@@ -1182,12 +1170,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                                   selectedWorkshopByPunch[employee.id] ?? "",
                                 )
                               }
-                              disabled={
-                                saving ||
-                                !selectedWorkshopByPunch[employee.id] ||
-                                activeWorkshopMembersQuery.isLoading ||
-                                activeWorkshopMembersQuery.isError
-                              }
+                              disabled={saving || !selectedWorkshopByPunch[employee.id]}
                             >
                               <Plus className="ml-1 h-4 w-4" />
                               إضافة إلى ورشة
@@ -1195,11 +1178,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                             <Button
                               size="sm"
                               variant="ghost"
-                              onClick={() =>
-                                setDismissedPunchEmployees((current) =>
-                                  new Set(current).add(employee.id),
-                                )
-                              }
+                              onClick={() => dismissUnassigned([employee.id])}
                             >
                               إهمال
                             </Button>
@@ -1208,6 +1187,16 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                       );
                     })}
                   </div>
+                  </>}
+                  {unassignedPages > 1 && (
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                      <span className="text-muted-foreground">صفحة {unassignedPage + 1} من {unassignedPages} · {unassignedCount} موظف</span>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" disabled={saving || unassignedPage === 0} onClick={() => changeUnassignedPage(unassignedPage - 1)}>السابق</Button>
+                        <Button size="sm" variant="outline" disabled={saving || unassignedPage + 1 >= unassignedPages} onClick={() => changeUnassignedPage(unassignedPage + 1)}>التالي</Button>
+                      </div>
+                    </div>
+                  )}
                 </section>
               )}
               {activeRoster.length > 0 && (
