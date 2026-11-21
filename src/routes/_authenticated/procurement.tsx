@@ -18,7 +18,7 @@ export const Route = createFileRoute("/_authenticated/procurement")({
   },
   head: () => ({
     meta: [
-      { title: "المشتريات | منظومة زِكت" },
+      { title: "المشتريات | EMAD_tc" },
       { name: "description", content: "إدارة شراء طلبات المواد والمعدات وإرسالها للاستلام." },
     ],
   }),

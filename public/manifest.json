@@ -1,6 +1,6 @@
 {
-  "name": "بوابة الحضور الذاتي للموظفين",
-  "short_name": "حضوري الذكي",
+  "name": "EMAD_tc",
+  "short_name": "EMAD_tc",
   "start_url": "/self-attendance",
   "scope": "/",
   "display": "standalone",

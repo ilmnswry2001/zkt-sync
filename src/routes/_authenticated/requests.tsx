@@ -42,7 +42,7 @@ export const Route = createFileRoute("/_authenticated/requests")({
   },
   head: () => ({
     meta: [
-      { title: "الطلبات | منظومة زِكت" },
+      { title: "الطلبات | EMAD_tc" },
       { name: "description", content: "طلبات المواد والمعدات وخطط المشاريع." },
     ],
   }),

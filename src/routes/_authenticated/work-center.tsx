@@ -51,9 +51,9 @@ import type {
 export const Route = createFileRoute("/_authenticated/work-center")({
   head: () => ({
     meta: [
-      { title: "مركز العمل — منظومة زِكت" },
+      { title: "مركز العمل — EMAD_tc" },
       { name: "description", content: "إدارة وتنفيذ ومتابعة مهام وتوجيهات القسم." },
-      { property: "og:title", content: "مركز العمل — منظومة زِكت" },
+      { property: "og:title", content: "مركز العمل — EMAD_tc" },
       { property: "og:description", content: "إدارة وتنفيذ ومتابعة مهام وتوجيهات القسم." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },

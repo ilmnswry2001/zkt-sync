@@ -27,7 +27,7 @@ export const Route = createFileRoute("/auth")({
   validateSearch: (s: Record<string, unknown>) => ({
     ...(typeof s.form === "string" ? { form: s.form } : {}),
   }),
-  head: () => ({ meta: [{ title: "تسجيل الدخول — نظام الحضور" }] }),
+  head: () => ({ meta: [{ title: "تسجيل الدخول — EMAD_tc" }] }),
   component: AuthPage,
 });
 
@@ -104,7 +104,7 @@ function AuthPage() {
               <Fingerprint className="h-6 w-6" />
             </span>
             <div>
-              <p className="font-extrabold text-slate-900">منظومة زِكت</p>
+              <p className="font-extrabold text-slate-900">EMAD_tc</p>
               <p className="text-xs text-slate-500">إدارة الحضور والموارد</p>
             </div>
           </div>
@@ -232,7 +232,7 @@ function AuthPage() {
               <Fingerprint className="h-6 w-6 text-teal-200" />
             </span>
             <div>
-              <p className="font-extrabold tracking-wide">منظومة زِكت</p>
+              <p className="font-extrabold tracking-wide">EMAD_tc</p>
               <p className="text-xs text-white/60">ZKTeco · إدارة الحضور والموارد</p>
             </div>
           </div>

@@ -28,9 +28,9 @@ import { MaterialRequestWorkflow } from "@/components/material-requests/Material
 export const Route = createFileRoute("/_authenticated/warehouses")({
   head: () => ({
     meta: [
-      { title: "المخازن | منظومة زِكت" },
+      { title: "المخازن | EMAD_tc" },
       { name: "description", content: "إدارة المخازن والمواد والعدد والصرف للمواقع والجرد الدوري" },
-      { property: "og:title", content: "المخازن | منظومة زِكت" },
+      { property: "og:title", content: "المخازن | EMAD_tc" },
       {
         property: "og:description",
         content: "إدارة المخازن والمواد والعدد والصرف للمواقع والجرد الدوري",

@@ -106,12 +106,12 @@ export const Route = createFileRoute("/_authenticated/planning")({
   },
   head: () => ({
     meta: [
-      { title: "الخطط | منظومة زِكت" },
+      { title: "الخطط | EMAD_tc" },
       {
         name: "description",
         content: "إعداد خطط المشاريع واعتماد الاحتياج وتوزيع الكوادر.",
       },
-      { property: "og:title", content: "الخطط | منظومة زِكت" },
+      { property: "og:title", content: "الخطط | EMAD_tc" },
       {
         property: "og:description",
         content: "إعداد خطط المشاريع واعتماد الاحتياج وتوزيع الكوادر.",

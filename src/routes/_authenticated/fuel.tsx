@@ -1,3 +1,4 @@
+import { readWorkspaceName } from "@/lib/workspace-name";
 import { PrivateStorageMedia } from "@/components/PrivateStorageMedia";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute, redirect } from "@tanstack/react-router";
@@ -354,8 +355,7 @@ function FuelPage() {
     window.setTimeout(() => window.print(), 150);
   };
 
-  const workspaceName =
-    (typeof window !== "undefined" && window.localStorage.getItem("zkt-workspace-name")) || "منظومة زِكت";
+  const workspaceName = readWorkspaceName();
 
   return (
     <div dir="rtl" className="space-y-6">

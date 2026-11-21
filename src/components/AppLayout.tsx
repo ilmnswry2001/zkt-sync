@@ -1,3 +1,4 @@
+import { readWorkspaceName } from "@/lib/workspace-name";
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import {
   LayoutDashboard,
@@ -234,13 +235,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
-  const [workspaceName, setWorkspaceName] = useState("منظومة زِكت");
+  const [workspaceName, setWorkspaceName] = useState("EMAD_tc");
   const [isEditingWorkspaceName, setIsEditingWorkspaceName] = useState(false);
   useEffect(() => {
     const savedSidebar = window.localStorage.getItem("zkt-sidebar-collapsed-v2");
     setSidebarCollapsed(savedSidebar === "true");
-    const savedWorkspaceName = window.localStorage.getItem("zkt-workspace-name");
-    if (savedWorkspaceName?.trim()) setWorkspaceName(savedWorkspaceName.trim());
+    setWorkspaceName(readWorkspaceName());
     const savedTheme = window.localStorage.getItem("zkt-theme");
     const theme = savedTheme === "dark" ? "dark" : "light";
     document.documentElement.classList.toggle("dark", theme === "dark");
@@ -253,7 +253,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     setThemeMode(next);
   };
   const saveWorkspaceName = () => {
-    const nextName = workspaceName.trim() || "منظومة زِكت";
+    const nextName = workspaceName.trim() || "EMAD_tc";
     setWorkspaceName(nextName);
     window.localStorage.setItem("zkt-workspace-name", nextName);
     setIsEditingWorkspaceName(false);

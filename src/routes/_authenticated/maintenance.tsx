@@ -1,3 +1,4 @@
+import { readWorkspaceName } from "@/lib/workspace-name";
 import { PrivateStorageMedia } from "@/components/PrivateStorageMedia";
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
@@ -534,9 +535,7 @@ function MaintenancePage() {
     );
   };
 
-  const workspaceName =
-    (typeof window !== "undefined" && window.localStorage.getItem("zkt-workspace-name")) ||
-    "منظومة زِكت";
+  const workspaceName = readWorkspaceName();
 
   const activeTabLabel = recordTypeLabel(activeTab);
 
