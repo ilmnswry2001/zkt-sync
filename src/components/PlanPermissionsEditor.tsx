@@ -1,98 +1,139 @@
-import { useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { PLAN_PERMISSION_SPECIALTIES, usePlanStaffingPermission } from "@/lib/plan-permissions";
+import { Label } from "@/components/ui/label";
+import type { AccountAccess } from "@/lib/account-access";
+import { PLAN_FULL_ROLES, PLAN_PERMISSION_SPECIALTIES } from "@/lib/plan-permissions";
 
-export function PlanPermissionsEditor({ userId }: { userId: string }) {
-  const qc = useQueryClient();
-  const { data, isLoading } = usePlanStaffingPermission(userId);
-  const [canRequest, setCanRequest] = useState(false);
-  const [canApprove, setCanApprove] = useState(false);
-  const [canStaffAll, setCanStaffAll] = useState(false);
-  const [specialties, setSpecialties] = useState<string[]>([]);
-  const [extra, setExtra] = useState("");
-  const [busy, setBusy] = useState(false);
+type PlanAccess = AccountAccess["plan"];
 
-  useEffect(() => {
-    setCanRequest(!!data?.can_request);
-    setCanApprove(!!data?.can_approve);
-    setCanStaffAll(!!data?.can_staff_all);
-    setSpecialties(data?.specialties ?? []);
-  }, [data]);
-
-  const options = [...new Set([...PLAN_PERMISSION_SPECIALTIES, ...specialties])];
-  const toggle = (s: string, on: boolean) =>
-    setSpecialties((c) => (on ? [...new Set([...c, s])] : c.filter((x) => x !== s)));
-
-  const save = async () => {
-    setBusy(true);
-    const extras = extra.split(/[،,\n]/).map((s) => s.trim()).filter(Boolean);
-    const { error } = await (supabase as any).from("plan_staffing_permissions").upsert({
-      user_id: userId,
-      can_request: canRequest,
-      can_approve: canApprove,
-      can_staff_all: canStaffAll,
-      specialties: [...new Set([...specialties, ...extras])],
-      updated_at: new Date().toISOString(),
-    });
-    setBusy(false);
-    if (error) return toast.error(error.message);
-    setExtra("");
-    qc.invalidateQueries({ queryKey: ["plan-staffing-permission", userId] });
-    toast.success("تم حفظ صلاحيات الخطط");
+export function PlanPermissionsEditor({
+  roles,
+  value,
+  onChange,
+}: {
+  roles: AccountAccess["roles"];
+  value: PlanAccess;
+  onChange: (next: PlanAccess) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [specialty, setSpecialty] = useState("");
+  const [error, setError] = useState("");
+  const inherited = roles.some((role) => PLAN_FULL_ROLES.includes(role));
+  const options = [...new Set([...value.specialties, ...PLAN_PERMISSION_SPECIALTIES])];
+  const addSpecialty = () => {
+    const name = specialty.trim();
+    if (!name) return;
+    if (value.specialties.includes(name)) {
+      setError("هذا التخصص مضاف بالفعل.");
+      return;
+    }
+    onChange({ ...value, specialties: [...value.specialties, name] });
+    setSpecialty("");
+    setError("");
   };
-
   return (
-    <div className="md:col-span-2 rounded-xl border border-primary/20 bg-primary/[0.035] p-4">
-      <p className="font-semibold">صلاحيات خطط العمل</p>
-      <p className="mb-3 text-xs text-muted-foreground">
-        حدد إمكانية طلب الخطة، والتخصصات التي يملأ الحساب أسماء كوادرها (مثلاً قسم السلامة: HSE).
-      </p>
-      {isLoading ? (
-        <p className="text-sm text-muted-foreground">جارٍ التحميل...</p>
-      ) : (
-        <>
-          <div className="mb-3 flex flex-wrap gap-4">
-            <label className="flex items-center gap-2 text-sm font-medium">
-              <Checkbox checked={canRequest} onCheckedChange={(v) => setCanRequest(v === true)} />
-              يستطيع طلب خطة
-            </label>
-            <label className="flex items-center gap-2 text-sm font-medium">
-              <Checkbox checked={canApprove} onCheckedChange={(v) => setCanApprove(v === true)} />
-              يستطيع الموافقة على الخطط
-            </label>
-            <label className="flex items-center gap-2 text-sm font-medium">
-              <Checkbox checked={canStaffAll} onCheckedChange={(v) => setCanStaffAll(v === true)} />
-              إدراج الكوادر لجميع التخصصات
-            </label>
+    <div className="space-y-5">
+      <div className="rounded-xl border bg-muted/35 p-4 text-sm leading-6">
+        <p className="font-medium">صلاحيات خطط العمل</p>
+        <p className="text-muted-foreground">
+          تُدار موافقات الخطط عبر أدوار سير العمل المعتمدة في شاشة التخطيط.
+        </p>
+        {inherited && (
+          <p className="mt-2 text-primary">
+            يمنح الدور الحالي طلب الخطط وإدراج الكوادر لجميع التخصصات.
+          </p>
+        )}
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="flex items-center gap-3 rounded-lg border p-3 text-sm">
+          <Checkbox
+            disabled={inherited}
+            checked={inherited || value.canRequest}
+            onCheckedChange={(checked) => onChange({ ...value, canRequest: checked === true })}
+          />
+          طلب خطة عمل
+        </label>
+        <label className="flex items-center gap-3 rounded-lg border p-3 text-sm">
+          <Checkbox
+            disabled={inherited}
+            checked={inherited || value.canStaffAll}
+            onCheckedChange={(checked) => onChange({ ...value, canStaffAll: checked === true })}
+          />
+          إدراج الكوادر لجميع التخصصات
+        </label>
+      </div>
+      {!inherited && !value.canStaffAll && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <Label htmlFor="account-specialties-search">التخصصات المسموح بإدراج كوادرها</Label>
+            <Badge variant="secondary">{value.specialties.length}</Badge>
           </div>
-          {!canStaffAll && (
-            <>
-              <p className="mb-2 text-sm font-medium">التخصصات المسموح بإدراج أسمائها</p>
-              <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-4">
-                {options.map((s) => (
-                  <label key={s} className="flex items-center gap-2 rounded-lg border bg-background p-2 text-sm">
-                    <Checkbox checked={specialties.includes(s)} onCheckedChange={(v) => toggle(s, v === true)} />
-                    {s}
-                  </label>
-                ))}
-              </div>
-              <Input
-                className="mt-2"
-                value={extra}
-                onChange={(e) => setExtra(e.target.value)}
-                placeholder="تخصصات إضافية مفصولة بفاصلة"
-              />
-            </>
+          <Input
+            id="account-specialties-search"
+            placeholder="ابحث عن تخصص"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          <div className="grid max-h-44 gap-2 overflow-y-auto rounded-lg border p-3 sm:grid-cols-2">
+            {options
+              .filter((name) => name.toLowerCase().includes(search.trim().toLowerCase()))
+              .map((name) => (
+                <label
+                  key={name}
+                  className="flex items-center gap-2 rounded-md p-2 text-sm hover:bg-muted"
+                >
+                  <Checkbox
+                    checked={value.specialties.includes(name)}
+                    onCheckedChange={(checked) =>
+                      onChange({
+                        ...value,
+                        specialties:
+                          checked === true
+                            ? [...value.specialties, name]
+                            : value.specialties.filter((entry) => entry !== name),
+                      })
+                    }
+                  />
+                  {name}
+                </label>
+              ))}
+          </div>
+          <Label htmlFor="account-specialty">تخصص إضافي</Label>
+          <div className="flex items-center gap-2">
+            <Input
+              id="account-specialty"
+              maxLength={120}
+              placeholder="اكتب اسم التخصص كما يظهر في التخطيط"
+              value={specialty}
+              onChange={(event) => {
+                setSpecialty(event.target.value);
+                setError("");
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  addSpecialty();
+                }
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!specialty.trim()}
+              onClick={addSpecialty}
+            >
+              إضافة
+            </Button>
+          </div>
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
           )}
-          <Button className="mt-3" size="sm" disabled={busy} onClick={save}>
-            {busy ? "جارٍ الحفظ..." : "حفظ صلاحيات الخطط"}
-          </Button>
-        </>
+        </div>
       )}
     </div>
   );

@@ -1,18 +1,24 @@
-import { formatErrorMessage } from "@/lib/error-message";
+import { useEffect, useState, type FormEvent } from "react";
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import { PlanPermissionsEditor } from "@/components/PlanPermissionsEditor";
-import { KeyRound, Loader2, Plus, RefreshCw, ShieldCheck, UserCog, Users, Trash2, Save } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  ChevronLeft,
+  ChevronRight,
+  KeyRound,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  ShieldOff,
+  Trash2,
+  UserRoundCog,
+  Users,
+} from "lucide-react";
 import { toast } from "sonner";
-import { useAuth } from "@/hooks/use-auth";
+import { AccountScopeFields } from "@/components/AccountScopeFields";
+import { MetricCard } from "@/components/MetricCard";
+import { PlanPermissionsEditor } from "@/components/PlanPermissionsEditor";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -22,746 +28,834 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useAuth } from "@/hooks/use-auth";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  accountAccessSchema,
+  accountRoles,
+  initialRolePages,
+  passwordSchema,
+  roleKeys,
+  type AccountAccess,
+  type AccountDetails,
+  type DirectoryAccount,
+} from "@/lib/account-access";
 import {
   createAccount,
   deleteAccount,
+  listAccounts,
+  readAccountAccess,
+  updateAccountAccess,
   updateAccountPassword,
-  updateUserDepartments,
 } from "@/lib/accounts.functions";
-import { SECTION_OPTIONS } from "@/components/AppLayout";
+import { formatErrorMessage } from "@/lib/error-message";
 
 export const Route = createFileRoute("/_authenticated/accounts")({
   head: () => ({ meta: [{ title: "الحسابات والصلاحيات" }] }),
   beforeLoad: async () => {
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) throw redirect({ to: "/auth" });
-    const { data } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userData.user.id);
-    if (!data?.some((role) => role.role === "admin")) throw redirect({ to: "/dashboard" });
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) throw redirect({ to: "/auth" });
+    const { data: isAdmin, error } = await supabase.rpc("is_admin", { _user_id: data.user.id });
+    if (error) throw new Error("تعذر التحقق من صلاحية إدارة الحسابات.");
+    if (!isAdmin) throw redirect({ to: "/dashboard" });
   },
   component: AccountsPage,
 });
 
-type Role =
-  | "admin"
-  | "hr"
-  | "supervisor"
-  | "data_entry"
-  | "site_admin"
-  | "department_manager"
-  | "engineer"
-  | "planning_officer"
-  | "warehouse_keeper"
-  | "procurement_officer"
-  | "maintenance_manager"
-  | "maintenance_admin"
-  | "accountant";
-type Profile = { id: string; full_name: string | null; email: string | null; created_at: string; allowed_sections: string[] | null };
-type UserRole = { id: string; user_id: string; role: Role };
-type Department = { id: string; name: string };
-type UserDepartment = { id: string; user_id: string; department_id: string };
+type FilterRole = "" | "unassigned" | AccountAccess["roles"][number];
+type AccountAction =
+  { kind: "create" } | { kind: "edit" | "password" | "delete"; account: DirectoryAccount };
+const pageSize = 20;
+const dateFormat = new Intl.DateTimeFormat("ar-IQ", {
+  dateStyle: "medium",
+  timeZone: "Asia/Baghdad",
+});
+const numberFormat = new Intl.NumberFormat("ar-IQ");
+const selectClass =
+  "h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
-const roles: { key: Role; label: string; description: string }[] = [
-  {
-    key: "admin",
-    label: "مدير النظام",
-    description: "إدارة الحسابات والصلاحيات وكل إعدادات النظام",
-  },
-  { key: "hr", label: "الموارد البشرية", description: "الموظفون والأجور والتقارير الإدارية" },
-  { key: "supervisor", label: "مشرف", description: "المتابعة والإشراف على التقارير والمهام" },
-  { key: "data_entry", label: "مدخل بيانات", description: "إدخال التقارير والمهام المسموحة" },
-  { key: "department_manager", label: "مدير قسم", description: "متابعة فريق القسم" },
-  { key: "site_admin", label: "إداري موقع", description: "إدارة الموقع ومهامه" },
-  { key: "engineer", label: "مهندس", description: "طلب الخطة فقط من قسم التخطيط" },
-  { key: "planning_officer", label: "مسؤول تخطيط", description: "مراجعة واعتماد طلبات المواد والمعدات" },
-  { key: "warehouse_keeper", label: "مسؤول مخازن", description: "مراجعة الصرف واستلام المشتريات فعلياً" },
-  { key: "procurement_officer", label: "مسؤول مشتريات", description: "تسجيل دفعات الشراء وإرسالها للاستلام" },
-  {
-    key: "maintenance_manager",
-    label: "مدير قسم الصيانة",
-    description: "إدارة كل أعمال الصيانة والكتالوج والتقارير",
-  },
-  {
-    key: "maintenance_admin",
-    label: "إداري / منسق الصيانة",
-    description: "تسجيل ومتابعة سجلات الصيانة",
-  },
-  { key: "accountant", label: "قسم الحسابات", description: "إدارة مسيرات الرواتب والسلف ومتابعة الصرف" },
-];
+function accountName(account: DirectoryAccount) {
+  return account.full_name || account.email || "حساب بلا اسم";
+}
 
 function AccountsPage() {
   const { user } = useAuth();
-  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
-  const [editingUserId, setEditingUserId] = useState<string | null>(null);
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [createForm, setCreateForm] = useState({
-    fullName: "",
-    email: "",
-    password: "",
-    role: "data_entry" as Role,
-    departmentIds: [] as string[],
-    allowedSections: [] as string[],
-    planCanRequest: false,
-    planCanApprove: false,
-  });
-  const [resetUserId, setResetUserId] = useState<string | null>(null);
-  const [resetPassword, setResetPassword] = useState("");
-  const [actionBusy, setActionBusy] = useState(false);
-  const [editingDepartmentIds, setEditingDepartmentIds] = useState<string[]>([]);
-  const [editingAllowedSections, setEditingAllowedSections] = useState<string[]>([]);
-  const [accountPendingDelete, setAccountPendingDelete] = useState<Profile | null>(null);
-  const profilesQuery = useQuery({
-    queryKey: ["accounts", "profiles"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, full_name, email, created_at, allowed_sections")
-        .order("created_at", { ascending: false })
-        .limit(500);
-      if (error) throw error;
-      return (data ?? []) as Profile[];
-    },
-  });
-  const rolesQuery = useQuery({
-    queryKey: ["accounts", "roles"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("user_roles")
-        .select("id, user_id, role")
-        .limit(2000);
-      if (error) throw error;
-      return (data ?? []) as UserRole[];
-    },
-  });
-  const departmentsQuery = useQuery({
-    queryKey: ["accounts", "departments"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("departments").select("id, name").order("name");
-      if (error) throw error;
-      return (data ?? []) as Department[];
-    },
-  });
-  const userDepartmentsQuery = useQuery({
-    queryKey: ["accounts", "user-departments"],
-    queryFn: async () => {
-      // The generated Lovable types are refreshed after the migration is applied.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const client = supabase as typeof supabase & { from: (table: string) => any };
-      const { data, error } = await client
-        .from("user_departments")
-        .select("id, user_id, department_id");
-      if (error) throw error;
-      return (data ?? []) as UserDepartment[];
-    },
-  });
-  const profiles = useMemo(() => profilesQuery.data ?? [], [profilesQuery.data]);
-  const userRoles = useMemo(() => rolesQuery.data ?? [], [rolesQuery.data]);
-  const departments = departmentsQuery.data ?? [];
-  const userDepartments = useMemo(
-    () => userDepartmentsQuery.data ?? [],
-    [userDepartmentsQuery.data],
-  );
-  const departmentsByUser = useMemo(() => {
-    const map = new Map<string, string[]>();
-    userDepartments.forEach((item) =>
-      map.set(item.user_id, [...(map.get(item.user_id) ?? []), item.department_id]),
-    );
-    return map;
-  }, [userDepartments]);
-  const departmentName = (id: string) =>
-    departments.find((department) => department.id === id)?.name ?? id;
-  const rolesByUser = useMemo(() => {
-    const map = new Map<string, UserRole[]>();
-    userRoles.forEach((item) => map.set(item.user_id, [...(map.get(item.user_id) ?? []), item]));
-    return map;
-  }, [userRoles]);
-  const adminCount = userRoles.filter((assignment) => assignment.role === "admin").length;
-  const filteredProfiles = useMemo(() => {
-    const value = search.trim().toLocaleLowerCase();
-    if (!value) return profiles;
-    return profiles.filter((profile) =>
-      [profile.full_name, profile.email].some((field) =>
-        field?.toLocaleLowerCase().includes(value),
-      ),
-    );
-  }, [profiles, search]);
+  const [term, setTerm] = useState("");
+  const [role, setRole] = useState<FilterRole>("");
+  const [page, setPage] = useState(0);
+  const [action, setAction] = useState<AccountAction>();
+  useEffect(() => {
+    const timer = window.setTimeout(() => setTerm(search.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
+  const directory = useQuery({
+    queryKey: ["accounts", "directory", { term, role, page }],
+    queryFn: ({ signal }) => listAccounts({ data: { search: term, role, page }, signal }),
+  });
+  const data = directory.data;
+  const pages = Math.max(1, Math.ceil((data?.filteredCount ?? 0) / pageSize));
+  useEffect(() => {
+    if (data && page >= pages) setPage(pages - 1);
+  }, [data, page, pages]);
+
+  const waiting = directory.isPending || search.trim() !== term;
+  const close = () => setAction(undefined);
   const refresh = async () => {
-    await Promise.all([
-      profilesQuery.refetch(),
-      rolesQuery.refetch(),
-      departmentsQuery.refetch(),
-      userDepartmentsQuery.refetch(),
-    ]);
-    toast.success("تم تحديث الحسابات والصلاحيات");
+    const result = await directory.refetch();
+    if (result.isSuccess) toast.success("تم تحديث دليل الحسابات");
   };
-  const hasRole = (userId: string, role: Role) =>
-    rolesByUser.get(userId)?.some((item) => item.role === role) ?? false;
-  const toggleRole = async (userId: string, role: Role, enabled: boolean) => {
-    if (
-      role === "admin" &&
-      !enabled &&
-      rolesByUser.get(userId)?.filter((item) => item.role === "admin").length === 1
-    ) {
-      const adminCount = profiles.filter((profile) => hasRole(profile.id, "admin")).length;
-      if (adminCount <= 1) return toast.error("لا يمكن إزالة صلاحية المدير الوحيد في النظام");
-    }
-    if (enabled) {
-      const { error } = await supabase.from("user_roles").insert({ user_id: userId, role: role as never });
-      if (error) return toast.error(formatErrorMessage(error));
-    } else {
-      const assignment = rolesByUser.get(userId)?.find((item) => item.role === role);
-      if (!assignment) return;
-      const { error } = await supabase.from("user_roles").delete().eq("id", assignment.id);
-      if (error) return toast.error(formatErrorMessage(error));
-    }
-    await queryClient.invalidateQueries({ queryKey: ["accounts", "roles"] });
-    toast.success("تم تحديث صلاحيات الحساب");
-  };
-  const handleCreateAccount = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (createForm.password.length < 8)
-      return toast.error("كلمة المرور يجب أن تكون 8 أحرف على الأقل");
-    setActionBusy(true);
-    try {
-      await createAccount({
-        data: {
-          fullName: createForm.fullName,
-          email: createForm.email,
-          password: createForm.password,
-          role: createForm.role,
-          departmentIds: createForm.departmentIds,
-          allowedSections: createForm.allowedSections,
-          planCanRequest: createForm.planCanRequest,
-          planCanApprove: createForm.planCanApprove,
-        },
-      });
-      setCreateForm({
-        fullName: "",
-        email: "",
-        password: "",
-        role: "data_entry",
-        departmentIds: [],
-        allowedSections: [],
-        planCanRequest: false,
-        planCanApprove: false,
-      });
-      setShowCreateForm(false);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["accounts", "profiles"] }),
-        queryClient.invalidateQueries({ queryKey: ["accounts", "roles"] }),
-      ]);
-      toast.success("تم إنشاء الحساب وتعيين الصلاحية");
-    } catch (error) {
-      toast.error(formatErrorMessage(error, "تعذر إنشاء الحساب"));
-    } finally {
-      setActionBusy(false);
-    }
-  };
-  const handleUpdatePassword = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!resetUserId || resetPassword.length < 8)
-      return toast.error("كلمة المرور يجب أن تكون 8 أحرف على الأقل");
-    setActionBusy(true);
-    try {
-      await updateAccountPassword({
-        data: { userId: resetUserId, password: resetPassword },
-      });
-      setResetUserId(null);
-      setResetPassword("");
-      toast.success("تم تغيير كلمة المرور. لا يتم عرضها داخل النظام");
-    } catch (error) {
-      toast.error(formatErrorMessage(error, "تعذر تغيير كلمة المرور"));
-    } finally {
-      setActionBusy(false);
-    }
-  };
-
-  const handleDeleteAccount = async () => {
-    if (!accountPendingDelete) return;
-    setActionBusy(true);
-    try {
-      await deleteAccount({ data: { userId: accountPendingDelete.id } });
-      const deletedName = accountPendingDelete.full_name || accountPendingDelete.email || "الحساب";
-      setAccountPendingDelete(null);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["accounts", "profiles"] }),
-        queryClient.invalidateQueries({ queryKey: ["accounts", "roles"] }),
-        queryClient.invalidateQueries({ queryKey: ["accounts", "user-departments"] }),
-      ]);
-      toast.success(`تم حذف حساب ${deletedName}`);
-    } catch (error) {
-      toast.error(formatErrorMessage(error, "تعذر حذف الحساب"));
-    } finally {
-      setActionBusy(false);
-    }
-  };
-
-  const saveDepartments = async (userId: string) => {
-    setActionBusy(true);
-    try {
-      const allowedSections = hasRole(userId, "engineer") ? ["/project-plans"] : editingAllowedSections;
-      await updateUserDepartments({ data: { userId, departmentIds: editingDepartmentIds, allowedSections } });
-      await Promise.all([userDepartmentsQuery.refetch(), profilesQuery.refetch()]);
-      toast.success("تم تحديث نطاق الوصول والصلاحيات");
-    } catch (error) {
-      toast.error(formatErrorMessage(error, "تعذر تحديث الأقسام"));
-    } finally {
-      setActionBusy(false);
-    }
-  };
-
-  const loading =
-    profilesQuery.isLoading ||
-    rolesQuery.isLoading ||
-    departmentsQuery.isLoading ||
-    userDepartmentsQuery.isLoading;
-  const error = profilesQuery.error ?? rolesQuery.error;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-        <div>
-          <div className="flex items-center gap-2">
-            <UserCog className="h-7 w-7 text-primary" />
-            <h1 className="text-3xl font-bold">الحسابات والصلاحيات</h1>
+    <div dir="rtl" className="mx-auto max-w-7xl space-y-5">
+      <header className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border bg-card p-5 sm:p-6">
+        <div className="flex items-start gap-3">
+          <div className="rounded-xl bg-primary/10 p-3 text-primary">
+            <UserRoundCog className="size-6" aria-hidden="true" />
           </div>
-          <p className="mt-1 text-muted-foreground">إدارة أدوار الحسابات المسجلة في النظام.</p>
+          <div>
+            <h1 className="text-xl font-bold sm:text-2xl">الحسابات والصلاحيات</h1>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              إدارة الحسابات والأدوار ونطاق الوصول إلى الأقسام وصفحات النظام.
+            </p>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={() => setShowCreateForm((value) => !value)}>
-            <Plus className="ml-2 h-4 w-4" />
-            إضافة حساب
-          </Button>
-          <Button variant="outline" onClick={refresh} disabled={loading}>
-            {loading ? (
-              <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="ml-2 h-4 w-4" />
-            )}
-            تحديث
-          </Button>
-        </div>
-      </div>
+        <Button onClick={() => setAction({ kind: "create" })} disabled={directory.isError}>
+          <Plus className="size-4" /> إنشاء حساب
+        </Button>
+      </header>
 
-      {showCreateForm && (
-        <Card className="border-primary/30 bg-primary/5">
-          <CardHeader>
-            <CardTitle>إضافة حساب جديد</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleCreateAccount} className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div>
-                <Label htmlFor="new-account-name">الاسم الكامل</Label>
-                <Input
-                  id="new-account-name"
-                  required
-                  value={createForm.fullName}
-                  onChange={(event) =>
-                    setCreateForm((current) => ({ ...current, fullName: event.target.value }))
-                  }
-                />
-              </div>
-              <div>
-                <Label htmlFor="new-account-email">البريد الإلكتروني</Label>
-                <Input
-                  id="new-account-email"
-                  type="email"
-                  required
-                  value={createForm.email}
-                  onChange={(event) =>
-                    setCreateForm((current) => ({ ...current, email: event.target.value }))
-                  }
-                />
-              </div>
-              <div>
-                <Label htmlFor="new-account-password">كلمة المرور الأولية</Label>
-                <Input
-                  id="new-account-password"
-                  type="password"
-                  minLength={8}
-                  required
-                  value={createForm.password}
-                  onChange={(event) =>
-                    setCreateForm((current) => ({ ...current, password: event.target.value }))
-                  }
-                />
-                <p className="mt-1 text-xs text-muted-foreground">
-                  لن تظهر كلمة المرور بعد الحفظ، ويمكن للمدير إعادة تعيينها.
-                </p>
-              </div>
-              <div>
-                <Label htmlFor="new-account-role">الصلاحية</Label>
-                <select
-                  id="new-account-role"
-                  className="mt-1 flex h-10 w-full rounded-md border bg-background px-3 text-sm"
-                  value={createForm.role}
-                  onChange={(event) =>
-                    setCreateForm((current) => ({ ...current, role: event.target.value as Role }))
-                  }
-                >
-                  {roles.map((role) => (
-                    <option key={role.key} value={role.key}>
-                      {role.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="md:col-span-2 rounded-lg border bg-background p-3">
-                <p className="mb-2 text-sm font-semibold">صلاحيات خطط العمل</p>
-                <div className="flex flex-wrap gap-4">
-                  <label className="flex items-center gap-2 text-sm">
-                    <Checkbox
-                      checked={createForm.planCanRequest}
-                      onCheckedChange={(v) => setCreateForm((c) => ({ ...c, planCanRequest: v === true }))}
-                    />
-                    يستطيع طلب خطة
-                  </label>
-                  <label className="flex items-center gap-2 text-sm">
-                    <Checkbox
-                      checked={createForm.planCanApprove}
-                      onCheckedChange={(v) => setCreateForm((c) => ({ ...c, planCanApprove: v === true }))}
-                    />
-                    يستطيع الموافقة على الخطط {createForm.role === "planning_officer" && <Badge variant="secondary">مقترح لمسؤول التخطيط</Badge>}
-                  </label>
-                </div>
-              </div>
-              {createForm.role !== "engineer" && createForm.role !== "admin" && (
-                <details className="md:col-span-2 rounded-lg border bg-background p-3">
-                  <summary className="cursor-pointer text-sm font-semibold">
-                    صفحات النظام المتاحة ({createForm.allowedSections.length || "الكل"})
-                  </summary>
-                  <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg border p-3 md:grid-cols-4">
-                    {SECTION_OPTIONS.map((section) => (
-                      <label key={section.to} className="flex items-center gap-2 text-sm">
-                        <Checkbox
-                          checked={createForm.allowedSections.includes(section.to)}
-                          onCheckedChange={(checked) =>
-                            setCreateForm((current) => ({
-                              ...current,
-                              allowedSections:
-                                checked === true
-                                  ? [...current.allowedSections, section.to]
-                                  : current.allowedSections.filter((s) => s !== section.to),
-                            }))
-                          }
-                        />
-                        {section.label}
-                      </label>
-                    ))}
-                  </div>
-                </details>
-              )}
-              {createForm.role === "engineer" && (
-                <p className="md:col-span-2 text-sm text-muted-foreground">
-                  حساب المهندس يستطيع فقط طلب خطة من قسم التخطيط.
-                </p>
-              )}
-              <div className="md:col-span-2">
-                <Label>الأقسام المسموح بها (اتركها فارغة للوصول الكامل)</Label>
-                <div className="mt-2 flex flex-wrap gap-2 rounded-lg border p-3">
-                  {departments.map((department) => (
-                    <label key={department.id} className="flex items-center gap-2 text-sm">
-                      <Checkbox
-                        checked={createForm.departmentIds.includes(department.id)}
-                        onCheckedChange={(checked) =>
-                          setCreateForm((current) => ({
-                            ...current,
-                            departmentIds:
-                              checked === true
-                                ? [...current.departmentIds, department.id]
-                                : current.departmentIds.filter((id) => id !== department.id),
-                          }))
-                        }
-                      />
-                      {department.name}
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div className="flex gap-2 md:col-span-2">
-                <Button type="submit" disabled={actionBusy}>
-                  {actionBusy && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}حفظ الحساب
-                </Button>
-                <Button type="button" variant="outline" onClick={() => setShowCreateForm(false)}>
-                  إلغاء
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Card>
-          <CardContent className="flex items-center gap-3 p-4">
-            <Users className="h-5 w-5 text-primary" />
-            <div>
-              <p className="text-xs text-muted-foreground">الحسابات</p>
-              <p className="text-xl font-bold">{profiles.length}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center gap-3 p-4">
-            <ShieldCheck className="h-5 w-5 text-emerald-600" />
-            <div>
-              <p className="text-xs text-muted-foreground">المديرون</p>
-              <p className="text-xl font-bold">
-                {profiles.filter((profile) => hasRole(profile.id, "admin")).length}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center gap-3 p-4">
-            <ShieldCheck className="h-5 w-5 text-blue-600" />
-            <div>
-              <p className="text-xs text-muted-foreground">الموارد البشرية</p>
-              <p className="text-xl font-bold">
-                {profiles.filter((profile) => hasRole(profile.id, "hr")).length}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center gap-3 p-4">
-            <ShieldCheck className="h-5 w-5 text-amber-600" />
-            <div>
-              <p className="text-xs text-muted-foreground">مدخلو البيانات</p>
-              <p className="text-xl font-bold">
-                {profiles.filter((profile) => hasRole(profile.id, "data_entry")).length}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <MetricCard
+          title="إجمالي الحسابات"
+          value={data ? numberFormat.format(data.total) : "—"}
+          icon={Users}
+          loading={directory.isPending}
+        />
+        <MetricCard
+          title="مديرو النظام"
+          value={data ? numberFormat.format(data.admins) : "—"}
+          icon={ShieldCheck}
+          tone="success"
+          loading={directory.isPending}
+        />
+        <MetricCard
+          title="حسابات بدون أدوار"
+          value={data ? numberFormat.format(data.unassigned) : "—"}
+          icon={ShieldOff}
+          tone="warning"
+          loading={directory.isPending}
+        />
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>الحسابات المسجلة</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label htmlFor="account-search">بحث بالاسم أو البريد الإلكتروني</Label>
-            <Input
-              id="account-search"
-              className="mt-1"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="ابحث هنا..."
-            />
+        <CardHeader className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle className="text-base sm:text-lg">دليل الحسابات</CardTitle>
+            <Button
+              size="icon"
+              variant="outline"
+              aria-label="تحديث دليل الحسابات"
+              title="تحديث دليل الحسابات"
+              disabled={directory.isFetching}
+              onClick={() => void refresh()}
+            >
+              <RefreshCw className={directory.isFetching ? "size-4 animate-spin" : "size-4"} />
+            </Button>
           </div>
-          {error && (
-            <p className="rounded-lg border border-destructive/40 p-3 text-destructive">
-              تعذر تحميل الحسابات: {(error as Error).message}
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            <div className="space-y-2">
+              <Label htmlFor="account-search">البحث عن حساب</Label>
+              <div className="relative">
+                <Search
+                  className="absolute start-3 top-3 size-4 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <Input
+                  id="account-search"
+                  className="ps-9"
+                  maxLength={160}
+                  placeholder="اكتب الاسم أو البريد الإلكتروني"
+                  value={search}
+                  onChange={(event) => {
+                    setSearch(event.target.value);
+                    setPage(0);
+                  }}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="account-role-filter">تصفية حسب الدور</Label>
+              <select
+                id="account-role-filter"
+                className={selectClass}
+                value={role}
+                onChange={(event) => {
+                  setRole(event.target.value as FilterRole);
+                  setPage(0);
+                }}
+              >
+                <option value="">جميع الأدوار</option>
+                <option value="unassigned">بدون دور</option>
+                {roleKeys.map((key) => (
+                  <option key={key} value={key}>
+                    {accountRoles[key][0]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {directory.isError ? (
+            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-5">
+              <p role="alert" className="text-sm text-destructive">
+                {formatErrorMessage(directory.error, "تعذر تحميل دليل الحسابات")}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={() => void directory.refetch()}
+              >
+                إعادة المحاولة
+              </Button>
+            </div>
+          ) : waiting ? (
+            <p
+              role="status"
+              className="rounded-xl border p-8 text-center text-sm text-muted-foreground"
+            >
+              جارٍ تحميل الحسابات…
             </p>
-          )}
-          {loading ? (
-            <p className="py-8 text-center text-muted-foreground">جارٍ تحميل الحسابات...</p>
-          ) : (
-            <div className="space-y-3">
-              {filteredProfiles.map((profile) => (
-                <div key={profile.id} className="rounded-xl border p-4">
-                  <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-                    <div className="min-w-0">
-                      <p className="font-semibold">{profile.full_name || "بدون اسم"}</p>
-                      <p className="truncate text-sm text-muted-foreground">
-                        {profile.email || profile.id}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {(rolesByUser.get(profile.id) ?? []).map((assignment) => (
-                        <Badge
-                          key={assignment.id}
-                          variant={assignment.role === "admin" ? "default" : "secondary"}
-                        >
-                          {roles.find((role) => role.key === assignment.role)?.label ??
-                            assignment.role}
-                        </Badge>
-                      ))}
-                      {!rolesByUser.has(profile.id) && <Badge variant="outline">بدون صلاحية</Badge>}
-                      {(departmentsByUser.get(profile.id) ?? []).length ? (
-                        (departmentsByUser.get(profile.id) ?? []).map((id) => (
-                          <Badge key={id} variant="outline">
-                            {departmentName(id)}
-                          </Badge>
-                        ))
-                      ) : (
-                        <Badge variant="outline">كافة الأقسام</Badge>
-                      )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          const opening = editingUserId !== profile.id;
-                          setEditingUserId(opening ? profile.id : null);
-                          if (opening) {
-                            setEditingDepartmentIds(departmentsByUser.get(profile.id) ?? []);
-                            setEditingAllowedSections(
-                              hasRole(profile.id, "engineer")
-                                ? ["/project-plans"]
-                                : profile.allowed_sections ?? [],
-                            );
-                          }
-                        }}
-                      >
-                        {editingUserId === profile.id ? "إغلاق" : "تعديل الصلاحيات"}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setResetUserId(resetUserId === profile.id ? null : profile.id);
-                          setResetPassword("");
-                        }}
-                      >
-                        <KeyRound className="ml-2 h-4 w-4" /> كلمة مرور جديدة
-                      </Button>
-                      {user?.id !== profile.id && (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          disabled={actionBusy || (hasRole(profile.id, "admin") && adminCount <= 1)}
-                          title={hasRole(profile.id, "admin") && adminCount <= 1 ? "لا يمكن حذف المدير الوحيد" : "حذف الحساب نهائياً"}
-                          onClick={() => setAccountPendingDelete(profile)}
-                        >
-                          <Trash2 className="ml-2 h-4 w-4" /> حذف الحساب
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                  {resetUserId === profile.id && (
-                    <form
-                      onSubmit={handleUpdatePassword}
-                      className="mt-4 flex flex-col gap-2 border-t pt-4 sm:flex-row sm:items-end"
-                    >
-                      <div className="flex-1">
-                        <Label htmlFor={`reset-password-${profile.id}`}>كلمة المرور الجديدة</Label>
-                        <Input
-                          id={`reset-password-${profile.id}`}
-                          type="password"
-                          minLength={8}
-                          required
-                          value={resetPassword}
-                          onChange={(event) => setResetPassword(event.target.value)}
-                        />
-                      </div>
-                      <Button type="submit" disabled={actionBusy}>
-                        {actionBusy ? "جارٍ الحفظ..." : "تأكيد التغيير"}
-                      </Button>
-                    </form>
-                  )}
-                  {editingUserId === profile.id && (
-                    <div className="mt-4 grid grid-cols-1 gap-3 border-t pt-4 md:grid-cols-2">
-                      {roles.map((role) => (
-                        <label
-                          key={role.key}
-                          className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 hover:bg-muted/50"
-                        >
-                          <Checkbox
-                            checked={hasRole(profile.id, role.key)}
-                            onCheckedChange={(checked) =>
-                              toggleRole(profile.id, role.key, checked === true)
-                            }
-                          />
-                          <span>
-                            <span className="block font-medium">{role.label}</span>
-                            <span className="text-xs text-muted-foreground">
-                              {role.description}
-                            </span>
-                          </span>
-                        </label>
-                      ))}
-                      <details open className="md:col-span-2 rounded-xl border bg-muted/20 p-4">
-                        <summary className="cursor-pointer font-medium">الأقسام المصرح بها (فارغ = كافة الأقسام)</summary>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {departments.map((department) => (
-                            <label key={department.id} className="flex items-center gap-2 text-sm">
-                              <Checkbox
-                                checked={editingDepartmentIds.includes(department.id)}
-                                onCheckedChange={(checked) =>
-                                  setEditingDepartmentIds((current) =>
-                                    checked === true
-                                      ? [...new Set([...current, department.id])]
-                                      : current.filter((id) => id !== department.id),
-                                  )
-                                }
-                              />
-                              {department.name}
-                            </label>
-                          ))}
-                        </div>
-                      </details>
-                      <details open className="md:col-span-2 rounded-xl border border-primary/20 bg-primary/[0.035] p-4">
-                        <summary className="cursor-pointer font-semibold">صفحات النظام المسموح بها</summary>
-                        <div className="mt-3">
-                          <p className="text-xs text-muted-foreground">اختر نطاق بيانات الأقسام والواجهات التي تظهر للحساب. ترك الصفحات فارغة يتيح الصفحات المسموحة بحسب الدور.</p>
-                          <p className="mb-2 mt-3 text-sm font-medium">صفحات النظام</p>
-                          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                            {SECTION_OPTIONS.map((section) => (
-                              <label key={section.to} className="flex cursor-pointer items-center gap-2 rounded-lg border bg-background p-2.5 text-sm">
-                                <Checkbox
-                                  disabled={hasRole(profile.id, "engineer")}
-                                  checked={editingAllowedSections.includes(section.to)}
-                                  onCheckedChange={(checked) => setEditingAllowedSections((current) =>
-                                    checked === true
-                                      ? [...new Set([...current, section.to])]
-                                      : current.filter((path) => path !== section.to),
-                                  )}
-                                />
-                                {section.label}
-                              </label>
-                            ))}
-                          </div>
-                          {hasRole(profile.id, "engineer") && <p className="mt-2 text-xs text-muted-foreground">حساب المهندس مقيد تلقائياً بواجهة خطط المشاريع.</p>}
-                          <Button className="mt-4" size="sm" disabled={actionBusy} onClick={() => saveDepartments(profile.id)}>
-                            <Save className="ml-2 h-4 w-4" /> حفظ الأقسام والصفحات
-                          </Button>
-                        </div>
-                      </details>
-                      <PlanPermissionsEditor userId={profile.id} />
-                    </div>
-                  )}
-                </div>
-              ))}
-              {!filteredProfiles.length && (
-                <p className="py-8 text-center text-muted-foreground">لا توجد حسابات مطابقة.</p>
+          ) : !data?.accounts.length ? (
+            <div className="space-y-3 rounded-xl border border-dashed p-8 text-center">
+              <p className="text-sm text-muted-foreground">لا توجد حسابات مطابقة للبحث والتصفية.</p>
+              {(search || role) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSearch("");
+                    setTerm("");
+                    setRole("");
+                    setPage(0);
+                  }}
+                >
+                  مسح عوامل التصفية
+                </Button>
               )}
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-xl border">
+              <div
+                aria-hidden="true"
+                className="hidden gap-3 bg-muted/55 px-4 py-3 text-xs font-medium text-muted-foreground lg:grid lg:grid-cols-[minmax(0,2fr)_minmax(0,2fr)_minmax(7rem,1fr)_9rem]"
+              >
+                <span>الحساب</span>
+                <span>الأدوار</span>
+                <span>تاريخ الإنشاء</span>
+                <span>الإجراءات</span>
+              </div>
+              <ul className="divide-y">
+                {data.accounts.map((account) => {
+                  const ownAccount = account.id === user?.id;
+                  return (
+                    <li
+                      key={account.id}
+                      className="grid gap-3 p-4 transition-colors hover:bg-muted/25 lg:grid-cols-[minmax(0,2fr)_minmax(0,2fr)_minmax(7rem,1fr)_9rem] lg:items-center"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span
+                          aria-hidden="true"
+                          className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary/10 font-semibold text-primary"
+                        >
+                          {accountName(account).slice(0, 1).toUpperCase()}
+                        </span>
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <p className="break-words text-sm font-semibold">
+                              {accountName(account)}
+                            </p>
+                            {ownAccount && <Badge variant="outline">حسابك</Badge>}
+                          </div>
+                          {account.email && (
+                            <p
+                              dir="ltr"
+                              className="break-all text-right text-xs text-muted-foreground"
+                            >
+                              {account.email}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {account.roles.length ? (
+                          account.roles.map((key) => (
+                            <Badge
+                              key={key}
+                              variant={key === "admin" ? "default" : "secondary"}
+                              className="whitespace-normal"
+                            >
+                              {accountRoles[key][0]}
+                            </Badge>
+                          ))
+                        ) : (
+                          <Badge variant="outline">بدون دور</Badge>
+                        )}
+                      </div>
+                      <time dateTime={account.created_at} className="text-xs text-muted-foreground">
+                        {dateFormat.format(new Date(account.created_at))}
+                      </time>
+                      <div className="flex flex-wrap items-center gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setAction({ kind: "edit", account })}
+                          aria-label={`تعديل وصول ${accountName(account)}`}
+                        >
+                          تعديل
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          aria-label={`تغيير كلمة مرور ${accountName(account)}`}
+                          title="تغيير كلمة المرور"
+                          onClick={() => setAction({ kind: "password", account })}
+                        >
+                          <KeyRound className="size-4" />
+                        </Button>
+                        {!ownAccount && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="text-destructive"
+                            aria-label={`حذف ${accountName(account)}`}
+                            title="حذف الحساب"
+                            onClick={() => setAction({ kind: "delete", account })}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t bg-muted/30 p-3">
+                <p className="text-sm text-muted-foreground">
+                  {numberFormat.format(page * pageSize + 1)}–
+                  {numberFormat.format(page * pageSize + data.accounts.length)} من{" "}
+                  {numberFormat.format(data.filteredCount)} حساب
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    aria-label="الصفحة السابقة"
+                    disabled={page === 0}
+                    onClick={() => setPage(page - 1)}
+                  >
+                    <ChevronRight className="size-4" />
+                  </Button>
+                  <span className="text-sm">
+                    {numberFormat.format(page + 1)} / {numberFormat.format(pages)}
+                  </span>
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    aria-label="الصفحة التالية"
+                    disabled={page + 1 >= pages}
+                    onClick={() => setPage(page + 1)}
+                  >
+                    <ChevronLeft className="size-4" />
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
         </CardContent>
       </Card>
-      <AlertDialog
-        open={!!accountPendingDelete}
-        onOpenChange={(open) => {
-          if (!open && !actionBusy) setAccountPendingDelete(null);
-        }}
-      >
+
+      {action?.kind === "create" && <AccountEditor onClose={close} />}
+      {action?.kind === "edit" && (
+        <EditAccount
+          account={action.account}
+          ownAccount={user?.id === action.account.id}
+          onClose={close}
+        />
+      )}
+      {action?.kind === "password" && <PasswordDialog account={action.account} onClose={close} />}
+      {action?.kind === "delete" && <DeleteDialog account={action.account} onClose={close} />}
+    </div>
+  );
+}
+
+function EditAccount({
+  account,
+  ownAccount,
+  onClose,
+}: {
+  account: DirectoryAccount;
+  ownAccount: boolean;
+  onClose: () => void;
+}) {
+  const details = useQuery({
+    queryKey: ["accounts", "details", account.id],
+    queryFn: ({ signal }) => readAccountAccess({ data: { userId: account.id }, signal }),
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+  });
+  if (details.data)
+    return (
+      <AccountEditor
+        accountId={account.id}
+        original={details.data}
+        ownAccount={ownAccount}
+        onClose={onClose}
+      />
+    );
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent dir="rtl">
+        <DialogHeader className="ps-5 text-start sm:text-start">
+          <DialogTitle>تعديل حساب {accountName(account)}</DialogTitle>
+          <DialogDescription>
+            {details.isError ? "تعذر قراءة إعدادات الحساب." : "جارٍ تحميل إعدادات الحساب…"}
+          </DialogDescription>
+        </DialogHeader>
+        {details.isError && (
+          <Button variant="outline" onClick={() => void details.refetch()}>
+            إعادة المحاولة
+          </Button>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AccountEditor({
+  accountId,
+  original: loadedAccess,
+  ownAccount,
+  onClose,
+}: {
+  accountId?: string;
+  original?: AccountDetails;
+  ownAccount?: boolean;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [original] = useState(loadedAccess);
+  const initial: AccountAccess = {
+    fullName: original?.fullName ?? "",
+    roles: original?.roles ?? ["data_entry"],
+    departmentIds: original?.departments.map((item) => item.id) ?? [],
+    allowedSections: original?.allowedSections ?? [],
+    plan: original?.plan ?? {
+      canRequest: false,
+      canApprove: false,
+      canStaffAll: false,
+      specialties: [],
+    },
+  };
+  const [access, setAccess] = useState(initial);
+  const [scopeCustomized, setScopeCustomized] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [departments, setDepartments] = useState(original?.departments ?? []);
+  const [tab, setTab] = useState("roles");
+  const [error, setError] = useState("");
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const draft = { ...access, departmentIds: departments.map((item) => item.id) };
+  const changed = JSON.stringify(draft) !== JSON.stringify(initial) || !!(email || password);
+  const oneDepartment = access.roles.includes("department_manager");
+  const fixedScope = access.roles.includes("admin")
+    ? "admin"
+    : access.roles.includes("engineer")
+      ? "engineer"
+      : null;
+
+  const save = useMutation({
+    mutationFn: async () => {
+      if (accountId && original) {
+        await updateAccountAccess({
+          data: { userId: accountId, access: draft, expected: original },
+        });
+      } else {
+        await createAccount({ data: { ...draft, email, password } });
+      }
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["accounts", "directory"] });
+      if (accountId)
+        await queryClient.invalidateQueries({ queryKey: ["plan-staffing-permission", accountId] });
+      if (ownAccount)
+        window.dispatchEvent(new CustomEvent("profile-name-updated", { detail: draft.fullName }));
+      toast.success(
+        original ? "تم حفظ بيانات الحساب وصلاحياته" : "تم إنشاء الحساب وتعيين صلاحياته",
+      );
+      onClose();
+    },
+    onError: (failure) => setError(formatErrorMessage(failure, "تعذر حفظ الحساب")),
+  });
+
+  const close = () => {
+    if (save.isPending) return;
+    if (changed) setConfirmDiscard(true);
+    else onClose();
+  };
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    setError("");
+    const validation = accountAccessSchema.safeParse(draft);
+    if (
+      draft.fullName.trim().length < 2 ||
+      (!original && (!email.trim() || password.length < 8 || !draft.roles.length))
+    ) {
+      setTab("roles");
+      setError(
+        original
+          ? "أدخل الاسم الكامل."
+          : "أدخل الاسم والبريد، واختر دوراً، واستخدم كلمة مرور من ٨ أحرف على الأقل.",
+      );
+      return;
+    }
+    if (oneDepartment && departments.length !== 1) {
+      setTab("scope");
+      setError("حدد قسماً واحداً لحساب مدير القسم.");
+      return;
+    }
+    if (!validation.success) {
+      setError("تحقق من البيانات المدخلة وحدود عدد الأقسام والصفحات والتخصصات.");
+      return;
+    }
+    save.mutate();
+  };
+
+  return (
+    <>
+      <Dialog open onOpenChange={(open) => !open && close()}>
+        <DialogContent
+          dir="rtl"
+          className="flex max-h-[94dvh] max-w-[calc(100%-1rem)] flex-col gap-0 overflow-hidden rounded-xl p-0 sm:max-w-2xl"
+        >
+          <DialogHeader className="border-b px-6 py-5 ps-12 text-start sm:text-start">
+            <DialogTitle>{original ? "تعديل الحساب والصلاحيات" : "إنشاء حساب جديد"}</DialogTitle>
+            <DialogDescription className="break-all">
+              {original
+                ? original.email || original.fullName
+                : "أدخل بيانات الحساب واختر صلاحياته قبل الحفظ."}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" noValidate>
+            <div className="min-h-0 space-y-3 overflow-y-auto p-4 sm:p-6">
+              <fieldset disabled={save.isPending}>
+                <Tabs dir="rtl" value={tab} onValueChange={setTab}>
+                  <TabsList className="mb-4 grid h-auto w-full grid-cols-3">
+                    <TabsTrigger className="whitespace-normal" value="roles">
+                      الحساب والأدوار
+                    </TabsTrigger>
+                    <TabsTrigger className="whitespace-normal" value="scope">
+                      الأقسام والصفحات
+                    </TabsTrigger>
+                    <TabsTrigger className="whitespace-normal" value="plan">
+                      خطط العمل
+                    </TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="roles" className="space-y-5">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="flex flex-col gap-3 sm:col-span-2">
+                        <Label htmlFor="account-name">الاسم الكامل</Label>
+                        <Input
+                          id="account-name"
+                          value={access.fullName}
+                          maxLength={160}
+                          onChange={(event) =>
+                            setAccess({ ...access, fullName: event.target.value })
+                          }
+                        />
+                      </div>
+                      {!original && (
+                        <>
+                          <div className="flex flex-col gap-3">
+                            <Label htmlFor="account-email">البريد الإلكتروني</Label>
+                            <Input
+                              dir="ltr"
+                              type="email"
+                              id="account-email"
+                              maxLength={320}
+                              value={email}
+                              onChange={(event) => setEmail(event.target.value)}
+                              autoComplete="off"
+                            />
+                          </div>
+                          <div className="flex flex-col gap-3">
+                            <Label htmlFor="account-password">كلمة المرور الأولية</Label>
+                            <Input
+                              dir="ltr"
+                              id="account-password"
+                              type="password"
+                              maxLength={72}
+                              value={password}
+                              onChange={(event) => setPassword(event.target.value)}
+                              autoComplete="new-password"
+                              placeholder="٨ أحرف على الأقل"
+                            />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold">الأدوار المسندة</p>
+                        <Badge variant="secondary">
+                          {numberFormat.format(access.roles.length)} دور
+                        </Badge>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {roleKeys.map((key) => {
+                          const selected = access.roles.includes(key);
+                          return (
+                            <label
+                              key={key}
+                              className={`flex items-start gap-3 rounded-lg border p-3 text-sm ${selected ? "border-primary/40 bg-primary/5" : "hover:bg-muted/40"}`}
+                            >
+                              <Checkbox
+                                className="mt-1"
+                                checked={selected}
+                                disabled={ownAccount && key === "admin"}
+                                onCheckedChange={(checked) => {
+                                  const roles =
+                                    checked === true
+                                      ? [...access.roles, key]
+                                      : access.roles.filter((role) => role !== key);
+                                  const allowedSections =
+                                    !original && !scopeCustomized
+                                      ? [
+                                          ...new Set(
+                                            roles.flatMap((role) => initialRolePages[role] ?? []),
+                                          ),
+                                        ]
+                                      : access.allowedSections;
+                                  setAccess({ ...access, roles, allowedSections });
+                                }}
+                              />
+                              <span className="min-w-0">
+                                <span className="block font-medium">{accountRoles[key][0]}</span>
+                                <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                                  {accountRoles[key][1]}
+                                </span>
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                      {ownAccount && (
+                        <p className="text-xs text-muted-foreground">
+                          دور مدير النظام مثبت لحسابك الحالي.
+                        </p>
+                      )}
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="scope">
+                    <AccountScopeFields
+                      departments={departments}
+                      onDepartments={setDepartments}
+                      singleDepartment={oneDepartment}
+                      sections={access.allowedSections}
+                      onSections={(allowedSections) => {
+                        setScopeCustomized(true);
+                        setAccess({ ...access, allowedSections });
+                      }}
+                      fixedScope={fixedScope}
+                    />
+                  </TabsContent>
+                  <TabsContent value="plan">
+                    <PlanPermissionsEditor
+                      roles={access.roles}
+                      value={access.plan}
+                      onChange={(plan) => setAccess({ ...access, plan })}
+                    />
+                  </TabsContent>
+                </Tabs>
+              </fieldset>
+            </div>
+            <div className="space-y-3 border-t bg-card p-4 sm:px-6">
+              {error && (
+                <p
+                  role="alert"
+                  className="rounded-md bg-destructive/10 p-2 text-sm leading-6 text-destructive"
+                >
+                  {error}
+                </p>
+              )}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">
+                  {changed ? "تغييرات غير محفوظة" : ""}
+                </p>
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" disabled={save.isPending} onClick={close}>
+                    إلغاء
+                  </Button>
+                  <Button type="submit" disabled={save.isPending || (!!original && !changed)}>
+                    {save.isPending && <Loader2 className="size-4 animate-spin" />}
+                    {original ? "حفظ التغييرات" : "إنشاء الحساب"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <AlertDialog open={confirmDiscard} onOpenChange={setConfirmDiscard}>
         <AlertDialogContent dir="rtl">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
-              <Trash2 className="h-5 w-5" /> تأكيد حذف الحساب
-            </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2 text-right">
-              <span className="block">
-                سيتم حذف حساب <strong className="text-foreground">{accountPendingDelete?.full_name || "بدون اسم"}</strong>
-                {accountPendingDelete?.email ? ` (${accountPendingDelete.email})` : ""} نهائياً ومنعه من تسجيل الدخول.
-              </span>
-              <span className="block">لا يمكن التراجع عن هذا الإجراء. إذا كانت للحساب سجلات تاريخية محمية، سيمنع النظام الحذف ويعرض السبب.</span>
+          <AlertDialogHeader className="text-start sm:text-start">
+            <AlertDialogTitle>تجاهل التغييرات؟</AlertDialogTitle>
+            <AlertDialogDescription>
+              ستُغلق نافذة الحساب وتُفقد التغييرات غير المحفوظة.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={actionBusy}>إلغاء</AlertDialogCancel>
-            <Button variant="destructive" disabled={actionBusy} onClick={handleDeleteAccount}>
-              {actionBusy ? <><Loader2 className="ml-2 h-4 w-4 animate-spin" /> جارٍ الحذف...</> : <><Trash2 className="ml-2 h-4 w-4" /> حذف نهائي</>}
+            <AlertDialogCancel>متابعة التعديل</AlertDialogCancel>
+            <Button variant="destructive" onClick={onClose}>
+              تجاهل التغييرات
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
+  );
+}
+
+function PasswordDialog({ account, onClose }: { account: DirectoryAccount; onClose: () => void }) {
+  const [password, setPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [error, setError] = useState("");
+  const update = useMutation({
+    mutationFn: () => updateAccountPassword({ data: { userId: account.id, password } }),
+    onSuccess: () => {
+      toast.success("تم تغيير كلمة المرور");
+      onClose();
+    },
+    onError: (failure) => setError(formatErrorMessage(failure, "تعذر تغيير كلمة المرور")),
+  });
+  return (
+    <Dialog open onOpenChange={(open) => !open && !update.isPending && onClose()}>
+      <DialogContent dir="rtl" className="max-h-[90dvh] overflow-y-auto">
+        <DialogHeader className="ps-5 text-start sm:text-start">
+          <DialogTitle>تغيير كلمة المرور</DialogTitle>
+          <DialogDescription>{accountName(account)}</DialogDescription>
+        </DialogHeader>
+        <form
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const validation = passwordSchema.safeParse(password);
+            if (!validation.success) {
+              setError(validation.error.issues[0].message);
+              return;
+            }
+            if (password !== confirmation) {
+              setError("كلمتا المرور غير متطابقتين.");
+              return;
+            }
+            setError("");
+            update.mutate();
+          }}
+        >
+          <div className="space-y-2">
+            <Label htmlFor="new-password">كلمة المرور الجديدة</Label>
+            <Input
+              dir="ltr"
+              id="new-password"
+              type="password"
+              autoComplete="new-password"
+              value={password}
+              maxLength={72}
+              disabled={update.isPending}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="confirm-password">تأكيد كلمة المرور</Label>
+            <Input
+              dir="ltr"
+              id="confirm-password"
+              type="password"
+              autoComplete="new-password"
+              value={confirmation}
+              maxLength={72}
+              disabled={update.isPending}
+              onChange={(event) => setConfirmation(event.target.value)}
+            />
+          </div>
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+          <Button disabled={update.isPending || !password || !confirmation}>
+            {update.isPending ? "جارٍ الحفظ…" : "حفظ كلمة المرور"}
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeleteDialog({ account, onClose }: { account: DirectoryAccount; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const removal = useMutation({
+    mutationFn: () => deleteAccount({ data: { userId: account.id } }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["accounts", "directory"] });
+      toast.success("تم حذف الحساب");
+      onClose();
+    },
+  });
+  return (
+    <AlertDialog open onOpenChange={(open) => !open && !removal.isPending && onClose()}>
+      <AlertDialogContent dir="rtl">
+        <AlertDialogHeader className="text-start sm:text-start">
+          <AlertDialogTitle>حذف حساب {accountName(account)}؟</AlertDialogTitle>
+          <AlertDialogDescription>
+            هذا حذف نهائي للحساب وصلاحياته. يمنع النظام الحذف إذا كان الحساب مرتبطاً بسجلات تاريخية
+            محمية.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {removal.isError && (
+          <p role="alert" className="text-sm text-destructive">
+            {formatErrorMessage(removal.error, "تعذر حذف الحساب")}
+          </p>
+        )}
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={removal.isPending}>إلغاء</AlertDialogCancel>
+          <Button
+            variant="destructive"
+            disabled={removal.isPending}
+            onClick={() => removal.mutate()}
+          >
+            {removal.isPending ? "جارٍ الحذف…" : "حذف الحساب"}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
