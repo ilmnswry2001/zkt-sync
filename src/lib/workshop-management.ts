@@ -28,3 +28,22 @@ export function workshopPeriodDays(start: string, end: string): number {
 export type WorkshopSiteOption = { id: string; name: string; ctr_code: string | null };
 export const workshopSiteLabel = (site: WorkshopSiteOption) =>
   `${site.ctr_code || "دون كود CTR"} — ${site.name}`;
+
+export function matchWorkshopPunches(
+  members: readonly { workshop_id: string; employee_id: string; employee: { employee_no: string } }[],
+  punches: readonly { employee_id: string | null; employee_no: string }[],
+) {
+  const punchIds = new Set(punches.map((punch) => punch.employee_id));
+  const punchNumbers = new Set(punches.map((punch) => punch.employee_no));
+  const byWorkshop = new Map<string, Set<string>>();
+  const employees = new Set<string>();
+
+  for (const member of members) {
+    if (!punchIds.has(member.employee_id) && !punchNumbers.has(member.employee.employee_no)) continue;
+    const matches = byWorkshop.get(member.workshop_id) ?? new Set<string>();
+    matches.add(member.employee_id);
+    byWorkshop.set(member.workshop_id, matches);
+    employees.add(member.employee_id);
+  }
+  return { byWorkshop, employeeCount: employees.size };
+}

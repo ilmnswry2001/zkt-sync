@@ -1,10 +1,27 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  matchWorkshopPunches,
   reorderWorkshopIds,
   workshopPeriodDays,
   workshopSiteLabel,
 } from "./workshop-management.ts";
+
+test("marks matching employees across workshops, using employee numbers for older punches", () => {
+  const member = (workshop_id: string, employee_id: string, employee_no: string) => ({
+    workshop_id, employee_id, employee: { employee_no },
+  });
+  const { byWorkshop, employeeCount } = matchWorkshopPunches(
+    [member("first", "employee-a", "01"), member("second", "employee-b", "02"),
+      member("second", "employee-a", "01"), member("third", "employee-c", "03")],
+    [{ employee_id: "employee-a", employee_no: "old-no" }, { employee_id: null, employee_no: "02" },
+      { employee_id: null, employee_no: "02" }, { employee_id: null, employee_no: "99" }],
+  );
+  assert.deepEqual(byWorkshop, new Map([
+    ["first", new Set(["employee-a"])], ["second", new Set(["employee-b", "employee-a"])],
+  ]));
+  assert.equal(employeeCount, 2);
+});
 
 test("reorders across filtered workshops without dropping hidden workshops", () => {
   const original = ["a", "hidden", "b", "c"];

@@ -1,7 +1,7 @@
 import { useDirectorySearch } from "@/hooks/use-directory-search";
 import { loadAllRows } from "@/lib/monthly-report";
 import { WorkshopManagement } from "@/components/WorkshopManagement";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { todayInBaghdad } from "@/lib/date-time";
@@ -9,6 +9,7 @@ import { printReport } from "@/lib/report-print";
 import { workshopReportMarkup } from "@/lib/operational-report-markup";
 import { formatErrorMessage } from "@/lib/error-message";
 import { getDefaultWage } from "@/lib/wage-defaults";
+import { matchWorkshopPunches } from "@/lib/workshop-management";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -97,12 +98,32 @@ const noAttendancePunches: AttendancePunch[] = [];
 
 const rosterFields = "id, workshop_id, employee_id, role_label, is_active, employee:employees(id, employee_no, full_name, position, status)";
 type RosterRow = Member & { employee: (Employee & { status: string }) | null };
+type WorkshopPunchMember = { workshop_id: string; employee_id: string; employee: { employee_no: string } };
 
 function activeRosterMembers(rows: RosterRow[]): Member[] {
   return rows.map((member) => ({
     ...member,
     employee: member.employee?.status === "active" ? member.employee : null,
   }));
+}
+
+async function loadAttendancePunches(date: string, column: "device_id" | "employee_no", scopeIds: readonly string[]) {
+  const start = new Date(`${date}T00:00:00+03:00`);
+  const end = new Date(start.getTime() + 86400000);
+  const punches: AttendancePunch[] = [];
+  const ids = [...new Set(scopeIds)];
+  for (let offset = 0; offset < ids.length; offset += 100) {
+    const batch = ids.slice(offset, offset + 100);
+    punches.push(...await loadAllRows<AttendancePunch>((from, to) => supabase
+      .from("attendance_logs")
+      .select("id, employee_id, employee_no, verify_time, device_id, status, verify_type, self_event_type, is_suspicious")
+      .in(column, batch)
+      .gte("verify_time", start.toISOString()).lt("verify_time", end.toISOString())
+      .eq("is_suspicious", false)
+      .or("self_event_type.eq.check_in,and(self_event_type.is.null,or(status.eq.0,and(status.is.null,verify_type.eq.0)))")
+      .order("verify_time").order("id").range(from, to)));
+  }
+  return punches.sort((a, b) => a.verify_time.localeCompare(b.verify_time) || a.id.localeCompare(b.id));
 }
 
 type QueuedInventory = {
@@ -156,7 +177,12 @@ async function submitInventory(item: QueuedInventory) {
 export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId?:string}={}) {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState("inventory");
-  const [date, setDate] = useState(todayInBaghdad());
+  const [date, setInventoryDate] = useState(todayInBaghdad());
+  const dateRef = useRef(date);
+  const setDate = (value: string) => {
+    dateRef.current = value;
+    setInventoryDate(value);
+  };
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>(["all"]);
   const [workshopId, setWorkshopId] = useState(initialWorkshopId);
   const [additionalWorkshopId, setAdditionalWorkshopId] = useState("");
@@ -173,6 +199,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
   const [selectedUnmatchedEmployeeIds, setSelectedUnmatchedEmployeeIds] = useState<string[]>([]);
   const [bulkTargetWorkshopId, setBulkTargetWorkshopId] = useState("");
   const [saving, setSaving] = useState(false);
+  const [markingBiometrics, setMarkingBiometrics] = useState(false);
   const [dismissedPunchEmployees, setDismissedPunchEmployees] = useState<Set<string>>(
     () => new Set(),
   );
@@ -246,31 +273,16 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
   const attendancePunchesQuery = useQuery<AttendancePunch[]>({
     queryKey: ["daily-workshop-attendance-punches", date, bySelectedDevices, scopeIds],
     enabled: tab === "inventory" && !!date && scopeIds.length > 0,
-    queryFn: async () => {
-      const start = new Date(`${date}T00:00:00+03:00`);
-      const end = new Date(start.getTime() + 86400000);
-      const punches: AttendancePunch[] = [];
-      const ids = [...new Set(scopeIds)];
-      for (let offset = 0; offset < ids.length; offset += 100) {
-        const batch = ids.slice(offset, offset + 100);
-        punches.push(...await loadAllRows<AttendancePunch>((from, to) => supabase
-          .from("attendance_logs")
-          .select("id, employee_id, employee_no, verify_time, device_id, status, verify_type, self_event_type, is_suspicious")
-          .in(bySelectedDevices ? "device_id" : "employee_no", batch)
-          .gte("verify_time", start.toISOString()).lt("verify_time", end.toISOString())
-          .eq("is_suspicious", false)
-          .or("self_event_type.eq.check_in,and(self_event_type.is.null,or(status.eq.0,and(status.is.null,verify_type.eq.0)))")
-          .order("verify_time").order("id").range(from, to)));
-      }
-      return punches.sort((a, b) => a.verify_time.localeCompare(b.verify_time) || a.id.localeCompare(b.id));
-    },
+    queryFn: () => loadAttendancePunches(date, bySelectedDevices ? "device_id" : "employee_no", scopeIds),
   });
   const activeWorkshopMembersQuery = useQuery({
     queryKey: ["daily-workshop-all-active-members"],
     enabled: tab === "inventory" && bySelectedDevices,
-    queryFn: () => loadAllRows((from, to) => supabase
-      .from("daily_workshop_members").select("workshop_id, employee_id, employee:employees(employee_no)")
-      .eq("is_active", true).order("id").range(from, to)),
+    queryFn: () => loadAllRows<WorkshopPunchMember>((from, to) => supabase
+      .from("daily_workshop_members")
+      .select("workshop_id, employee_id, workshop:daily_workshops!inner(is_active), employee:employees!inner(employee_no)")
+      .eq("is_active", true).eq("workshop.is_active", true).eq("employee.status", "active")
+      .order("id").range(from, to)),
   });
   const attendancePunches = attendancePunchesQuery.data ?? noAttendancePunches;
   const deviceEmployeeNumbers = useMemo(
@@ -317,15 +329,14 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
       if (error) throw error;
       const ids = (reports ?? []).map((report: DailyReport) => report.id);
       if (!ids.length) return { reports: [] as DailyReport[], lines: [] as AttendanceLine[] };
-      const { data: lines, error: linesError } = await supa
+      const lines = await loadAllRows<AttendanceLine>((from, to) => supa
         .from("daily_workshop_report_lines")
         .select(
           "id, report_id, employee_id, employee_no_snapshot, employee_name_snapshot, role_label, attended, site_id",
         )
         .in("report_id", ids)
-        .order("employee_name_snapshot");
-      if (linesError) throw linesError;
-      return { reports: reports as DailyReport[], lines: (lines ?? []) as AttendanceLine[] };
+        .order("employee_name_snapshot").order("id").range(from, to));
+      return { reports: reports as DailyReport[], lines };
     },
   });
 
@@ -379,10 +390,6 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
   const activeWorkshopEmployeeIds = useMemo(
     () => new Set((activeWorkshopMembersQuery.data ?? []).map((member) => member.employee_id)),
     [activeWorkshopMembersQuery.data],
-  );
-  const activeWorkshopIds = useMemo(
-    () => new Set(workshops.map((workshop) => workshop.id)),
-    [workshops],
   );
   const unmatchedPunches = useMemo(() => {
     if (
@@ -505,55 +512,50 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
   };
 
   const markRosterFromBiometrics = async () => {
-    const [punchesResult, membersResult, reportsResult] = await Promise.all([
-      attendancePunchesQuery.refetch(),
-      bySelectedDevices ? activeWorkshopMembersQuery.refetch() : membersQuery.refetch(),
-      reportQuery.refetch(),
-    ]);
-    const queryError = punchesResult.error ?? membersResult.error ?? reportsResult.error;
-    if (queryError) {
-      toast.error(formatErrorMessage(queryError, "تعذر مطابقة حركات البصمة مع الورش"));
-      return;
-    }
-    const punches = punchesResult.data ?? [];
-    const punchEmployeeIds = new Set(punches.map((punch) => punch.employee_id).filter(Boolean));
-    const punchEmployeeNumbers = new Set(punches.map((punch) => punch.employee_no));
-    const matchedMembers = (membersResult.data ?? []).filter(
-      (member) =>
-        activeWorkshopIds.has(member.workshop_id) &&
-        (punchEmployeeIds.has(member.employee_id) ||
-          punchEmployeeNumbers.has(member.employee?.employee_no ?? "")),
-    );
-    const reports = reportsResult.data?.reports ?? [];
-    const lines = reportsResult.data?.lines ?? [];
-    const markedByWorkshop = new Map<string, Set<string>>();
-    for (const member of matchedMembers) {
-      const employeeIds = markedByWorkshop.get(member.workshop_id) ?? new Set<string>();
-      employeeIds.add(member.employee_id);
-      markedByWorkshop.set(member.workshop_id, employeeIds);
-    }
-    setDrafts((current) => {
-      const next = { ...current };
-      for (const [targetWorkshopId, employeeIds] of markedByWorkshop) {
-        const savedReport = reports.find((report) => report.workshop_id === targetWorkshopId);
-        const savedAttendance = Object.fromEntries(
-          lines
-            .filter((line) => line.report_id === savedReport?.id)
-            .map((line) => [line.employee_id, line.attended]),
-        );
-        const attended = { ...(current[targetWorkshopId]?.attended ?? savedAttendance) };
-        for (const id of employeeIds) attended[id] = true;
-        next[targetWorkshopId] = {
-          attended,
-          notes: current[targetWorkshopId]?.notes ?? savedReport?.notes ?? "",
-        };
+    if (!date || markingBiometrics || saving) return;
+    setMarkingBiometrics(true);
+    try {
+      const [membersResult, reportsResult, devicePunches] = await Promise.all([
+        activeWorkshopMembersQuery.refetch({ throwOnError: true }),
+        reportQuery.refetch({ throwOnError: true }),
+        bySelectedDevices ? attendancePunchesQuery.refetch({ throwOnError: true }) : null,
+      ]);
+      const allMembers = membersResult.data ?? [];
+      if (date !== dateRef.current) return;
+      const punches = devicePunches?.data ?? await loadAttendancePunches(
+        date, "employee_no", allMembers.map((member) => member.employee.employee_no),
+      );
+      if (date !== dateRef.current) return;
+      const { byWorkshop, employeeCount } = matchWorkshopPunches(allMembers, punches);
+      if (!byWorkshop.size) {
+        toast.info("لا توجد حركات بصمة مطابقة لكادر الورش في التاريخ المحدد.");
+        return;
       }
-      return next;
-    });
-    const matchedEmployeeCount = new Set(matchedMembers.map((member) => member.employee_id)).size;
-    toast.success(
-      `تم تأشير ${matchedEmployeeCount} موظفاً في ${markedByWorkshop.size} ورشة بالبصمة`,
-    );
+      const reports = reportsResult.data?.reports ?? [];
+      const lines = reportsResult.data?.lines ?? [];
+      setDrafts((current) => {
+        const next = { ...current };
+        for (const [targetWorkshopId, employeeIds] of byWorkshop) {
+          const savedReport = reports.find((report) => report.workshop_id === targetWorkshopId);
+          const savedAttendance = Object.fromEntries(
+            lines.filter((line) => line.report_id === savedReport?.id)
+              .map((line) => [line.employee_id, line.attended]),
+          );
+          const attended = { ...(current[targetWorkshopId]?.attended ?? savedAttendance) };
+          for (const id of employeeIds) attended[id] = true;
+          next[targetWorkshopId] = {
+            attended,
+            notes: current[targetWorkshopId]?.notes ?? savedReport?.notes ?? "",
+          };
+        }
+        return next;
+      });
+      toast.success(`تم تأشير ${employeeCount} موظفاً في ${byWorkshop.size} ورشة بالبصمة`);
+    } catch (error) {
+      toast.error(formatErrorMessage(error, "تعذر مطابقة حركات البصمة مع الورش"));
+    } finally {
+      setMarkingBiometrics(false);
+    }
   };
 
   const assignUnmatchedPunch = async (employees: Employee[], targetWorkshopId: string) => {
@@ -669,7 +671,8 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
       } else {
         for (const id of others) {
           const cached = queryClient.getQueryData<Member[]>(["daily-workshop-members", id]);
-          if (cached) allMembers = [...allMembers, ...cached];
+          if (!cached) throw new Error("اتصل بالإنترنت لتحميل كادر الورش وإرسال الجرد.");
+          allMembers = [...allMembers, ...cached];
         }
       }
       const reports = reportQuery.data?.reports ?? [];
@@ -873,6 +876,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
+                        disabled={markingBiometrics}
                         className={`${inputClass} justify-between font-normal`}
                       >
                         {selectedDeviceIds.includes("all")
@@ -953,6 +957,15 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                   {formatErrorMessage(activeWorkshopMembersQuery.error)}
                 </p>
               )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void markRosterFromBiometrics()}
+                disabled={!date || !workshops.length || markingBiometrics || saving}
+              >
+                <Fingerprint className="size-4" />
+                {markingBiometrics ? "جارٍ فحص بصمات الورش…" : "تأشير جميع الورش بالبصمة"}
+              </Button>
               {selectedWorkshop && (
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-muted/20 p-3">
                   <div>
@@ -977,21 +990,6 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => setAttendedByEmployee({})}>
                       إلغاء التحديد
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => void markRosterFromBiometrics()}
-                      disabled={
-                        !date || !scopeIds.length || attendancePunchesQuery.isFetching ||
-                        (bySelectedDevices && (activeWorkshopMembersQuery.isLoading ||
-                          activeWorkshopMembersQuery.isError || employeesQuery.isFetching || employeesQuery.isError))
-                      }
-                    >
-                      <Fingerprint className="ml-2 h-4 w-4" />
-                      {attendancePunchesQuery.isFetching
-                        ? "جارٍ فحص البصمات..."
-                        : bySelectedDevices ? "تأشير الورش من الأجهزة المحددة" : "تأشير الورشة بالبصمة"}
                     </Button>
                   </div>
                 </div>
@@ -1212,40 +1210,37 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                   </div>
                 </section>
               )}
-              {workshopId && activeRoster.length > 0 && (
-                <>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="workshop-report-notes">ملاحظات (اختياري)</Label>
-                    <Textarea
-                      id="workshop-report-notes"
-                      value={notes}
-                      maxLength={2000}
-                      onChange={(event) => setNotes(event.target.value)}
-                      placeholder="ملاحظات تخص حضور الورشة اليوم..."
-                    />
-                  </div>
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-sm text-muted-foreground">
-                      الحاضرون:{" "}
-                      {
-                        activeRoster.filter(({ employee }) => attendedByEmployee[employee!.id])
-                          .length
-                      }{" "}
-                      من {activeRoster.length}
-                      {savedReport ? " · يوجد سجل محفوظ لهذا اليوم" : ""}
-                      {!online ? " · وضع عدم الاتصال" : ""}
-                      {pendingCount ? ` · ${pendingCount} جرد بانتظار المزامنة` : ""}
-                    </p>
-                    <Button onClick={() => void saveDailyReport()} disabled={saving}>
-                      <Save className="ml-2 h-4 w-4" />
-                      {saving
-                        ? "جارٍ الإرسال..."
-                        : draftCount > 1
-                          ? `إرسال جرد كل الورش (${draftCount})`
-                          : "إرسال الجرد"}
-                    </Button>
-                  </div>
-                </>
+              {activeRoster.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="workshop-report-notes">ملاحظات (اختياري)</Label>
+                  <Textarea
+                    id="workshop-report-notes"
+                    value={notes}
+                    maxLength={2000}
+                    onChange={(event) => setNotes(event.target.value)}
+                    placeholder="ملاحظات تخص حضور الورشة اليوم..."
+                  />
+                </div>
+              )}
+              {(activeRoster.length > 0 || draftCount > 0) && (
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm text-muted-foreground">
+                    {activeRoster.length > 0
+                      ? `الحاضرون: ${activeRoster.filter(({ employee }) => attendedByEmployee[employee!.id]).length} من ${activeRoster.length}`
+                      : `مسودات الجرد: ${draftCount}`}
+                    {activeRoster.length > 0 && savedReport ? " · يوجد سجل محفوظ لهذا اليوم" : ""}
+                    {!online ? " · وضع عدم الاتصال" : ""}
+                    {pendingCount ? ` · ${pendingCount} جرد بانتظار المزامنة` : ""}
+                  </p>
+                  <Button onClick={() => void saveDailyReport()} disabled={saving || markingBiometrics}>
+                    <Save className="ml-2 h-4 w-4" />
+                    {saving
+                      ? "جارٍ الإرسال..."
+                      : draftCount > 1
+                        ? `إرسال جرد كل الورش (${draftCount})`
+                        : "إرسال الجرد"}
+                  </Button>
+                </div>
               )}
             </CardContent>
           </Card>
