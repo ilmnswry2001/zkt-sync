@@ -9,6 +9,7 @@ import {
   projectCostCrew,
 } from "@/lib/project-execution-costs";
 import { loadAllRows } from "@/lib/monthly-report";
+import { ProjectFinancialsPanel } from "@/components/ProjectFinancialsPanel";
 import { ProjectExecutionPanel } from "@/components/ProjectExecutionPanel";
 import { WorkshopSitePicker } from "@/components/WorkshopManagementFields";
 import { Link } from "@tanstack/react-router";
@@ -406,6 +407,22 @@ function ProjectsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {selectedProjectId === "all" ? (
+        <p className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">
+          اختر مشروعاً لعرض موازنة العقد والتكلفة المالية والمواد المصروفة.
+        </p>
+      ) : (
+        visibleProjects[0] && (
+          <ProjectFinancialsPanel
+            key={selectedProjectId + reportDate}
+            project={visibleProjects[0]}
+            end={reportDate}
+            wages={data.wages}
+            refreshWages={async () => (await query.refetch()).isSuccess}
+          />
+        )
+      )}
 
       <ProjectExecutionPanel
         date={reportDate}
