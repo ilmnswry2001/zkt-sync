@@ -1,6 +1,6 @@
 import { test, expect, mock } from "bun:test";
 import { createHmac } from "node:crypto";
-import { mobileAgentFile } from "./mobile-sync";
+import { mobileAgentFile, mobileAgentBundle } from "./mobile-sync";
 
 const device = "00000000-0000-4000-8000-000000000002";
 const batch = "00000000-0000-4000-8000-000000000003";
@@ -30,6 +30,31 @@ test("the Android agent file contains the scoped configuration for the HTTPS end
   });
   expect(() => mobileAgentFile(payload, "http://erp.example.test")).toThrow();
   expect(() => mobileAgentFile(payload, "https://name@erp.example.test")).toThrow();
+});
+
+test("the all-devices download preserves each device and its own credential", () => {
+  const origin = "https://erp.example.test";
+  const credentials = [
+    {
+      device_id: device,
+      operator_id: batch,
+      serial: "TEST-001",
+      device_ip: "192.168.1.201",
+      sync_key: key,
+    },
+    {
+      device_id: batch,
+      operator_id: batch,
+      serial: "TEST-002",
+      device_ip: "192.168.1.202",
+      sync_key: `zkm_${"c".repeat(64)}`,
+    },
+  ];
+  expect(JSON.parse(mobileAgentBundle(credentials, origin))).toEqual({
+    format: "zkteco-mobile-agent-bundle-v1",
+    devices: credentials.map((credential) => JSON.parse(mobileAgentFile(credential, origin))),
+  });
+  expect(() => mobileAgentBundle(credentials, "http://erp.example.test")).toThrow();
 });
 
 test("the actual public POST handler enforces signatures and routes mobile batches to the scoped RPC", async () => {

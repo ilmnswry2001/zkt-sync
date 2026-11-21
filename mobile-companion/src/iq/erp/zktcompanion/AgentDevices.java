@@ -50,6 +50,23 @@ final class AgentDevices {
         return new AgentDevices(next, current);
     }
 
+    AgentDevices importDevices(List<JSONObject> imported) throws Exception {
+        List<JSONObject> merged = new ArrayList<>(imported.size());
+        for (JSONObject device : imported) {
+            JSONObject existing = devices.get(key(device));
+            if (existing != null && existing.optString("serial").equals(device.optString("serial"))) {
+                device = new JSONObject(device.toString())
+                    .put("device_ip", existing.optString("device_ip", device.optString("device_ip")))
+                    .put("device_port", existing.optInt("device_port", 4370))
+                    .put("device_password", existing.optInt("device_password", 0))
+                    .put("transport", existing.optString("transport", "auto"))
+                    .put("utc", existing.optBoolean("utc", false));
+            }
+            merged.add(device);
+        }
+        return withDevices(merged);
+    }
+
     AgentDevices select(JSONObject device) { return new AgentDevices(devices, key(device)); }
     JSONObject selected() { return devices.get(selected); }
     List<JSONObject> all() { return new ArrayList<>(devices.values()); }

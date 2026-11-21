@@ -5,20 +5,35 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 final class AgentConfiguration {
-    static JSONObject read(InputStream source) throws Exception {
+    static List<JSONObject> readAll(InputStream source) throws Exception {
         if (source == null) throw new IOException("تعذر فتح ملف إعداد الوكيل.");
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         byte[] block = new byte[1024];
         for (int count; (count = source.read(block)) != -1; ) {
-            if (bytes.size() + count > 8192) throw new IOException("ملف إعداد الوكيل أكبر من الحد المسموح.");
+            if (bytes.size() + count > 2 * 1024 * 1024) throw new IOException("ملف إعداد الوكيل أكبر من الحد المسموح.");
             bytes.write(block, 0, count);
         }
         String content = new String(bytes.toByteArray(), StandardCharsets.UTF_8);
         if (content.startsWith("\uFEFF")) content = content.substring(1);
         JSONObject config = new JSONObject(content);
+        if (!"zkteco-mobile-agent-bundle-v1".equals(config.optString("format"))) {
+            return Collections.singletonList(readDevice(config));
+        }
+        JSONArray entries = config.getJSONArray("devices");
+        if (entries.length() == 0 || entries.length() > 2000) throw new IOException("عدد الأجهزة في ملف الإعداد غير صالح.");
+        List<JSONObject> devices = new ArrayList<>(entries.length());
+        for (int i = 0; i < entries.length(); i++) devices.add(readDevice(entries.getJSONObject(i)));
+        return devices;
+    }
+
+    private static JSONObject readDevice(JSONObject config) throws Exception {
         URI url = new URI(config.getString("sync_url"));
         String ip = config.getString("device_ip");
         String serial = config.getString("serial").trim();

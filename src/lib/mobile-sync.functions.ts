@@ -1,18 +1,36 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { loadAllRows } from "@/lib/monthly-report";
 import {
   isLanDeviceIp,
+  mobileAgentBundleLimit,
   mobileKeyPrefix,
   mobileOperators,
   syncDigest,
   toHex,
 } from "@/lib/mobile-sync";
 
-const binding = z.object({
-  device_id: z.string().uuid(),
+const operator = z.object({
   operator_email: z.string().trim().email().max(254).optional(),
 });
+const binding = z.discriminatedUnion("action", [
+  operator.extend({ action: z.literal("provision"), device_id: z.string().uuid() }),
+  operator.extend({ action: z.literal("revoke"), device_id: z.string().uuid() }),
+  operator.extend({ action: z.literal("provision_all") }),
+]);
+
+type SyncDevice = { id: string; serial_number: string | null; ip_address: string | null };
+function hasMobileConfig<T extends SyncDevice>(
+  device: T,
+): device is T & { serial_number: string; ip_address: string } {
+  return Boolean(
+    device.serial_number?.trim() &&
+    device.serial_number.length <= 64 &&
+    device.ip_address &&
+    isLanDeviceIp(device.ip_address),
+  );
+}
 
 export const listMobileSyncDevices = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -31,14 +49,12 @@ export const listMobileSyncDevices = createServerFn({ method: "GET" })
     if (data.search) query = query.ilike("name", `%${data.search.replace(/[\\%_]/g, "\\$&")}%`);
     const { data: devices, error } = await query.order("name").order("id").limit(50);
     if (error) throw error;
-    return devices.filter(
-      (device) => device.serial_number && device.ip_address && isLanDeviceIp(device.ip_address),
-    );
+    return devices.filter(hasMobileConfig);
   });
 
 export const configureMobileSync = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(binding.extend({ action: z.enum(["provision", "revoke"]) }))
+  .inputValidator(binding)
   .handler(async ({ context, data }) => {
     const { data: isAdmin, error: permissionError } = await context.supabase.rpc("is_admin", {
       _user_id: context.userId,
@@ -74,31 +90,49 @@ export const configureMobileSync = createServerFn({ method: "POST" })
       .limit(1)
       .maybeSingle();
     if (roleError || !role) throw new Error("الحساب المحدد لا يملك دوراً ميدانياً معتمداً");
-    const { data: device, error: deviceError } = await supabaseAdmin
-      .from("devices")
-      .select("id, serial_number, ip_address")
-      .eq("id", data.device_id)
-      .eq("status", "active")
-      .maybeSingle();
-    if (deviceError) throw deviceError;
-    if (!device?.serial_number || !device.ip_address || !isLanDeviceIp(device.ip_address)) {
-      throw new Error("أضف رقماً تسلسلياً وعنوان شبكة محلية صالحاً لجهاز نشط");
+    const eligibleDevices = () =>
+      supabaseAdmin
+        .from("devices")
+        .select("id, serial_number, ip_address")
+        .eq("status", "active")
+        .not("serial_number", "is", null)
+        .not("ip_address", "is", null);
+    let devices: SyncDevice[];
+    if (data.action === "provision_all") {
+      devices = await loadAllRows<SyncDevice>((from, to) =>
+        eligibleDevices().order("id").range(from, to),
+      );
+    } else {
+      const { data: device, error } = await eligibleDevices()
+        .eq("id", data.device_id)
+        .maybeSingle();
+      if (error) throw error;
+      devices = device ? [device] : [];
     }
-    const key = `${mobileKeyPrefix}${toHex(crypto.getRandomValues(new Uint8Array(32)))}`;
-    const { error } = await supabaseAdmin.from("mobile_device_sync_keys").insert({
-      key_hash: await syncDigest(key),
-      device_id: device.id,
-      operator_id: operatorId,
-      expires_at: new Date(Date.now() + 30 * 86_400_000).toISOString(),
-    });
-    if (error) throw error;
-    return {
+    const eligible = devices.filter(hasMobileConfig);
+    if (!eligible.length)
+      throw new Error("لا توجد أجهزة نشطة برقم تسلسلي وعنوان شبكة محلية صالحين");
+    if (eligible.length > mobileAgentBundleLimit)
+      throw new Error("عدد الأجهزة يتجاوز الحد المدعوم للملف المجمّع");
+    const expiresAt = new Date(Date.now() + 30 * 86_400_000).toISOString();
+    const entries = eligible.map((device) => ({
       device_id: device.id,
       operator_id: operatorId,
       serial: device.serial_number,
       device_ip: device.ip_address,
-      sync_key: key,
-    };
+      sync_key: `${mobileKeyPrefix}${toHex(crypto.getRandomValues(new Uint8Array(32)))}`,
+    }));
+    const records = await Promise.all(
+      entries.map(async (entry) => ({
+        key_hash: await syncDigest(entry.sync_key),
+        device_id: entry.device_id,
+        operator_id: operatorId,
+        expires_at: expiresAt,
+      })),
+    );
+    const { error } = await supabaseAdmin.from("mobile_device_sync_keys").insert(records);
+    if (error) throw error;
+    return data.action === "provision_all" ? entries : entries[0];
   });
 
 export const listMobileSyncHistory = createServerFn({ method: "GET" })

@@ -401,22 +401,22 @@ public final class MainActivity extends Activity {
                 List<String> names = new ArrayList<>();
                 for (Uri file : files) {
                     try (InputStream source = getContentResolver().openInputStream(file)) {
-                        JSONObject device = AgentConfiguration.read(source);
-                        imported.add(device);
-                        names.add(device.getString("serial") + " · " + device.getString("server_url"));
+                        imported.addAll(AgentConfiguration.readAll(source));
                     }
                 }
+                for (JSONObject device : imported) names.add(device.getString("server_url"));
+                String origins = String.join("\n", new java.util.LinkedHashSet<>(names));
                 runOnUiThread(() -> {
                     if (isDestroyed()) return;
                     new AlertDialog.Builder(this).setTitle("تأكيد إعداد الوكيل")
-                        .setMessage("تحقق من عناوين النظام والأجهزة قبل إرسال الحركات.\n" + String.join("\n", names))
+                        .setMessage("تحقق من عنوان النظام قبل إرسال الحركات.\n" + origins + "\nعدد إعدادات الأجهزة: " + imported.size())
                         .setNegativeButton("إلغاء", null).setPositiveButton("حفظ الإعداد", (dialog, which) -> {
                             if (busy) {
                                 feedback.setText("انتظر انتهاء المزامنة ثم استورد الملفات مجددًا.");
                                 return;
                             }
                             try {
-                                AgentDevices updated = configurations.withDevices(imported);
+                                AgentDevices updated = configurations.importDevices(imported);
                                 store.configure(updated);
                                 configurations = updated;
                                 refreshDevicePicker();

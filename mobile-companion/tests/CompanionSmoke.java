@@ -23,6 +23,7 @@ public final class CompanionSmoke {
         JSONObject fixture = new JSONObject(new String(Files.readAllBytes(Paths.get(args[0])), java.nio.charset.StandardCharsets.UTF_8));
         verifyConfiguration(fixture);
         verifyDeviceProfiles(fixture);
+        verifyBundle(fixture);
         verifyTcp();
         verifyUdp();
         System.out.println("Agent file import, device list, failure isolation, HMAC, TCP and UDP passed");
@@ -43,7 +44,31 @@ public final class CompanionSmoke {
     }
 
     private static JSONObject readConfig(String file) throws Exception {
-        return AgentConfiguration.read(new ByteArrayInputStream(file.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        java.util.List<JSONObject> devices = readConfigs(file);
+        check(devices.size() == 1, "Single-device file must import one device");
+        return devices.get(0);
+    }
+
+    private static java.util.List<JSONObject> readConfigs(String file) throws Exception {
+        return AgentConfiguration.readAll(new ByteArrayInputStream(file.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    private static void verifyBundle(JSONObject fixture) throws Exception {
+        String bundled = fixture.getString("bundle");
+        java.util.List<JSONObject> imported = readConfigs(bundled);
+        check(imported.size() == 2 && imported.get(1).getString("serial").equals("TEST-002"), "The downloaded bundle lost devices");
+        JSONObject previous = readConfig(fixture.getString("file")).put("device_ip", "192.168.1.99")
+            .put("device_password", 123).put("device_port", 5370).put("transport", "udp").put("utc", true);
+        AgentDevices devices = AgentDevices.read(null, previous).importDevices(imported);
+        JSONObject restored = devices.credentialFor(previous);
+        check(devices.all().size() == 2 && restored.getString("device_ip").equals("192.168.1.99")
+            && restored.getInt("device_port") == 5370 && restored.getInt("device_password") == 123
+            && restored.getString("transport").equals("udp") && restored.getBoolean("utc"), "Import discarded locally saved connection settings");
+        check(!restored.getString("sync_key").equals(previous.getString("sync_key")), "Import did not refresh the first device credential");
+        try {
+            readConfigs(bundled.replace("TEST-002", ""));
+            throw new AssertionError("A malformed device was allowed into a bundle");
+        } catch (java.io.IOException expected) { /* Invalid bundle. */ }
     }
 
     private static void verifyDeviceProfiles(JSONObject fixture) throws Exception {

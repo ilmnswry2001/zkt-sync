@@ -25,7 +25,13 @@ import {
 } from "@/components/ui/table";
 import { useAuth } from "@/hooks/use-auth";
 import { formatErrorMessage } from "@/lib/error-message";
-import { mobileAgentFile, mobileApk, mobileOperators, mobileVersion } from "@/lib/mobile-sync";
+import {
+  mobileAgentBundle,
+  mobileAgentFile,
+  mobileApk,
+  mobileOperators,
+  mobileVersion,
+} from "@/lib/mobile-sync";
 import {
   configureMobileSync,
   listMobileSyncDevices,
@@ -72,10 +78,11 @@ function MobileSync() {
               </a>
             </Button>
             <ol className="list-decimal space-y-2 ps-5 text-sm leading-6 text-muted-foreground">
-              <li>نزّل ملف إعداد لكل جهاز من النظام واستورد الملفات في الوكيل.</li>
+              <li>نزّل ملف إعداد جميع الأجهزة من النظام واستورده في الوكيل.</li>
               <li>اتصل بشبكة تستطيع الوصول منها إلى أجهزة البصمة.</li>
               <li>
-                اسحب حركات الجهاز المحدد أو اضغط «سحب الحركات من كل الأجهزة». تُرفع الحركات عند توفر الإنترنت.
+                اسحب حركات الجهاز المحدد أو اضغط «سحب الحركات من كل الأجهزة». تُرفع الحركات عند توفر
+                الإنترنت.
               </li>
             </ol>
           </CardContent>
@@ -152,20 +159,29 @@ function AgentSettings() {
     queryFn: ({ signal }) => listMobileSyncDevices({ signal, data: { search: term } }),
   });
   const configure = useMutation({
-    mutationFn: async (action: "provision" | "revoke") => {
-      if (action === "provision" && window.location.protocol !== "https:")
+    mutationFn: async (action: "provision" | "provision_all" | "revoke") => {
+      if (action !== "revoke" && window.location.protocol !== "https:")
         throw new Error("افتح النظام عبر HTTPS لتنزيل ملف الوكيل");
+      const operator_email = email.trim() || undefined;
       const result = await configureMobileSync({
-        data: { action, device_id: device, operator_email: email.trim() || undefined },
+        data:
+          action === "provision_all"
+            ? { action, operator_email }
+            : { action, device_id: device, operator_email },
       });
       if (!result) return toast.success("أُلغي تصريح الوكيل للحساب والجهاز المحددين");
-      const file = mobileAgentFile(result, window.location.origin);
+      const file = Array.isArray(result)
+        ? mobileAgentBundle(result, window.location.origin)
+        : mobileAgentFile(result, window.location.origin);
       const url = URL.createObjectURL(new Blob([file], { type: "application/json" }));
       const download = document.createElement("a");
       download.href = url;
-      download.download = "zkteco-mobile-agent.json";
+      download.download = Array.isArray(result)
+        ? "zkteco-mobile-agent-all-devices.json"
+        : "zkteco-mobile-agent.json";
       download.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      if (Array.isArray(result)) toast.success(`تم تجهيز ملف إعداد ${result.length} جهاز`);
     },
     onError: (error) => toast.error(formatErrorMessage(error, "تعذر تحديث إعداد الوكيل")),
   });
@@ -239,7 +255,11 @@ function AgentSettings() {
           />
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button disabled={configure.isPending} onClick={() => configure.mutate("provision_all")}>
+            <Download className="size-4" /> تنزيل ملف إعداد الوكيل لكل الأجهزة
+          </Button>
           <Button
+            variant="outline"
             disabled={!device || configure.isPending}
             onClick={() => configure.mutate("provision")}
           >
@@ -254,7 +274,8 @@ function AgentSettings() {
           </Button>
         </div>
         <p className="text-sm text-muted-foreground">
-          يتضمن الملف تصريحًا خاصًا بالحساب والجهاز صالحًا لمدة 30 يومًا. سلّمه للمشرف المعني فقط.
+          يشمل الملف المجمّع كل جهاز نشط له رقم تسلسلي وعنوان شبكة محلية صالح. سلّم الملف للمشرف
+          المعني فقط. التصاريح صالحة لمدة 30 يومًا.
         </p>
       </CardContent>
     </Card>
