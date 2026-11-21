@@ -3,7 +3,7 @@ import { z } from "zod";
 export const mobileOperators = ["admin", "hr", "supervisor", "site_admin"] as const;
 export const mobileKeyPrefix = "zkm_";
 export const mobileApk = "/downloads/ZKTeco-Mobile-Companion.apk";
-export const mobileVersion = "1.1.0";
+export const mobileVersion = "1.1.1";
 
 export function isLanDeviceIp(ip: string) {
   if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) return false;

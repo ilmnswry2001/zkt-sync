@@ -23,6 +23,7 @@ import org.json.JSONObject;
 /** Implements the ZK read commands and framing documented by the pyzk reference client. */
 final class ZkReader implements Closeable {
     private static final int MAX_BYTES = 16 * 1024 * 1024;
+    private static final int TCP_MAGIC_1 = 0x5050, TCP_MAGIC_2 = 0x7d82;
     private static final int ACK = 2000, UNAUTHORIZED = 2005, DATA = 1501, PREPARE = 1500;
     private final Socket tcp;
     private final DatagramSocket udp;
@@ -176,11 +177,11 @@ final class ZkReader implements Closeable {
         int size = bounded(le(first.data).getInt(0), 0);
         ByteArrayOutputStream result = new ByteArrayOutputStream(size);
         while (result.size() < size) {
-            Packet next = receive();
+            Packet next = receive(DATA);
             if (next.command != DATA || next.data.length == 0 || next.data.length > size - result.size()) throw unsupported();
             result.write(next.data, 0, next.data.length);
         }
-        if (receive().command != ACK) throw unsupported();
+        if (receive(ACK).command != ACK) throw unsupported();
         return result.toByteArray();
     }
 
@@ -196,20 +197,22 @@ final class ZkReader implements Closeable {
         frame.putShort(2, checksum(frame.array()));
         frame.putShort(6, (short) ((reply + 1) % 65535));
         if (tcp != null) {
-            byte[] packet = le(8 + frame.capacity()).putShort((short) 0x5050).putShort((short) 0x7282).putInt(frame.capacity()).put(frame.array()).array();
+            byte[] packet = le(8 + frame.capacity()).putShort((short) TCP_MAGIC_1).putShort((short) TCP_MAGIC_2).putInt(frame.capacity()).put(frame.array()).array();
             tcp.getOutputStream().write(packet);
         } else {
             udp.send(new DatagramPacket(frame.array(), frame.capacity()));
         }
-        return receive();
+        Packet result = receive(0);
+        reply = result.reply;
+        return result;
     }
 
-    private Packet receive() throws IOException {
+    private Packet receive(int bufferedCommand) throws IOException {
         byte[] frame;
         if (tcp != null) {
             byte[] header = new byte[8]; input.readFully(header);
             ByteBuffer contents = le(header);
-            if (u16(contents, 0) != 0x5050 || u16(contents, 2) != 0x7282) throw unsupported();
+            if (u16(contents, 0) != TCP_MAGIC_1 || u16(contents, 2) != TCP_MAGIC_2) throw unsupported();
             frame = new byte[bounded(contents.getInt(4), 8)]; input.readFully(frame);
         } else {
             DatagramPacket packet = new DatagramPacket(new byte[65507], 65507);
@@ -218,10 +221,13 @@ final class ZkReader implements Closeable {
         }
         if (frame.length < 8) throw unsupported();
         ByteBuffer contents = le(frame);
-        int packetSession = u16(contents, 4);
-        if (session != 0 && session != packetSession) throw unsupported();
-        reply = u16(contents, 6);
-        return new Packet(u16(contents, 0), packetSession, Arrays.copyOfRange(frame, 8, frame.length));
+        int command = u16(contents, 0), packetSession = u16(contents, 4);
+        // Buffered data and its final acknowledgement may repurpose the session
+        // field. The connected peer's PREPARE response must still match the session.
+        if (session != 0 && session != packetSession && (bufferedCommand == 0 || command != bufferedCommand)) {
+            throw unsupported();
+        }
+        return new Packet(command, packetSession, u16(contents, 6), Arrays.copyOfRange(frame, 8, frame.length));
     }
 
     static short checksum(byte[] message) {
@@ -231,7 +237,8 @@ final class ZkReader implements Closeable {
             if (pos + 1 < message.length) sum += Byte.toUnsignedInt(message[pos + 1]) << 8;
             if (sum > 65535) sum -= 65535;
         }
-        return (short) ((~sum) & 0xffff);
+        // ZKTeco folds the complemented sum modulo 65535, matching the desktop agent.
+        return (short) Math.floorMod(~sum, 65535);
     }
 
     private static byte[] commKey(int password, int session) {
@@ -268,8 +275,8 @@ final class ZkReader implements Closeable {
     static final class DeviceException extends IOException { DeviceException(String message) { super(message); } }
     static final class DeviceIdentityException extends IOException { DeviceIdentityException(String message) { super(message); } }
     private static final class Packet {
-        final int command, session;
+        final int command, session, reply;
         final byte[] data;
-        Packet(int command, int session, byte[] data) { this.command = command; this.session = session; this.data = data; }
+        Packet(int command, int session, int reply, byte[] data) { this.command = command; this.session = session; this.reply = reply; this.data = data; }
     }
 }
