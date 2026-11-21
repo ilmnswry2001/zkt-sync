@@ -85,6 +85,7 @@ export function resolvePayrollWage(
             ? "specialty"
             : "default",
     wageTitle: wage?.title ?? employee.position ?? "غير محدد",
+    wageRateId: wage?.id ?? null,
   };
 }
 export function allocateAdvanceInstallments(

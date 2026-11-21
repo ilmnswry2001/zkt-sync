@@ -22,6 +22,8 @@ import { EmployeeProfileContent } from "@/components/EmployeeProfileContent";
 import { useServerFn } from "@tanstack/react-start";
 import { importEmployees } from "@/lib/employees.functions";
 import { useAuth } from "@/hooks/use-auth";
+import { attendanceDeviceCodeField, parseEmployeeMessage, requiresDailyOnboardingPay, resolveOnboardingWage, type OnboardingPayType } from "@/lib/employee-onboarding";
+import { resolvePayrollWage } from "@/lib/payroll-wage-resolution";
 import {
   EMPLOYEE_EXTRA_SOURCE_FIELDS,
   EMPLOYEE_IMPORT_FIELDS,
@@ -45,6 +47,12 @@ const directoryColumns = {
   email: "البريد الإلكتروني", phone1: "رقم الهاتف", hire_date: "تاريخ المباشرة",
 };
 type DirectoryColumn = keyof typeof directoryColumns;
+const emptyOnboarding = {
+  fullName: "", position: "", pin: "", deviceCode: "", wageRateId: "none",
+  payType: "monthly" as OnboardingPayType, preferredPayType: "monthly" as OnboardingPayType,
+  salaryType: "", wagePosition: "",
+};
+const iqd = new Intl.NumberFormat("ar-IQ", { style: "currency", currency: "IQD", maximumFractionDigits: 2 });
 const columnKeys = Object.keys(directoryColumns) as DirectoryColumn[];
 const defaultColumns = columnKeys.slice(0, 8);
 const emptyFilters = { department: "", status: "", pay: "", position: "", from: "", to: "" };
@@ -246,11 +254,37 @@ function EmployeesPage() {
     setAttendanceSiteIds(employeeSiteAccessQuery.data.siteIds);
     setCheckInGraceHours(employeeSiteAccessQuery.data.checkInGraceHours);
   }, [employeeSiteAccessQuery.data]);
-  const { data: wages = [] } = useQuery({
-    queryKey: ["wage_rates"],
-    queryFn: async () => (await supabase.from("wage_rates").select("id, title").order("title")).data ?? [],
+  const wageQuery = useQuery({
+    queryKey: ["wage_rates", "employee-form"],
+    enabled: open,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("wage_rates").select("id, title, daily_rate, monthly_rate, overtime_hour_rate, currency").order("title");
+      if (error) throw error;
+      return data;
+    },
   });
+  const wages = wageQuery.data ?? [];
+  const [employeeMessage, setEmployeeMessage] = useState("");
+  const [onboarding, setOnboarding] = useState(emptyOnboarding);
+  const needsDaily = !editing && requiresDailyOnboardingPay(onboarding.position);
+  const selectedWage = wages.find((wage) => wage.id === onboarding.wageRateId);
+  const newPayType = needsDaily ? "daily" : onboarding.payType;
+  const wagePreview = selectedWage && resolvePayrollWage({ position: onboarding.position, pay_type: newPayType, wage_rates: selectedWage }, []);
+  const wageAmount = wagePreview?.source === "linked" ? (newPayType === "daily" ? wagePreview.dailyRate : wagePreview.monthlySalary) : null;
   const ed = editing as any;
+
+  const applyEmployeeMessage = () => {
+    try {
+      const parsed = parseEmployeeMessage(employeeMessage);
+      const preferredPayType = parsed.payType ?? "monthly";
+      const wage = resolveOnboardingWage(parsed.position, preferredPayType, wages);
+      setOnboarding({ ...parsed, preferredPayType, wagePosition: parsed.position, wageRateId: wage.wageRateId ?? "none", payType: wage.payType,
+        salaryType: wage.payType === "daily" ? "أجر يومي" : "أجر شهري" });
+      toast.success("تمت تعبئة البيانات للمراجعة قبل الحفظ");
+    } catch (error) {
+      toast.error(formatErrorMessage(error, "تعذر قراءة رسالة الموظف"));
+    }
+  };
 
 
   const sanitizeEmployeePayload = (raw: Record<string, any>) => {
@@ -314,6 +348,8 @@ function EmployeesPage() {
   };
 
   const closeEmployeeDialog = () => {
+    setEmployeeMessage("");
+    setOnboarding(emptyOnboarding);
     setCreatedEmployee(null);
     setOpen(false);
     setEditing(null);
@@ -539,6 +575,7 @@ function EmployeesPage() {
                 ]),
                 ...EMPLOYEE_EXTRA_SOURCE_FIELDS.map(({ header }) => [header, g(`source_${header}`)]),
               ]);
+              sourceFields[attendanceDeviceCodeField] = g("attendance_device_code");
               const sourceColumns = Object.fromEntries([
                 ["department_name", selectedDepartment?.name ?? null],
                 ...EMPLOYEE_EXTRA_SOURCE_FIELDS.map(({ header, column }) => [column, g(`source_${header}`)]),
@@ -553,7 +590,7 @@ function EmployeesPage() {
                 position: g("position"),
                 status: f.get("status") as any,
                 base_salary: n("base_salary"),
-                pay_type: (f.get("pay_type") as string) || "monthly",
+                pay_type: needsDaily ? "daily" : (f.get("pay_type") as string) || "monthly",
                 erp_no: g("erp_no"), id_no: g("id_no"), ctr_code: g("ctr_code"),
                 nationality: g("nationality"), gender: g("gender"), marital_status: g("marital_status"),
                 blood_type: g("blood_type"), education: g("education"),
@@ -563,7 +600,7 @@ function EmployeesPage() {
                 allowAllAttendanceSites,
                 attendanceSiteIds,
                 checkInGraceHours,
-                salary_type: g("salary_type"), salary_structure: g("salary_structure"), project: g("project"),
+                salary_type: needsDaily ? "أجر يومي" : g("salary_type"), salary_structure: g("salary_structure"), project: g("project"),
                 passport_no: g("passport_no"), passport_expiry: g("passport_expiry"),
                 residency_no: g("residency_no"), residency_expiry: g("residency_expiry"),
                 safety_passport_no: g("safety_passport_no"), safety_passport_expiry: g("safety_passport_expiry"),
@@ -574,6 +611,14 @@ function EmployeesPage() {
                 ...sourceColumns,
               });
             }} className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
+              {!editing && (
+                <section className="space-y-3 rounded-xl border bg-card p-4 shadow-sm">
+                  <Label htmlFor="employee-message" className="font-semibold">لصق رسالة الموظف</Label>
+                  <Textarea id="employee-message" value={employeeMessage} onChange={(event) => setEmployeeMessage(event.target.value)} maxLength={2000} rows={5}
+                    placeholder={"إضافة جديدة\nالاسم الكامل\nالمسمى الوظيفي\nأجر يومي أو شهري\nID-6\nAK D25"} />
+                  <Button type="button" variant="outline" disabled={!employeeMessage.trim() || wageQuery.isPending || save.isPending} onClick={applyEmployeeMessage}>تعبئة البيانات من الرسالة</Button>
+                </section>
+              )}
               <section className="space-y-3 rounded-xl border bg-card p-4 shadow-sm">
                 <div><h3 className="font-semibold">البيانات الأساسية</h3><p className="text-xs text-muted-foreground">الحقول ذات النجمة مطلوبة لإتمام الحفظ.</p></div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -592,9 +637,18 @@ function EmployeesPage() {
                         : { value: createdEmployee?.employee_no ?? "" })}
                     />
                   </div>
-                  <div><Label>رقم جهاز البصمة</Label><Input name="attendance_device_id" defaultValue={ed?.attendance_device_id ?? ""} /></div>
-                  <div className="md:col-span-2"><Label>الاسم الكامل *</Label><Input name="full_name" required autoFocus={!editing} placeholder="الاسم كما في المستندات الرسمية" defaultValue={ed?.full_name ?? ""} /></div>
-                  <div><Label>المسمى الوظيفي</Label><Input name="position" defaultValue={ed?.position ?? ""} /></div>
+                  <div><Label htmlFor="employee-attendance-pin">معرّف الموظف في جهاز البصمة</Label><Input id="employee-attendance-pin" name="attendance_device_id" {...(editing ? { defaultValue: ed?.attendance_device_id ?? "" } : { value: onboarding.pin, onChange: (event) => setOnboarding((previous) => ({ ...previous, pin: event.target.value })) })} /></div>
+                  <div><Label htmlFor="employee-attendance-device">رمز جهاز البصمة</Label><Input id="employee-attendance-device" name="attendance_device_code" maxLength={64} {...(editing ? { defaultValue: editing.employee_import_data?.[attendanceDeviceCodeField]?.toString() ?? "" } : { value: onboarding.deviceCode, onChange: (event) => setOnboarding((previous) => ({ ...previous, deviceCode: event.target.value })) })} /></div>
+                  <div className="md:col-span-2"><Label htmlFor="employee-full-name">الاسم الكامل *</Label><Input id="employee-full-name" name="full_name" required autoFocus={!editing} placeholder="الاسم كما في المستندات الرسمية" {...(editing ? { defaultValue: ed?.full_name ?? "" } : { value: onboarding.fullName, onChange: (event) => setOnboarding((previous) => ({ ...previous, fullName: event.target.value })) })} /></div>
+                  <div><Label htmlFor="employee-position">المسمى الوظيفي</Label><Input id="employee-position" name="position" {...(editing ? { defaultValue: ed?.position ?? "" } : {
+                    value: onboarding.position,
+                    onChange: (event) => setOnboarding((previous) => ({ ...previous, position: event.target.value })),
+                    onBlur: () => setOnboarding((previous) => {
+                      if (!previous.position.trim() || previous.wagePosition === previous.position) return previous;
+                      const wage = resolveOnboardingWage(previous.position, previous.preferredPayType, wages);
+                      return { ...previous, wagePosition: previous.position, wageRateId: wage.wageRateId ?? "none", payType: wage.payType, salaryType: wage.payType === "daily" ? "أجر يومي" : "أجر شهري" };
+                    }),
+                  })} /></div>
                   <div>
                     <Label>القسم</Label>
                     <Select name="department_id" defaultValue={ed?.department_id ?? "none"}>
@@ -638,26 +692,43 @@ function EmployeesPage() {
                   <div><Label>كود التكلفة CTR</Label><Input name="ctr_code" defaultValue={ed?.ctr_code ?? ""} /></div>
                   <div>
                     <Label>أجر التخصص</Label>
-                    <Select name="wage_rate_id" defaultValue={ed?.wage_rate_id ?? "none"}>
+                    <Select name="wage_rate_id" {...(editing ? { defaultValue: ed?.wage_rate_id ?? "none" } : {
+                      value: onboarding.wageRateId,
+                      onValueChange: (value: string) => setOnboarding((previous) => ({ ...previous, wageRateId: value })),
+                    })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">— بدون —</SelectItem>
                         {wages.map((w: any) => <SelectItem key={w.id} value={w.id}>{w.title}</SelectItem>)}
                       </SelectContent>
                     </Select>
+                    {!editing && onboarding.position.trim() && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {wageAmount && wageAmount > 0
+                          ? `${iqd.format(wageAmount)} ${newPayType === "daily" ? "يوميًا" : "شهريًا"}`
+                          : "لم يُحدد أجر معتمد لهذا التخصص. راجع الأجر قبل الحفظ."}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <Label>تصنيف الأجر *</Label>
-                    <Select name="pay_type" defaultValue={ed?.pay_type ?? "monthly"}>
+                    <Select name="pay_type" {...(editing ? { defaultValue: ed?.pay_type ?? "monthly" } : {
+                      value: newPayType,
+                      onValueChange: (value: string) => {
+                        const payType = value === "daily" ? "daily" : "monthly";
+                        setOnboarding((previous) => ({ ...previous, payType, preferredPayType: payType, salaryType: payType === "daily" ? "أجر يومي" : "أجر شهري" }));
+                      },
+                    })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="monthly">شهري</SelectItem>
+                        <SelectItem value="monthly" disabled={needsDaily}>شهري</SelectItem>
                         <SelectItem value="daily">يومي (تُحتسب أيام الجمعة بأجر)</SelectItem>
                       </SelectContent>
                     </Select>
+                    {needsDaily && <p className="mt-1 text-xs text-muted-foreground">هذا التخصص يُسجّل بأجر يومي.</p>}
                   </div>
                   <div><Label>الراتب الأساسي</Label><Input name="base_salary" type="number" step="0.01" defaultValue={ed?.base_salary ?? ""} /></div>
-                  <div><Label>نوع الراتب</Label><Input name="salary_type" defaultValue={ed?.salary_type ?? ""} /></div>
+                  <div><Label>نوع الراتب</Label><Input name="salary_type" {...(editing ? { defaultValue: ed?.salary_type ?? "" } : { value: needsDaily ? "أجر يومي" : onboarding.salaryType, readOnly: needsDaily, onChange: (event) => setOnboarding((previous) => ({ ...previous, salaryType: event.target.value })) })} /></div>
                   <div><Label>هيكل الراتب</Label><Input name="salary_structure" defaultValue={ed?.salary_structure ?? ""} /></div>
                 </div>
               </section>
