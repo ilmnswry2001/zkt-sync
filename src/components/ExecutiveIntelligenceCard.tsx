@@ -1,3 +1,4 @@
+import { direction, displayLocale, ui } from "@/lib/ui-language";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCheck, Gauge, ShieldAlert, Wrench } from "lucide-react";
 import { toast } from "sonner";
@@ -83,13 +84,13 @@ export function ExecutiveIntelligenceCard({ className = "" }: { className?: stri
       if (error) throw error;
     },
     onSuccess: async () => {
-      toast.success("تمت تسوية التنبيه");
+      toast.success(ui("تمت تسوية التنبيه"));
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["executive-intelligence"] }),
         queryClient.invalidateQueries({ queryKey: ["command-center"] }),
       ]);
     },
-    onError: (error) => toast.error(`تعذر تسوية التنبيه: ${error.message}`),
+    onError: (error) => toast.error((ui("تعذر تسوية التنبيه: ") + (error.message))),
   });
 
   const brief = query.data?.brief;
@@ -98,21 +99,17 @@ export function ExecutiveIntelligenceCard({ className = "" }: { className?: stri
 
   return (
     <Card
-      dir="rtl"
+      dir={direction()}
       className={`overflow-hidden border-amber-500/30 bg-gradient-to-br from-slate-950 via-slate-900 to-[#142131] text-slate-100 shadow-[0_12px_42px_rgba(2,8,23,0.28)] ${className}`}
     >
       <CardHeader className="gap-3 border-b border-white/10 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <CardTitle className="flex items-center gap-2 text-lg">
-            <ShieldAlert className="h-5 w-5 text-amber-300" />
-            الملخص التنفيذي الذكي
-          </CardTitle>
-          <p className="mt-1 text-xs text-slate-400">
-            مؤشرات الحضور والمخاطر والصيانة · تحديث تلقائي كل دقيقة
-          </p>
+            <ShieldAlert className="h-5 w-5 text-amber-300" />{ui("الملخص التنفيذي الذكي")}</CardTitle>
+          <p className="mt-1 text-xs text-slate-400">{ui("مؤشرات الحضور والمخاطر والصيانة · تحديث تلقائي كل دقيقة")}</p>
         </div>
         <Badge className="border border-amber-500/30 bg-amber-500/10 text-amber-200">
-          {query.isFetching ? "جارٍ التحديث" : "مباشر"}
+          {query.isFetching ? ui("جارٍ التحديث") : ui("مباشر")}
         </Badge>
       </CardHeader>
       <CardContent className="space-y-5 p-4 sm:p-5">
@@ -120,29 +117,28 @@ export function ExecutiveIntelligenceCard({ className = "" }: { className?: stri
           <div
             role="alert"
             className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200"
-          >
-            تعذر تحميل الملخص التنفيذي: {(query.error as Error).message}
+          >{ui("تعذر تحميل الملخص التنفيذي: ")}{(query.error as Error).message}
           </div>
         ) : (
           <>
             <div className="grid gap-3 sm:grid-cols-3">
               <IntelligenceMetric
                 icon={Gauge}
-                label="نسبة الحضور اليوم"
-                value={`${Number(brief?.attendance_percentage ?? 0).toLocaleString("ar-IQ")}٪`}
-                detail={`${Number(brief?.present_employees ?? 0).toLocaleString("ar-IQ")} من ${Number(brief?.active_employees ?? 0).toLocaleString("ar-IQ")}`}
+                label={ui("نسبة الحضور اليوم")}
+                value={`${Number(brief?.attendance_percentage ?? 0).toLocaleString(displayLocale())}٪`}
+                detail={`${Number(brief?.present_employees ?? 0).toLocaleString(displayLocale())} من ${Number(brief?.active_employees ?? 0).toLocaleString(displayLocale())}`}
               />
               <IntelligenceMetric
                 icon={AlertTriangle}
-                label="تنبيهات حرجة"
-                value={Number(brief?.critical_anomalies ?? 0).toLocaleString("ar-IQ")}
-                detail={`${Number(brief?.unresolved_anomalies ?? 0).toLocaleString("ar-IQ")} تنبيه غير مسوّى`}
+                label={ui("تنبيهات حرجة")}
+                value={Number(brief?.critical_anomalies ?? 0).toLocaleString(displayLocale())}
+                detail={`${Number(brief?.unresolved_anomalies ?? 0).toLocaleString(displayLocale())} تنبيه غير مسوّى`}
                 critical={Number(brief?.critical_anomalies ?? 0) > 0}
               />
               <IntelligenceMetric
                 icon={Wrench}
-                label="صيانة متجاوزة"
-                value={Number(brief?.overdue_maintenance ?? 0).toLocaleString("ar-IQ")}
+                label={ui("صيانة متجاوزة")}
+                value={Number(brief?.overdue_maintenance ?? 0).toLocaleString(displayLocale())}
                 detail="مركبات بلغت قراءة الاستحقاق"
                 critical={Number(brief?.overdue_maintenance ?? 0) > 0}
               />
@@ -150,33 +146,29 @@ export function ExecutiveIntelligenceCard({ className = "" }: { className?: stri
             <Progress
               value={Number(brief?.attendance_percentage ?? 0)}
               className="h-2 bg-white/10"
-              aria-label="نسبة الحضور اليوم"
+              aria-label={ui("نسبة الحضور اليوم")}
             />
             <p className="text-sm leading-7 text-slate-300">
-              {brief?.summary_ar ?? "جارٍ إنشاء الملخص اليومي."}
+              {brief?.summary_ar ?? ui("جارٍ إنشاء الملخص اليومي.")}
             </p>
 
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <h3 className="text-sm font-bold">التنبيهات المفتوحة</h3>
+                <h3 className="text-sm font-bold">{ui("التنبيهات المفتوحة")}</h3>
                 <div className="flex items-center gap-2">
                   {canResolve && visibleAnomalies.length > 0 && (
                     <>
                       <Button size="sm" variant="outline" className="h-7 border-current bg-black/10 text-current text-xs"
                         disabled={resolveMutation.isPending}
-                        onClick={() => confirm("إزالة جميع تنبيهات الورش؟") && resolveMutation.mutate("workshops")}>
-                        إزالة تنبيهات الورش
-                      </Button>
+                        onClick={() => confirm(ui("إزالة جميع تنبيهات الورش؟")) && resolveMutation.mutate("workshops")}>{ui("إزالة تنبيهات الورش")}</Button>
                       <Button size="sm" variant="outline" className="h-7 border-current bg-black/10 text-current text-xs"
                         disabled={resolveMutation.isPending}
-                        onClick={() => confirm("إزالة جميع التنبيهات المفتوحة؟") && resolveMutation.mutate("all")}>
-                        <CheckCheck className="ms-1 h-3 w-3" />
-                        إزالة الكل
-                      </Button>
+                        onClick={() => confirm(ui("إزالة جميع التنبيهات المفتوحة؟")) && resolveMutation.mutate("all")}>
+                        <CheckCheck className="ms-1 h-3 w-3" />{ui("إزالة الكل")}</Button>
                     </>
                   )}
                   <span className="text-xs text-slate-400">
-                    {Number(brief?.unresolved_anomalies ?? 0).toLocaleString("ar-IQ")}
+                    {Number(brief?.unresolved_anomalies ?? 0).toLocaleString(displayLocale())}
                   </span>
                 </div>
               </div>
@@ -188,7 +180,7 @@ export function ExecutiveIntelligenceCard({ className = "" }: { className?: stri
                   >
                     <div className="min-w-0">
                       <p className="font-semibold">
-                        {anomalyLabels[anomaly.anomaly_type] ?? "تنبيه تشغيلي"}
+                        {ui(anomalyLabels[anomaly.anomaly_type]) ?? ui("تنبيه تشغيلي")}
                       </p>
                       <p className="mt-1 text-xs opacity-80">
                         {anomaly.entity_name || anomaly.entity_type}
@@ -208,16 +200,12 @@ export function ExecutiveIntelligenceCard({ className = "" }: { className?: stri
                         disabled={resolveMutation.isPending}
                         onClick={() => resolveMutation.mutate(anomaly.id)}
                       >
-                        <CheckCheck className="ms-2 h-4 w-4" />
-                        تسوية
-                      </Button>
+                        <CheckCheck className="ms-2 h-4 w-4" />{ui("تسوية")}</Button>
                     )}
                   </article>
                 ))
               ) : (
-                <p className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-emerald-200">
-                  لا توجد تنبيهات مفتوحة ضمن صلاحيات حسابك.
-                </p>
+                <p className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-emerald-200">{ui("لا توجد تنبيهات مفتوحة ضمن صلاحيات حسابك.")}</p>
               )}
             </div>
           </>
@@ -246,7 +234,7 @@ function IntelligenceMetric({
     >
       <div className="flex items-center gap-2 text-xs text-slate-400">
         <Icon className={`h-4 w-4 ${critical ? "text-red-300" : "text-cyan-300"}`} />
-        {label}
+        {ui(label)}
       </div>
       <p className="mt-2 text-2xl font-black tabular-nums">{value}</p>
       <p className="mt-1 text-xs text-slate-500">{detail}</p>

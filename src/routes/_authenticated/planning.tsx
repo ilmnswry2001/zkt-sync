@@ -1,3 +1,4 @@
+import { direction, displayLocale, ui } from "@/lib/ui-language";
 import { ProjectExecutionPanel } from "@/components/ProjectExecutionPanel";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
@@ -106,7 +107,7 @@ export const Route = createFileRoute("/_authenticated/planning")({
   },
   head: () => ({
     meta: [
-      { title: "الخطط | EMAD_tc" },
+      { title: ui("الخطط | EMAD_tc") },
       {
         name: "description",
         content: "إعداد خطط المشاريع واعتماد الاحتياج وتوزيع الكوادر.",
@@ -282,7 +283,7 @@ function ResponsivePlanAction({
         className="hidden min-h-11 sm:inline-flex"
         onClick={onAction}
       >
-        {label}
+        {ui(label)}
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -291,14 +292,14 @@ function ResponsivePlanAction({
             variant="outline"
             size="icon"
             className="h-11 w-11 sm:hidden"
-            aria-label={label}
+            aria-label={ui(label)}
           >
             <MoreHorizontal className="h-5 w-5" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem className="min-h-11" onSelect={onAction}>
-            {label}
+            {ui(label)}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -308,7 +309,7 @@ function ResponsivePlanAction({
 
 function ColoredNameChips({ names, color }: { names: string[]; color: string }) {
   if (!names.length)
-    return <span className="text-sm text-muted-foreground">لم يتم تخصيص أسماء</span>;
+    return <span className="text-sm text-muted-foreground">{ui("لم يتم تخصيص أسماء")}</span>;
   return (
     <div className="flex flex-wrap gap-1.5">
       {names.map((name) => (
@@ -358,7 +359,7 @@ function PlanProcessTrack({ status }: { status: SiteWorkPlan["status"] }) {
             >
               {done ? <Check className="h-3 w-3" /> : index + 1}
             </span>
-            {step.label}
+            {ui(step.label)}
           </li>
         );
       })}
@@ -368,7 +369,7 @@ function PlanProcessTrack({ status }: { status: SiteWorkPlan["status"] }) {
 
 function RosterNames({ names }: { names: string[] }) {
   if (!names.length) {
-    return <span className="text-xs text-muted-foreground">لم يُسند أحد لهذا التخصص</span>;
+    return <span className="text-xs text-muted-foreground">{ui("لم يُسند أحد لهذا التخصص")}</span>;
   }
   return (
     <ol className="columns-1 gap-x-8 sm:columns-2">
@@ -410,14 +411,12 @@ function FinalPlanDocument({
   const planNotes = (plan.final_plan?.notes || plan.management_notes || plan.planning_notes || "").trim();
 
   return (
-    <section dir="rtl" className="planning-final-print overflow-hidden rounded-lg border bg-card">
+    <section dir={direction()} className="planning-final-print overflow-hidden rounded-lg border bg-card">
       <header className="border-b">
         <div className="h-1 bg-primary" />
         <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
           <div className="min-w-0 space-y-2">
-            <p className="text-[11px] font-semibold tracking-[0.18em] text-primary">
-              وثيقة توزيع تشغيلية
-            </p>
+            <p className="text-[11px] font-semibold tracking-[0.18em] text-primary">{ui("وثيقة توزيع تشغيلية")}</p>
             <h3 className="text-xl font-semibold tracking-tight sm:text-2xl">{title}</h3>
             <p className="text-sm text-muted-foreground">
               {plan.site_name}
@@ -429,10 +428,9 @@ function FinalPlanDocument({
             <Badge variant={issued ? "default" : "outline"} className="rounded-md px-2.5 py-1">
               {issued ? (
                 <span className="inline-flex items-center gap-1">
-                  <FileCheck2 className="h-3.5 w-3.5" /> صادرة
-                </span>
+                  <FileCheck2 className="h-3.5 w-3.5" />{ui(" صادرة")}</span>
               ) : (
-                "بانتظار الإصدار"
+                ui("بانتظار الإصدار")
               )}
             </Badge>
             <span className="text-sm tabular-nums text-muted-foreground">{plan.request_date}</span>
@@ -443,8 +441,7 @@ function FinalPlanDocument({
                 className="planning-final-controls min-h-10"
                 onClick={onExport}
               >
-                <Printer className="ml-2 h-4 w-4" /> تصدير
-              </Button>
+                <Printer className="ml-2 h-4 w-4" />{ui(" تصدير")}</Button>
             )}
           </div>
         </div>
@@ -456,7 +453,7 @@ function FinalPlanDocument({
             { label: "حالة الوثيقة", value: planStatusLabel[plan.status] },
           ].map((item) => (
             <div key={item.label} className="border-b px-5 py-3 sm:border-b-0 sm:border-l sm:last:border-l-0">
-              <dt className="text-[11px] text-muted-foreground">{item.label}</dt>
+              <dt className="text-[11px] text-muted-foreground">{ui(item.label)}</dt>
               <dd className="mt-1 truncate text-sm font-medium">{item.value}</dd>
             </div>
           ))}
@@ -468,24 +465,24 @@ function FinalPlanDocument({
 
         <div className="grid grid-cols-3 overflow-hidden rounded-md border">
           <div className="px-4 py-3">
-            <p className="text-[11px] text-muted-foreground">الاحتياج</p>
+            <p className="text-[11px] text-muted-foreground">{ui("الاحتياج")}</p>
             <p className="mt-1 text-2xl font-semibold tabular-nums">{coverage.requiredTotal}</p>
           </div>
           <div className="border-x px-4 py-3">
-            <p className="text-[11px] text-muted-foreground">تم التوزيع</p>
+            <p className="text-[11px] text-muted-foreground">{ui("تم التوزيع")}</p>
             <p className="mt-1 text-2xl font-semibold tabular-nums text-emerald-800 dark:text-emerald-300">
               {coverage.assignedTotal}
             </p>
           </div>
           <div className="px-4 py-3">
-            <p className="text-[11px] text-muted-foreground">المتبقي</p>
+            <p className="text-[11px] text-muted-foreground">{ui("المتبقي")}</p>
             <p className="mt-1 text-2xl font-semibold tabular-nums text-amber-800 dark:text-amber-300">
               {coverage.remainingTotal}
             </p>
           </div>
           <div className="col-span-3 border-t px-4 py-2.5">
             <div className="mb-1.5 flex items-center justify-between text-[11px] text-muted-foreground">
-              <span>اكتمال التوزيع</span>
+              <span>{ui("اكتمال التوزيع")}</span>
               <span className="tabular-nums text-foreground">{coverage.progress}٪</span>
             </div>
             <div className="h-1.5 overflow-hidden rounded-full bg-muted">
@@ -497,10 +494,8 @@ function FinalPlanDocument({
         <div>
           <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h4 className="text-base font-semibold">كشف التوزيع حسب التخصص</h4>
-              <p className="text-xs text-muted-foreground">
-                العدد المطلوب مقابل الأسماء المسندة لكل بند تشغيلي
-              </p>
+              <h4 className="text-base font-semibold">{ui("كشف التوزيع حسب التخصص")}</h4>
+              <p className="text-xs text-muted-foreground">{ui("العدد المطلوب مقابل الأسماء المسندة لكل بند تشغيلي")}</p>
             </div>
             {onStaffSearchChange && (
               <div className="planning-final-controls relative w-full sm:max-w-xs">
@@ -509,8 +504,8 @@ function FinalPlanDocument({
                   className="min-h-10 rounded-md pr-9"
                   value={staffSearch}
                   onChange={(event) => onStaffSearchChange(event.target.value)}
-                  placeholder="تصفية التخصص أو الاسم..."
-                  aria-label="بحث في الخطة النهائية"
+                  placeholder={ui("تصفية التخصص أو الاسم...")}
+                  aria-label={ui("بحث في الخطة النهائية")}
                 />
               </div>
             )}
@@ -519,19 +514,19 @@ function FinalPlanDocument({
           {!coverage.rows.length ? (
             <div className="rounded-md border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
               {coverage.specialties.length
-                ? "لا توجد تخصصات مطابقة للبحث."
-                : "لا توجد تخصصات في هذه الخطة."}
+                ? ui("لا توجد تخصصات مطابقة للبحث.")
+                : ui("لا توجد تخصصات في هذه الخطة.")}
             </div>
           ) : (
             <div className="planning-final-desktop overflow-x-auto rounded-md border">
               <Table className="planning-final-table min-w-[720px]">
                 <TableHeader>
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
-                    <TableHead className="w-[22%] text-right">التخصص</TableHead>
-                    <TableHead className="w-20 text-center">المطلوب</TableHead>
-                    <TableHead className="w-20 text-center">الموزَّع</TableHead>
-                    <TableHead className="w-24 text-center">الحالة</TableHead>
-                    <TableHead className="text-right">كشف الأسماء</TableHead>
+                    <TableHead className="w-[22%] text-right">{ui("التخصص")}</TableHead>
+                    <TableHead className="w-20 text-center">{ui("المطلوب")}</TableHead>
+                    <TableHead className="w-20 text-center">{ui("الموزَّع")}</TableHead>
+                    <TableHead className="w-24 text-center">{ui("الحالة")}</TableHead>
+                    <TableHead className="text-right">{ui("كشف الأسماء")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -552,8 +547,7 @@ function FinalPlanDocument({
                           <div>
                             <div className="font-semibold">{row.item.specialty}</div>
                             {row.item.heavy_equipment && (
-                              <p className="text-[11px] text-muted-foreground">
-                                آلية: {row.item.equipment_name || "مطلوبة"}
+                              <p className="text-[11px] text-muted-foreground">{ui("آلية: ")}{row.item.equipment_name || ui("مطلوبة")}
                               </p>
                             )}
                             {row.item.notes && (
@@ -577,7 +571,7 @@ function FinalPlanDocument({
                               : "bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200",
                           )}
                         >
-                          {row.complete ? "مكتمل" : `نقص ${row.missing}`}
+                          {row.complete ? ui("مكتمل") : (ui("نقص ") + (row.missing))}
                         </span>
                       </TableCell>
                       <TableCell className="align-top">
@@ -593,21 +587,21 @@ function FinalPlanDocument({
 
         <div className="grid gap-3 md:grid-cols-2">
           <div className="rounded-md border p-4">
-            <p className="text-[11px] font-semibold text-muted-foreground">ملاحظات المهندس</p>
+            <p className="text-[11px] font-semibold text-muted-foreground">{ui("ملاحظات المهندس")}</p>
             <p className="mt-2 whitespace-pre-line text-sm leading-7">
-              {engineerNotes || "لا توجد ملاحظات مرفقة."}
+              {engineerNotes || ui("لا توجد ملاحظات مرفقة.")}
             </p>
           </div>
           <div className="rounded-md border p-4">
-            <p className="text-[11px] font-semibold text-muted-foreground">ملاحظات الخطة</p>
+            <p className="text-[11px] font-semibold text-muted-foreground">{ui("ملاحظات الخطة")}</p>
             <p className="mt-2 whitespace-pre-line text-sm leading-7">
-              {planNotes || "لا توجد ملاحظات إضافية."}
+              {planNotes || ui("لا توجد ملاحظات إضافية.")}
             </p>
           </div>
         </div>
 
         {children ? <div className="planning-final-controls">{children}</div> : null}
-        <div className="sr-only">إجمالي الأسماء المضافة: {coverage.assignedTotal}</div>
+        <div className="sr-only">{ui("إجمالي الأسماء المضافة: ")}{coverage.assignedTotal}</div>
       </div>
     </section>
   );
@@ -866,12 +860,12 @@ function PlanningPage() {
         sites.find((site) => site.id === plan.site_id),
       )}</div>`,
     );
-    if (!ok) toast.error("تعذر فتح نافذة تصدير PDF؛ اسمح بالنوافذ المنبثقة ثم حاول مرة أخرى.");
+    if (!ok) toast.error(ui("تعذر فتح نافذة تصدير PDF؛ اسمح بالنوافذ المنبثقة ثم حاول مرة أخرى."));
   };
 
   const exportAllPlansPdf = () => {
     if (!finalPlans.length) {
-      toast.info("لا توجد خطط نهائية لتصديرها");
+      toast.info(ui("لا توجد خطط نهائية لتصديرها"));
       return;
     }
     const ok = printReport(
@@ -885,7 +879,7 @@ function PlanningPage() {
         )
         .join("")}</div>`,
     );
-    if (!ok) toast.error("تعذر فتح نافذة تصدير PDF؛ اسمح بالنوافذ المنبثقة ثم حاول مرة أخرى.");
+    if (!ok) toast.error(ui("تعذر فتح نافذة تصدير PDF؛ اسمح بالنوافذ المنبثقة ثم حاول مرة أخرى."));
   };
 
   const createWorkPlanRequest = useMutation({
@@ -947,13 +941,13 @@ function PlanningPage() {
       );
       setSpecialtySearch("");
       setVisibleSpecialtyNotes({});
-      toast.success("تم إرسال الخطة إلى قسم التخطيط");
+      toast.success(ui("تم إرسال الخطة إلى قسم التخطيط"));
     },
     onError: (error: any) =>
       toast.error(
         error?.message?.includes("site_work_plans")
-          ? "جدول خطط الأعمال غير موجود في قاعدة البيانات. نفّذ Migration الخاص به أولاً في Lovable Cloud."
-          : (error?.message ?? "تعذر إرسال الخطة"),
+          ? ui("جدول خطط الأعمال غير موجود في قاعدة البيانات. نفّذ Migration الخاص به أولاً في Lovable Cloud.")
+          : (ui(error?.message) ?? ui("تعذر إرسال الخطة")),
       ),
   });
 
@@ -981,9 +975,9 @@ function PlanningPage() {
       qc.invalidateQueries({ queryKey: ["planning-project-plans"] });
       qc.invalidateQueries({ queryKey: ["project-execution"] });
       void qc.invalidateQueries({ queryKey: ["projects-dashboard"] });
-      toast.success("تم تحديث حالة الخطة");
+      toast.success(ui("تم تحديث حالة الخطة"));
     },
-    onError: (error: any) => toast.error(formatErrorMessage(error, "تعذر تحديث الخطة")),
+    onError: (error: any) => toast.error(ui(formatErrorMessage(error, "تعذر تحديث الخطة"))),
   });
   const deleteWorkPlan = useMutation({
     mutationFn: async (plan: SiteWorkPlan) => {
@@ -994,9 +988,9 @@ function PlanningPage() {
       void qc.invalidateQueries({ queryKey: ["planning-project-plans"] });
       void qc.invalidateQueries({ queryKey: ["project-execution"] });
       void qc.invalidateQueries({ queryKey: ["projects-dashboard"] });
-      toast.success("تم حذف خطة العمل");
+      toast.success(ui("تم حذف خطة العمل"));
     },
-    onError: (error: any) => toast.error(formatErrorMessage(error, "تعذر حذف خطة العمل")),
+    onError: (error: any) => toast.error(ui(formatErrorMessage(error, "تعذر حذف خطة العمل"))),
   });
 
   const finalizePlan = useMutation({
@@ -1051,9 +1045,9 @@ function PlanningPage() {
       qc.invalidateQueries({ queryKey: ["project-execution"] });
       void qc.invalidateQueries({ queryKey: ["projects-dashboard"] });
       setActiveWorkPlanTab("final");
-      toast.success("تم تأكيد الخطة النهائية واستعراضها في قسم الخطة النهائية");
+      toast.success(ui("تم تأكيد الخطة النهائية واستعراضها في قسم الخطة النهائية"));
     },
-    onError: (error: any) => toast.error(formatErrorMessage(error, "تعذر إغلاق الخطة النهائية")),
+    onError: (error: any) => toast.error(ui(formatErrorMessage(error, "تعذر إغلاق الخطة النهائية"))),
   });
 
   const updateDraftSpecialty = (
@@ -1096,13 +1090,13 @@ function PlanningPage() {
             item.id === planId ? { ...item, assigned_staff: nextAssignments } : item,
           ),
         );
-        toast.success(typeof successMessage === "function" ? successMessage() : successMessage);
+        toast.success(typeof successMessage === "function" ? ui(successMessage()) : ui(successMessage));
       })
       .catch((error: any) => {
         void qc.invalidateQueries({ queryKey: ["planning-project-plans"] });
         void qc.invalidateQueries({ queryKey: ["project-execution"] });
       void qc.invalidateQueries({ queryKey: ["projects-dashboard"] });
-        toast.error(formatErrorMessage(error, "تعذر حفظ الكوادر"));
+        toast.error(ui(formatErrorMessage(error, "تعذر حفظ الكوادر")));
       });
 
     assignmentSaveQueue.current.set(planId, queued);
@@ -1119,7 +1113,7 @@ function PlanningPage() {
     employee: AssignedStaffEmployee,
   ) => {
     if (!canStaff(specialtyName)) {
-      toast.error(`لا تملك صلاحية إدراج كوادر تخصص ${specialtyName}`);
+      toast.error((ui("لا تملك صلاحية إدراج كوادر تخصص ") + (specialtyName)));
       return;
     }
     queueStaffAssignmentUpdate(
@@ -1127,7 +1121,7 @@ function PlanningPage() {
       (current) => {
         const result = appendStaffEmployee(current, specialtyName, employee);
         if (result.duplicate) {
-          toast.warning("هذا الموظف مسكّن مسبقًا ضمن الخطة");
+          toast.warning(ui("هذا الموظف مسكّن مسبقًا ضمن الخطة"));
           return current;
         }
 
@@ -1139,7 +1133,7 @@ function PlanningPage() {
         const assigned =
           result.assignments.find((item) => item.specialty === specialtyName)?.names.length ?? 0;
         if (assigned > required)
-          toast.warning(`تم تجاوز العدد المطلوب بمقدار ${assigned - required}`);
+          toast.warning((ui("تم تجاوز العدد المطلوب بمقدار ") + (assigned - required)));
         return result.assignments;
       },
       () => `تم تسكين ${employee.full_name} ضمن ${specialtyName}`,
@@ -1148,7 +1142,7 @@ function PlanningPage() {
 
   const removeManagementName = (planId: string, specialtyName: string, name: string) => {
     if (!canStaff(specialtyName)) {
-      toast.error(`لا تملك صلاحية إدراج كوادر تخصص ${specialtyName}`);
+      toast.error((ui("لا تملك صلاحية إدراج كوادر تخصص ") + (specialtyName)));
       return;
     }
     queueStaffAssignmentUpdate(
@@ -1175,7 +1169,7 @@ function PlanningPage() {
     employee: AssignedStaffEmployee,
   ) => {
     if (!canStaff(specialtyName)) {
-      toast.error(`لا تملك صلاحية إدراج كوادر تخصص ${specialtyName}`);
+      toast.error((ui("لا تملك صلاحية إدراج كوادر تخصص ") + (specialtyName)));
       return;
     }
     queueStaffAssignmentUpdate(
@@ -1187,14 +1181,14 @@ function PlanningPage() {
 
   const clearManagementNames = (planId: string, specialtyName: string) => {
     if (!canStaff(specialtyName)) {
-      toast.error(`لا تملك صلاحية إدراج كوادر تخصص ${specialtyName}`);
+      toast.error((ui("لا تملك صلاحية إدراج كوادر تخصص ") + (specialtyName)));
       return;
     }
     const group = workPlans
       .find((item) => item.id === planId)
       ?.assigned_staff.find((item) => item.specialty === specialtyName);
     if (!group?.names.length) return;
-    if (!window.confirm(`مسح جميع الأسماء المضافة لتخصص ${specialtyName}؟`)) return;
+    if (!window.confirm((ui("مسح جميع الأسماء المضافة لتخصص ") + (specialtyName) + "؟"))) return;
 
     queueStaffAssignmentUpdate(
       planId,
@@ -1217,9 +1211,9 @@ function PlanningPage() {
       qc.invalidateQueries({ queryKey: ["sites"] });
       setOpen(false);
       setEditing(null);
-      toast.success("تم الحفظ");
+      toast.success(ui("تم الحفظ"));
     },
-    onError: (e: any) => toast.error(formatErrorMessage(e)),
+    onError: (e: any) => toast.error(ui(formatErrorMessage(e))),
   });
   const del = useMutation({
     mutationFn: async (id: string) => {
@@ -1228,9 +1222,9 @@ function PlanningPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sites"] });
-      toast.success("تم الحذف");
+      toast.success(ui("تم الحذف"));
     },
-    onError: (e: any) => toast.error(formatErrorMessage(e)),
+    onError: (e: any) => toast.error(ui(formatErrorMessage(e))),
   });
 
   const siteForm = (
@@ -1241,7 +1235,7 @@ function PlanningPage() {
         const value = (key: string) => (formData.get(key) as string)?.trim() || null;
         const siteAdminId = value("site_admin_employee_id");
         if (!siteAdminId || siteAdminId === "none") {
-          toast.error("اختيار إداري الموقع مطلوب");
+          toast.error(ui("اختيار إداري الموقع مطلوب"));
           return;
         }
         save.mutate({
@@ -1259,11 +1253,11 @@ function PlanningPage() {
       className="grid grid-cols-1 gap-3 sm:grid-cols-2"
     >
       <div className="sm:col-span-2">
-        <Label>اسم الموقع</Label>
+        <Label>{ui("اسم الموقع")}</Label>
         <Input name="name" required defaultValue={editing?.name} className="mt-1 min-h-11" />
       </div>
       <div>
-        <Label>كود التكلفة CTR</Label>
+        <Label>{ui("كود التكلفة CTR")}</Label>
         <Input
           name="ctr_code"
           required
@@ -1272,29 +1266,29 @@ function PlanningPage() {
         />
       </div>
       <div>
-        <Label>الجهة / العميل</Label>
+        <Label>{ui("الجهة / العميل")}</Label>
         <Input name="client" defaultValue={editing?.client ?? ""} className="mt-1 min-h-11" />
       </div>
       <div>
-        <Label>الموقع الجغرافي</Label>
+        <Label>{ui("الموقع الجغرافي")}</Label>
         <Input name="location" defaultValue={editing?.location ?? ""} className="mt-1 min-h-11" />
       </div>
       <div>
-        <Label>الحالة</Label>
+        <Label>{ui("الحالة")}</Label>
         <Select name="status" defaultValue={editing?.status ?? "active"}>
           <SelectTrigger className="mt-1 min-h-11">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="active">نشط</SelectItem>
-            <SelectItem value="planned">مخطط</SelectItem>
-            <SelectItem value="completed">منتهي</SelectItem>
-            <SelectItem value="suspended">متوقف</SelectItem>
+            <SelectItem value="active">{ui("نشط")}</SelectItem>
+            <SelectItem value="planned">{ui("مخطط")}</SelectItem>
+            <SelectItem value="completed">{ui("منتهي")}</SelectItem>
+            <SelectItem value="suspended">{ui("متوقف")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
       <div>
-        <Label>تاريخ البدء</Label>
+        <Label>{ui("تاريخ البدء")}</Label>
         <Input
           type="date"
           name="start_date"
@@ -1303,7 +1297,7 @@ function PlanningPage() {
         />
       </div>
       <div>
-        <Label>تاريخ الانتهاء</Label>
+        <Label>{ui("تاريخ الانتهاء")}</Label>
         <Input
           type="date"
           name="end_date"
@@ -1312,16 +1306,16 @@ function PlanningPage() {
         />
       </div>
       <div className="sm:col-span-2">
-        <Label>إداري الموقع المسؤول عن التقرير *</Label>
+        <Label>{ui("إداري الموقع المسؤول عن التقرير *")}</Label>
         <Select
           name="site_admin_employee_id"
           defaultValue={editing?.site_admin_employee_id ?? "none"}
         >
           <SelectTrigger className="mt-1 min-h-11">
-            <SelectValue placeholder="اختر إداري الموقع" />
+            <SelectValue placeholder={ui("اختر إداري الموقع")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="none">— اختر إداري الموقع —</SelectItem>
+            <SelectItem value="none">{ui("— اختر إداري الموقع —")}</SelectItem>
             {(siteAdmins as any[]).map((employee) => (
               <SelectItem key={employee.id} value={employee.id}>
                 {employee.full_name} — {employee.employee_no}
@@ -1330,11 +1324,11 @@ function PlanningPage() {
           </SelectContent>
         </Select>
         {!siteAdmins.length && (
-          <p className="mt-1 text-xs text-warning">لا توجد أسماء موظفين نشطين متاحة.</p>
+          <p className="mt-1 text-xs text-warning">{ui("لا توجد أسماء موظفين نشطين متاحة.")}</p>
         )}
       </div>
       <div className="sm:col-span-2">
-        <Label>وصف</Label>
+        <Label>{ui("وصف")}</Label>
         <Input
           name="description"
           defaultValue={editing?.description ?? ""}
@@ -1342,7 +1336,7 @@ function PlanningPage() {
         />
       </div>
       <Button type="submit" className="min-h-11 sm:col-span-2" disabled={save.isPending}>
-        {save.isPending ? "جارٍ الحفظ..." : "حفظ الموقع"}
+        {save.isPending ? ui("جارٍ الحفظ...") : ui("حفظ الموقع")}
       </Button>
     </form>
   );
@@ -1354,8 +1348,8 @@ function PlanningPage() {
           className="min-h-11 pr-9"
           value={planSearch}
           onChange={(event) => setPlanSearch(event.target.value)}
-          placeholder="بحث شامل في الخطط..."
-          aria-label="بحث في الخطط"
+          placeholder={ui("بحث شامل في الخطط...")}
+          aria-label={ui("بحث في الخطط")}
         />
       </div>
       <Input
@@ -1363,14 +1357,14 @@ function PlanningPage() {
         type="date"
         value={planDateFilter}
         onChange={(event) => setPlanDateFilter(event.target.value)}
-        aria-label="تصفية الخطط حسب التاريخ"
+        aria-label={ui("تصفية الخطط حسب التاريخ")}
       />
       <select
         className="min-h-11 rounded-md border bg-background px-3 text-sm"
         value={planCreatorFilter}
         onChange={(event) => setPlanCreatorFilter(event.target.value)}
       >
-        <option value="all">كل منشئي الخطط</option>
+        <option value="all">{ui("كل منشئي الخطط")}</option>
         {planCreators.map((name) => (
           <option key={name} value={name}>
             {name}
@@ -1382,7 +1376,7 @@ function PlanningPage() {
         value={planApplicantFilter}
         onChange={(event) => setPlanApplicantFilter(event.target.value)}
       >
-        <option value="all">كل طالبي الخطط</option>
+        <option value="all">{ui("كل طالبي الخطط")}</option>
         {planApplicants.map((name) => (
           <option key={name} value={name}>
             {name}
@@ -1394,7 +1388,7 @@ function PlanningPage() {
         value={planSiteFilter}
         onChange={(event) => setPlanSiteFilter(event.target.value)}
       >
-        <option value="all">كل المواقع</option>
+        <option value="all">{ui("كل المواقع")}</option>
         {sites.map((site) => (
           <option key={site.id} value={site.id}>
             {site.name}
@@ -1405,19 +1399,17 @@ function PlanningPage() {
   );
 
   return (
-    <div dir="rtl" className="space-y-6">
+    <div dir={direction()} className="space-y-6">
       {siteAdminsError && (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
-          تعذر تحميل أسماء الإداريين من قاعدة البيانات:{" "}
-          {(siteAdminsError as any).message ?? "تحقق من اتصال Lovable Cloud"}
+        <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">{ui("تعذر تحميل أسماء الإداريين من قاعدة البيانات:")}{" "}
+          {(siteAdminsError as any).message ?? ui("تحقق من اتصال Lovable Cloud")}
         </div>
       )}
       {sitesError && (
         <div
           role="alert"
           className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive"
-        >
-          تعذر تحميل المواقع: {(sitesError as any).message ?? "تحقق من اتصال قاعدة البيانات"}
+        >{ui("تعذر تحميل المواقع: ")}{(sitesError as any).message ?? ui("تحقق من اتصال قاعدة البيانات")}
         </div>
       )}
       <section className="operations-banner relative isolate overflow-hidden rounded-2xl border bg-card p-6 text-foreground sm:p-8">
@@ -1425,12 +1417,9 @@ function PlanningPage() {
         <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-end">
           <div className="max-w-2xl">
             <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary">
-              <Banknote className="h-4 w-4" /> مراجعة واعتماد الخطط
-            </div>
-            <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">الخطط</h1>
-            <p className="mt-2 text-sm leading-7 text-muted-foreground sm:text-base">
-              راجع احتياج المشروع واعتمد الكميات، ثم وزّع الكوادر على الخطة التنفيذية.
-            </p>
+              <Banknote className="h-4 w-4" />{ui(" مراجعة واعتماد الخطط")}</div>
+            <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">{ui("الخطط")}</h1>
+            <p className="mt-2 text-sm leading-7 text-muted-foreground sm:text-base">{ui("راجع احتياج المشروع واعتمد الكميات، ثم وزّع الكوادر على الخطة التنفيذية.")}</p>
           </div>
           <Button
             className="hidden min-h-11 shrink-0 sm:inline-flex"
@@ -1440,30 +1429,29 @@ function PlanningPage() {
               setOpen(true);
             }}
           >
-            <Plus className="ml-2 h-4 w-4" /> إضافة موقع
-          </Button>
+            <Plus className="ml-2 h-4 w-4" />{ui(" إضافة موقع")}</Button>
         </div>
         <div className="mt-6 grid grid-cols-2 gap-2 border-t border-border pt-4 sm:grid-cols-4">
           {[
             {
               label: "مواقع مسجلة",
-              value: sites.length.toLocaleString("ar-IQ"),
+              value: sites.length.toLocaleString(displayLocale()),
               tone: "text-foreground",
             },
             {
               label: "بانتظار الاعتماد",
-              value: requestedPlans.length.toLocaleString("ar-IQ"),
+              value: requestedPlans.length.toLocaleString(displayLocale()),
               tone: "text-warning",
             },
             {
               label: "بانتظار توزيع الكوادر",
-              value: planningApprovedPlans.length.toLocaleString("ar-IQ"),
+              value: planningApprovedPlans.length.toLocaleString(displayLocale()),
               tone: "text-primary",
               onClick: () => setActiveWorkPlanTab("management"),
             },
             {
               label: "خطط نهائية",
-              value: finalPlans.length.toLocaleString("ar-IQ"),
+              value: finalPlans.length.toLocaleString(displayLocale()),
               tone: "text-success",
             },
           ].map((item) => (
@@ -1473,7 +1461,7 @@ function PlanningPage() {
               onClick={item.onClick}
               className="rounded-xl border border-border bg-card/80 px-3 py-2.5 text-right transition hover:bg-accent"
             >
-              <p className="text-xs text-muted-foreground">{item.label}</p>
+              <p className="text-xs text-muted-foreground">{ui(item.label)}</p>
               <p className={`mt-1 text-lg font-extrabold tabular-nums ${item.tone}`}>
                 {item.value}
               </p>
@@ -1492,9 +1480,9 @@ function PlanningPage() {
             if (!value) setEditing(null);
           }}
         >
-          <DrawerContent dir="rtl" className="max-h-[92dvh] overflow-y-auto">
+          <DrawerContent dir={direction()} className="max-h-[92dvh] overflow-y-auto">
             <DrawerHeader className="text-right">
-              <DrawerTitle>{editing ? "تعديل موقع" : "موقع عمل جديد"}</DrawerTitle>
+              <DrawerTitle>{editing ? ui("تعديل موقع") : ui("موقع عمل جديد")}</DrawerTitle>
             </DrawerHeader>
             <div className="overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
               {siteForm}
@@ -1509,9 +1497,9 @@ function PlanningPage() {
             if (!value) setEditing(null);
           }}
         >
-          <DialogContent dir="rtl" className="max-h-[90vh] max-w-2xl overflow-y-auto">
+          <DialogContent dir={direction()} className="max-h-[90vh] max-w-2xl overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{editing ? "تعديل موقع" : "موقع عمل جديد"}</DialogTitle>
+              <DialogTitle>{editing ? ui("تعديل موقع") : ui("موقع عمل جديد")}</DialogTitle>
             </DialogHeader>
             {siteForm}
           </DialogContent>
@@ -1519,7 +1507,7 @@ function PlanningPage() {
       )}
       {isMobile && !isEngineer && (
         <Button
-          aria-label="إضافة موقع جديد"
+          aria-label={ui("إضافة موقع جديد")}
           className={`fixed ${activeWorkPlanTab === "request" ? "bottom-24" : "bottom-5"} left-5 z-30 h-14 w-14 rounded-full shadow-lg sm:hidden`}
           size="icon"
           onClick={() => {
@@ -1533,7 +1521,7 @@ function PlanningPage() {
 
       <Card className="border-primary/20">
         <CardHeader>
-          <CardTitle>خطط الأعمال</CardTitle>
+          <CardTitle>{ui("خطط الأعمال")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="sticky top-0 z-20 -mx-6 flex snap-x gap-2 overflow-x-auto border-b bg-card px-4 py-2 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
@@ -1546,10 +1534,10 @@ function PlanningPage() {
                 className="min-h-11 shrink-0 snap-start gap-2 rounded-full"
                 onClick={() => setActiveWorkPlanTab(tab)}
               >
-                {tab === "request" && "طلب خطة"}
-                {tab === "requested" && "الخطط المطلوبة"}
-                {tab === "management" && "توزيع الكوادر"}
-                {tab === "final" && "مراجعة التوزيع والخطة النهائية"}
+                {tab === "request" && ui("طلب خطة")}
+                {tab === "requested" && ui("الخطط المطلوبة")}
+                {tab === "management" && ui("توزيع الكوادر")}
+                {tab === "final" && ui("مراجعة التوزيع والخطة النهائية")}
                 <Badge
                   variant={activeWorkPlanTab === tab ? "secondary" : "outline"}
                   className="min-w-6 justify-center px-1.5"
@@ -1563,13 +1551,12 @@ function PlanningPage() {
             <div
               role="alert"
               className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
-            >
-              تعذر تحميل خطط الأعمال:{" "}
-              {(workPlansQuery.error as any).message ?? "تحقق من الاتصال بقاعدة البيانات"}
+            >{ui("تعذر تحميل خطط الأعمال:")}{" "}
+              {(workPlansQuery.error as any).message ?? ui("تحقق من الاتصال بقاعدة البيانات")}
             </div>
           )}
           {workPlansQuery.isLoading && activeWorkPlanTab !== "request" && (
-            <div className="space-y-2" aria-label="جارٍ تحميل الخطط">
+            <div className="space-y-2" aria-label={ui("جارٍ تحميل الخطط")}>
               {[0, 1].map((item) => (
                 <div key={item} className="h-20 animate-pulse rounded-xl border bg-muted/40" />
               ))}
@@ -1580,16 +1567,16 @@ function PlanningPage() {
             <div className="space-y-5 pb-28 md:pb-4">
               <div className="grid grid-cols-1 gap-3 rounded-xl border bg-card p-3 sm:grid-cols-2 lg:grid-cols-[1.2fr_0.8fr_1.5fr]">
                 <div className="space-y-2">
-                  <Label>موقع العمل</Label>
+                  <Label>{ui("موقع العمل")}</Label>
                   <Input
                     value={requestSiteSearch}
                     onChange={(event) => setRequestSiteSearch(event.target.value)}
-                    placeholder="ابحث عن موقع..."
-                    aria-label="ابحث عن موقع للخطة"
+                    placeholder={ui("ابحث عن موقع...")}
+                    aria-label={ui("ابحث عن موقع للخطة")}
                   />
                   <Select value={requestSiteId} onValueChange={setRequestSiteId}>
                     <SelectTrigger className="min-h-11">
-                      <SelectValue placeholder="اختر الموقع" />
+                      <SelectValue placeholder={ui("اختر الموقع")} />
                     </SelectTrigger>
                     <SelectContent>
                       {sites
@@ -1607,7 +1594,7 @@ function PlanningPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>تاريخ الخطة</Label>
+                  <Label>{ui("تاريخ الخطة")}</Label>
                   <Input
                     className="min-h-11"
                     type="date"
@@ -1616,31 +1603,29 @@ function PlanningPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>طالب الخطة</Label>
+                  <Label>{ui("طالب الخطة")}</Label>
                   <Input
                     className="min-h-11"
                     value={applicantName}
                     onChange={(event) => setApplicantName(event.target.value)}
-                    placeholder="اسم طالب الخطة"
+                    placeholder={ui("اسم طالب الخطة")}
                   />
                 </div>
                 <div className="space-y-2 sm:col-span-2 lg:col-span-1">
-                  <Label>ملاحظات الطلب</Label>
+                  <Label>{ui("ملاحظات الطلب")}</Label>
                   <Input
                     className="min-h-11"
                     value={requestNotes}
                     onChange={(event) => setRequestNotes(event.target.value)}
-                    placeholder="الأولويات أو متطلبات الموقع..."
+                    placeholder={ui("الأولويات أو متطلبات الموقع...")}
                   />
                 </div>
               </div>
 
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <h2 className="text-lg font-bold">التخصصات والآليات</h2>
-                  <p className="text-sm text-muted-foreground">
-                    أدخل العدد المطلوب، واترك الباقي صفرًا.
-                  </p>
+                  <h2 className="text-lg font-bold">{ui("التخصصات والآليات")}</h2>
+                  <p className="text-sm text-muted-foreground">{ui("أدخل العدد المطلوب، واترك الباقي صفرًا.")}</p>
                 </div>
                 <div className="relative w-full sm:max-w-xs">
                   <Search className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -1648,16 +1633,14 @@ function PlanningPage() {
                     className="min-h-11 pr-9"
                     value={specialtySearch}
                     onChange={(event) => setSpecialtySearch(event.target.value)}
-                    placeholder="تصفية التخصصات..."
-                    aria-label="تصفية التخصصات"
+                    placeholder={ui("تصفية التخصصات...")}
+                    aria-label={ui("تصفية التخصصات")}
                   />
                 </div>
               </div>
 
               {specialtyOptions.length === 0 ? (
-                <div className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">
-                  لا توجد تخصصات نشطة في دليل النظام.
-                </div>
+                <div className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">{ui("لا توجد تخصصات نشطة في دليل النظام.")}</div>
               ) : (
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
                   {filteredSpecialties.map((item) => {
@@ -1677,7 +1660,7 @@ function PlanningPage() {
                             variant="ghost"
                             size="icon"
                             className="h-11 w-11 shrink-0"
-                            aria-label={`${visibleSpecialtyNotes[item.specialty] ? "إخفاء" : "إظهار"} ملاحظات ${item.specialty}`}
+                            aria-label={((visibleSpecialtyNotes[item.specialty] ? "إخفاء" : "إظهار") + ui(" ملاحظات ") + (item.specialty))}
                             onClick={() =>
                               setVisibleSpecialtyNotes((current) => ({
                                 ...current,
@@ -1695,7 +1678,7 @@ function PlanningPage() {
                               variant="outline"
                               size="icon"
                               className="h-11 w-11"
-                              aria-label={`تقليل عدد ${item.specialty}`}
+                              aria-label={(ui("تقليل عدد ") + (item.specialty))}
                               disabled={item.quantity <= 0}
                               onClick={() =>
                                 updateDraftSpecialty(
@@ -1709,7 +1692,7 @@ function PlanningPage() {
                             </Button>
                             <Input
                               className="h-11 w-16 text-center text-lg font-bold tabular-nums"
-                              aria-label={`العدد المطلوب من ${item.specialty}`}
+                              aria-label={(ui("العدد المطلوب من ") + (item.specialty))}
                               type="number"
                               min={0}
                               value={item.quantity}
@@ -1726,7 +1709,7 @@ function PlanningPage() {
                               variant="outline"
                               size="icon"
                               className="h-11 w-11"
-                              aria-label={`زيادة عدد ${item.specialty}`}
+                              aria-label={(ui("زيادة عدد ") + (item.specialty))}
                               onClick={() =>
                                 updateDraftSpecialty(index, "quantity", item.quantity + 1)
                               }
@@ -1742,9 +1725,7 @@ function PlanningPage() {
                                 updateDraftSpecialty(index, "heavy_equipment", event.target.checked);
                                 updateDraftSpecialty(index, "equipment_quantity", event.target.checked ? Math.max(1, item.equipment_quantity || 1) : 0);
                               }}
-                            />
-                            آلية
-                          </label>
+                            />{ui("آلية")}</label>
                         </div>
                         {item.heavy_equipment && (
                           <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -1755,7 +1736,7 @@ function PlanningPage() {
                             }
                           >
                             <SelectTrigger className="min-h-11">
-                              <SelectValue placeholder="نوع الآلية" />
+                              <SelectValue placeholder={ui("نوع الآلية")} />
                             </SelectTrigger>
                             <SelectContent>
                               {equipmentOptions.map((option) => (
@@ -1766,7 +1747,7 @@ function PlanningPage() {
                             </SelectContent>
                           </Select>
                           <div>
-                            <Label htmlFor={`plan-equipment-quantity-${index}`} className="text-xs">عدد الآليات المطلوبة</Label>
+                            <Label htmlFor={`plan-equipment-quantity-${index}`} className="text-xs">{ui("عدد الآليات المطلوبة")}</Label>
                             <Input id={`plan-equipment-quantity-${index}`} type="number" min={1} className="min-h-11" value={item.equipment_quantity || 1} onChange={(event) => updateDraftSpecialty(index, "equipment_quantity", Math.max(1, Number(event.target.value) || 1))} />
                           </div>
                           </div>
@@ -1778,7 +1759,7 @@ function PlanningPage() {
                             onChange={(event) =>
                               updateDraftSpecialty(index, "notes", event.target.value)
                             }
-                            placeholder="ملاحظات اختيارية لهذا التخصص"
+                            placeholder={ui("ملاحظات اختيارية لهذا التخصص")}
                           />
                         )}
                       </div>
@@ -1790,16 +1771,16 @@ function PlanningPage() {
               <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-lg backdrop-blur md:sticky md:bottom-0 md:rounded-xl md:border md:px-4">
                 <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2">
                   <div className="text-sm">
-                    <span className="text-muted-foreground">التخصصات:</span>{" "}
+                    <span className="text-muted-foreground">{ui("التخصصات:")}</span>{" "}
                     <b>{selectedSpecialties.length}</b>
                   </div>
                   <div className="text-sm">
-                    <span className="text-muted-foreground">إجمالي العدد:</span>{" "}
+                    <span className="text-muted-foreground">{ui("إجمالي العدد:")}</span>{" "}
                     <b>{requestedHeadcount}</b>
                   </div>
                   <div className="text-sm">
-                    <span className="text-muted-foreground">التكلفة اليومية التقديرية:</span>{" "}
-                    <b>{estimatedPlanCost.toLocaleString()} د.ع</b>
+                    <span className="text-muted-foreground">{ui("التكلفة اليومية التقديرية:")}</span>{" "}
+                    <b>{estimatedPlanCost.toLocaleString()}{ui(" د.ع")}</b>
                   </div>
                   <Button
                     type="button"
@@ -1812,8 +1793,8 @@ function PlanningPage() {
                     }
                   >
                     {createWorkPlanRequest.isPending
-                      ? "جارٍ الإرسال..."
-                      : "إرسال الخطة إلى التخطيط"}
+                      ? ui("جارٍ الإرسال...")
+                      : ui("إرسال الخطة إلى التخطيط")}
                   </Button>
                 </div>
               </div>
@@ -1826,8 +1807,8 @@ function PlanningPage() {
               {visibleRequestedPlans.length === 0 ? (
                 <div className="rounded-xl border border-dashed p-6 text-center text-muted-foreground">
                   {requestedPlans.length
-                    ? "لا توجد نتائج مطابقة للبحث والتاريخ."
-                    : "لا توجد خطط جديدة في انتظار اعتماد قسم التخطيط."}
+                    ? ui("لا توجد نتائج مطابقة للبحث والتاريخ.")
+                    : ui("لا توجد خطط جديدة في انتظار اعتماد قسم التخطيط.")}
                 </div>
               ) : (
                 visibleRequestedPlans.map((plan) => (
@@ -1864,9 +1845,7 @@ function PlanningPage() {
                           {(plan.specialties ?? []).reduce(
                             (sum, item) => sum + Number(item.quantity || 0),
                             0,
-                          )}{" "}
-                          فرد
-                        </Badge>
+                          )}{" "}{ui("فرد")}</Badge>
                         <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
                       </div>
                     </summary>
@@ -1875,10 +1854,10 @@ function PlanningPage() {
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead>التخصص</TableHead>
-                              <TableHead>العدد</TableHead>
-                              <TableHead>الآلية</TableHead>
-                              <TableHead>الملاحظات</TableHead>
+                              <TableHead>{ui("التخصص")}</TableHead>
+                              <TableHead>{ui("العدد")}</TableHead>
+                              <TableHead>{ui("الآلية")}</TableHead>
+                              <TableHead>{ui("الملاحظات")}</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -1887,7 +1866,7 @@ function PlanningPage() {
                                 <TableCell className="font-medium">{item.specialty}</TableCell>
                                 <TableCell>{item.quantity}</TableCell>
                                 <TableCell>
-                                  {item.heavy_equipment ? `${item.equipment_name || "آلية"} (${Math.max(1, Number(item.equipment_quantity) || 1)})` : "—"}
+                                  {item.heavy_equipment ? ((item.equipment_name || "آلية") + " (" + (Math.max(1, Number(item.equipment_quantity) || 1)) + ")") : "—"}
                                 </TableCell>
                                 <TableCell>{item.notes || "—"}</TableCell>
                               </TableRow>
@@ -1896,7 +1875,7 @@ function PlanningPage() {
                         </Table>
                       </div>
                       <div className="rounded-lg bg-muted/30 p-3 text-sm">
-                        {plan.request_notes || "لا توجد ملاحظات للطلب."}
+                        {plan.request_notes || ui("لا توجد ملاحظات للطلب.")}
                       </div>
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
                         <Input
@@ -1908,10 +1887,10 @@ function PlanningPage() {
                               [plan.id]: event.target.value,
                             }))
                           }
-                          placeholder="ملاحظة التخطيط..."
+                          placeholder={ui("ملاحظة التخطيط...")}
                         />
                         <ResponsivePlanAction
-                          label="اعتماد من قسم التخطيط"
+                          label={ui("اعتماد من قسم التخطيط")}
                           onAction={() =>
                             updatePlanStatus.mutate({
                               id: plan.id,
@@ -1928,15 +1907,14 @@ function PlanningPage() {
                           onClick={() => {
                             if (
                               confirm(
-                                `حذف خطة «${plan.site_name}»؟ لا يمكن التراجع عن هذا الإجراء.`,
+                                (ui("حذف خطة «") + (plan.site_name) + ui("»؟ لا يمكن التراجع عن هذا الإجراء.")),
                               )
                             ) {
                               deleteWorkPlan.mutate(plan);
                             }
                           }}
                         >
-                          <Trash2 className="ml-2 h-4 w-4" /> حذف الخطة
-                        </Button>
+                          <Trash2 className="ml-2 h-4 w-4" />{ui(" حذف الخطة")}</Button>
                       </div>
                     </div>
                   </details>
@@ -1951,8 +1929,8 @@ function PlanningPage() {
               {visiblePlanningApprovedPlans.length === 0 ? (
                 <div className="rounded-xl border border-dashed p-6 text-center text-muted-foreground">
                   {planningApprovedPlans.length
-                    ? "لا توجد نتائج مطابقة للبحث والتاريخ."
-                    : "لا توجد خطط تمت الموافقة عليها من قسم التخطيط حتى الآن."}
+                    ? ui("لا توجد نتائج مطابقة للبحث والتاريخ.")
+                    : ui("لا توجد خطط تمت الموافقة عليها من قسم التخطيط حتى الآن.")}
                 </div>
               ) : (
                 visiblePlanningApprovedPlans.map((plan) => (
@@ -1967,9 +1945,7 @@ function PlanningPage() {
                             {(plan.specialties ?? []).reduce(
                               (sum, item) => sum + Number(item.quantity || 0),
                               0,
-                            )}{" "}
-                            مطلوب
-                          </p>
+                            )}{" "}{ui("مطلوب")}</p>
                           <div className="mt-1 flex flex-wrap gap-1">
                             {(plan.specialties ?? []).slice(0, 2).map((item) => (
                               <Badge
@@ -1989,7 +1965,7 @@ function PlanningPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant="secondary">موافق عليه</Badge>
+                        <Badge variant="secondary">{ui("موافق عليه")}</Badge>
                         <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
                       </div>
                     </summary>
@@ -2015,7 +1991,7 @@ function PlanningPage() {
                                 <div className="font-bold">
                                   {item.specialty}
                                   {!canStaff(item.specialty) && (
-                                    <span className="mr-2 text-xs font-normal text-muted-foreground">(يملؤه القسم المختص)</span>
+                                    <span className="mr-2 text-xs font-normal text-muted-foreground">{ui("(يملؤه القسم المختص)")}</span>
                                   )}
                                 </div>
                                 <Badge
@@ -2051,7 +2027,7 @@ function PlanningPage() {
                                           <div className="min-w-0">
                                             <p className="truncate font-bold">{employee.full_name}</p>
                                             <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                                              <span>رقم: {employee.employee_no || "—"}</span>
+                                              <span>{ui("رقم: ")}{employee.employee_no || "—"}</span>
                                               <Badge variant="outline">{item.specialty}</Badge>
                                             </div>
                                           </div>
@@ -2060,8 +2036,8 @@ function PlanningPage() {
                                             variant="ghost"
                                             size="icon"
                                             className="h-8 w-8 shrink-0 text-destructive"
-                                            aria-label={`إلغاء تسكين ${employee.full_name}`}
-                                            title="إلغاء التسكين"
+                                            aria-label={(ui("إلغاء تسكين ") + (employee.full_name))}
+                                            title={ui("إلغاء التسكين")}
                                             onClick={() =>
                                               removeManagementEmployee(plan.id, item.specialty, employee)
                                             }
@@ -2072,7 +2048,7 @@ function PlanningPage() {
                                         <div className="mt-2 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
                                           <Phone className="h-3.5 w-3.5 shrink-0" />
                                           <span dir="ltr" className="min-w-0 flex-1 truncate text-right">
-                                            {employee.phone || "رقم الهاتف غير مسجل"}
+                                            {employee.phone || ui("رقم الهاتف غير مسجل")}
                                           </span>
                                           {employee.phone && (
                                             <Button
@@ -2080,14 +2056,14 @@ function PlanningPage() {
                                               variant="ghost"
                                               size="icon"
                                               className="h-7 w-7 shrink-0"
-                                              aria-label={`نسخ رقم ${employee.full_name}`}
-                                              title="نسخ رقم الهاتف"
+                                              aria-label={(ui("نسخ رقم ") + (employee.full_name))}
+                                              title={ui("نسخ رقم الهاتف")}
                                               onClick={async () => {
                                                 try {
                                                   await navigator.clipboard.writeText(employee.phone!);
-                                                  toast.success("تم نسخ رقم الهاتف");
+                                                  toast.success(ui("تم نسخ رقم الهاتف"));
                                                 } catch {
-                                                  toast.error("تعذر نسخ رقم الهاتف");
+                                                  toast.error(ui("تعذر نسخ رقم الهاتف"));
                                                 }
                                               }}
                                             >
@@ -2121,18 +2097,13 @@ function PlanningPage() {
                                     variant="ghost"
                                     className="min-h-11 px-2 text-destructive"
                                     onClick={() => clearManagementNames(plan.id, item.specialty)}
-                                  >
-                                    مسح الكل
-                                  </Button>
+                                  >{ui("مسح الكل")}</Button>
                                 </div>
                               ) : (
-                                <p className="mt-2 text-sm text-muted-foreground">
-                                  لم تُضف أسماء بعد
-                                </p>
+                                <p className="mt-2 text-sm text-muted-foreground">{ui("لم تُضف أسماء بعد")}</p>
                               )}
                               {names.length > required && (
-                                <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">
-                                  تم تجاوز العدد المطلوب بمقدار {names.length - required}
+                                <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">{ui("تم تجاوز العدد المطلوب بمقدار ")}{names.length - required}
                                 </p>
                               )}
                             </div>
@@ -2141,7 +2112,7 @@ function PlanningPage() {
                       </div>
 
                       <div className="rounded-xl border bg-muted/30 p-3">
-                        <div className="mb-2 font-bold">تأكيد توزيع الكوادر</div>
+                        <div className="mb-2 font-bold">{ui("تأكيد توزيع الكوادر")}</div>
                         <div className="flex flex-col md:flex-row gap-2">
                           <Input
                             className="min-h-11"
@@ -2152,10 +2123,10 @@ function PlanningPage() {
                                 [plan.id]: e.target.value,
                               }))
                             }
-                            placeholder="ملاحظات الإدارة..."
+                            placeholder={ui("ملاحظات الإدارة...")}
                           />
                           <ResponsivePlanAction
-                            label="تأكيد توزيع الكوادر"
+                            label={ui("تأكيد توزيع الكوادر")}
                             onAction={() =>
                               updatePlanStatus.mutate({
                                 id: plan.id,
@@ -2169,7 +2140,7 @@ function PlanningPage() {
 
                       {(plan.assigned_staff ?? []).some((group) => group.names.length > 0) && (
                         <div className="rounded-xl border bg-background p-3">
-                          <div className="mb-2 font-bold">الكوادر الحالية</div>
+                          <div className="mb-2 font-bold">{ui("الكوادر الحالية")}</div>
                           <div className="space-y-3">
                             {(plan.assigned_staff ?? [])
                               .filter((group) => group.names.length > 0)
@@ -2200,10 +2171,8 @@ function PlanningPage() {
             <div className="space-y-6">
               <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="font-semibold">مراجعة التوزيع والإصدار</p>
-                  <p className="text-xs text-muted-foreground">
-                    قارن الاحتياج بالأسماء المسندة، ثم أصدر الوثيقة أو صدّرها ككشف تشغيلي.
-                  </p>
+                  <p className="font-semibold">{ui("مراجعة التوزيع والإصدار")}</p>
+                  <p className="text-xs text-muted-foreground">{ui("قارن الاحتياج بالأسماء المسندة، ثم أصدر الوثيقة أو صدّرها ككشف تشغيلي.")}</p>
                 </div>
                 <Button
                   type="button"
@@ -2211,25 +2180,22 @@ function PlanningPage() {
                   className="min-h-11 shrink-0"
                   onClick={exportAllPlansPdf}
                 >
-                  <Printer className="ml-2 h-4 w-4" /> تصدير جميع الخطط
-                </Button>
+                  <Printer className="ml-2 h-4 w-4" />{ui(" تصدير جميع الخطط")}</Button>
               </div>
               {planFilters}
               {visibleManagementReviewPlans.length === 0 && visibleFinalPlans.length === 0 ? (
                 <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
                   {managementReviewPlans.length || finalPlans.length
-                    ? "لا توجد نتائج مطابقة للبحث والتاريخ."
-                    : "لا توجد خطط في مرحلة التحضير أو الإغلاق النهائي بعد إدراج الكوادر."}
+                    ? ui("لا توجد نتائج مطابقة للبحث والتاريخ.")
+                    : ui("لا توجد خطط في مرحلة التحضير أو الإغلاق النهائي بعد إدراج الكوادر.")}
                 </div>
               ) : null}
 
               {visibleManagementReviewPlans.length > 0 && (
                 <div className="space-y-4">
                   <div>
-                    <h3 className="text-sm font-semibold">بانتظار إصدار الخطة</h3>
-                    <p className="text-xs text-muted-foreground">
-                      راجع الكشف ثم ثبّت العنوان والملاحظات قبل الإصدار النهائي.
-                    </p>
+                    <h3 className="text-sm font-semibold">{ui("بانتظار إصدار الخطة")}</h3>
+                    <p className="text-xs text-muted-foreground">{ui("راجع الكشف ثم ثبّت العنوان والملاحظات قبل الإصدار النهائي.")}</p>
                   </div>
                   {visibleManagementReviewPlans.map((plan) => (
                     <FinalPlanDocument
@@ -2241,10 +2207,10 @@ function PlanningPage() {
                       issued={false}
                     >
                       <div className="rounded-md border bg-muted/20 p-4">
-                        <p className="mb-3 text-sm font-semibold">إصدار الوثيقة النهائية</p>
+                        <p className="mb-3 text-sm font-semibold">{ui("إصدار الوثيقة النهائية")}</p>
                         <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                           <div className="space-y-1.5">
-                            <Label htmlFor={`final-title-${plan.id}`}>عنوان الخطة</Label>
+                            <Label htmlFor={`final-title-${plan.id}`}>{ui("عنوان الخطة")}</Label>
                             <Input
                               id={`final-title-${plan.id}`}
                               value={finalPlanTitle[plan.id] ?? ""}
@@ -2254,11 +2220,11 @@ function PlanningPage() {
                                   [plan.id]: e.target.value,
                                 }))
                               }
-                              placeholder={`الخطة النهائية - ${plan.site_name}`}
+                              placeholder={(ui("الخطة النهائية - ") + (plan.site_name))}
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <Label htmlFor={`final-notes-${plan.id}`}>ملاحظات الإصدار</Label>
+                            <Label htmlFor={`final-notes-${plan.id}`}>{ui("ملاحظات الإصدار")}</Label>
                             <Input
                               id={`final-notes-${plan.id}`}
                               value={finalPlanNotes[plan.id] ?? ""}
@@ -2268,13 +2234,13 @@ function PlanningPage() {
                                   [plan.id]: e.target.value,
                                 }))
                               }
-                              placeholder="تظهر مع الوثيقة المعتمدة"
+                              placeholder={ui("تظهر مع الوثيقة المعتمدة")}
                             />
                           </div>
                         </div>
                         <div className="mt-3">
                           <ResponsivePlanAction
-                            label="تأكيد الخطة النهائية ليوم"
+                            label={ui("تأكيد الخطة النهائية ليوم")}
                             onAction={() =>
                               finalizePlan.mutate({
                                 id: plan.id,
@@ -2294,10 +2260,8 @@ function PlanningPage() {
               {visibleFinalPlans.length > 0 && (
                 <div className="space-y-4">
                   <div>
-                    <h3 className="text-sm font-semibold">الخطط الصادرة</h3>
-                    <p className="text-xs text-muted-foreground">
-                      الوثيقة المعتمدة للتوزيع اليومي حسب التخصص.
-                    </p>
+                    <h3 className="text-sm font-semibold">{ui("الخطط الصادرة")}</h3>
+                    <p className="text-xs text-muted-foreground">{ui("الوثيقة المعتمدة للتوزيع اليومي حسب التخصص.")}</p>
                   </div>
                   {visibleFinalPlans.map((plan) => (
                     <div key={plan.id} className="space-y-3">
@@ -2312,9 +2276,7 @@ function PlanningPage() {
                       <Button type="button" variant="outline" onClick={() => {
                         setBiometricDate(plan.request_date);
                         setBiometricPlan(plan);
-                      }}>
-                        مطابقة حضور الكادر الميداني
-                      </Button>
+                      }}>{ui("مطابقة حضور الكادر الميداني")}</Button>
                     </div>
                   ))}
                 </div>
@@ -2324,13 +2286,13 @@ function PlanningPage() {
         </CardContent>
       </Card>
       <Dialog open={biometricPlan !== null} onOpenChange={(open) => { if (!open) setBiometricPlan(null); }}>
-        <DialogContent dir="rtl" className="max-h-[90dvh] max-w-4xl overflow-y-auto">
-          <DialogHeader><DialogTitle>مطابقة حضور الكادر الميداني</DialogTitle></DialogHeader>
+        <DialogContent dir={direction()} className="max-h-[90dvh] max-w-4xl overflow-y-auto">
+          <DialogHeader><DialogTitle>{ui("مطابقة حضور الكادر الميداني")}</DialogTitle></DialogHeader>
           {biometricPlan && (
             <div className="space-y-4">
               <p className="font-medium">{biometricPlan.site_name}</p>
               <div className="flex max-w-xs flex-col gap-3">
-                <Label htmlFor="final-plan-match-date">تاريخ المطابقة</Label>
+                <Label htmlFor="final-plan-match-date">{ui("تاريخ المطابقة")}</Label>
                 <Input id="final-plan-match-date" type="date" min={biometricPlan.request_date} max={todayInBaghdad()}
                   value={biometricDate} onChange={(event) => setBiometricDate(event.target.value)} />
               </div>
@@ -2338,23 +2300,19 @@ function PlanningPage() {
                 <>
                   {biometricPlan.assigned_staff.some((group) => group.employees.length) ? (
                     <PlanBiometricMatch key={biometricDate} planDate={biometricDate} assignments={biometricPlan.assigned_staff} autoLoad />
-                  ) : <p className="text-sm text-muted-foreground">لا يوجد موظفون مسندون بأرقام وظيفية لهذه الخطة.</p>}
+                  ) : <p className="text-sm text-muted-foreground">{ui("لا يوجد موظفون مسندون بأرقام وظيفية لهذه الخطة.")}</p>}
                   <Button variant="outline" asChild>
-                    <Link to="/attendance" search={{ site: biometricPlan.site_id, date: biometricDate, publish: true }}>
-                      فتح اعتماد التقرير الميداني
-                    </Link>
+                    <Link to="/attendance" search={{ site: biometricPlan.site_id, date: biometricDate, publish: true }}>{ui("فتح اعتماد التقرير الميداني")}</Link>
                   </Button>
-                  <p className="text-xs text-muted-foreground">يعتمد التقرير أحدث خطة سارية للموقع في التاريخ المحدد.</p>
+                  <p className="text-xs text-muted-foreground">{ui("يعتمد التقرير أحدث خطة سارية للموقع في التاريخ المحدد.")}</p>
                 </>
-              ) : <p className="text-sm text-muted-foreground">اختر تاريخاً بين تاريخ سريان الخطة واليوم.</p>}
+              ) : <p className="text-sm text-muted-foreground">{ui("اختر تاريخاً بين تاريخ سريان الخطة واليوم.")}</p>}
             </div>
           )}
         </DialogContent>
       </Dialog>
 
-      <p className="text-sm text-muted-foreground">
-        لإدارة بيانات المواقع وإداريي المواقع، استخدم قسم «المواقع» المستقل من القائمة الجانبية.
-      </p>
+      <p className="text-sm text-muted-foreground">{ui("لإدارة بيانات المواقع وإداريي المواقع، استخدم قسم «المواقع» المستقل من القائمة الجانبية.")}</p>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { direction, displayLocale, ui } from "@/lib/ui-language";
 import { WorkshopInventorySearch } from "@/components/WorkshopInventorySearch";
 import { useDirectorySearch } from "@/hooks/use-directory-search";
 import { loadAllRows } from "@/lib/monthly-report";
@@ -516,7 +517,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
       if (date !== dateRef.current) return;
       const { byWorkshop, employeeCount } = matchWorkshopPunches(allMembers, punches);
       if (!byWorkshop.size) {
-        toast.info("لا توجد حركات بصمة مطابقة لكادر الورش في التاريخ المحدد.");
+        toast.info(ui("لا توجد حركات بصمة مطابقة لكادر الورش في التاريخ المحدد."));
         return;
       }
       const reports = reportsResult.data?.reports ?? [];
@@ -538,16 +539,16 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
         }
         return next;
       });
-      toast.success(`تم تأشير ${employeeCount} موظفاً في ${byWorkshop.size} ورشة بالبصمة`);
+      toast.success((ui("تم تأشير ") + (employeeCount) + ui(" موظفاً في ") + (byWorkshop.size) + ui(" ورشة بالبصمة")));
     } catch (error) {
-      toast.error(formatErrorMessage(error, "تعذر مطابقة حركات البصمة مع الورش"));
+      toast.error(ui(formatErrorMessage(error, "تعذر مطابقة حركات البصمة مع الورش")));
     } finally {
       setMarkingBiometrics(false);
     }
   };
 
   const assignUnmatchedPunch = async (employees: Employee[], targetWorkshopId: string) => {
-    if (!targetWorkshopId) return toast.error("اختر الورشة أولاً");
+    if (!targetWorkshopId) return toast.error(ui("اختر الورشة أولاً"));
     setSaving(true);
     try {
       const { data, error } = await supa
@@ -584,10 +585,10 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
         queryClient.invalidateQueries({ queryKey: ["daily-workshop-unassigned-punches"] }),
       ]);
       toast.success(
-        `تمت إضافة ${employees.length === 1 ? employees[0].full_name : employees.length + " موظفين"} إلى الورشة وتسجيل الحضور`,
+        (ui("تمت إضافة ") + (employees.length === 1 ? employees[0].full_name : employees.length + " موظفين") + ui(" إلى الورشة وتسجيل الحضور")),
       );
     } catch (error) {
-      toast.error(formatErrorMessage(error, "تعذر إضافة الموظف إلى الورشة"));
+      toast.error(ui(formatErrorMessage(error, "تعذر إضافة الموظف إلى الورشة")));
     } finally {
       setSaving(false);
     }
@@ -608,7 +609,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
   const addMember = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const employee = selectedEmployee;
-    if (!workshopId || !employee) return toast.error("اختر الورشة والموظف");
+    if (!workshopId || !employee) return toast.error(ui("اختر الورشة والموظف"));
     setSaving(true);
     try {
       const { error } = await supa.from("daily_workshop_members").upsert(
@@ -627,9 +628,9 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
       setAdditionalWorkshopId("");
       await queryClient.invalidateQueries({ queryKey: ["daily-workshop-all-active-members"] });
       await refreshData();
-      toast.success("تم إسناد الموظف إلى الورشة");
+      toast.success(ui("تم إسناد الموظف إلى الورشة"));
     } catch (error) {
-      toast.error(formatErrorMessage(error, "تعذر إضافة الموظف"));
+      toast.error(ui(formatErrorMessage(error, "تعذر إضافة الموظف")));
     } finally {
       setSaving(false);
     }
@@ -640,15 +641,15 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
       .from("daily_workshop_members")
       .update({ is_active: false })
       .eq("id", member.id);
-    if (error) return toast.error(formatErrorMessage(error, "تعذر إزالة الموظف من الورشة"));
+    if (error) return toast.error(ui(formatErrorMessage(error, "تعذر إزالة الموظف من الورشة")));
     await refreshData();
-    toast.success("تمت إزالة الموظف من قائمة الورشة مع الاحتفاظ بالسجلات السابقة");
+    toast.success(ui("تمت إزالة الموظف من قائمة الورشة مع الاحتفاظ بالسجلات السابقة"));
   };
 
   const saveDailyReport = async () => {
     const ids = Object.keys(drafts).filter(Boolean);
     if (workshopId && !ids.includes(workshopId)) ids.push(workshopId);
-    if (!ids.length) return toast.error("أضف ورشة أو اخترها أولاً");
+    if (!ids.length) return toast.error(ui("أضف ورشة أو اخترها أولاً"));
     setSaving(true);
     try {
       // Rosters for every edited workshop (cached query for the current one, fetch the rest).
@@ -693,7 +694,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
           })),
         });
       }
-      if (!payloads.length) return toast.error("لا يوجد كادر في الورش المحددة");
+      if (!payloads.length) return toast.error(ui("لا يوجد كادر في الورش المحددة"));
       let queued = 0;
       for (const payload of payloads) {
         try {
@@ -708,13 +709,13 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
       }
       setDrafts({});
       setPendingCount(readInventoryQueue().length);
-      if (queued) toast.success(`لا يوجد اتصال — حُفظ ${queued} جرد على الهاتف وسيُرسل تلقائياً`);
+      if (queued) toast.success((ui("لا يوجد اتصال — حُفظ ") + (queued) + ui(" جرد على الهاتف وسيُرسل تلقائياً")));
       if (payloads.length - queued) {
         await refreshData();
-        toast.success(`تم إرسال جرد ${payloads.length - queued} ورشة`);
+        toast.success((ui("تم إرسال جرد ") + (payloads.length - queued) + ui(" ورشة")));
       }
     } catch (error) {
-      toast.error(formatErrorMessage(error, "تعذر حفظ الجرد اليومي"));
+      toast.error(ui(formatErrorMessage(error, "تعذر حفظ الجرد اليومي")));
     } finally {
       setSaving(false);
     }
@@ -742,7 +743,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
       busy = false;
       setPendingCount(readInventoryQueue().length);
       if (sent) {
-        toast.success(`تمت مزامنة ${sent} جرد محفوظ دون اتصال`);
+        toast.success((ui("تمت مزامنة ") + (sent) + ui(" جرد محفوظ دون اتصال")));
         await queryClient.invalidateQueries({ queryKey: ["daily-workshop-reports"] });
         await queryClient.invalidateQueries({ queryKey: ["project-execution"] });
         await queryClient.invalidateQueries({ queryKey: ["projects-dashboard"] });
@@ -764,21 +765,21 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
     );
     if (siteId && otherAssignment) {
       return toast.error(
-        "هذا الموظف مسند بالفعل إلى مركز تكلفة آخر اليوم؛ ألغِ إسناده السابق أولاً",
+        ui("هذا الموظف مسند بالفعل إلى مركز تكلفة آخر اليوم؛ ألغِ إسناده السابق أولاً"),
       );
     }
     const { error } = await supa
       .from("daily_workshop_report_lines")
       .update({ site_id: siteId || null })
       .eq("id", line.id);
-    if (error) return toast.error(formatErrorMessage(error, "تعذر إسناد الموظف إلى مركز التكلفة"));
+    if (error) return toast.error(ui(formatErrorMessage(error, "تعذر إسناد الموظف إلى مركز التكلفة")));
     await queryClient.invalidateQueries({ queryKey: ["daily-workshop-reports", date] });
     await queryClient.invalidateQueries({ queryKey: ["daily-crew-assignments", date] });
     await queryClient.invalidateQueries({ queryKey: ["projects-dashboard", date] });
     await queryClient.invalidateQueries({ queryKey: ["site-finalized-plan-follow-up"] });
     await queryClient.invalidateQueries({ queryKey: ["workshop-management"] });
     await queryClient.invalidateQueries({ queryKey: ["project-execution"] });
-    toast.success("تم تحديث مركز تكلفة الموظف لهذا اليوم");
+    toast.success(ui("تم تحديث مركز تكلفة الموظف لهذا اليوم"));
   };
 
   const selectedEmployees = unmatchedPunches
@@ -788,7 +789,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
   const printDailyReport = () => {
     const savedReports = reports.filter((report) => printIds.includes(report.id));
     const allLines = reportQuery.data?.lines ?? [];
-    if (!savedReports.length) return toast.error("يرجى اختيار ورشة واحدة على الأقل");
+    if (!savedReports.length) return toast.error(ui("يرجى اختيار ورشة واحدة على الأقل"));
     const content = savedReports
       .map((report) => {
         const workshop = workshops.find((item) => item.id === report.workshop_id);
@@ -802,7 +803,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
       })
       .join("");
     if (!printReport(`الجرد اليومي للورش — ${date}`, content)) {
-      toast.error("اسمح بالنوافذ المنبثقة لطباعة التقرير");
+      toast.error(ui("اسمح بالنوافذ المنبثقة لطباعة التقرير"));
     } else setPrintOpen(false);
   };
 
@@ -818,35 +819,29 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
         <p
           role="alert"
           className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
-        >
-          تعذر تحميل بيانات الجرد:{" "}
-          {formatErrorMessage(
+        >{ui("تعذر تحميل بيانات الجرد:")}{" "}
+          {ui(formatErrorMessage(
             workshopsQuery.error ?? membersQuery.error ?? reportQuery.error,
-          )}
+          ))}
         </p>
       )}
-      <Tabs value={tab} onValueChange={setTab} dir="rtl" className="space-y-4">
+      <Tabs value={tab} onValueChange={setTab} dir={direction()} className="space-y-4">
         <TabsList className="grid h-auto w-full grid-cols-4 gap-2 bg-transparent p-0">
           <TabsTrigger value="inventory" className="min-h-11 rounded-xl border bg-card">
-            <ClipboardCheck className="ml-2 h-4 w-4" /> تسجيل الجرد
-          </TabsTrigger>
+            <ClipboardCheck className="ml-2 h-4 w-4" />{ui(" تسجيل الجرد")}</TabsTrigger>
           <TabsTrigger value="workshops" className="min-h-11 rounded-xl border bg-card">
-            <HardHat className="ml-2 h-4 w-4" /> إعداد الورش
-          </TabsTrigger>
+            <HardHat className="ml-2 h-4 w-4" />{ui(" إعداد الورش")}</TabsTrigger>
           <TabsTrigger value="reports" className="min-h-11 rounded-xl border bg-card">
-            <Printer className="ml-2 h-4 w-4" /> سجل وتقارير اليوم
-          </TabsTrigger>
+            <Printer className="ml-2 h-4 w-4" />{ui(" سجل وتقارير اليوم")}</TabsTrigger>
           <TabsTrigger value="allocation" className="min-h-11 rounded-xl border bg-card">
-            <UsersRound className="ml-2 h-4 w-4" /> تقسيم الكادر
-          </TabsTrigger>
+            <UsersRound className="ml-2 h-4 w-4" />{ui(" تقسيم الكادر")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="inventory" className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <ClipboardCheck className="h-5 w-5 text-primary" /> تسجيل حضور البصمة
-              </CardTitle>
+                <ClipboardCheck className="h-5 w-5 text-primary" />{ui(" تسجيل حضور البصمة")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <WorkshopInventorySearch key={date} date={date} onSelect={(workshop, employee) => {
@@ -855,7 +850,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
               }} />
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="workshop-inventory-date">التاريخ</Label>
+                  <Label htmlFor="workshop-inventory-date">{ui("التاريخ")}</Label>
                   <Input
                     id="workshop-inventory-date"
                     type="date"
@@ -865,7 +860,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>أجهزة البصمة</Label>
+                  <Label>{ui("أجهزة البصمة")}</Label>
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
@@ -874,12 +869,12 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                         className={`${inputClass} justify-between font-normal`}
                       >
                         {selectedDeviceIds.includes("all")
-                          ? "بصمات أعضاء الورشة"
-                          : `${selectedDeviceIds.length} أجهزة محددة`}
+                          ? ui("بصمات أعضاء الورشة")
+                          : ((selectedDeviceIds.length) + ui(" أجهزة محددة"))}
                         <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent dir="rtl" className="w-72 p-2" align="start">
+                    <PopoverContent dir={direction()} className="w-72 p-2" align="start">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2 rounded-md p-2 text-sm hover:bg-muted">
                           <Checkbox
@@ -889,9 +884,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                               toggleDeviceSelection("all", checked === true)
                             }
                           />
-                          <label htmlFor="all-attendance-devices" className="flex-1 cursor-pointer">
-                            أعضاء الورشة من كل الأجهزة
-                          </label>
+                          <label htmlFor="all-attendance-devices" className="flex-1 cursor-pointer">{ui("أعضاء الورشة من كل الأجهزة")}</label>
                         </div>
                         {devices.map((device) => (
                           <div
@@ -919,14 +912,14 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                   </Popover>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="workshop-inventory-select">الورشة</Label>
+                  <Label htmlFor="workshop-inventory-select">{ui("الورشة")}</Label>
                   <select
                     id="workshop-inventory-select"
                     className={inputClass}
                     value={workshopId}
                     onChange={(event) => setWorkshopId(event.target.value)}
                   >
-                    <option value="">اختر الورشة</option>
+                    <option value="">{ui("اختر الورشة")}</option>
                     {workshops.map((workshop) => (
                       <option key={workshop.id} value={workshop.id}>
                         {workshop.name}
@@ -936,19 +929,16 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                 </div>
               </div>
               {devicesQuery.isError && (
-                <p role="alert" className="text-sm text-destructive">
-                  تعذر تحميل أجهزة البصمة: {formatErrorMessage(devicesQuery.error)}
+                <p role="alert" className="text-sm text-destructive">{ui("تعذر تحميل أجهزة البصمة: ")}{ui(formatErrorMessage(devicesQuery.error))}
                 </p>
               )}
               {attendancePunchesQuery.isError && (
-                <p role="alert" className="text-sm text-destructive">
-                  تعذر تحميل حركات البصمة: {formatErrorMessage(attendancePunchesQuery.error)}
+                <p role="alert" className="text-sm text-destructive">{ui("تعذر تحميل حركات البصمة: ")}{ui(formatErrorMessage(attendancePunchesQuery.error))}
                 </p>
               )}
               {activeWorkshopMembersQuery.isError && (
-                <p role="alert" className="text-sm text-destructive">
-                  تعذر التحقق من عضويات الورش النشطة:{" "}
-                  {formatErrorMessage(activeWorkshopMembersQuery.error)}
+                <p role="alert" className="text-sm text-destructive">{ui("تعذر التحقق من عضويات الورش النشطة:")}{" "}
+                  {ui(formatErrorMessage(activeWorkshopMembersQuery.error))}
                 </p>
               )}
               <Button
@@ -958,15 +948,13 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                 disabled={!date || !workshops.length || markingBiometrics || saving}
               >
                 <Fingerprint className="size-4" />
-                {markingBiometrics ? "جارٍ فحص بصمات الورش…" : "تأشير جميع الورش بالبصمة"}
+                {markingBiometrics ? ui("جارٍ فحص بصمات الورش…") : ui("تأشير جميع الورش بالبصمة")}
               </Button>
               {selectedWorkshop && (
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-muted/20 p-3">
                   <div>
                     <p id="inventory-roster-heading" tabIndex={-1} className="font-semibold">{selectedWorkshop.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      علّم الموظفين الذين حضروا لتسجيل البصمة
-                    </p>
+                    <p className="text-xs text-muted-foreground">{ui("علّم الموظفين الذين حضروا لتسجيل البصمة")}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button
@@ -979,25 +967,17 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                           ),
                         )
                       }
-                    >
-                      تحديد الكل حاضر
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => setAttendedByEmployee({})}>
-                      إلغاء التحديد
-                    </Button>
+                    >{ui("تحديد الكل حاضر")}</Button>
+                    <Button size="sm" variant="outline" onClick={() => setAttendedByEmployee({})}>{ui("إلغاء التحديد")}</Button>
                   </div>
                 </div>
               )}
               {!workshopId ? (
-                <p className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">
-                  اختر ورشة، أو أضف ورشة من تبويب إعداد الورش.
-                </p>
+                <p className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">{ui("اختر ورشة، أو أضف ورشة من تبويب إعداد الورش.")}</p>
               ) : membersQuery.isLoading ? (
-                <p className="p-8 text-center text-muted-foreground">جارٍ تحميل كادر الورشة...</p>
+                <p className="p-8 text-center text-muted-foreground">{ui("جارٍ تحميل كادر الورشة...")}</p>
               ) : !activeRoster.length ? (
-                <p className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">
-                  لا يوجد موظفون في هذه الورشة. أضف الكادر من تبويب إعداد الورش.
-                </p>
+                <p className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">{ui("لا يوجد موظفون في هذه الورشة. أضف الكادر من تبويب إعداد الورش.")}</p>
               ) : (
                 <div className="space-y-2">
                   {activeRoster.map(({ id, employee, role_label }) => (
@@ -1040,7 +1020,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                         </div>
                       </div>
                       <Badge variant="secondary">
-                        {role_label?.trim() || employee!.position || "بدون صفة"}
+                        {role_label?.trim() || employee!.position || ui("بدون صفة")}
                       </Badge>
                     </label>
                   ))}
@@ -1049,24 +1029,23 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
               {date && (
                 <section className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
                   <div>
-                    <h3 className="font-semibold">حاضرون بالبصمة غير مسجلين في الورش</h3>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      حركات دخول بتاريخ {date} ومن{" "}
+                    <h3 className="font-semibold">{ui("حاضرون بالبصمة غير مسجلين في الورش")}</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">{ui("حركات دخول بتاريخ ")}{date}{ui(" ومن")}{" "}
                       {selectedDeviceIds.includes("all")
-                        ? "كل الأجهزة"
-                        : `${selectedDeviceIds.length} أجهزة محددة`}
+                        ? ui("كل الأجهزة")
+                        : ((selectedDeviceIds.length) + ui(" أجهزة محددة"))}
                       .
                     </p>
                   </div>
                   {unassignedPunchesQuery.isPending ? (
-                    <p role="status" className="text-sm text-muted-foreground">جارٍ تحميل الحاضرين غير المنسّبين…</p>
+                    <p role="status" className="text-sm text-muted-foreground">{ui("جارٍ تحميل الحاضرين غير المنسّبين…")}</p>
                   ) : unassignedPunchesQuery.isError ? (
                     <div className="flex flex-wrap items-center gap-2">
-                      <p role="alert" className="text-sm text-destructive">تعذر تحميل الحاضرين غير المنسّبين.</p>
-                      <Button size="sm" variant="outline" onClick={() => void unassignedPunchesQuery.refetch()}>إعادة المحاولة</Button>
+                      <p role="alert" className="text-sm text-destructive">{ui("تعذر تحميل الحاضرين غير المنسّبين.")}</p>
+                      <Button size="sm" variant="outline" onClick={() => void unassignedPunchesQuery.refetch()}>{ui("إعادة المحاولة")}</Button>
                     </div>
                   ) : unassignedCount === 0 ? (
-                    <p className="text-sm text-muted-foreground">لا يوجد حاضرون غير منسّبين ضمن التاريخ والأجهزة المختارة.</p>
+                    <p className="text-sm text-muted-foreground">{ui("لا يوجد حاضرون غير منسّبين ضمن التاريخ والأجهزة المختارة.")}</p>
                   ) : null}
                   {unmatchedPunches.length > 0 && <>
                   <div className="flex flex-wrap gap-2 items-center">
@@ -1086,18 +1065,18 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                         }
                       />
                       {selectedEmployees.length === unmatchedPunches.length
-                        ? "إلغاء التحديد"
-                        : "تحديد الصفحة"}{" "}
+                        ? ui("إلغاء التحديد")
+                        : ui("تحديد الصفحة")}{" "}
                       ({unmatchedPunches.length})
                     </label>
-                    <Badge variant="secondary">المحددون: {selectedEmployees.length}</Badge>
+                    <Badge variant="secondary">{ui("المحددون: ")}{selectedEmployees.length}</Badge>
                     <select
                       className={inputClass}
-                      aria-label="الورشة المستهدفة"
+                      aria-label={ui("الورشة المستهدفة")}
                       value={bulkTargetWorkshopId}
                       onChange={(e) => setBulkTargetWorkshopId(e.target.value)}
                     >
-                      <option value="">اختر الورشة المستهدفة</option>
+                      <option value="">{ui("اختر الورشة المستهدفة")}</option>
                       {workshops.map((w) => (
                         <option key={w.id} value={w.id}>
                           {w.name}
@@ -1110,18 +1089,16 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                         void assignUnmatchedPunch(selectedEmployees, bulkTargetWorkshopId)
                       }
                     >
-                      {saving ? "جارٍ الحفظ…" : "إضافة المحددين إلى الورشة"}
+                      {saving ? ui("جارٍ الحفظ…") : ui("إضافة المحددين إلى الورشة")}
                     </Button>
                     <Button
                       variant="outline"
                       disabled={saving || !selectedEmployees.length}
                       onClick={() => {
                         dismissUnassigned(selectedEmployees.map((employee) => employee.id));
-                        toast.success("تم إهمال الموظفين المحددين");
+                        toast.success(ui("تم إهمال الموظفين المحددين"));
                       }}
-                    >
-                      إهمال المحددين
-                    </Button>
+                    >{ui("إهمال المحددين")}</Button>
                   </div>
                   <div className="space-y-2">
                     {unmatchedPunches.map(({ employee, punch }) => {
@@ -1132,7 +1109,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                           className="flex flex-col gap-3 rounded-lg border bg-background/70 p-3 sm:flex-row sm:items-center sm:justify-between"
                         >
                           <Checkbox
-                            aria-label={`تحديد ${employee.full_name}`}
+                            aria-label={(ui("تحديد ") + (employee.full_name))}
                             checked={selectedUnmatchedEmployeeIds.includes(employee.id)}
                             onCheckedChange={(checked) =>
                               setSelectedUnmatchedEmployeeIds((ids) =>
@@ -1145,10 +1122,10 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                           <div className="min-w-0">
                             <p className="font-medium">{employee.full_name}</p>
                             <p className="text-xs text-muted-foreground">
-                              {employee.employee_no} · {employee.position || "بدون مسمى"}
+                              {employee.employee_no} · {employee.position || ui("بدون مسمى")}
                             </p>
                             <p className="mt-1 text-xs text-muted-foreground">
-                              {new Date(punch.verify_time).toLocaleTimeString("ar-IQ", {
+                              {new Date(punch.verify_time).toLocaleTimeString(displayLocale(), {
                                 timeZone: "Asia/Baghdad",
                                 hour: "2-digit",
                                 minute: "2-digit",
@@ -1156,13 +1133,13 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                               {" · "}
                               {device
                                 ? `${device.name}${device.serial_number ? ` (${device.serial_number})` : ""}`
-                                : "جهاز غير محدد"}
+                                : ui("جهاز غير محدد")}
                             </p>
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
                             <select
                               className={`${inputClass} w-auto min-w-40`}
-                              aria-label={`اختر ورشة لإضافة ${employee.full_name}`}
+                              aria-label={(ui("اختر ورشة لإضافة ") + (employee.full_name))}
                               value={selectedWorkshopByPunch[employee.id] ?? ""}
                               onChange={(event) =>
                                 setSelectedWorkshopByPunch((current) => ({
@@ -1171,7 +1148,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                                 }))
                               }
                             >
-                              <option value="">اختر ورشة</option>
+                              <option value="">{ui("اختر ورشة")}</option>
                               {workshops.map((workshop) => (
                                 <option key={workshop.id} value={workshop.id}>
                                   {workshop.name}
@@ -1188,16 +1165,12 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                               }
                               disabled={saving || !selectedWorkshopByPunch[employee.id]}
                             >
-                              <Plus className="ml-1 h-4 w-4" />
-                              إضافة إلى ورشة
-                            </Button>
+                              <Plus className="ml-1 h-4 w-4" />{ui("إضافة إلى ورشة")}</Button>
                             <Button
                               size="sm"
                               variant="ghost"
                               onClick={() => dismissUnassigned([employee.id])}
-                            >
-                              إهمال
-                            </Button>
+                            >{ui("إهمال")}</Button>
                           </div>
                         </article>
                       );
@@ -1206,10 +1179,10 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                   </>}
                   {unassignedPages > 1 && (
                     <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                      <span className="text-muted-foreground">صفحة {unassignedPage + 1} من {unassignedPages} · {unassignedCount} موظف</span>
+                      <span className="text-muted-foreground">{ui("صفحة ")}{unassignedPage + 1}{ui(" من ")}{unassignedPages} · {unassignedCount}{ui(" موظف")}</span>
                       <div className="flex gap-2">
-                        <Button size="sm" variant="outline" disabled={saving || unassignedPage === 0} onClick={() => changeUnassignedPage(unassignedPage - 1)}>السابق</Button>
-                        <Button size="sm" variant="outline" disabled={saving || unassignedPage + 1 >= unassignedPages} onClick={() => changeUnassignedPage(unassignedPage + 1)}>التالي</Button>
+                        <Button size="sm" variant="outline" disabled={saving || unassignedPage === 0} onClick={() => changeUnassignedPage(unassignedPage - 1)}>{ui("السابق")}</Button>
+                        <Button size="sm" variant="outline" disabled={saving || unassignedPage + 1 >= unassignedPages} onClick={() => changeUnassignedPage(unassignedPage + 1)}>{ui("التالي")}</Button>
                       </div>
                     </div>
                   )}
@@ -1217,13 +1190,13 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
               )}
               {activeRoster.length > 0 && (
                 <div className="space-y-1.5">
-                  <Label htmlFor="workshop-report-notes">ملاحظات (اختياري)</Label>
+                  <Label htmlFor="workshop-report-notes">{ui("ملاحظات (اختياري)")}</Label>
                   <Textarea
                     id="workshop-report-notes"
                     value={notes}
                     maxLength={2000}
                     onChange={(event) => setNotes(event.target.value)}
-                    placeholder="ملاحظات تخص حضور الورشة اليوم..."
+                    placeholder={ui("ملاحظات تخص حضور الورشة اليوم...")}
                   />
                 </div>
               )}
@@ -1231,19 +1204,19 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-sm text-muted-foreground">
                     {activeRoster.length > 0
-                      ? `الحاضرون: ${activeRoster.filter(({ employee }) => attendedByEmployee[employee!.id]).length} من ${activeRoster.length}`
-                      : `مسودات الجرد: ${draftCount}`}
-                    {activeRoster.length > 0 && savedReport ? " · يوجد سجل محفوظ لهذا اليوم" : ""}
-                    {!online ? " · وضع عدم الاتصال" : ""}
-                    {pendingCount ? ` · ${pendingCount} جرد بانتظار المزامنة` : ""}
+                      ? (ui("الحاضرون: ") + (activeRoster.filter(({ employee }) => attendedByEmployee[employee!.id]).length) + ui(" من ") + (activeRoster.length))
+                      : (ui("مسودات الجرد: ") + (draftCount))}
+                    {activeRoster.length > 0 && savedReport ? ui(" · يوجد سجل محفوظ لهذا اليوم") : ""}
+                    {!online ? ui(" · وضع عدم الاتصال") : ""}
+                    {pendingCount ? (" · " + (pendingCount) + ui(" جرد بانتظار المزامنة")) : ""}
                   </p>
                   <Button onClick={() => void saveDailyReport()} disabled={saving || markingBiometrics}>
                     <Save className="ml-2 h-4 w-4" />
                     {saving
-                      ? "جارٍ الإرسال..."
+                      ? ui("جارٍ الإرسال...")
                       : draftCount > 1
-                        ? `إرسال جرد كل الورش (${draftCount})`
-                        : "إرسال الجرد"}
+                        ? (ui("إرسال جرد كل الورش (") + (draftCount) + ")")
+                        : ui("إرسال الجرد")}
                   </Button>
                 </div>
               )}
@@ -1257,19 +1230,18 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <UsersRound className="h-5 w-5 text-primary" /> إدارة كادر الورشة
-              </CardTitle>
+                <UsersRound className="h-5 w-5 text-primary" />{ui(" إدارة كادر الورشة")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="manage-workshop-select">الورشة</Label>
+                <Label htmlFor="manage-workshop-select">{ui("الورشة")}</Label>
                 <select
                   id="manage-workshop-select"
                   className={inputClass}
                   value={workshopId}
                   onChange={(event) => setWorkshopId(event.target.value)}
                 >
-                  <option value="">اختر الورشة</option>
+                  <option value="">{ui("اختر الورشة")}</option>
                   {workshops.map((workshop) => (
                     <option key={workshop.id} value={workshop.id}>
                       {workshop.name}
@@ -1283,7 +1255,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                   className="grid gap-3 rounded-xl border bg-muted/20 p-3 sm:grid-cols-[1fr_1fr_auto]"
                 >
                   <div className="space-y-1.5">
-                    <Label htmlFor="roster-employee">الموظف</Label>
+                    <Label htmlFor="roster-employee">{ui("الموظف")}</Label>
                     <Popover open={employeePickerOpen} onOpenChange={setEmployeePickerOpen}>
                       <PopoverTrigger asChild>
                         <Button
@@ -1298,23 +1270,23 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                           <span className="truncate">
                             {selectedEmployee
                               ? `${selectedEmployee.employee_no} — ${selectedEmployee.full_name}`
-                              : "ابحث بالاسم أو الرقم الوظيفي..."}
+                              : ui("ابحث بالاسم أو الرقم الوظيفي...")}
                           </span>
                           <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent
-                        dir="rtl"
+                        dir={direction()}
                         className="w-[--radix-popover-trigger-width] p-0"
                         align="start"
                       >
                         <Command shouldFilter={false}>
                           <CommandInput value={employeeSearch} onValueChange={setEmployeeSearch} maxLength={100}
-                            placeholder="اكتب اسم الموظف أو رقمه الوظيفي..." />
+                            placeholder={ui("اكتب اسم الموظف أو رقمه الوظيفي...")} />
                           <CommandList>
-                            <CommandEmpty>{!employeeLookup.valid ? "اكتب حرفين أو رقمين على الأقل." :
-                              employeeLookup.waiting || employeeSearchQuery.isFetching ? "جارٍ البحث…" :
-                              employeeSearchQuery.isError ? "تعذر البحث عن الموظفين." : "لا يوجد موظف مطابق للبحث."}</CommandEmpty>
+                            <CommandEmpty>{!employeeLookup.valid ? ui("اكتب حرفين أو رقمين على الأقل.") :
+                              employeeLookup.waiting || employeeSearchQuery.isFetching ? ui("جارٍ البحث…") :
+                              employeeSearchQuery.isError ? ui("تعذر البحث عن الموظفين.") : ui("لا يوجد موظف مطابق للبحث.")}</CommandEmpty>
                             <CommandGroup>
                               {(!employeeLookup.waiting && employeeLookup.valid ? employeeSearchQuery.data ?? [] : []).map((employee) => (
                                 <CommandItem
@@ -1342,31 +1314,26 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                     </Popover>
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="roster-role">الصفة في الورشة</Label>
+                    <Label htmlFor="roster-role">{ui("الصفة في الورشة")}</Label>
                     <Input
                       id="roster-role"
                       value={roleLabel}
                       maxLength={120}
                       onChange={(event) => setRoleLabel(event.target.value)}
-                      placeholder="عامل، كوسرجي..."
+                      placeholder={ui("عامل، كوسرجي...")}
                     />
                   </div>
-                  <label className="space-y-1.5">ورشة ثانية (اختياري)
-                    <select className={inputClass} value={additionalWorkshopId === workshopId ? "" : additionalWorkshopId} onChange={event => setAdditionalWorkshopId(event.target.value)}>
-                      <option value="">بدون ورشة ثانية</option>
+                  <label className="space-y-1.5">{ui("ورشة ثانية (اختياري)")}<select className={inputClass} value={additionalWorkshopId === workshopId ? "" : additionalWorkshopId} onChange={event => setAdditionalWorkshopId(event.target.value)}>
+                      <option value="">{ui("بدون ورشة ثانية")}</option>
                       {workshops.filter(w => w.id !== workshopId).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                     </select>
                   </label>
                   <Button type="submit" disabled={saving || !selectedEmployee} className="self-end">
-                    <Plus className="ml-2 h-4 w-4" />
-                    إضافة للكادر
-                  </Button>
+                    <Plus className="ml-2 h-4 w-4" />{ui("إضافة للكادر")}</Button>
                 </form>
               )}
               {!workshopId ? (
-                <p className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">
-                  اختر ورشة لإدارة كادرها.
-                </p>
+                <p className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">{ui("اختر ورشة لإدارة كادرها.")}</p>
               ) : (
                 <div className="space-y-2">
                   {activeRoster.map((member) => (
@@ -1378,13 +1345,13 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                         <p className="font-medium">{member.employee?.full_name}</p>
                         <p className="text-xs text-muted-foreground">
                           {member.employee?.employee_no} ·{" "}
-                          {member.role_label || member.employee?.position || "بدون صفة"}
+                          {member.role_label || member.employee?.position || ui("بدون صفة")}
                         </p>
                       </div>
                       <Button
                         variant="ghost"
                         size="icon"
-                        aria-label={`إزالة ${member.employee?.full_name} من الورشة`}
+                        aria-label={(ui("إزالة ") + (member.employee?.full_name) + ui(" من الورشة"))}
                         onClick={() => void removeMember(member)}
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
@@ -1392,9 +1359,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                     </div>
                   ))}
                   {!activeRoster.length && (
-                    <p className="py-8 text-center text-muted-foreground">
-                      لم تتم إضافة موظفين لهذه الورشة.
-                    </p>
+                    <p className="py-8 text-center text-muted-foreground">{ui("لم تتم إضافة موظفين لهذه الورشة.")}</p>
                   )}
                 </div>
               )}
@@ -1406,9 +1371,9 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
           <Card>
             <CardHeader>
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <CardTitle>الجرد اليومي للورش</CardTitle>
+                <CardTitle>{ui("الجرد اليومي للورش")}</CardTitle>
                 <div className="flex items-center gap-2">
-                  <Label htmlFor="workshop-archive-date">التاريخ</Label>
+                  <Label htmlFor="workshop-archive-date">{ui("التاريخ")}</Label>
                   <Input
                     id="workshop-archive-date"
                     className="w-auto"
@@ -1424,24 +1389,18 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                     }}
                     disabled={!reportQuery.data?.reports.length}
                   >
-                    <Printer className="ml-2 h-4 w-4" />
-                    طباعة التقرير
-                  </Button>
+                    <Printer className="ml-2 h-4 w-4" />{ui("طباعة التقرير")}</Button>
                   <Dialog open={printOpen} onOpenChange={setPrintOpen}>
-                    <DialogContent dir="rtl">
+                    <DialogContent dir={direction()}>
                       <DialogHeader>
-                        <DialogTitle>تحديد الورش للطباعة</DialogTitle>
+                        <DialogTitle>{ui("تحديد الورش للطباعة")}</DialogTitle>
                       </DialogHeader>
                       <div className="flex gap-2">
                         <Button
                           variant="outline"
                           onClick={() => setPrintIds(reports.map((r) => r.id))}
-                        >
-                          تحديد الكل
-                        </Button>
-                        <Button variant="outline" onClick={() => setPrintIds([])}>
-                          إلغاء التحديد
-                        </Button>
+                        >{ui("تحديد الكل")}</Button>
+                        <Button variant="outline" onClick={() => setPrintIds([])}>{ui("إلغاء التحديد")}</Button>
                       </div>
                       <div className="max-h-[50vh] overflow-y-auto space-y-2">
                         {reports.map((report) => {
@@ -1458,19 +1417,14 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                                   )
                                 }
                               />
-                              {workshops.find((w) => w.id === report.workshop_id)?.name ?? "ورشة"}{" "}
-                              (حضور: {lines.filter((l) => l.attended).length} من {lines.length})
+                              {workshops.find((w) => w.id === report.workshop_id)?.name ?? ui("ورشة")}{" "}{ui("(حضور: ")}{lines.filter((l) => l.attended).length}{ui(" من ")}{lines.length})
                             </label>
                           );
                         })}
                       </div>
                       <DialogFooter>
-                        <Button onClick={printDailyReport}>
-                          تأكيد وطباعة ({printIds.length} ورش)
-                        </Button>
-                        <Button variant="outline" onClick={() => setPrintOpen(false)}>
-                          إلغاء
-                        </Button>
+                        <Button onClick={printDailyReport}>{ui("تأكيد وطباعة (")}{printIds.length}{ui(" ورش)")}</Button>
+                        <Button variant="outline" onClick={() => setPrintOpen(false)}>{ui("إلغاء")}</Button>
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
@@ -1480,15 +1434,15 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
             <CardContent className="space-y-4">
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-xl border p-3">
-                  <p className="text-xs text-muted-foreground">ورش سجلت اليوم</p>
+                  <p className="text-xs text-muted-foreground">{ui("ورش سجلت اليوم")}</p>
                   <p className="mt-1 text-2xl font-bold">{reportQuery.data?.reports.length ?? 0}</p>
                 </div>
                 <div className="rounded-xl border p-3">
-                  <p className="text-xs text-muted-foreground">إجمالي الكادر المسجل</p>
+                  <p className="text-xs text-muted-foreground">{ui("إجمالي الكادر المسجل")}</p>
                   <p className="mt-1 text-2xl font-bold">{totalRostered}</p>
                 </div>
                 <div className="rounded-xl border p-3">
-                  <p className="text-xs text-muted-foreground">الحاضرون</p>
+                  <p className="text-xs text-muted-foreground">{ui("الحاضرون")}</p>
                   <p className="mt-1 text-2xl font-bold text-emerald-600">{totalPresent}</p>
                 </div>
               </div>
@@ -1503,9 +1457,8 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                   <section key={report.id} className="rounded-xl border p-4">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
-                        <h3 className="font-bold">{workshop?.name ?? "ورشة"}</h3>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          حضر: {present.length} · لم يحضر: {absent} · الإجمالي: {lines.length}
+                        <h3 className="font-bold">{workshop?.name ?? ui("ورشة")}</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">{ui("حضر: ")}{present.length}{ui(" · لم يحضر: ")}{absent}{ui(" · الإجمالي: ")}{lines.length}
                         </p>
                         {report.notes && <p className="mt-2 text-sm">{report.notes}</p>}
                       </div>
@@ -1514,22 +1467,18 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                     <div className="mt-3 flex flex-wrap gap-2">
                       {present.map((line) => (
                         <Badge key={line.id} className="bg-emerald-600">
-                          {line.employee_name_snapshot} · {line.role_label || "بدون صفة"}
+                          {line.employee_name_snapshot} · {line.role_label || ui("بدون صفة")}
                         </Badge>
                       ))}
                       {!present.length && (
-                        <span className="text-sm text-muted-foreground">
-                          لم يتم تسجيل حضور أي موظف.
-                        </span>
+                        <span className="text-sm text-muted-foreground">{ui("لم يتم تسجيل حضور أي موظف.")}</span>
                       )}
                     </div>
                   </section>
                 );
               })}
               {!reportQuery.isLoading && !reportQuery.data?.reports.length && (
-                <p className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">
-                  لا توجد جردات محفوظة لهذا التاريخ.
-                </p>
+                <p className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">{ui("لا توجد جردات محفوظة لهذا التاريخ.")}</p>
               )}
             </CardContent>
           </Card>
@@ -1538,31 +1487,24 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
         <TabsContent value="allocation" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>تقسيم الكادر الحاضر على مراكز التكلفة</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                يعرض الموظفين المسجل حضورهم في جرد هذا اليوم فقط. اختر CTR لحساب كلفة العامل ضمن
-                متابعة نشر الموقع.
-              </p>
+              <CardTitle>{ui("تقسيم الكادر الحاضر على مراكز التكلفة")}</CardTitle>
+              <p className="text-sm text-muted-foreground">{ui("يعرض الموظفين المسجل حضورهم في جرد هذا اليوم فقط. اختر CTR لحساب كلفة العامل ضمن متابعة نشر الموقع.")}</p>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/30 p-3 text-sm">
-                <span>
-                  التاريخ: <b>{date}</b> · الحاضرون: <b>{presentLines.length}</b>
+                <span>{ui("التاريخ: ")}<b>{date}</b>{ui(" · الحاضرون: ")}<b>{presentLines.length}</b>
                 </span>
-                <span>
-                  إجمالي الكلفة المسندة:{" "}
+                <span>{ui("إجمالي الكلفة المسندة:")}{" "}
                   <b>
                     {presentLines
                       .reduce((sum, line) => sum + (line.site_id ? dailyCost(line) : 0), 0)
-                      .toLocaleString("ar-IQ")}{" "}
-                    د.ع
-                  </b>
+                      .toLocaleString(displayLocale())}{" "}{ui("د.ع")}</b>
                 </span>
               </div>
               {presentGroups.map((group) => (
                 <section key={group.name} className="space-y-2 rounded-xl border p-3">
                   <h3 className="font-semibold">
-                    {group.name} <Badge variant="secondary">{group.lines.length} حاضر</Badge>
+                    {group.name} <Badge variant="secondary">{group.lines.length}{ui(" حاضر")}</Badge>
                   </h3>
                   {group.lines.map((line) => (
                     <div
@@ -1572,12 +1514,12 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                       <div>
                         <p className="font-medium">{line.employee_name_snapshot}</p>
                         <p className="text-xs text-muted-foreground">
-                          {line.role_label || "بدون صفة"}
+                          {line.role_label || ui("بدون صفة")}
                         </p>
                       </div>
                       <select
                         className={inputClass}
-                        aria-label={`مركز تكلفة ${line.employee_name_snapshot}`}
+                        aria-label={(ui("مركز تكلفة ") + (line.employee_name_snapshot))}
                         value={line.site_id ?? "unassigned"}
                         onChange={(event) =>
                           void assignSite(
@@ -1586,7 +1528,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                           )
                         }
                       >
-                        <option value="unassigned">اختر مركز التكلفة CTR</option>
+                        <option value="unassigned">{ui("اختر مركز التكلفة CTR")}</option>
                         {sites.map((site) => (
                           <option key={site.id} value={site.id}>
                             {site.ctr_code} — {site.name}
@@ -1595,26 +1537,22 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                       </select>
                       <Badge variant={line.site_id ? "default" : "secondary"}>
                         {line.site_id
-                          ? `${dailyCost(line).toLocaleString("ar-IQ")} د.ع / يوم`
-                          : "غير مسند"}
+                          ? `${dailyCost(line).toLocaleString(displayLocale())} د.ع / يوم`
+                          : ui("غير مسند")}
                       </Badge>
                     </div>
                   ))}
                 </section>
               ))}
               {!presentLines.length && (
-                <p className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">
-                  احفظ جرد الحضور أولاً ليظهر الكادر الحاضر هنا.
-                </p>
+                <p className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">{ui("احفظ جرد الحضور أولاً ليظهر الكادر الحاضر هنا.")}</p>
               )}
               {sitesQuery.error && (
-                <p role="alert" className="text-sm text-destructive">
-                  تعذر تحميل مراكز التكلفة: {formatErrorMessage(sitesQuery.error)}
+                <p role="alert" className="text-sm text-destructive">{ui("تعذر تحميل مراكز التكلفة: ")}{ui(formatErrorMessage(sitesQuery.error))}
                 </p>
               )}
               {wagesQuery.error && (
-                <p role="alert" className="text-sm text-destructive">
-                  تعذر تحميل أجور التخصصات: {formatErrorMessage(wagesQuery.error)}
+                <p role="alert" className="text-sm text-destructive">{ui("تعذر تحميل أجور التخصصات: ")}{ui(formatErrorMessage(wagesQuery.error))}
                 </p>
               )}
             </CardContent>

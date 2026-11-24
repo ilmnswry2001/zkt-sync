@@ -1,3 +1,4 @@
+import { direction, displayLocale, ui } from "@/lib/ui-language";
 import { WorkshopManagement } from "@/components/WorkshopManagement";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute, redirect } from "@tanstack/react-router";
@@ -50,7 +51,7 @@ export const Route = createFileRoute("/_authenticated/sites")({
   },
   head: () => ({
     meta: [
-      { title: "المواقع — إدارة مواقع العمل وأكواد التكلفة" },
+      { title: ui("المواقع — إدارة مواقع العمل وأكواد التكلفة") },
       {
         name: "description",
         content: "إدارة مواقع العمل وتحديد كود التكلفة CTR وربط الموظفين وإداريي المواقع بها.",
@@ -225,9 +226,9 @@ function PlanningPage() {
       qc.invalidateQueries({ queryKey: ["sites"] });
       setOpen(false);
       setEditing(null);
-      toast.success("تم الحفظ");
+      toast.success(ui("تم الحفظ"));
     },
-    onError: (e: any) => toast.error(formatErrorMessage(e)),
+    onError: (e: any) => toast.error(ui(formatErrorMessage(e))),
   });
   const del = useMutation({
     mutationFn: async (id: string) => {
@@ -236,25 +237,22 @@ function PlanningPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sites"] });
-      toast.success("تم الحذف");
+      toast.success(ui("تم الحذف"));
     },
-    onError: (e: any) => toast.error(formatErrorMessage(e)),
+    onError: (e: any) => toast.error(ui(formatErrorMessage(e))),
   });
 
   return (
     <div className="space-y-6">
       {siteAdminsError && (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
-          تعذر تحميل أسماء الإداريين من قاعدة البيانات:{" "}
-          {(siteAdminsError as any).message ?? "تحقق من اتصال Lovable Cloud"}
+        <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">{ui("تعذر تحميل أسماء الإداريين من قاعدة البيانات:")}{" "}
+          {(siteAdminsError as any).message ?? ui("تحقق من اتصال Lovable Cloud")}
         </div>
       )}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">المواقع</h1>
-          <p className="text-muted-foreground mt-1">
-            إدارة مواقع العمل وأكواد التكلفة (CTR) — {sites.length} موقع
-          </p>
+          <h1 className="text-3xl font-bold">{ui("المواقع")}</h1>
+          <p className="text-muted-foreground mt-1">{ui("إدارة مواقع العمل وأكواد التكلفة (CTR) — ")}{sites.length}{ui(" موقع")}</p>
         </div>
         <Dialog
           open={open}
@@ -265,12 +263,11 @@ function PlanningPage() {
         >
           <DialogTrigger asChild>
             <Button>
-              <Plus className="w-4 h-4 ml-2" /> إضافة موقع
-            </Button>
+              <Plus className="w-4 h-4 ml-2" />{ui(" إضافة موقع")}</Button>
           </DialogTrigger>
-          <DialogContent dir="rtl" className="max-w-lg">
+          <DialogContent dir={direction()} className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>{editing ? "تعديل موقع" : "موقع عمل جديد"}</DialogTitle>
+              <DialogTitle>{editing ? ui("تعديل موقع") : ui("موقع عمل جديد")}</DialogTitle>
             </DialogHeader>
             <form
               onSubmit={(e) => {
@@ -281,11 +278,11 @@ function PlanningPage() {
                 const latitudeValue = v("latitude");
                 const longitudeValue = v("longitude");
                 if (!siteAdminId || siteAdminId === "none") {
-                  toast.error("اختيار إداري الموقع مطلوب");
+                  toast.error(ui("اختيار إداري الموقع مطلوب"));
                   return;
                 }
                 if (Boolean(latitudeValue) !== Boolean(longitudeValue)) {
-                  toast.error("أدخل خط العرض والطول معًا");
+                  toast.error(ui("أدخل خط العرض والطول معًا"));
                   return;
                 }
                 const latitude = latitudeValue === null ? null : Number(latitudeValue);
@@ -294,7 +291,7 @@ function PlanningPage() {
                   (latitude !== null && (!Number.isFinite(latitude) || latitude < -90 || latitude > 90)) ||
                   (longitude !== null && (!Number.isFinite(longitude) || longitude < -180 || longitude > 180))
                 ) {
-                  toast.error("إحداثيات GPS خارج النطاق الصحيح");
+                  toast.error(ui("إحداثيات GPS خارج النطاق الصحيح"));
                   return;
                 }
                 save.mutate({
@@ -314,11 +311,11 @@ function PlanningPage() {
               className="grid grid-cols-2 gap-3"
             >
               <div className="col-span-2">
-                <Label>اسم الموقع</Label>
+                <Label>{ui("اسم الموقع")}</Label>
                 <Input name="name" required defaultValue={editing?.name} />
               </div>
               <div>
-                <Label>كود التكلفة CTR</Label>
+                <Label>{ui("كود التكلفة CTR")}</Label>
                 <Input
                   name="ctr_code"
                   required
@@ -327,15 +324,15 @@ function PlanningPage() {
                 />
               </div>
               <div>
-                <Label>الجهة / العميل</Label>
+                <Label>{ui("الجهة / العميل")}</Label>
                 <Input name="client" defaultValue={editing?.client ?? ""} />
               </div>
               <div>
-                <Label>الموقع الجغرافي</Label>
+                <Label>{ui("الموقع الجغرافي")}</Label>
                 <Input name="location" defaultValue={editing?.location ?? ""} />
               </div>
               <div>
-                <Label>خط العرض</Label>
+                <Label>{ui("خط العرض")}</Label>
                 <Input
                   type="number"
                   step="any"
@@ -346,7 +343,7 @@ function PlanningPage() {
                 />
               </div>
               <div>
-                <Label>خط الطول</Label>
+                <Label>{ui("خط الطول")}</Label>
                 <Input
                   type="number"
                   step="any"
@@ -357,38 +354,38 @@ function PlanningPage() {
                 />
               </div>
               <div>
-                <Label>الحالة</Label>
+                <Label>{ui("الحالة")}</Label>
                 <Select name="status" defaultValue={editing?.status ?? "active"}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="active">نشط</SelectItem>
-                    <SelectItem value="planned">مخطط</SelectItem>
-                    <SelectItem value="completed">منتهي</SelectItem>
-                    <SelectItem value="suspended">متوقف</SelectItem>
+                    <SelectItem value="active">{ui("نشط")}</SelectItem>
+                    <SelectItem value="planned">{ui("مخطط")}</SelectItem>
+                    <SelectItem value="completed">{ui("منتهي")}</SelectItem>
+                    <SelectItem value="suspended">{ui("متوقف")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>تاريخ البدء</Label>
+                <Label>{ui("تاريخ البدء")}</Label>
                 <Input type="date" name="start_date" defaultValue={editing?.start_date ?? ""} />
               </div>
               <div>
-                <Label>تاريخ الانتهاء</Label>
+                <Label>{ui("تاريخ الانتهاء")}</Label>
                 <Input type="date" name="end_date" defaultValue={editing?.end_date ?? ""} />
               </div>
               <div className="col-span-2">
-                <Label>إداري الموقع المسؤول عن التقرير *</Label>
+                <Label>{ui("إداري الموقع المسؤول عن التقرير *")}</Label>
                 <Select
                   name="site_admin_employee_id"
                   defaultValue={editing?.site_admin_employee_id ?? "none"}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="اختر إداري الموقع" />
+                    <SelectValue placeholder={ui("اختر إداري الموقع")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">— اختر إداري الموقع —</SelectItem>
+                    <SelectItem value="none">{ui("— اختر إداري الموقع —")}</SelectItem>
                     {siteAdmins.map((employee: any) => (
                       <SelectItem key={employee.id} value={employee.id}>
                         {employee.full_name} — {employee.employee_no}
@@ -397,18 +394,14 @@ function PlanningPage() {
                   </SelectContent>
                 </Select>
                 {!siteAdmins.length && (
-                  <p className="text-xs text-warning mt-1">
-                    لا توجد أسماء موظفين نشطين متاحة. تحقق من اتصال قاعدة البيانات وصلاحية القراءة.
-                  </p>
+                  <p className="text-xs text-warning mt-1">{ui("لا توجد أسماء موظفين نشطين متاحة. تحقق من اتصال قاعدة البيانات وصلاحية القراءة.")}</p>
                 )}
               </div>
               <div className="col-span-2">
-                <Label>وصف</Label>
+                <Label>{ui("وصف")}</Label>
                 <Input name="description" defaultValue={editing?.description ?? ""} />
               </div>
-              <Button type="submit" className="col-span-2">
-                حفظ
-              </Button>
+              <Button type="submit" className="col-span-2">{ui("حفظ")}</Button>
             </form>
           </DialogContent>
         </Dialog>
@@ -427,7 +420,7 @@ function PlanningPage() {
                 <stat.icon className="h-5 w-5" />
               </span>
               <div className="min-w-0">
-                <p className="truncate text-xs text-muted-foreground">{stat.label}</p>
+                <p className="truncate text-xs text-muted-foreground">{ui(stat.label)}</p>
                 <p className="text-xl font-bold tabular-nums">{stat.value}</p>
               </div>
             </CardContent>
@@ -442,20 +435,20 @@ function PlanningPage() {
             className="min-h-11 pr-9"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="ابحث باسم الموقع أو كود CTR..."
-            aria-label="البحث في المواقع"
+            placeholder={ui("ابحث باسم الموقع أو كود CTR...")}
+            aria-label={ui("البحث في المواقع")}
           />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="min-h-11 sm:w-48">
-            <SelectValue placeholder="كل الحالات" />
+            <SelectValue placeholder={ui("كل الحالات")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">كل الحالات</SelectItem>
-            <SelectItem value="active">نشط</SelectItem>
-            <SelectItem value="planned">مخطط</SelectItem>
-            <SelectItem value="suspended">معلق</SelectItem>
-            <SelectItem value="completed">منتهي</SelectItem>
+            <SelectItem value="all">{ui("كل الحالات")}</SelectItem>
+            <SelectItem value="active">{ui("نشط")}</SelectItem>
+            <SelectItem value="planned">{ui("مخطط")}</SelectItem>
+            <SelectItem value="suspended">{ui("معلق")}</SelectItem>
+            <SelectItem value="completed">{ui("منتهي")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -487,25 +480,25 @@ function PlanningPage() {
                   <div className="min-w-0">
                     <CardTitle className="truncate text-lg">{site.name}</CardTitle>
                     <p className="mt-1 truncate text-sm text-muted-foreground">
-                      {site.client || "موقع عمل"}
+                      {site.client || ui("موقع عمل")}
                     </p>
                   </div>
                   <Badge variant={site.status === "active" ? "default" : "secondary"}>
-                    {statusLabel}
+                    {ui(statusLabel)}
                   </Badge>
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-primary/5 px-3 py-2">
-                  <span className="text-xs text-muted-foreground">كود التكلفة CTR</span>
+                  <span className="text-xs text-muted-foreground">{ui("كود التكلفة CTR")}</span>
                   <Badge variant="outline" className="font-mono text-sm font-bold text-primary">
-                    {site.ctr_code || "غير محدد"}
+                    {site.ctr_code || ui("غير محدد")}
                   </Badge>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <Button variant="outline" className="w-full justify-between" onClick={() => setWorkshopSite(site)}><span>الورش وفرق العمل التابعة والمكلّفة</span><Users className="h-4 w-4" /></Button>
+                <Button variant="outline" className="w-full justify-between" onClick={() => setWorkshopSite(site)}><span>{ui("الورش وفرق العمل التابعة والمكلّفة")}</span><Users className="h-4 w-4" /></Button>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="rounded-lg border p-3">
-                    <p className="text-xs font-semibold text-muted-foreground">إحداثيات GPS</p>
+                    <p className="text-xs font-semibold text-muted-foreground">{ui("إحداثيات GPS")}</p>
                     {coordinates ? (
                       <div className="mt-2 flex items-center justify-between gap-2">
                         <span dir="ltr" className="truncate font-mono text-xs">{coordinates}</span>
@@ -515,14 +508,14 @@ function PlanningPage() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8"
-                            aria-label="نسخ الإحداثيات"
-                            title="نسخ الإحداثيات"
+                            aria-label={ui("نسخ الإحداثيات")}
+                            title={ui("نسخ الإحداثيات")}
                             onClick={async () => {
                               try {
                                 await navigator.clipboard.writeText(coordinates);
-                                toast.success("تم نسخ الإحداثيات");
+                                toast.success(ui("تم نسخ الإحداثيات"));
                               } catch {
-                                toast.error("تعذر نسخ الإحداثيات");
+                                toast.error(ui("تعذر نسخ الإحداثيات"));
                               }
                             }}
                           >
@@ -533,8 +526,8 @@ function PlanningPage() {
                               href={`https://www.google.com/maps?q=${site.latitude},${site.longitude}`}
                               target="_blank"
                               rel="noreferrer"
-                              aria-label="فتح الموقع على الخريطة"
-                              title="فتح الموقع على الخريطة"
+                              aria-label={ui("فتح الموقع على الخريطة")}
+                              title={ui("فتح الموقع على الخريطة")}
                             >
                               <ExternalLink className="h-4 w-4" />
                             </a>
@@ -542,25 +535,25 @@ function PlanningPage() {
                         </div>
                       </div>
                     ) : (
-                      <p className="mt-2 text-sm text-muted-foreground">الإحداثيات غير محددة</p>
+                      <p className="mt-2 text-sm text-muted-foreground">{ui("الإحداثيات غير محددة")}</p>
                     )}
                     {site.location && (
                       <p className="mt-1 truncate text-xs text-muted-foreground">{site.location}</p>
                     )}
                   </div>
                   <div className="rounded-lg border p-3">
-                    <p className="text-xs font-semibold text-muted-foreground">المشرف المسؤول</p>
+                    <p className="text-xs font-semibold text-muted-foreground">{ui("المشرف المسؤول")}</p>
                     <p className="mt-2 truncate text-sm font-medium">
-                      {manager?.full_name || "غير محدد"}
+                      {manager?.full_name || ui("غير محدد")}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {site.start_date || "—"} {site.end_date ? ` إلى ${site.end_date}` : ""}
+                      {site.start_date || "—"} {site.end_date ? (ui(" إلى ") + (site.end_date)) : ""}
                     </p>
                   </div>
                 </div>
                 {site.description && (
                   <div>
-                    <p className="text-xs font-semibold text-muted-foreground">وصف العمل / النطاق</p>
+                    <p className="text-xs font-semibold text-muted-foreground">{ui("وصف العمل / النطاق")}</p>
                     <p className="mt-1 whitespace-pre-wrap text-sm leading-6">{site.description}</p>
                   </div>
                 )}
@@ -569,21 +562,21 @@ function PlanningPage() {
                     <Badge key={title} variant="outline">{title} · {count}</Badge>
                   ))}
                   {!siteSummary[site.id]?.employees && (
-                    <span className="text-xs text-muted-foreground">لا يوجد موظفون مسجلون للموقع</span>
+                    <span className="text-xs text-muted-foreground">{ui("لا يوجد موظفون مسجلون للموقع")}</span>
                   )}
                 </div>
                 <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted/40 p-3 text-sm">
                   <div className="flex items-center gap-2">
                     <ClipboardList className="h-4 w-4 text-primary" />
-                    <span>{sitePlanSummary.plans} خطة جارية</span>
+                    <span>{sitePlanSummary.plans}{ui(" خطة جارية")}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Users className="h-4 w-4 text-primary" />
-                    <span>{sitePlanSummary.workers} كادر مسكّن</span>
+                    <span>{sitePlanSummary.workers}{ui(" كادر مسكّن")}</span>
                   </div>
                   <div className="col-span-2 flex items-center gap-2 border-t pt-2 font-semibold">
                     <Banknote className="h-4 w-4 text-primary" />
-                    <span>التكلفة الشهرية: {(siteSummary[site.id]?.monthly ?? 0).toLocaleString("ar-IQ")} د.ع</span>
+                    <span>{ui("التكلفة الشهرية: ")}{(siteSummary[site.id]?.monthly ?? 0).toLocaleString(displayLocale())}{ui(" د.ع")}</span>
                   </div>
                 </div>
                 <div className="flex justify-end gap-1 border-t pt-2">
@@ -591,8 +584,8 @@ function PlanningPage() {
                     type="button"
                     variant="ghost"
                     size="icon"
-                    aria-label={`تعديل ${site.name}`}
-                    title="تعديل الموقع"
+                    aria-label={(ui("تعديل ") + (site.name))}
+                    title={ui("تعديل الموقع")}
                     onClick={() => {
                       setEditing(site);
                       setOpen(true);
@@ -604,10 +597,10 @@ function PlanningPage() {
                     type="button"
                     variant="ghost"
                     size="icon"
-                    aria-label={`حذف ${site.name}`}
-                    title="حذف الموقع"
+                    aria-label={(ui("حذف ") + (site.name))}
+                    title={ui("حذف الموقع")}
                     onClick={() => {
-                      if (confirm(`حذف موقع ${site.name}؟`)) del.mutate(site.id);
+                      if (confirm((ui("حذف موقع ") + (site.name) + "؟"))) del.mutate(site.id);
                     }}
                   >
                     <Trash2 className="h-4 w-4 text-destructive" />
@@ -620,13 +613,13 @@ function PlanningPage() {
         {!filteredSites.length && (
           <Card className="xl:col-span-2">
             <CardContent className="p-8 text-center text-muted-foreground">
-              {sites.length ? "لا توجد مواقع مطابقة للتصفية" : "لا توجد مواقع بعد"}
+              {sites.length ? ui("لا توجد مواقع مطابقة للتصفية") : ui("لا توجد مواقع بعد")}
             </CardContent>
           </Card>
         )}
       </div>
       <Dialog open={!!workshopSite} onOpenChange={open => { if (!open) setWorkshopSite(null); }}>
-        <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-6xl"><DialogHeader><DialogTitle>ورش وعمليات {workshopSite?.name}</DialogTitle></DialogHeader>{workshopSite && <WorkshopManagement siteId={workshopSite.id} />}</DialogContent>
+        <DialogContent dir={direction()} className="max-h-[90vh] overflow-y-auto sm:max-w-6xl"><DialogHeader><DialogTitle>{ui("ورش وعمليات ")}{workshopSite?.name}</DialogTitle></DialogHeader>{workshopSite && <WorkshopManagement siteId={workshopSite.id} />}</DialogContent>
       </Dialog>
     </div>
   );

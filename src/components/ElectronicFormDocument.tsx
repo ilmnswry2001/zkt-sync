@@ -1,3 +1,4 @@
+import { direction, ui } from "@/lib/ui-language";
 import { toast } from "sonner";
 import {
   fields,
@@ -67,7 +68,7 @@ export function ElectronicFormDocument({ doc }: { doc: FormDocument }) {
   return (
     <div
       className="ef-document"
-      dir="rtl"
+      dir={direction()}
       style={{ "--ink": b.brand_primary_color || "#548235" } as React.CSSProperties}
     >
       {pages.map((parts, p) => (
@@ -129,7 +130,7 @@ export function ElectronicFormDocument({ doc }: { doc: FormDocument }) {
                     </th>
                   </tr>
                   <tr>
-                    {s.show_row_number !== false && <th>ت</th>}
+                    {s.show_row_number !== false && <th>{ui("ت")}</th>}
                     {fs.map((f) => (
                       <th key={f.key}>{f.label_ar}</th>
                     ))}
@@ -159,8 +160,7 @@ export function ElectronicFormDocument({ doc }: { doc: FormDocument }) {
             </bdi>
             <bdi>{doc.reference_code}</bdi>
             <bdi>{new Date().toLocaleDateString("en-GB")}</bdi>
-            <span>
-              صفحة {p + 1} من {pages.length}
+            <span>{ui("صفحة ")}{p + 1}{ui(" من ")}{pages.length}
             </span>
           </footer>
         </article>
@@ -171,7 +171,7 @@ export function ElectronicFormDocument({ doc }: { doc: FormDocument }) {
 function FieldPair({ label, value, numeric }: { label: string; value: string; numeric: boolean }) {
   return (
     <>
-      <th>{label}</th>
+      <th>{ui(label)}</th>
       <td dir={numeric || /^\d+$/.test(value) ? "ltr" : "auto"}>{value}</td>
     </>
   );
@@ -179,7 +179,7 @@ function FieldPair({ label, value, numeric }: { label: string; value: string; nu
 export async function printForms(docs: FormDocument[]) {
   const w = window.open("", "_blank");
   if (!w) {
-    toast.error("اسمح بفتح نافذة الطباعة");
+    toast.error(ui("اسمح بفتح نافذة الطباعة"));
     return;
   }
   w.opener = null;

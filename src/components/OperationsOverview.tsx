@@ -1,3 +1,4 @@
+import { displayLocale, ui } from "@/lib/ui-language";
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -17,9 +18,9 @@ import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
-const number = (value?: number) => (value == null ? "—" : value.toLocaleString("ar-IQ"));
+const number = (value?: number) => (value == null ? "—" : value.toLocaleString(displayLocale()));
 const time = (value: string | number) =>
-  new Date(value).toLocaleString("ar-IQ", {
+  new Date(value).toLocaleString(displayLocale(), {
     timeZone: "Asia/Baghdad",
     dateStyle: "short",
     timeStyle: "short",
@@ -119,16 +120,15 @@ export function OperationsOverview({
       <header className="operations-banner flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-slate-900 p-6 text-white">
         <div>
           <p className="operations-date text-sm text-slate-300">
-            {new Date(today + "T12:00:00+03:00").toLocaleDateString("ar-IQ", {
+            {new Date(today + "T12:00:00+03:00").toLocaleDateString(displayLocale(), {
               dateStyle: "full",
               timeZone: "Asia/Baghdad",
             })}
           </p>
-          <h1 className="mt-1 text-3xl font-bold">متابعة التشغيل اليومي</h1>
+          <h1 className="mt-1 text-3xl font-bold">{ui("متابعة التشغيل اليومي")}</h1>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs">
-            آخر تحديث {updatedAt ? time(Math.max(updatedAt, workshops.dataUpdatedAt)) : "—"}
+          <span className="text-xs">{ui("آخر تحديث ")}{updatedAt ? time(Math.max(updatedAt, workshops.dataUpdatedAt)) : "—"}
           </span>
           <Button
             variant="secondary"
@@ -138,50 +138,45 @@ export function OperationsOverview({
               if (workshops.isEnabled) void workshops.refetch();
             }}
           >
-            <RefreshCw className="ml-2 size-4" />
-            تحديث
-          </Button>
+            <RefreshCw className="ml-2 size-4" />{ui("تحديث")}</Button>
         </div>
       </header>
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
         <Card>
           <CardHeader>
-            <CardTitle>حضور اليوم</CardTitle>
+            <CardTitle>{ui("حضور اليوم")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap items-baseline gap-5">
               <span>
                 <strong className="text-5xl tabular-nums text-teal-700 dark:text-teal-300">
                   {number(attendance?.present)}
-                </strong>{" "}
-                حاضر
-              </span>
-              <span>غائب · {number(attendance?.absent)}</span>
-              <span>متأخر · {number(attendance?.late)}</span>
-              <span>دوام غير مكتمل · {number(attendance?.incomplete)}</span>
+                </strong>{" "}{ui("حاضر")}</span>
+              <span>{ui("غائب · ")}{number(attendance?.absent)}</span>
+              <span>{ui("متأخر · ")}{number(attendance?.late)}</span>
+              <span>{ui("دوام غير مكتمل · ")}{number(attendance?.incomplete)}</span>
             </div>
             {!!devices?.length && (
               <p className="mt-4 rounded-md bg-amber-500/10 p-3 text-sm">
-                <AlertTriangle className="ml-2 inline size-4" />
-                قد تتأخر بعض البصمات. {devices[0].name} ·{" "}
-                {devices[0].last_sync_at ? time(devices[0].last_sync_at) : "لم تتم المزامنة بعد"}
+                <AlertTriangle className="ml-2 inline size-4" />{ui("قد تتأخر بعض البصمات. ")}{devices[0].name} ·{" "}
+                {devices[0].last_sync_at ? time(devices[0].last_sync_at) : ui("لم تتم المزامنة بعد")}
               </p>
             )}
           </CardContent>
         </Card>
         <Card className="lg:col-start-2 lg:row-span-2">
           <CardHeader>
-            <CardTitle>يحتاج متابعة</CardTitle>
+            <CardTitle>{ui("يحتاج متابعة")}</CardTitle>
           </CardHeader>
           <CardContent className="max-h-96 space-y-5 overflow-y-auto">
             <section>
-              <h3 className="mb-2 font-semibold">الأجهزة المتأخرة</h3>
+              <h3 className="mb-2 font-semibold">{ui("الأجهزة المتأخرة")}</h3>
               {devices?.map((d) => (
                 <div key={d.id} className="flex justify-between gap-3 border-t py-2">
                   <div>
                     {d.name}
                     <small className="block text-muted-foreground">
-                      {d.last_sync_at ? time(d.last_sync_at) : "لم تتم المزامنة بعد"}
+                      {d.last_sync_at ? time(d.last_sync_at) : ui("لم تتم المزامنة بعد")}
                     </small>
                   </div>
                   {canAccessSection("/devices") && (
@@ -189,35 +184,30 @@ export function OperationsOverview({
                       to="/devices"
                       hash={`device-${d.id}`}
                       className="text-sm text-primary underline"
-                    >
-                      فتح الجهاز
-                    </Link>
+                    >{ui("فتح الجهاز")}</Link>
                   )}
                 </div>
               ))}
-              {devices?.length === 0 && "لا توجد أجهزة نشطة متأخرة"}
+              {devices?.length === 0 && ui("لا توجد أجهزة نشطة متأخرة")}
             </section>
             <section>
-              <h3 className="font-semibold">تقارير المواقع اليوم</h3>
+              <h3 className="font-semibold">{ui("تقارير المواقع اليوم")}</h3>
               {sites && (
-                <p className="py-2 text-sm text-emerald-700">
-                  رُفع {number(sites.reported)} من {number(sites.active)}
+                <p className="py-2 text-sm text-emerald-700">{ui("رُفع ")}{number(sites.reported)}{ui(" من ")}{number(sites.active)}
                 </p>
               )}
               {sites?.outstanding.map((site) => (
                 <div key={site.id} className="flex justify-between gap-2 border-t py-2">
                   <span>
                     {site.name}
-                    <small className="block text-muted-foreground">بانتظار التقرير</small>
+                    <small className="block text-muted-foreground">{ui("بانتظار التقرير")}</small>
                   </span>
                   {canAccessSection("/attendance") && (
                     <Link
                       to="/attendance"
                       search={{ site: site.id }}
                       className="text-sm text-primary underline"
-                    >
-                      مراجعة التقرير
-                    </Link>
+                    >{ui("مراجعة التقرير")}</Link>
                   )}
                 </div>
               ))}
@@ -226,7 +216,7 @@ export function OperationsOverview({
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>اتجاه الحضور · آخر سبعة أيام</CardTitle>
+            <CardTitle>{ui("اتجاه الحضور · آخر سبعة أيام")}</CardTitle>
           </CardHeader>
           <CardContent>
             {trend.some((d) => d.hasData) ? (
@@ -242,11 +232,9 @@ export function OperationsOverview({
                 </ResponsiveContainer>
               </div>
             ) : (
-              <p>{fetching ? "جارٍ تحميل الحضور…" : "لا توجد بيانات حضور للفترة"}</p>
+              <p>{fetching ? ui("جارٍ تحميل الحضور…") : ui("لا توجد بيانات حضور للفترة")}</p>
             )}
-            <label className="mt-3 flex flex-wrap items-center gap-3 text-sm">
-              تفاصيل اليوم
-              <select
+            <label className="mt-3 flex flex-wrap items-center gap-3 text-sm">{ui("تفاصيل اليوم")}<select
                 className="rounded border bg-background p-1"
                 value={selected?.date}
                 onChange={(e) => setSelectedDay(e.target.value)}
@@ -258,7 +246,7 @@ export function OperationsOverview({
                 ))}
               </select>
               {selected?.hasData
-                ? `${number(selected.present)} حاضر من ${number(selected.total)} موظف نشط`
+                ? ((number(selected.present)) + ui(" حاضر من ") + (number(selected.total)) + ui(" موظف نشط"))
                 : "—"}
             </label>
           </CardContent>
@@ -267,7 +255,7 @@ export function OperationsOverview({
       {canAccessSection("/attendance") && (
         <Card>
           <CardHeader>
-            <CardTitle>جرد الورش اليوم</CardTitle>
+            <CardTitle>{ui("جرد الورش اليوم")}</CardTitle>
           </CardHeader>
           <CardContent className="overflow-x-auto">
             <table className="w-full text-right text-sm">
@@ -295,7 +283,7 @@ export function OperationsOverview({
                     <td>{number(w.roster)}</td>
                     <td>{w.saved ? number(w.present) : "—"}</td>
                     <td className={w.saved ? "text-emerald-700" : "text-amber-700"}>
-                      {w.saved ? "تم حفظ الجرد" : "بانتظار الجرد"}
+                      {w.saved ? ui("تم حفظ الجرد") : ui("بانتظار الجرد")}
                     </td>
                   </tr>
                 ))}
@@ -304,17 +292,17 @@ export function OperationsOverview({
             {!workshops.data?.length && (
               <p className="p-3">
                 {workshops.isLoading
-                  ? "جارٍ تحميل الورش…"
+                  ? ui("جارٍ تحميل الورش…")
                   : workshops.isError
-                    ? "تعذر تحميل الجرد"
-                    : "لا توجد ورش نشطة"}
+                    ? ui("تعذر تحميل الجرد")
+                    : ui("لا توجد ورش نشطة")}
               </p>
             )}
           </CardContent>
         </Card>
       )}
       <section>
-        <h2 className="mb-3 text-lg font-bold">ملخص التشغيل</h2>
+        <h2 className="mb-3 text-lg font-bold">{ui("ملخص التشغيل")}</h2>
         <div className="grid gap-3 sm:grid-cols-3">
           {(
             [
@@ -329,12 +317,10 @@ export function OperationsOverview({
           ).map(([to, label, value]) => (
             <Card key={to}>
               <CardContent className="p-4">
-                <p className="text-sm text-muted-foreground">{label}</p>
+                <p className="text-sm text-muted-foreground">{ui(label)}</p>
                 <strong className="block py-2 text-2xl">{value}</strong>
                 {canAccessSection(to) && (
-                  <Link className="text-sm text-primary underline" to={to}>
-                    عرض التفاصيل
-                  </Link>
+                  <Link className="text-sm text-primary underline" to={to}>{ui("عرض التفاصيل")}</Link>
                 )}
               </CardContent>
             </Card>

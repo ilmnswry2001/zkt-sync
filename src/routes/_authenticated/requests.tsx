@@ -1,3 +1,4 @@
+import { direction, ui } from "@/lib/ui-language";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { lazy, Suspense, useState } from "react";
 import { ClipboardList } from "lucide-react";
@@ -42,7 +43,7 @@ export const Route = createFileRoute("/_authenticated/requests")({
   },
   head: () => ({
     meta: [
-      { title: "الطلبات | EMAD_tc" },
+      { title: ui("الطلبات | EMAD_tc") },
       { name: "description", content: "طلبات المواد والمعدات وخطط المشاريع." },
     ],
   }),
@@ -83,31 +84,31 @@ function RequestsPage() {
   const activeStage = availableStages.includes(stage) ? stage : (availableStages[0] ?? "planning");
 
   return (
-    <div dir="rtl" className="space-y-5">
+    <div dir={direction()} className="space-y-5">
       <header className="flex flex-wrap items-end gap-3 border-b pb-4">
         <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
           <ClipboardList className="h-5 w-5" />
         </span>
         <div>
-          <p className="text-xs font-semibold text-muted-foreground">المواد والمعدات وخطط المشاريع</p>
-          <h1 className="mt-1 text-2xl font-bold">الطلبات</h1>
+          <p className="text-xs font-semibold text-muted-foreground">{ui("المواد والمعدات وخطط المشاريع")}</p>
+          <h1 className="mt-1 text-2xl font-bold">{ui("الطلبات")}</h1>
         </div>
       </header>
 
-      <Tabs defaultValue="materials" dir="rtl">
+      <Tabs defaultValue="materials" dir={direction()}>
         <TabsList className="flex h-auto w-full flex-wrap justify-start">
-          <TabsTrigger value="materials">طلبات المواد</TabsTrigger>
-          <TabsTrigger value="equipment">طلبات المعدات</TabsTrigger>
-          {canViewPlans && <TabsTrigger value="plans">الخطط</TabsTrigger>}
+          <TabsTrigger value="materials">{ui("طلبات المواد")}</TabsTrigger>
+          <TabsTrigger value="equipment">{ui("طلبات المعدات")}</TabsTrigger>
+          {canViewPlans && <TabsTrigger value="plans">{ui("الخطط")}</TabsTrigger>}
         </TabsList>
         {(["materials", "equipment"] as const).map((requestType) => (
           <TabsContent key={requestType} value={requestType} className="space-y-4">
             {availableStages.length > 1 && (
-              <Tabs value={activeStage} onValueChange={(value) => setStage(value as RequestStage)} dir="rtl">
+              <Tabs value={activeStage} onValueChange={(value) => setStage(value as RequestStage)} dir={direction()}>
                 <TabsList>
-                  {canPlan && <TabsTrigger value="planning">التخطيط</TabsTrigger>}
-                  {canUseWarehouse && <TabsTrigger value="warehouse">المخازن والاستلام</TabsTrigger>}
-                  {canUseProcurement && <TabsTrigger value="procurement">المشتريات</TabsTrigger>}
+                  {canPlan && <TabsTrigger value="planning">{ui("التخطيط")}</TabsTrigger>}
+                  {canUseWarehouse && <TabsTrigger value="warehouse">{ui("المخازن والاستلام")}</TabsTrigger>}
+                  {canUseProcurement && <TabsTrigger value="procurement">{ui("المشتريات")}</TabsTrigger>}
                 </TabsList>
               </Tabs>
             )}
@@ -120,7 +121,7 @@ function RequestsPage() {
         ))}
         {canViewPlans && (
           <TabsContent value="plans">
-            <Suspense fallback={<p className="py-8 text-center text-sm text-muted-foreground">جارٍ تحميل الخطط...</p>}>
+            <Suspense fallback={<p className="py-8 text-center text-sm text-muted-foreground">{ui("جارٍ تحميل الخطط...")}</p>}>
               <ProjectPlansView />
             </Suspense>
           </TabsContent>

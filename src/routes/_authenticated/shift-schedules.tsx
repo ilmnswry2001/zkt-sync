@@ -1,3 +1,4 @@
+import { direction, ui } from "@/lib/ui-language";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -12,7 +13,7 @@ import { toast } from "sonner";
 import { loadAllRows } from "@/lib/monthly-report";
 
 export const Route = createFileRoute("/_authenticated/shift-schedules")({
-  head: () => ({ meta: [{ title: "جداول الورديات" }] }), component: ShiftSchedulesPage,
+  head: () => ({ meta: [{ title: ui("جداول الورديات") }] }), component: ShiftSchedulesPage,
 });
 const weekdays = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 function ShiftSchedulesPage() {
@@ -45,9 +46,9 @@ function ShiftSchedulesPage() {
       : targetType === "department"
         ? (employees.data ?? []).filter((employee) => employee.department_id === departmentId)
         : (employees.data ?? []).filter((employee) => employee.id === employeeId);
-    if (targetType === "employee" && !employeeId) return toast.error("اختر الموظف");
-    if (targetType === "department" && !departmentId) return toast.error("اختر القسم");
-    if (!targetEmployees.length) return toast.error("لا يوجد موظفون نشطون ضمن النطاق المحدد");
+    if (targetType === "employee" && !employeeId) return toast.error(ui("اختر الموظف"));
+    if (targetType === "department" && !departmentId) return toast.error(ui("اختر القسم"));
+    if (!targetEmployees.length) return toast.error(ui("لا يوجد موظفون نشطون ضمن النطاق المحدد"));
     const days = weekday === "all" ? weekdays.map((_, index) => index) : [Number(weekday)];
     const rows = targetEmployees.flatMap((employee) => days.map((day) => ({
       employee_id: employee.id, weekday: day, start_time: start, end_time: end,
@@ -55,17 +56,17 @@ function ShiftSchedulesPage() {
     })));
     const { error } = await (supabase as any).from("employee_weekly_schedules")
       .upsert(rows, { onConflict: "employee_id,weekday,effective_from" });
-    if (error) return toast.error(formatErrorMessage(error));
-    toast.success(`تم تطبيق الوردية على ${targetEmployees.length} موظف · ${days.length} يوم`);
+    if (error) return toast.error(ui(formatErrorMessage(error)));
+    toast.success((ui("تم تطبيق الوردية على ") + (targetEmployees.length) + ui(" موظف · ") + (days.length) + ui(" يوم")));
     client.invalidateQueries({ queryKey: ["employee-weekly-schedules"] });
   };
   const removeMany = async (ids: string[]) => {
-    if (!ids.length || !window.confirm(`حذف ${ids.length} سجل وردية؟`)) return;
+    if (!ids.length || !window.confirm((ui("حذف ") + (ids.length) + ui(" سجل وردية؟")))) return;
     for (let index = 0; index < ids.length; index += 500) {
       const { error } = await (supabase as any).from("employee_weekly_schedules").delete().in("id", ids.slice(index, index + 500));
-      if (error) return toast.error(formatErrorMessage(error));
+      if (error) return toast.error(ui(formatErrorMessage(error)));
     }
-    toast.success("تم حذف الورديات المحددة");
+    toast.success(ui("تم حذف الورديات المحددة"));
     await client.invalidateQueries({ queryKey: ["employee-weekly-schedules"] });
   };
   const groupedSchedules = (() => {
@@ -82,23 +83,23 @@ function ShiftSchedulesPage() {
         employees: employeeIds.map((id) => items.find((item) => item.employee_id === id)).filter(Boolean) };
     });
   })();
-  if (!isAdmin && !isHR) return <p className="p-8 text-center">هذه الصفحة مخصصة للإدارة والموارد البشرية.</p>;
-  return <div dir="rtl" className="space-y-5 p-4">
-    <div><h1 className="text-2xl font-bold">جداول الورديات الأسبوعية</h1><p className="text-sm text-muted-foreground">حدد وقت بداية ونهاية دوام كل موظف لكل يوم. تُستخدم أوقات الوردية لحساب التأخير.</p></div>
-    <Card><CardHeader><CardTitle>إضافة أو تعديل وردية</CardTitle></CardHeader><CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      <Label>نطاق التطبيق<select className="mt-1 h-10 w-full rounded-md border bg-background px-3" value={targetType} onChange={(e) => setTargetType(e.target.value as typeof targetType)}><option value="employee">موظف واحد</option><option value="department">قسم كامل</option><option value="all">جميع الموظفين النشطين</option></select></Label>
-      {targetType === "employee" && <Label>الموظف<select className="mt-1 h-10 w-full rounded-md border bg-background px-3" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}><option value="">اختر موظفاً</option>{(employees.data ?? []).map((employee) => <option key={employee.id} value={employee.id}>{employee.employee_no} — {employee.full_name}</option>)}</select></Label>}
-      {targetType === "department" && <Label>القسم<select className="mt-1 h-10 w-full rounded-md border bg-background px-3" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}><option value="">اختر القسم</option>{(departments.data ?? []).map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select></Label>}
-      <Label>اليوم<select className="mt-1 h-10 w-full rounded-md border bg-background px-3" value={weekday} onChange={(e) => setWeekday(e.target.value)}><option value="all">جميع الأيام</option>{weekdays.map((day, i) => <option key={day} value={i}>{day}</option>)}</select></Label>
-      <Label>بداية الدوام<Input type="time" value={start} onChange={(e) => setStart(e.target.value)} /></Label><Label>نهاية الدوام<Input type="time" value={end} onChange={(e) => setEnd(e.target.value)} /></Label>
-      <Label>سماح التأخير بالدقائق<Input type="number" min="0" max="240" value={grace} onChange={(e) => setGrace(e.target.value)} /></Label><Label>ساري من تاريخ<Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></Label>
-      <div className="flex items-end"><Button onClick={() => void save()}>حفظ الوردية</Button></div>
+  if (!isAdmin && !isHR) return <p className="p-8 text-center">{ui("هذه الصفحة مخصصة للإدارة والموارد البشرية.")}</p>;
+  return <div dir={direction()} className="space-y-5 p-4">
+    <div><h1 className="text-2xl font-bold">{ui("جداول الورديات الأسبوعية")}</h1><p className="text-sm text-muted-foreground">{ui("حدد وقت بداية ونهاية دوام كل موظف لكل يوم. تُستخدم أوقات الوردية لحساب التأخير.")}</p></div>
+    <Card><CardHeader><CardTitle>{ui("إضافة أو تعديل وردية")}</CardTitle></CardHeader><CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <Label>{ui("نطاق التطبيق")}<select className="mt-1 h-10 w-full rounded-md border bg-background px-3" value={targetType} onChange={(e) => setTargetType(e.target.value as typeof targetType)}><option value="employee">{ui("موظف واحد")}</option><option value="department">{ui("قسم كامل")}</option><option value="all">{ui("جميع الموظفين النشطين")}</option></select></Label>
+      {targetType === "employee" && <Label>{ui("الموظف")}<select className="mt-1 h-10 w-full rounded-md border bg-background px-3" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}><option value="">{ui("اختر موظفاً")}</option>{(employees.data ?? []).map((employee) => <option key={employee.id} value={employee.id}>{employee.employee_no} — {employee.full_name}</option>)}</select></Label>}
+      {targetType === "department" && <Label>{ui("القسم")}<select className="mt-1 h-10 w-full rounded-md border bg-background px-3" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}><option value="">{ui("اختر القسم")}</option>{(departments.data ?? []).map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select></Label>}
+      <Label>{ui("اليوم")}<select className="mt-1 h-10 w-full rounded-md border bg-background px-3" value={weekday} onChange={(e) => setWeekday(e.target.value)}><option value="all">{ui("جميع الأيام")}</option>{weekdays.map((day, i) => <option key={day} value={i}>{day}</option>)}</select></Label>
+      <Label>{ui("بداية الدوام")}<Input type="time" value={start} onChange={(e) => setStart(e.target.value)} /></Label><Label>{ui("نهاية الدوام")}<Input type="time" value={end} onChange={(e) => setEnd(e.target.value)} /></Label>
+      <Label>{ui("سماح التأخير بالدقائق")}<Input type="number" min="0" max="240" value={grace} onChange={(e) => setGrace(e.target.value)} /></Label><Label>{ui("ساري من تاريخ")}<Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></Label>
+      <div className="flex items-end"><Button onClick={() => void save()}>{ui("حفظ الوردية")}</Button></div>
     </CardContent></Card>
-    <Card><CardHeader className="flex-row items-center justify-between"><CardTitle>الورديات المسجلة ({groupedSchedules.length})</CardTitle><Button variant="destructive" size="sm" disabled={!schedules.data?.length} onClick={() => void removeMany((schedules.data ?? []).map((item: any) => item.id))}>حذف جميع الورديات</Button></CardHeader><CardContent className="space-y-3">
-      {groupedSchedules.map((group) => <section key={group.key} className="rounded-lg border p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold">وردية {group.items[0].start_time} – {group.items[0].end_time}</h3><p className="mt-1 text-sm text-muted-foreground">الأيام: {group.days.map((day) => weekdays[day]).join("، ")} · سماح {group.items[0].grace_minutes} د · سارية من {group.items[0].effective_from}</p><p className="mt-1 text-sm">مطبقة على {group.employees.length} موظف</p></div><Button variant="destructive" size="sm" onClick={() => void removeMany(group.items.map((item: any) => item.id))}>حذف المجموعة</Button></div>
-        <details className="mt-3 border-t pt-3"><summary className="cursor-pointer text-sm font-medium text-primary">عرض الموظفين</summary><ul className="mt-2 grid gap-2 sm:grid-cols-2">{group.employees.map((item: any) => <li key={item.employee_id} className="flex items-center justify-between gap-2 rounded bg-muted/30 px-3 py-2 text-sm"><span>{item.employees?.employee_no} — {item.employees?.full_name}</span><Button variant="ghost" size="sm" onClick={() => void removeMany(group.items.filter((row: any) => row.employee_id === item.employee_id).map((row: any) => row.id))}>حذف الموظف</Button></li>)}</ul></details>
+    <Card><CardHeader className="flex-row items-center justify-between"><CardTitle>{ui("الورديات المسجلة (")}{groupedSchedules.length})</CardTitle><Button variant="destructive" size="sm" disabled={!schedules.data?.length} onClick={() => void removeMany((schedules.data ?? []).map((item: any) => item.id))}>{ui("حذف جميع الورديات")}</Button></CardHeader><CardContent className="space-y-3">
+      {groupedSchedules.map((group) => <section key={group.key} className="rounded-lg border p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold">{ui("وردية ")}{group.items[0].start_time} – {group.items[0].end_time}</h3><p className="mt-1 text-sm text-muted-foreground">{ui("الأيام: ")}{group.days.map((day) => weekdays[day]).join("، ")}{ui(" · سماح ")}{group.items[0].grace_minutes}{ui(" د · سارية من ")}{group.items[0].effective_from}</p><p className="mt-1 text-sm">{ui("مطبقة على ")}{group.employees.length}{ui(" موظف")}</p></div><Button variant="destructive" size="sm" onClick={() => void removeMany(group.items.map((item: any) => item.id))}>{ui("حذف المجموعة")}</Button></div>
+        <details className="mt-3 border-t pt-3"><summary className="cursor-pointer text-sm font-medium text-primary">{ui("عرض الموظفين")}</summary><ul className="mt-2 grid gap-2 sm:grid-cols-2">{group.employees.map((item: any) => <li key={item.employee_id} className="flex items-center justify-between gap-2 rounded bg-muted/30 px-3 py-2 text-sm"><span>{item.employees?.employee_no} — {item.employees?.full_name}</span><Button variant="ghost" size="sm" onClick={() => void removeMany(group.items.filter((row: any) => row.employee_id === item.employee_id).map((row: any) => row.id))}>{ui("حذف الموظف")}</Button></li>)}</ul></details>
       </section>)}
-      {!groupedSchedules.length && <p className="py-8 text-center text-muted-foreground">لا توجد ورديات مسجلة.</p>}
+      {!groupedSchedules.length && <p className="py-8 text-center text-muted-foreground">{ui("لا توجد ورديات مسجلة.")}</p>}
     </CardContent></Card>
   </div>;
 }

@@ -1,3 +1,6 @@
+import { direction, ui } from "@/lib/ui-language";
+import { LanguageSwitch } from "@/components/LanguageSwitch";
+import { GuideNavigation } from "@/lib/guide-navigation";
 import { readWorkspaceName } from "@/lib/workspace-name";
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import {
@@ -104,7 +107,7 @@ const nav = [
   { to: "/safety", label: "السلامة والبلاغات", icon: ShieldAlert },
   { to: "/settings", label: "الإعدادات", icon: Settings2, access: "admin" },
   { to: "/accounts", label: "الحسابات والصلاحيات", icon: UserCog, access: "admin" },
-  { to: "/system-map", label: "خريطة النظام", icon: Network, access: "admin" },
+  { to: "/system-map", label: "خريطة النظام", icon: Network },
 ] as const;
 
 export const SECTION_OPTIONS = nav.map(({ to, label }) => ({ to, label }));
@@ -220,7 +223,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const blocked =
     !permissionsLoading &&
     !!allowedSections &&
-    pathname !== "/profile" &&
+    pathname !== "/profile" && pathname !== "/system-map" &&
     !allowedSections.some(
       (p) =>
         pathname === p ||
@@ -274,7 +277,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       (item.to === "/planning" && pathname === "/project-plans"),
   );
   const visibleNav = nav.filter((item) => {
-    if (!canAccessSection(item.to) && !(item.to === "/attendance-forms" && canAccessSection("/forms"))) return false;
+    if (item.to !== "/system-map" && !canAccessSection(item.to) && !(item.to === "/attendance-forms" && canAccessSection("/forms"))) return false;
     if ("access" in item && item.access === "admin" && !isAdmin) return false;
     if ("access" in item && item.access === "mobileSync" && !roles.some((role) => ["admin", "hr", "supervisor", "site_admin"].includes(role))) return false;
     if ("access" in item && item.access === "hr" && !isHR) return false;
@@ -453,9 +456,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     [resolveGroupKey],
   );
   return (
-    <div dir="rtl" className="app-shell flex min-h-screen bg-background">
+    <div dir={direction()} className="app-shell flex min-h-screen bg-background">
       <button
-        aria-label="إغلاق القائمة"
+        aria-label={ui("إغلاق القائمة")}
         aria-hidden={!mobileSidebarOpen}
         tabIndex={mobileSidebarOpen ? undefined : -1}
         className={cn(
@@ -466,8 +469,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       />
       <aside
         className={cn(
-          "app-sidebar fixed inset-y-0 right-0 z-40 flex h-screen w-[min(19rem,calc(100vw-1.5rem))] shrink-0 flex-col overflow-hidden border-l border-sidebar-border bg-sidebar text-sidebar-foreground shadow-xl transition-[width,transform] duration-300 ease-in-out md:translate-x-0",
-          mobileSidebarOpen ? "translate-x-0" : "translate-x-full",
+          "app-sidebar fixed inset-y-0 start-0 z-40 flex h-screen w-[min(19rem,calc(100vw-1.5rem))] shrink-0 flex-col overflow-hidden border-e border-sidebar-border bg-sidebar text-sidebar-foreground shadow-xl transition-[width,transform] duration-300 ease-in-out md:translate-x-0",
+          mobileSidebarOpen ? "translate-x-0" : "rtl:translate-x-full ltr:-translate-x-full",
           sidebarCollapsed ? "md:w-16" : "md:w-72",
         )}
       >
@@ -487,15 +490,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     if (event.key === "Enter") saveWorkspaceName();
                     if (event.key === "Escape") setIsEditingWorkspaceName(false);
                   }}
-                  aria-label="اسم النظام"
+                  aria-label={ui("اسم النظام")}
                   className="w-full rounded-md border border-sidebar-border bg-sidebar px-2 py-1 text-sm font-bold text-sidebar-foreground outline-none"
                 />
               ) : (
                 <h1 className="truncate text-sm font-bold">{workspaceName}</h1>
               )}
-              <p className="mt-1 truncate text-[11px] text-sidebar-foreground/55">
-                إدارة الموارد والمشاريع
-              </p>
+              <p className="mt-1 truncate text-[11px] text-sidebar-foreground/55">{ui("إدارة الموارد والمشاريع")}</p>
             </div>
             <div className="flex shrink-0 items-center gap-1">
               <Button
@@ -508,8 +509,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 onClick={() =>
                   isEditingWorkspaceName ? saveWorkspaceName() : setIsEditingWorkspaceName(true)
                 }
-                aria-label={isEditingWorkspaceName ? "حفظ اسم النظام" : "تعديل اسم النظام"}
-                title={isEditingWorkspaceName ? "حفظ اسم النظام" : "تعديل اسم النظام"}
+                aria-label={isEditingWorkspaceName ? ui("حفظ اسم النظام") : ui("تعديل اسم النظام")}
+                title={isEditingWorkspaceName ? ui("حفظ اسم النظام") : ui("تعديل اسم النظام")}
               >
                 <Settings2 className="h-4 w-4" />
               </Button>
@@ -518,8 +519,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 size="icon"
                 className="hidden h-8 w-8 text-sidebar-foreground/65 hover:bg-muted md:inline-flex"
                 onClick={toggleSidebar}
-                aria-label={sidebarCollapsed ? "توسيع القائمة" : "طي القائمة"}
-                title={sidebarCollapsed ? "توسيع القائمة" : "طي القائمة"}
+                aria-label={sidebarCollapsed ? ui("توسيع القائمة") : ui("طي القائمة")}
+                title={sidebarCollapsed ? ui("توسيع القائمة") : ui("طي القائمة")}
               >
                 {sidebarCollapsed ? (
                   <ChevronLeft className="h-4 w-4" />
@@ -532,15 +533,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 size="icon"
                 className="h-8 w-8 text-sidebar-foreground/65 hover:bg-muted md:hidden"
                 onClick={() => setMobileSidebarOpen(false)}
-                aria-label="إخفاء اللوحة الجانبية"
-                title="إخفاء اللوحة الجانبية"
+                aria-label={ui("إخفاء اللوحة الجانبية")}
+                title={ui("إخفاء اللوحة الجانبية")}
               >
                 <X className="h-4 w-4" />
               </Button>
             </div>
           </div>
           <nav
-            aria-label="التنقل الرئيسي"
+            aria-label={ui("التنقل الرئيسي")}
             className={cn(
               "app-sidebar-nav flex-1 space-y-1.5 overflow-y-auto p-3",
               sidebarCollapsed && "md:px-2",
@@ -551,9 +552,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 "px-3 pb-1 pt-2 text-[10px] font-bold text-sidebar-foreground/40",
                 sidebarCollapsed && "md:hidden",
               )}
-            >
-              القائمة الرئيسية
-            </p>
+            >{ui("القائمة الرئيسية")}</p>
             {mergedGroups.map((group) => {
               const isOpen = openGroups.includes(group.key);
               const isGroupActive = group.items.some(
@@ -561,13 +560,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               );
               const GroupIcon = group.icon;
               return (
-                <div key={group.key} dir="rtl" className="space-y-1">
+                <div key={group.key} dir={direction()} className="space-y-1">
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
                         type="button"
                         onClick={() => toggleGroup(group.key)}
-                        aria-label={group.label}
+                        aria-label={ui(group.label)}
                         aria-expanded={isOpen}
                         className={cn(
                           "mb-1.5 flex w-full items-center justify-between gap-2 rounded-xl border border-sidebar-accent/20 bg-sidebar-accent/15 px-3 py-2.5 text-xs font-bold text-sidebar-foreground transition-colors hover:bg-sidebar-accent/25",
@@ -576,7 +575,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       >
                         <span className="flex min-w-0 items-center gap-2">
                           <GroupIcon className="h-4 w-4 shrink-0 text-primary" />
-                          <span className={cn(sidebarCollapsed && "md:hidden")}>{group.label}</span>
+                          <span className={cn(sidebarCollapsed && "md:hidden")}>{ui(group.label)}</span>
                           <span
                             className={cn(
                               "rounded-full bg-background/70 px-1.5 py-0.5 text-[10px] font-bold",
@@ -597,7 +596,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       </button>
                     </TooltipTrigger>
                     <TooltipContent side="left" className={cn(!sidebarCollapsed && "hidden")}>
-                      {group.label}
+                      {ui(group.label)}
                     </TooltipContent>
                   </Tooltip>
                   <div
@@ -609,8 +608,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     <div className="overflow-hidden">
                       <div
                         className={cn(
-                          "my-1 mr-3.5 space-y-1 border-r-2 border-sidebar-border/60 pr-2.5",
-                          sidebarCollapsed && "md:my-0 md:mr-0 md:border-r-0 md:pr-0",
+                          "my-1 ms-3.5 space-y-1 border-s-2 border-sidebar-border/60 ps-2.5",
+                          sidebarCollapsed && "md:my-0 md:ms-0 md:border-s-0 md:ps-0",
                         )}
                       >
                         {group.items.map((item) => {
@@ -624,7 +623,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                                   onClick={() => {
                                     if (window.innerWidth < 768) setMobileSidebarOpen(false);
                                   }}
-                                  aria-label={item.label}
+                                  aria-label={ui(item.label)}
                                   className={cn(
                                     "group relative flex items-center gap-3 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors",
                                     sidebarCollapsed && "md:justify-center md:gap-0 md:px-0 md:py-2.5",
@@ -641,7 +640,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                                   )}
                                   <Icon className="h-4 w-4 shrink-0 transition-transform duration-300 group-hover:scale-110" />
                                   <span className={cn(sidebarCollapsed && "md:hidden")}>
-                                    {item.label}
+                                    {ui(item.label)}
                                   </span>
                                 </Link>
                               </TooltipTrigger>
@@ -649,7 +648,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                                 side="left"
                                 className={cn(!sidebarCollapsed && "hidden")}
                               >
-                                {item.label}
+                                {ui(item.label)}
                               </TooltipContent>
                             </Tooltip>
                           );
@@ -668,10 +667,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </span>
               <div className={cn("min-w-0", sidebarCollapsed && "md:hidden")}>
                 <p className="truncate text-xs font-semibold">
-                  {profileName || user?.user_metadata?.full_name || "حسابي"}
+                  {profileName || user?.user_metadata?.full_name || ui("حسابي")}
                 </p>
                 <p className="mt-0.5 truncate text-[10px] text-sidebar-foreground/55">
-                  {isAdmin ? "مدير النظام" : isHR ? "الموارد البشرية" : roles[0] || "مستخدم"}
+                  {isAdmin ? ui("مدير النظام") : isHR ? ui("الموارد البشرية") : roles[0] || ui("مستخدم")}
                 </p>
               </div>
             </div>
@@ -686,8 +685,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 size="icon"
                 className="h-8 w-8 shrink-0 text-sidebar-foreground/65 hover:bg-muted"
                 onClick={toggleTheme}
-                aria-label={themeMode === "dark" ? "تفعيل المظهر الفاتح" : "تفعيل المظهر الداكن"}
-                title={themeMode === "dark" ? "المظهر الفاتح" : "المظهر الداكن"}
+                aria-label={themeMode === "dark" ? ui("تفعيل المظهر الفاتح") : ui("تفعيل المظهر الداكن")}
+                title={themeMode === "dark" ? ui("المظهر الفاتح") : ui("المظهر الداكن")}
               >
                 {themeMode === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               </Button>
@@ -697,8 +696,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   size="icon"
                   className="h-8 w-8 shrink-0 text-sidebar-foreground/65 hover:bg-muted"
                   onClick={() => setCustomizerOpen(true)}
-                  aria-label="تخصيص القائمة"
-                  title="تخصيص القائمة"
+                  aria-label={ui("تخصيص القائمة")}
+                  title={ui("تخصيص القائمة")}
                 >
                   <SlidersHorizontal className="h-4 w-4" />
                 </Button>
@@ -708,8 +707,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 size="icon"
                 className="hidden h-8 w-8 shrink-0 text-sidebar-foreground/65 hover:bg-muted md:inline-flex"
                 onClick={toggleSidebar}
-                aria-label={sidebarCollapsed ? "توسيع القائمة" : "طي القائمة"}
-                title={sidebarCollapsed ? "توسيع القائمة" : "طي القائمة"}
+                aria-label={sidebarCollapsed ? ui("توسيع القائمة") : ui("طي القائمة")}
+                title={sidebarCollapsed ? ui("توسيع القائمة") : ui("طي القائمة")}
               >
                 {sidebarCollapsed ? (
                   <ChevronLeft className="h-4 w-4" />
@@ -725,29 +724,27 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   await signOut();
                   navigate({ to: "/auth" });
                 }}
-                aria-label="تسجيل الخروج"
-                title="تسجيل الخروج"
+                aria-label={ui("تسجيل الخروج")}
+                title={ui("تسجيل الخروج")}
               >
                 <LogOut className="h-4 w-4" />
               </Button>
             </div>
             <div
-              title="النظام متصل"
+              title={ui("النظام متصل")}
               className={cn(
                 "flex items-center gap-2 text-[10px] text-sidebar-foreground/55",
                 sidebarCollapsed && "md:hidden",
               )}
             >
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              النظام متصل
-            </div>
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />{ui("النظام متصل")}</div>
           </div>
         </TooltipProvider>
       </aside>
       <main
         className={cn(
           "app-main min-w-0 flex-1 overflow-auto transition-[margin] duration-300 ease-in-out",
-          sidebarCollapsed ? "md:mr-16" : "md:mr-72",
+          sidebarCollapsed ? "md:ms-16" : "md:ms-72",
         )}
       >
         <div className="mx-auto max-w-[1500px] p-4 sm:p-6 xl:p-8">
@@ -758,32 +755,31 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 size="icon"
                 className="md:hidden"
                 onClick={() => setMobileSidebarOpen(true)}
-                aria-label="فتح القائمة"
+                aria-label={ui("فتح القائمة")}
               >
                 <Menu className="h-4 w-4" />
               </Button>
               <div className="min-w-0">
-                <p className="text-[11px] font-semibold text-muted-foreground">
-                  مساحة العمل <span className="mx-1 text-primary">/</span> الإدارة
-                </p>
+                <p className="text-[11px] font-semibold text-muted-foreground">{ui("مساحة العمل ")}<span className="mx-1 text-primary">/</span>{ui(" الإدارة")}</p>
                 <h2 className="truncate text-base font-bold sm:text-lg">
-                  {currentPage?.label || "الملف الشخصي"}
+                  {ui(currentPage?.label) || ui("الملف الشخصي")}
                 </h2>
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <LanguageSwitch />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="outline"
                     className="h-10 gap-2 rounded-xl border-border/70 bg-background/80 px-2.5 shadow-sm hover:bg-muted/70 sm:px-3"
-                    aria-label="قائمة الحساب الشخصي"
+                    aria-label={ui("قائمة الحساب الشخصي")}
                   >
                     <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary">
                       <UserCircle2 className="h-[18px] w-[18px]" />
                     </span>
                     <span className="hidden max-w-32 truncate text-xs font-semibold sm:block">
-                      {profileName || user?.user_metadata?.full_name || "حسابي"}
+                      {profileName || user?.user_metadata?.full_name || ui("حسابي")}
                     </span>
                     <ChevronDown className="hidden h-3.5 w-3.5 text-muted-foreground sm:block" />
                   </Button>
@@ -791,14 +787,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 <DropdownMenuContent align="end" className="w-60" style={{ direction: "rtl" }}>
                   <DropdownMenuLabel className="font-normal">
                     <div className="truncate text-sm font-semibold text-foreground">
-                      {profileName || user?.user_metadata?.full_name || "صاحب الحساب"}
+                      {profileName || user?.user_metadata?.full_name || ui("صاحب الحساب")}
                     </div>
                     <div className="mt-1 truncate text-xs text-muted-foreground">{user?.email}</div>
                     <div className="mt-2 flex flex-wrap gap-1">
                       {isAdmin && (
-                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
-                          مدير النظام
-                        </span>
+                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">{ui("مدير النظام")}</span>
                       )}
                       {roles.map((role) => (
                         <span
@@ -813,8 +807,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
                     <Link to="/profile" className="cursor-pointer">
-                      <UserCircle2 className="ml-2 h-4 w-4" /> الملف الشخصي
-                    </Link>
+                      <UserCircle2 className="ml-2 h-4 w-4" />{ui(" الملف الشخصي")}</Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     className="cursor-pointer text-destructive focus:text-destructive"
@@ -823,8 +816,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       navigate({ to: "/auth" });
                     }}
                   >
-                    <LogOut className="ml-2 h-4 w-4" /> تسجيل الخروج
-                  </DropdownMenuItem>
+                    <LogOut className="ml-2 h-4 w-4" />{ui(" تسجيل الخروج")}</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
               {canViewOperationalAlerts && (
@@ -834,8 +826,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       variant="outline"
                       size="icon"
                       className="relative"
-                      aria-label={`مركز التنبيهات: ${alertCount} تنبيه`}
-                      title="مركز التنبيهات"
+                      aria-label={(ui("مركز التنبيهات: ") + (alertCount) + ui(" تنبيه"))}
+                      title={ui("مركز التنبيهات")}
                     >
                       <Bell className="h-4 w-4" />
                       {alertCount > 0 && (
@@ -846,21 +838,20 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent
-                    dir="rtl"
+                    dir={direction()}
                     align="end"
                     className="w-[min(22rem,calc(100vw-2rem))] p-0"
                   >
                     <div className="border-b px-4 py-3">
-                      <p className="text-sm font-bold">التنبيهات التشغيلية</p>
+                      <p className="text-sm font-bold">{ui("التنبيهات التشغيلية")}</p>
                       <p className="text-xs text-muted-foreground">
-                        {alertCount} تنبيه حالي
-                      </p>
+                        {alertCount}{ui(" تنبيه حالي")}</p>
                     </div>
                     <div className="max-h-[min(65vh,28rem)] overflow-y-auto p-2">
                       {operationalAlertsQuery.isLoading ? (
-                        <p className="p-3 text-sm text-muted-foreground">جارٍ فحص المؤشرات...</p>
+                        <p className="p-3 text-sm text-muted-foreground">{ui("جارٍ فحص المؤشرات...")}</p>
                       ) : operationalAlertsQuery.error ? (
-                        <p className="p-3 text-sm text-destructive">تعذر تحميل التنبيهات.</p>
+                        <p className="p-3 text-sm text-destructive">{ui("تعذر تحميل التنبيهات.")}</p>
                       ) : alertCount ? (
                         operationalAlerts.slice(0, 6).map((alert) => (
                           <Link
@@ -874,34 +865,28 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                           </Link>
                         ))
                       ) : (
-                        <p className="p-3 text-sm text-muted-foreground">لا توجد تنبيهات حالية.</p>
+                        <p className="p-3 text-sm text-muted-foreground">{ui("لا توجد تنبيهات حالية.")}</p>
                       )}
                     </div>
                   </PopoverContent>
                 </Popover>
               )}
               <div className="hidden items-center gap-2 rounded-xl bg-primary/5 px-3 py-2 text-xs font-semibold text-primary sm:flex">
-                <Sparkles className="h-4 w-4" /> نظام إدارة موحد
-              </div>
+                <Sparkles className="h-4 w-4" />{ui(" نظام إدارة موحد")}</div>
             </div>
           </header>
           {permissionError ? (
             <div
               role="alert"
               className="rounded-2xl border border-amber-300 bg-amber-50 p-6 text-sm text-amber-950 shadow-sm dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100"
-            >
-              تعذر التحقق من صلاحيات الحساب. أعد تحميل الصفحة، وإذا استمرت المشكلة تواصل مع مدير
-              النظام.
-            </div>
+            >{ui("تعذر التحقق من صلاحيات الحساب. أعد تحميل الصفحة، وإذا استمرت المشكلة تواصل مع مدير النظام.")}</div>
           ) : blocked && !allowedSections?.length ? (
             <div
               role="alert"
               className="rounded-2xl border bg-card p-6 text-sm text-muted-foreground shadow-sm"
-            >
-              لا توجد واجهات مخصصة لهذا الحساب. تواصل مع مدير النظام لتحديث صلاحياتك.
-            </div>
+            >{ui("لا توجد واجهات مخصصة لهذا الحساب. تواصل مع مدير النظام لتحديث صلاحياتك.")}</div>
           ) : blocked ? null : (
-            children
+            <GuideNavigation.Provider value={mergedGroups}>{children}</GuideNavigation.Provider>
           )}
         </div>
       </main>

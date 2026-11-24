@@ -1,3 +1,4 @@
+import { direction, ui } from "@/lib/ui-language";
 import { MetricCard, type MetricTone } from "@/components/MetricCard";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -181,9 +182,9 @@ export function WorkshopManagement({
     try {
       await action();
       await invalidate();
-      toast.success("تم حفظ التغييرات");
+      toast.success(ui("تم حفظ التغييرات"));
     } catch (error) {
-      toast.error(formatErrorMessage(error, "تعذر حفظ إعدادات الورش"));
+      toast.error(ui(formatErrorMessage(error, "تعذر حفظ إعدادات الورش")));
     } finally {
       setBusy(false);
     }
@@ -247,33 +248,24 @@ export function WorkshopManagement({
     );
     setEditing(w ?? "new");
   };
-  if (query.isPending) return <p className="p-6 text-muted-foreground">جارٍ تحميل بيئة الورش...</p>;
+  if (query.isPending) return <p className="p-6 text-muted-foreground">{ui("جارٍ تحميل بيئة الورش...")}</p>;
   if (query.isError)
     return (
-      <div className="rounded-xl border border-destructive p-4 text-destructive">
-        تعذر تحميل إعدادات الورش. تأكد من تطبيق ترحيل قاعدة البيانات.
-        <Button variant="outline" onClick={() => void query.refetch()}>
-          إعادة المحاولة
-        </Button>
+      <div className="rounded-xl border border-destructive p-4 text-destructive">{ui("تعذر تحميل إعدادات الورش. تأكد من تطبيق ترحيل قاعدة البيانات.")}<Button variant="outline" onClick={() => void query.refetch()}>{ui("إعادة المحاولة")}</Button>
       </div>
     );
   return (
-    <section dir="rtl" className="space-y-5">
+    <section dir={direction()} className="space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-4 border-b pb-5">
         <div>
-          <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground">
-            إدارة التشغيل / الورش
-          </p>
-          <h2 className="text-2xl font-semibold">الورش وفرق العمل</h2>
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            هوية ثابتة للفريق، وتكليف يتغير مع العمل. المقر يجمع الورش؛ وموقع التنفيذ يحدد وجهة عمل
-            اليوم.
-          </p>
+          <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground">{ui("إدارة التشغيل / الورش")}</p>
+          <h2 className="text-2xl font-semibold">{ui("الورش وفرق العمل")}</h2>
+          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{ui("هوية ثابتة للفريق، وتكليف يتغير مع العمل. المقر يجمع الورش؛ وموقع التنفيذ يحدد وجهة عمل اليوم.")}</p>
         </div>
         <div className="flex gap-2">
           {(!controlledDate || onDateChange) && (
             <Input
-              aria-label="تاريخ الإحصاءات والتكليف"
+              aria-label={ui("تاريخ الإحصاءات والتكليف")}
               type="date"
               value={date}
               onChange={(e) => {
@@ -283,9 +275,7 @@ export function WorkshopManagement({
           )}
           {permission.data && (
             <Button onClick={() => openEdit()}>
-              <Plus className="ml-2 h-4 w-4" />
-              ورشة جديدة
-            </Button>
+              <Plus className="ml-2 h-4 w-4" />{ui("ورشة جديدة")}</Button>
           )}
         </div>
       </header>
@@ -302,19 +292,17 @@ export function WorkshopManagement({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Input
           className="max-w-sm"
-          aria-label="البحث في الورش"
-          placeholder="ابحث بالورشة، المسؤول أو التخصص…"
+          aria-label={ui("البحث في الورش")}
+          placeholder={ui("ابحث بالورشة، المسؤول أو التخصص…")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
         <Button variant="outline" onClick={() => setArchived(!archived)}>
-          {archived ? "عرض الورش النشطة" : "الأرشيف"}
+          {archived ? ui("عرض الورش النشطة") : ui("الأرشيف")}
         </Button>
       </div>
       {permission.data && (
-        <p className="text-xs text-muted-foreground">
-          اسحب البطاقة لترتيب الورش، أو استخدم أسهم الترتيب. يُحفظ الترتيب لجميع المستخدمين.
-        </p>
+        <p className="text-xs text-muted-foreground">{ui("اسحب البطاقة لترتيب الورش، أو استخدم أسهم الترتيب. يُحفظ الترتيب لجميع المستخدمين.")}</p>
       )}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {visible.map((w, index) => {
@@ -347,11 +335,11 @@ export function WorkshopManagement({
               <div className="flex items-start justify-between gap-3 border-b p-5">
                 <div>
                   <p className="text-xs text-muted-foreground">
-                    {w.specialty || "فريق متعدد الأعمال"}
+                    {w.specialty || ui("فريق متعدد الأعمال")}
                   </p>
                   <h3 className="mt-1 text-lg font-semibold">{w.name}</h3>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    {w.supervisor_name || "لم يُحدد مسؤول الفريق"}
+                    {w.supervisor_name || ui("لم يُحدد مسؤول الفريق")}
                   </p>
                 </div>
                 {permission.data && (
@@ -360,51 +348,44 @@ export function WorkshopManagement({
               </div>
               <div className="flex-1 space-y-4 p-5">
                 <p className="flex items-center gap-2 text-sm">
-                  <Building2 className="h-4 w-4 text-muted-foreground" />
-                  المقر: {siteName(w.home_site_id)}
+                  <Building2 className="h-4 w-4 text-muted-foreground" />{ui("المقر: ")}{siteName(w.home_site_id)}
                 </p>
                 {w.description && <p className="text-sm text-muted-foreground">{w.description}</p>}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-lg bg-muted/40 p-3">
-                    <p className="text-xs text-muted-foreground">الكادر المسجل</p>
+                    <p className="text-xs text-muted-foreground">{ui("الكادر المسجل")}</p>
                     <p className="mt-1 text-xl font-semibold">{count}</p>
                   </div>
                   <div className="rounded-lg bg-muted/40 p-3">
-                    <p className="text-xs text-muted-foreground">الحضور المبلغ اليوم</p>
+                    <p className="text-xs text-muted-foreground">{ui("الحضور المبلغ اليوم")}</p>
                     <p className="mt-1 text-xl font-semibold">{attended}</p>
                   </div>
                 </div>
                 <div className="border-r-2 border-primary pr-3">
-                  <p className="text-xs text-muted-foreground">تكليف {date}</p>
+                  <p className="text-xs text-muted-foreground">{ui("تكليف ")}{date}</p>
                   <p className="mt-1 text-sm font-medium">
-                    {report?.work_activity || "لم يُحدد عمل لهذا اليوم"}
+                    {report?.work_activity || ui("لم يُحدد عمل لهذا اليوم")}
                   </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    وجهة التنفيذ: {siteName(report?.work_site_id)}
+                  <p className="mt-1 text-xs text-muted-foreground">{ui("وجهة التنفيذ: ")}{siteName(report?.work_site_id)}
                   </p>
                 </div>
-                <Button variant="outline" className="w-full" onClick={() => setRoster(w)}>
-                  عرض الكادر والحضور ({count})
+                <Button variant="outline" className="w-full" onClick={() => setRoster(w)}>{ui("عرض الكادر والحضور (")}{count})
                 </Button>
                 {siteId && (
                   <Badge variant="outline">
-                    {w.home_site_id === siteId ? "ورشة تابعة للمقر" : "فريق مكلف بالعمل في الموقع"}
+                    {w.home_site_id === siteId ? ui("ورشة تابعة للمقر") : ui("فريق مكلف بالعمل في الموقع")}
                   </Badge>
                 )}
               </div>
               <footer className="flex flex-wrap gap-1 border-t p-3">
                 {onSelect && (
                   <Button size="sm" variant="outline" onClick={() => onSelect(w.id)}>
-                    <UsersRound className="ml-1 h-4 w-4" />
-                    إدارة الكادر
-                  </Button>
+                    <UsersRound className="ml-1 h-4 w-4" />{ui("إدارة الكادر")}</Button>
                 )}
                 {permission.data && (
                   <>
                     <Button disabled={busy} size="sm" variant="ghost" onClick={() => openEdit(w)}>
-                      <Pencil className="ml-1 h-4 w-4" />
-                      تعديل
-                    </Button>
+                      <Pencil className="ml-1 h-4 w-4" />{ui("تعديل")}</Button>
                     <Button
                       disabled={busy || !w.is_active}
                       size="sm"
@@ -419,12 +400,10 @@ export function WorkshopManagement({
                         setActivity(report?.work_activity ?? "");
                       }}
                     >
-                      <HardHat className="ml-1 h-4 w-4" />
-                      تكليف اليوم
-                    </Button>
+                      <HardHat className="ml-1 h-4 w-4" />{ui("تكليف اليوم")}</Button>
                     <Button
-                      aria-label="تقديم الورشة"
-                      title="تقديم الورشة"
+                      aria-label={ui("تقديم الورشة")}
+                      title={ui("تقديم الورشة")}
                       disabled={busy || index === 0}
                       size="icon"
                       variant="ghost"
@@ -433,8 +412,8 @@ export function WorkshopManagement({
                       <ArrowUp className="h-4 w-4" />
                     </Button>
                     <Button
-                      aria-label="تأخير الورشة"
-                      title="تأخير الورشة"
+                      aria-label={ui("تأخير الورشة")}
+                      title={ui("تأخير الورشة")}
                       disabled={busy || index === visible.length - 1}
                       size="icon"
                       variant="ghost"
@@ -450,9 +429,7 @@ export function WorkshopManagement({
         })}
       </div>
       {!visible.length && (
-        <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-          لا توجد ورش مطابقة. اربط الورش بالمقر من إعدادات كل ورشة لتظهر هنا.
-        </div>
+        <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">{ui("لا توجد ورش مطابقة. اربط الورش بالمقر من إعدادات كل ورشة لتظهر هنا.")}</div>
       )}
       <Dialog
         open={!!editing}
@@ -460,9 +437,9 @@ export function WorkshopManagement({
           if (!open && !busy) setEditing(null);
         }}
       >
-        <DialogContent dir="rtl" className="max-h-[90dvh] overflow-y-auto gap-6 sm:max-w-xl">
+        <DialogContent dir={direction()} className="max-h-[90dvh] overflow-y-auto gap-6 sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>{editing === "new" ? "إضافة ورشة" : "هوية الورشة وإعداداتها"}</DialogTitle>
+            <DialogTitle>{editing === "new" ? ui("إضافة ورشة") : ui("هوية الورشة وإعداداتها")}</DialogTitle>
           </DialogHeader>
           <form
             className="space-y-6"
@@ -489,7 +466,7 @@ export function WorkshopManagement({
             }}
           >
             <Label className="flex flex-col items-stretch gap-3 leading-6">
-              <span>اسم الورشة</span>
+              <span>{ui("اسم الورشة")}</span>
               <Input
                 required
                 minLength={2}
@@ -499,16 +476,16 @@ export function WorkshopManagement({
               />
             </Label>
             <Label className="flex flex-col items-stretch gap-3 leading-6">
-              <span>المقر الدائم / الموقع الحاضن</span>
+              <span>{ui("المقر الدائم / الموقع الحاضن")}</span>
               <WorkshopSitePicker
-                label="المقر الدائم"
+                label={ui("المقر الدائم")}
                 sites={data!.sites}
                 value={form.home_site_id}
                 onChange={(id) => setForm({ ...form, home_site_id: id })}
               />
             </Label>
             <Label className="flex flex-col items-stretch gap-3 leading-6">
-              <span>مسؤول الفريق</span>
+              <span>{ui("مسؤول الفريق")}</span>
               <Input
                 maxLength={120}
                 value={form.supervisor_name}
@@ -516,16 +493,16 @@ export function WorkshopManagement({
               />
             </Label>
             <Label className="flex flex-col items-stretch gap-3 leading-6">
-              <span>التخصص الأساسي</span>
+              <span>{ui("التخصص الأساسي")}</span>
               <Input
                 maxLength={120}
-                placeholder="مثال: ستيل / صيانة / تصنيع"
+                placeholder={ui("مثال: ستيل / صيانة / تصنيع")}
                 value={form.specialty}
                 onChange={(e) => setForm({ ...form, specialty: e.target.value })}
               />
             </Label>
             <Label className="flex flex-col items-stretch gap-3 leading-6">
-              <span>وصف وإمكانات الورشة</span>
+              <span>{ui("وصف وإمكانات الورشة")}</span>
               <Textarea
                 maxLength={1000}
                 value={form.description}
@@ -534,7 +511,7 @@ export function WorkshopManagement({
             </Label>
             <div className="flex justify-between gap-2">
               <Button disabled={busy || form.name.trim().length < 2} type="submit">
-                {busy ? "جارٍ الحفظ…" : "حفظ الإعدادات"}
+                {busy ? ui("جارٍ الحفظ…") : ui("حفظ الإعدادات")}
               </Button>
               {editing && editing !== "new" && (
                 <Button
@@ -557,13 +534,11 @@ export function WorkshopManagement({
                   ) : (
                     <RotateCcw className="ml-2 h-4 w-4" />
                   )}
-                  {editing.is_active ? "أرشفة الورشة" : "إعادة تفعيل"}
+                  {editing.is_active ? ui("أرشفة الورشة") : ui("إعادة تفعيل")}
                 </Button>
               )}
             </div>
-            <p className="text-xs text-muted-foreground">
-              تعديل الاسم لا يغير هوية الورشة أو كادرها. الأرشفة تحتفظ بسجلاتها السابقة.
-            </p>
+            <p className="text-xs text-muted-foreground">{ui("تعديل الاسم لا يغير هوية الورشة أو كادرها. الأرشفة تحتفظ بسجلاتها السابقة.")}</p>
           </form>
         </DialogContent>
       </Dialog>
@@ -573,16 +548,16 @@ export function WorkshopManagement({
           if (!open && !busy) setTask(null);
         }}
       >
-        <DialogContent dir="rtl" className="max-h-[90dvh] overflow-y-auto gap-6 sm:max-w-xl">
+        <DialogContent dir={direction()} className="max-h-[90dvh] overflow-y-auto gap-6 sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>تكليف {task?.name}</DialogTitle>
+            <DialogTitle>{ui("تكليف ")}{task?.name}</DialogTitle>
           </DialogHeader>
           <form
             className="space-y-6"
             onSubmit={(e) => {
               e.preventDefault();
               if (!workshopPeriodDays(periodTask ? taskStart : date, periodTask ? taskEnd : date)) {
-                toast.error("اختر فترة صحيحة بحد أقصى 366 يوماً");
+                toast.error(ui("اختر فترة صحيحة بحد أقصى 366 يوماً"));
                 return;
               }
               void run(async () => {
@@ -605,23 +580,17 @@ export function WorkshopManagement({
                   type="checkbox"
                   checked={periodTask}
                   onChange={(e) => setPeriodTask(e.target.checked)}
-                />
-                إسناد مستمر لفترة محددة
-              </label>
+                />{ui("إسناد مستمر لفترة محددة")}</label>
               {periodTask ? (
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Label className="flex flex-col gap-3 leading-6">
-                    من تاريخ
-                    <Input
+                  <Label className="flex flex-col gap-3 leading-6">{ui("من تاريخ")}<Input
                       type="date"
                       required
                       value={taskStart}
                       onChange={(e) => setTaskStart(e.target.value)}
                     />
                   </Label>
-                  <Label className="flex flex-col gap-3 leading-6">
-                    إلى تاريخ
-                    <Input
+                  <Label className="flex flex-col gap-3 leading-6">{ui("إلى تاريخ")}<Input
                       type="date"
                       required
                       min={taskStart}
@@ -631,18 +600,15 @@ export function WorkshopManagement({
                   </Label>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">ليوم {date} فقط</p>
+                <p className="text-sm text-muted-foreground">{ui("ليوم ")}{date}{ui(" فقط")}</p>
               )}
               {periodTask && (
-                <p className="text-xs text-muted-foreground">
-                  يشمل يوم البداية والنهاية ·{" "}
-                  {workshopPeriodDays(taskStart, taskEnd) || "فترة غير صحيحة"} يوم · الحد الأقصى 366
-                  يوماً
-                </p>
+                <p className="text-xs text-muted-foreground">{ui("يشمل يوم البداية والنهاية ·")}{" "}
+                  {workshopPeriodDays(taskStart, taskEnd) || ui("فترة غير صحيحة")}{ui(" يوم · الحد الأقصى 366 يوماً")}</p>
               )}
             </div>
             <fieldset className="space-y-2">
-              <legend className="mb-2 text-sm font-medium">تطبيق التكليف على الورش</legend>
+              <legend className="mb-2 text-sm font-medium">{ui("تطبيق التكليف على الورش")}</legend>
               <div className="max-h-36 space-y-2 overflow-auto rounded-lg border p-3">
                 {all
                   .filter((w) => w.is_active)
@@ -664,36 +630,30 @@ export function WorkshopManagement({
               </div>
             </fieldset>
             <Label className="flex flex-col items-stretch gap-3 leading-6">
-              <span>موقع التنفيذ / مركز التكلفة</span>
+              <span>{ui("موقع التنفيذ / مركز التكلفة")}</span>
               <WorkshopSitePicker
-                label="موقع التنفيذ / مركز التكلفة"
+                label={ui("موقع التنفيذ / مركز التكلفة")}
                 sites={data!.sites}
                 value={taskSite}
                 onChange={setTaskSite}
               />
             </Label>
             <Label className="flex flex-col items-stretch gap-3 leading-6">
-              <span>وصف الأعمال المسندة</span>
+              <span>{ui("وصف الأعمال المسندة")}</span>
               <Input
                 maxLength={200}
-                placeholder="مثال: المحطة الخامسة — أعمال الستيل"
+                placeholder={ui("مثال: المحطة الخامسة — أعمال الستيل")}
                 value={activity}
                 onChange={(e) => setActivity(e.target.value)}
               />
             </Label>
-            <p className="text-sm text-muted-foreground">
-              يُحفظ التكليف لكل يوم ضمن الفترة المختارة، وتظهر وجهته تلقائياً عند تسجيل الحضور. يمكن
-              تطبيقه على الحاضرين غير المسندين. الإسنادات الفردية السابقة محفوظة؛ عدّلها من توزيع
-              العمل عند الحاجة.
-            </p>
+            <p className="text-sm text-muted-foreground">{ui("يُحفظ التكليف لكل يوم ضمن الفترة المختارة، وتظهر وجهته تلقائياً عند تسجيل الحضور. يمكن تطبيقه على الحاضرين غير المسندين. الإسنادات الفردية السابقة محفوظة؛ عدّلها من توزيع العمل عند الحاجة.")}</p>
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
                 checked={applyTask}
                 onChange={(e) => setApplyTask(e.target.checked)}
-              />
-              تطبيق على الحاضرين غير المسندين حالياً
-            </label>
+              />{ui("تطبيق على الحاضرين غير المسندين حالياً")}</label>
             <Button
               type="submit"
               disabled={
@@ -703,8 +663,8 @@ export function WorkshopManagement({
               }
             >
               {busy
-                ? "جارٍ الحفظ…"
-                : `حفظ ${periodTask ? "تكليف الفترة" : "تكليف اليوم"} (${taskIds.length})`}
+                ? ui("جارٍ الحفظ…")
+                : (ui("حفظ ") + (periodTask ? "تكليف الفترة" : "تكليف اليوم") + " (" + (taskIds.length) + ")")}
             </Button>
           </form>
         </DialogContent>
@@ -715,10 +675,9 @@ export function WorkshopManagement({
           if (!open) setRoster(null);
         }}
       >
-        <DialogContent dir="rtl" className="max-h-[90dvh] overflow-y-auto gap-6 sm:max-w-3xl">
+        <DialogContent dir={direction()} className="max-h-[90dvh] overflow-y-auto gap-6 sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle>
-              كادر {roster?.name} · {date}
+            <DialogTitle>{ui("كادر ")}{roster?.name} · {date}
             </DialogTitle>
           </DialogHeader>
           {roster && (

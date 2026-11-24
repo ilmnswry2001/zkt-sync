@@ -1,3 +1,4 @@
+import { direction, displayLocale, ui } from "@/lib/ui-language";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -30,7 +31,7 @@ import {
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/tasks")({
-  head: () => ({ meta: [{ title: "مهامي اليومية" }] }),
+  head: () => ({ meta: [{ title: ui("مهامي اليومية") }] }),
   component: EmployeeTasksPage,
 });
 
@@ -179,10 +180,10 @@ function EmployeeTasksPage() {
   );
   const sendDepartmentGuidance = async () => {
     const content = departmentGuidanceContent.trim();
-    if (!selectedGuidanceDepartmentId) return toast.error("اختر القسم أولاً");
-    if (!content) return toast.error("اكتب نص التوجيه قبل إرساله");
-    if (content.length > 3000) return toast.error("يجب ألا يتجاوز التوجيه 3000 حرف");
-    if (!user) return toast.error("يجب تسجيل الدخول أولاً");
+    if (!selectedGuidanceDepartmentId) return toast.error(ui("اختر القسم أولاً"));
+    if (!content) return toast.error(ui("اكتب نص التوجيه قبل إرساله"));
+    if (content.length > 3000) return toast.error(ui("يجب ألا يتجاوز التوجيه 3000 حرف"));
+    if (!user) return toast.error(ui("يجب تسجيل الدخول أولاً"));
     setIsSendingDepartmentGuidance(true);
     try {
       const client = supabase as any;
@@ -199,9 +200,9 @@ function EmployeeTasksPage() {
               content,
               author_id: user.id,
             });
-      if (result.error) return toast.error(`تعذر إرسال التوجيه: ${formatErrorMessage(result.error)}`);
+      if (result.error) return toast.error((ui("تعذر إرسال التوجيه: ") + (formatErrorMessage(result.error))));
       await queryClient.invalidateQueries({ queryKey: ["employee-tasks", "department-guidance"] });
-      toast.success("تم إرسال التوجيه إلى القسم");
+      toast.success(ui("تم إرسال التوجيه إلى القسم"));
     } finally {
       setIsSendingDepartmentGuidance(false);
     }
@@ -322,9 +323,9 @@ function EmployeeTasksPage() {
       employee_id: currentEmployee?.id ?? null,
       department_id: currentEmployee?.department_id ?? t.department_id,
     } as any);
-    if (error) return toast.error(formatErrorMessage(error));
+    if (error) return toast.error(ui(formatErrorMessage(error)));
     await queryClient.invalidateQueries({ queryKey: ["employee-tasks"] });
-    toast.success("تم إنجاز المهمة المجدولة");
+    toast.success(ui("تم إنجاز المهمة المجدولة"));
   };
 
   const archiveQuery = useQuery({
@@ -385,13 +386,13 @@ function EmployeeTasksPage() {
     setEditingTask(null);
   };
   const saveTask = async () => {
-    if (!user) return toast.error("يجب تسجيل الدخول أولاً");
+    if (!user) return toast.error(ui("يجب تسجيل الدخول أولاً"));
     if (!canCreateTasks)
       return toast.error(
-        "لا يسمح لك بإضافة أو تعديل المهام. يسمح بذلك مدخل البيانات وإداري الموقع فقط.",
+        ui("لا يسمح لك بإضافة أو تعديل المهام. يسمح بذلك مدخل البيانات وإداري الموقع فقط."),
       );
-    if (selectedDate > today) return toast.error("لا يمكن تسجيل مهمة بتاريخ مستقبلي");
-    if (form.title.trim().length < 2) return toast.error("اكتب عنوان المهمة بوضوح");
+    if (selectedDate > today) return toast.error(ui("لا يمكن تسجيل مهمة بتاريخ مستقبلي"));
+    if (form.title.trim().length < 2) return toast.error(ui("اكتب عنوان المهمة بوضوح"));
     const payload = {
       task_date: selectedDate,
       title: form.title.trim(),
@@ -411,15 +412,15 @@ function EmployeeTasksPage() {
     if (result.error) {
       if (result.error.code === "23502" && result.error.message.includes("employee_id")) {
         return toast.error(
-          "قاعدة البيانات ما زالت تشترط employee_id. نفّذ كود تحديث جدول employee_tasks في Lovable Cloud SQL editor ثم أعد المحاولة.",
+          ui("قاعدة البيانات ما زالت تشترط employee_id. نفّذ كود تحديث جدول employee_tasks في Lovable Cloud SQL editor ثم أعد المحاولة."),
         );
       }
-      return toast.error(formatErrorMessage(result.error));
+      return toast.error(ui(formatErrorMessage(result.error)));
     }
     await invalidate();
     resetForm();
     playTaskSavedSound();
-    toast.success(editingTask ? "تم تعديل المهمة" : "تمت إضافة المهمة");
+    toast.success(editingTask ? ui("تم تعديل المهمة") : ui("تمت إضافة المهمة"));
   };
   const editTask = (task: Task) => {
     setEditingTask(task);
@@ -433,37 +434,37 @@ function EmployeeTasksPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
   const archiveTask = async (task: Task, restore = false) => {
-    if (!restore && !window.confirm("هل تريد أرشفة هذه المهمة؟ ستبقى محفوظة في الأرشيف.")) return;
+    if (!restore && !window.confirm(ui("هل تريد أرشفة هذه المهمة؟ ستبقى محفوظة في الأرشيف."))) return;
     const { error } = await supabase
       .from("employee_tasks")
       .update({ archived_at: restore ? null : new Date().toISOString() })
       .eq("id", task.id);
-    if (error) return toast.error(formatErrorMessage(error));
+    if (error) return toast.error(ui(formatErrorMessage(error)));
     await invalidate();
-    toast.success(restore ? "تمت استعادة المهمة" : "تمت أرشفة المهمة");
+    toast.success(restore ? ui("تمت استعادة المهمة") : ui("تمت أرشفة المهمة"));
   };
   const deleteTask = async (task: Task) => {
     if (!isAdmin && task.created_by !== user?.id) {
-      return toast.error("حذف مهام الآخرين متاح لمدير النظام فقط");
+      return toast.error(ui("حذف مهام الآخرين متاح لمدير النظام فقط"));
     }
-    if (!window.confirm("سيتم حذف المهمة نهائياً. هل أنت متأكد؟")) return;
+    if (!window.confirm(ui("سيتم حذف المهمة نهائياً. هل أنت متأكد؟"))) return;
     const { error } = await supabase.from("employee_tasks").delete().eq("id", task.id);
-    if (error) return toast.error(formatErrorMessage(error));
+    if (error) return toast.error(ui(formatErrorMessage(error)));
     await invalidate();
-    toast.success("تم حذف المهمة");
+    toast.success(ui("تم حذف المهمة"));
   };
   const deleteGuidance = async (note: GuidanceNote) => {
-    if (!isAdmin) return toast.error("حذف التوجيهات متاح لمدير النظام فقط");
-    if (!window.confirm("سيتم حذف هذا التوجيه نهائياً من حساب المستلم. هل تريد المتابعة؟")) return;
+    if (!isAdmin) return toast.error(ui("حذف التوجيهات متاح لمدير النظام فقط"));
+    if (!window.confirm(ui("سيتم حذف هذا التوجيه نهائياً من حساب المستلم. هل تريد المتابعة؟"))) return;
     const { data, error } = await (supabase as any)
       .from("employee_guidance_notes")
       .delete()
       .eq("id", note.id)
       .select("id");
-    if (error) return toast.error(`تعذر حذف التوجيه: ${formatErrorMessage(error)}`);
-    if (!data?.length) return toast.error("لم يتم حذف التوجيه؛ تحقق من صلاحية مدير النظام.");
+    if (error) return toast.error((ui("تعذر حذف التوجيه: ") + (formatErrorMessage(error))));
+    if (!data?.length) return toast.error(ui("لم يتم حذف التوجيه؛ تحقق من صلاحية مدير النظام."));
     await queryClient.invalidateQueries({ queryKey: ["employee-guidance"] });
-    toast.success("تم حذف التوجيه");
+    toast.success(ui("تم حذف التوجيه"));
   };
 
   const renderTaskRow = (task: Task, archived = false) => (
@@ -473,11 +474,11 @@ function EmployeeTasksPage() {
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-semibold text-base">{task.title}</h3>
             <Badge variant={task.status === "completed" ? "default" : "secondary"}>
-              {task.status === "completed" ? "منجزة" : "قيد التنفيذ"}
+              {task.status === "completed" ? ui("منجزة") : ui("قيد التنفيذ")}
             </Badge>
-            {archived && <Badge variant="outline">مؤرشفة</Badge>}
+            {archived && <Badge variant="outline">{ui("مؤرشفة")}</Badge>}
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">مهمتي الشخصية · {task.task_date}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{ui("مهمتي الشخصية · ")}{task.task_date}</p>
           {task.description && (
             <p className="mt-3 whitespace-pre-wrap text-sm">{task.description}</p>
           )}
@@ -485,16 +486,15 @@ function EmployeeTasksPage() {
         <div className="flex items-center gap-2 shrink-0">
           {task.duration_minutes > 0 && (
             <span className="text-xs text-muted-foreground flex items-center gap-1">
-              <Clock3 className="w-3.5 h-3.5" /> {task.duration_minutes} دقيقة
-            </span>
+              <Clock3 className="w-3.5 h-3.5" /> {task.duration_minutes}{ui(" دقيقة")}</span>
           )}
           {!archived && (
             <Button
               size="icon"
               variant="ghost"
               onClick={() => editTask(task)}
-              title="تعديل"
-              aria-label="تعديل"
+              title={ui("تعديل")}
+              aria-label={ui("تعديل")}
             >
               <Edit3 className="w-4 h-4" />
             </Button>
@@ -504,8 +504,8 @@ function EmployeeTasksPage() {
               size="icon"
               variant="ghost"
               onClick={() => void archiveTask(task)}
-              title="أرشفة"
-              aria-label="أرشفة"
+              title={ui("أرشفة")}
+              aria-label={ui("أرشفة")}
             >
               <Archive className="w-4 h-4 text-warning" />
             </Button>
@@ -515,8 +515,8 @@ function EmployeeTasksPage() {
               size="icon"
               variant="ghost"
               onClick={() => void archiveTask(task, true)}
-              title="استعادة"
-              aria-label="استعادة"
+              title={ui("استعادة")}
+              aria-label={ui("استعادة")}
             >
               <ArchiveRestore className="w-4 h-4 text-success" />
             </Button>
@@ -526,8 +526,8 @@ function EmployeeTasksPage() {
               size="icon"
               variant="ghost"
               onClick={() => void deleteTask(task)}
-              title="حذف"
-              aria-label="حذف"
+              title={ui("حذف")}
+              aria-label={ui("حذف")}
             >
               <Trash2 className="w-4 h-4 text-destructive" />
             </Button>
@@ -543,16 +543,12 @@ function EmployeeTasksPage() {
         <div>
           <div className="flex items-center gap-2">
             <ClipboardCheck className="w-7 h-7 text-primary" />
-            <h1 className="text-3xl font-bold">مهامي اليومية</h1>
+            <h1 className="text-3xl font-bold">{ui("مهامي اليومية")}</h1>
           </div>
-          <p className="text-muted-foreground mt-1">
-            سجل الأعمال المنجزة خلال اليوم مع متابعة وإرشفة كاملة
-          </p>
+          <p className="text-muted-foreground mt-1">{ui("سجل الأعمال المنجزة خلال اليوم مع متابعة وإرشفة كاملة")}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Label htmlFor="task-date" className="whitespace-nowrap">
-            تاريخ المهام
-          </Label>
+          <Label htmlFor="task-date" className="whitespace-nowrap">{ui("تاريخ المهام")}</Label>
           <Input
             id="task-date"
             type="date"
@@ -563,12 +559,12 @@ function EmployeeTasksPage() {
         </div>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <StatCard label="إجمالي المهام" value={stats.total} icon={ListChecks} />
-        <StatCard label="منجزة" value={stats.completed} icon={CheckCircle2} />
-        <StatCard label="قيد التنفيذ" value={stats.inProgress} icon={Clock3} />
-        <StatCard label="إجمالي الدقائق" value={stats.minutes} icon={Clock3} />
+        <StatCard label={ui("إجمالي المهام")} value={stats.total} icon={ListChecks} />
+        <StatCard label={ui("منجزة")} value={stats.completed} icon={CheckCircle2} />
+        <StatCard label={ui("قيد التنفيذ")} value={stats.inProgress} icon={Clock3} />
+        <StatCard label={ui("إجمالي الدقائق")} value={stats.minutes} icon={Clock3} />
         <StatCard
-          label="نسبة الإنجاز"
+          label={ui("نسبة الإنجاز")}
           value={stats.completionRate}
           suffix="%"
           icon={CheckCircle2}
@@ -577,61 +573,54 @@ function EmployeeTasksPage() {
       <Tabs
         value={activeTab}
         onValueChange={(value) => setActiveTab(value as "daily" | "archive" | "guidance")}
-        dir="rtl"
+        dir={direction()}
       >
         <TabsList>
-          <TabsTrigger value="daily">إدخال ومتابعة المهام</TabsTrigger>
-          <TabsTrigger value="archive">أرشيف المهام</TabsTrigger>
-          <TabsTrigger value="guidance">توجيهات مدير القسم</TabsTrigger>
+          <TabsTrigger value="daily">{ui("إدخال ومتابعة المهام")}</TabsTrigger>
+          <TabsTrigger value="archive">{ui("أرشيف المهام")}</TabsTrigger>
+          <TabsTrigger value="guidance">{ui("توجيهات مدير القسم")}</TabsTrigger>
         </TabsList>
         <TabsContent value="daily" className="space-y-5">
           {(isAdmin || isHR) && (
             <Card className="overflow-hidden rounded-2xl border-teal-200 bg-gradient-to-br from-teal-50 via-white to-emerald-50 shadow-sm dark:border-teal-900 dark:from-teal-950/40 dark:via-card dark:to-emerald-950/20">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2">
-                  <Megaphone className="h-5 w-5 text-teal-700 dark:text-teal-300" /> إرسال توجيه
-                  للقسم
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  اكتب تعليمات اليوم لتظهر لأعضاء القسم في مهامي اليومية.
-                </p>
+                  <Megaphone className="h-5 w-5 text-teal-700 dark:text-teal-300" />{ui(" إرسال توجيه للقسم")}</CardTitle>
+                <p className="text-sm text-muted-foreground">{ui("اكتب تعليمات اليوم لتظهر لأعضاء القسم في مهامي اليومية.")}</p>
               </CardHeader>
               <CardContent className="grid gap-4 md:grid-cols-[minmax(13rem,0.7fr)_1.5fr]">
                 <div className="space-y-2">
-                  <Label htmlFor="guidance-department">القسم</Label>
+                  <Label htmlFor="guidance-department">{ui("القسم")}</Label>
                   <select
                     id="guidance-department"
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                     value={selectedGuidanceDepartmentId}
                     onChange={(event) => setGuidanceDepartmentId(event.target.value)}
                   >
-                    <option value="" disabled>
-                      اختر القسم
-                    </option>
+                    <option value="" disabled>{ui("اختر القسم")}</option>
                     {guidanceDepartments.map((department) => (
                       <option key={department.id} value={department.id}>
                         {department.name}
                       </option>
                     ))}
                   </select>
-                  <p className="text-xs text-muted-foreground">
-                    التوجيه مرتبط بتاريخ {selectedDate}
+                  <p className="text-xs text-muted-foreground">{ui("التوجيه مرتبط بتاريخ ")}{selectedDate}
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="daily-guidance">نص التوجيه</Label>
+                  <Label htmlFor="daily-guidance">{ui("نص التوجيه")}</Label>
                   <Textarea
                     id="daily-guidance"
                     value={departmentGuidanceContent}
                     onChange={(event) => setDepartmentGuidanceContent(event.target.value)}
                     maxLength={3000}
-                    placeholder="اكتب الأولويات والتعليمات المطلوبة من الفريق..."
+                    placeholder={ui("اكتب الأولويات والتعليمات المطلوبة من الفريق...")}
                     className="min-h-24 bg-background"
                   />
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs text-muted-foreground">
                       {departmentGuidanceContent.length}/3000
-                      {departmentGuidanceQuery.data ? " · توجيه محفوظ" : ""}
+                      {departmentGuidanceQuery.data ? ui(" · توجيه محفوظ") : ""}
                     </span>
                     <Button
                       onClick={() => void sendDepartmentGuidance()}
@@ -647,7 +636,7 @@ function EmployeeTasksPage() {
                       ) : (
                         <Send className="ml-2 h-4 w-4" />
                       )}
-                      {departmentGuidanceQuery.data ? "تحديث التوجيه" : "إرسال التوجيه"}
+                      {departmentGuidanceQuery.data ? ui("تحديث التوجيه") : ui("إرسال التوجيه")}
                     </Button>
                   </div>
                 </div>
@@ -658,36 +647,34 @@ function EmployeeTasksPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Plus className="w-5 h-5 text-primary" />
-                {editingTask ? "تعديل مهمة" : "إضافة مهمة منجزة"}
+                {editingTask ? ui("تعديل مهمة") : ui("إضافة مهمة منجزة")}
               </CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
-                <b className="text-foreground">السجل الشخصي:</b> سيتم حفظ المهمة تلقائياً باسم حسابك
-                الحالي، ولا يمكن إدخال مهمة باسم موظف آخر.
-              </div>
+                <b className="text-foreground">{ui("السجل الشخصي:")}</b>{ui(" سيتم حفظ المهمة تلقائياً باسم حسابك الحالي، ولا يمكن إدخال مهمة باسم موظف آخر.")}</div>
               <div>
-                <Label>حالة المهمة</Label>
+                <Label>{ui("حالة المهمة")}</Label>
                 <select
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                   value={form.status}
                   onChange={(e) => setForm({ ...form, status: e.target.value as TaskStatus })}
                 >
-                  <option value="completed">منجزة</option>
-                  <option value="in_progress">قيد التنفيذ</option>
+                  <option value="completed">{ui("منجزة")}</option>
+                  <option value="in_progress">{ui("قيد التنفيذ")}</option>
                 </select>
               </div>
               <div className="md:col-span-2">
-                <Label>عنوان المهمة</Label>
+                <Label>{ui("عنوان المهمة")}</Label>
                 <Input
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
-                  placeholder="مثال: إعداد التقرير اليومي للموقع"
+                  placeholder={ui("مثال: إعداد التقرير اليومي للموقع")}
                   maxLength={200}
                 />
               </div>
               <div>
-                <Label>المدة بالدقائق (اختياري)</Label>
+                <Label>{ui("المدة بالدقائق (اختياري)")}</Label>
                 <Input
                   type="number"
                   min="0"
@@ -698,27 +685,25 @@ function EmployeeTasksPage() {
                 />
               </div>
               <div className="md:col-span-2">
-                <Label>تفاصيل المهمة (اختياري)</Label>
+                <Label>{ui("تفاصيل المهمة (اختياري)")}</Label>
                 <Textarea
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  placeholder="اكتب وصفاً مختصراً لما تم إنجازه..."
+                  placeholder={ui("اكتب وصفاً مختصراً لما تم إنجازه...")}
                 />
               </div>
               <div className="md:col-span-2 flex justify-end gap-2">
-                <Button variant="outline" onClick={resetForm}>
-                  تفريغ
-                </Button>
+                <Button variant="outline" onClick={resetForm}>{ui("تفريغ")}</Button>
                 <Button onClick={() => void saveTask()} disabled={activeTasksQuery.isLoading}>
                   {activeTasksQuery.isLoading && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
-                  {editingTask ? "حفظ التعديل" : "حفظ المهمة"}
+                  {editingTask ? ui("حفظ التعديل") : ui("حفظ المهمة")}
                 </Button>
               </div>
             </CardContent>
           </Card>
           {dueTemplates.length > 0 && (
             <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2"><ListChecks className="h-5 w-5" /> قائمة المهام المجدولة — {selectedDate}</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="flex items-center gap-2"><ListChecks className="h-5 w-5" />{ui(" قائمة المهام المجدولة — ")}{selectedDate}</CardTitle></CardHeader>
               <CardContent className="space-y-2">
                 {dueTemplates.map((t) => {
                   const done = activeTasks.some((task) => task.title === t.title && task.status === "completed");
@@ -732,7 +717,7 @@ function EmployeeTasksPage() {
                           {t.description ? ` · ${t.description}` : ""}
                         </p>
                       </div>
-                      {done ? <Badge>منجزة</Badge> : <Button size="sm" onClick={() => void completeTemplate(t)}><CheckCircle2 className="ml-1 h-4 w-4" /> تم</Button>}
+                      {done ? <Badge>{ui("منجزة")}</Badge> : <Button size="sm" onClick={() => void completeTemplate(t)}><CheckCircle2 className="ml-1 h-4 w-4" />{ui(" تم")}</Button>}
                     </div>
                   );
                 })}
@@ -741,22 +726,19 @@ function EmployeeTasksPage() {
           )}
           <section className="space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold">مهام {selectedDate}</h2>
-              <Badge variant="outline">{activeTasks.length} مهمة</Badge>
+              <h2 className="text-xl font-semibold">{ui("مهام ")}{selectedDate}</h2>
+              <Badge variant="outline">{activeTasks.length}{ui(" مهمة")}</Badge>
             </div>
             {activeTasksQuery.isLoading ? (
-              <p className="text-muted-foreground">جارٍ تحميل المهام...</p>
+              <p className="text-muted-foreground">{ui("جارٍ تحميل المهام...")}</p>
             ) : activeTasksQuery.error ? (
-              <p className="text-destructive">
-                تعذر تحميل المهام: {activeTasksQuery.error.message}
+              <p className="text-destructive">{ui("تعذر تحميل المهام: ")}{activeTasksQuery.error.message}
               </p>
             ) : activeTasks.length ? (
               <div className="space-y-3">{activeTasks.map((task) => renderTaskRow(task))}</div>
             ) : (
               <Card>
-                <CardContent className="py-12 text-center text-muted-foreground">
-                  لا توجد مهام مسجلة لهذا التاريخ. أضف أول مهمة من النموذج أعلاه.
-                </CardContent>
+                <CardContent className="py-12 text-center text-muted-foreground">{ui("لا توجد مهام مسجلة لهذا التاريخ. أضف أول مهمة من النموذج أعلاه.")}</CardContent>
               </Card>
             )}
           </section>
@@ -765,7 +747,7 @@ function EmployeeTasksPage() {
           <Card>
             <CardContent className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <Label>من تاريخ</Label>
+                <Label>{ui("من تاريخ")}</Label>
                 <Input
                   type="date"
                   max={today}
@@ -774,7 +756,7 @@ function EmployeeTasksPage() {
                 />
               </div>
               <div>
-                <Label>إلى تاريخ</Label>
+                <Label>{ui("إلى تاريخ")}</Label>
                 <Input
                   type="date"
                   max={today}
@@ -789,39 +771,34 @@ function EmployeeTasksPage() {
                     setArchiveFrom("");
                     setArchiveTo("");
                   }}
-                >
-                  إظهار كل الأرشيف
-                </Button>
+                >{ui("إظهار كل الأرشيف")}</Button>
               </div>
             </CardContent>
           </Card>
           {archiveQuery.isLoading ? (
-            <p className="text-muted-foreground">جارٍ تحميل الأرشيف...</p>
+            <p className="text-muted-foreground">{ui("جارٍ تحميل الأرشيف...")}</p>
           ) : archiveQuery.error ? (
-            <p className="text-destructive">تعذر تحميل الأرشيف: {archiveQuery.error.message}</p>
+            <p className="text-destructive">{ui("تعذر تحميل الأرشيف: ")}{archiveQuery.error.message}</p>
           ) : archivedTasks.length ? (
             <div className="space-y-3">
               {archivedTasks.map((task) => renderTaskRow(task, true))}
             </div>
           ) : (
             <Card>
-              <CardContent className="py-12 text-center text-muted-foreground">
-                لا توجد مهام مؤرشفة ضمن الفلتر.
-              </CardContent>
+              <CardContent className="py-12 text-center text-muted-foreground">{ui("لا توجد مهام مؤرشفة ضمن الفلتر.")}</CardContent>
             </Card>
           )}
         </TabsContent>
         <TabsContent value="guidance" className="space-y-5">
           <Card>
             <CardHeader>
-              <CardTitle>التوجيهات الواردة</CardTitle>
+              <CardTitle>{ui("التوجيهات الواردة")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {guidanceQuery.isLoading ? (
-                <p className="text-muted-foreground">جارٍ تحميل التوجيهات...</p>
+                <p className="text-muted-foreground">{ui("جارٍ تحميل التوجيهات...")}</p>
               ) : guidanceQuery.error ? (
-                <p className="text-destructive">
-                  تعذر تحميل التوجيهات: {guidanceQuery.error.message}
+                <p className="text-destructive">{ui("تعذر تحميل التوجيهات: ")}{guidanceQuery.error.message}
                 </p>
               ) : (guidanceQuery.data ?? []).length ? (
                 (guidanceQuery.data ?? []).map((note) => (
@@ -837,7 +814,7 @@ function EmployeeTasksPage() {
                     >
                       <div className="flex items-center justify-between gap-3">
                         <strong>{note.title}</strong>
-                        {!note.read_at && <Badge>جديد</Badge>}
+                        {!note.read_at && <Badge>{ui("جديد")}</Badge>}
                       </div>
                       <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
                         {note.content}
@@ -845,7 +822,7 @@ function EmployeeTasksPage() {
                       <p className="mt-2 text-xs text-muted-foreground">
                         {note.guidance_date}
                         {isAdmin &&
-                          ` · المستلم: ${guidanceProfileById.get(note.target_user_id)?.full_name ?? note.target_user_id}`}
+                          (ui(" · المستلم: ") + (guidanceProfileById.get(note.target_user_id)?.full_name ?? note.target_user_id))}
                       </p>
                     </button>
                     {isAdmin && (
@@ -855,14 +832,13 @@ function EmployeeTasksPage() {
                           variant="destructive"
                           onClick={() => void deleteGuidance(note)}
                         >
-                          <Trash2 className="ml-2 h-4 w-4" /> حذف التوجيه
-                        </Button>
+                          <Trash2 className="ml-2 h-4 w-4" />{ui(" حذف التوجيه")}</Button>
                       </div>
                     )}
                   </div>
                 ))
               ) : (
-                <p className="py-8 text-center text-muted-foreground">لا توجد توجيهات واردة.</p>
+                <p className="py-8 text-center text-muted-foreground">{ui("لا توجد توجيهات واردة.")}</p>
               )}
             </CardContent>
           </Card>
@@ -890,9 +866,9 @@ function StatCard({
           <Icon className="w-5 h-5 text-primary" />
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">{label}</p>
+          <p className="text-xs text-muted-foreground">{ui(label)}</p>
           <p className="text-2xl font-bold">
-            {value.toLocaleString("ar-IQ")}
+            {value.toLocaleString(displayLocale())}
             {suffix}
           </p>
         </div>

@@ -1,3 +1,4 @@
+import { direction, displayLocale, ui } from "@/lib/ui-language";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -30,9 +31,9 @@ type Props = {
   onClose: () => void;
 };
 
-const money = (amount: number) => `${amount.toLocaleString("ar-IQ")} د.ع`;
+const money = (amount: number) => `${amount.toLocaleString(displayLocale())} د.ع`;
 const timestamp = (value: string) =>
-  new Date(value).toLocaleString("ar-IQ", {
+  new Date(value).toLocaleString(displayLocale(), {
     dateStyle: "medium",
     timeStyle: "short",
     timeZone: COMPANY_TIME_ZONE,
@@ -109,9 +110,9 @@ export function AdvanceDetailsDialog({
         qc.invalidateQueries({ queryKey: ["advances", financeUserId] }),
         qc.invalidateQueries({ queryKey: ["payroll"] }),
       ]);
-      toast.success("تم إغلاق السلفة وتوثيق السبب");
+      toast.success(ui("تم إغلاق السلفة وتوثيق السبب"));
     },
-    onError: (error) => toast.error(formatErrorMessage(error, "تعذر إغلاق السلفة")),
+    onError: (error) => toast.error(ui(formatErrorMessage(error, "تعذر إغلاق السلفة"))),
   });
 
   const advance = details.data?.advance;
@@ -134,65 +135,62 @@ export function AdvanceDetailsDialog({
         if (!open && !closeAdvance.isPending) onClose();
       }}
     >
-      <DialogContent dir="rtl" className="max-h-[90dvh] max-w-4xl overflow-y-auto">
+      <DialogContent dir={direction()} className="max-h-[90dvh] max-w-4xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>تفاصيل السلفة</DialogTitle>
+          <DialogTitle>{ui("تفاصيل السلفة")}</DialogTitle>
           <DialogDescription>{employeeName}</DialogDescription>
         </DialogHeader>
         {details.isPending ? (
-          <p role="status">جارٍ تحميل تفاصيل السلفة…</p>
+          <p role="status">{ui("جارٍ تحميل تفاصيل السلفة…")}</p>
         ) : details.isError ? (
           <div className="space-y-3" role="alert">
             <p className="text-destructive">
-              {formatErrorMessage(details.error, "تعذر تحميل تفاصيل السلفة")}
+              {ui(formatErrorMessage(details.error, "تعذر تحميل تفاصيل السلفة"))}
             </p>
-            <Button variant="outline" onClick={() => void details.refetch()}>
-              إعادة المحاولة
-            </Button>
+            <Button variant="outline" onClick={() => void details.refetch()}>{ui("إعادة المحاولة")}</Button>
           </div>
         ) : (
           advance && (
             <div className="space-y-6">
               <div className="grid gap-3 sm:grid-cols-3">
-                <MetricCard title="أصل السلفة" value={money(Number(advance.amount))} />
-                <MetricCard title="المخصوم من الرواتب" value={money(deducted)} tone="success" />
-                <MetricCard title="الرصيد المجدول" value={money(balance)} tone="warning" />
+                <MetricCard title={ui("أصل السلفة")} value={money(Number(advance.amount))} />
+                <MetricCard title={ui("المخصوم من الرواتب")} value={money(deducted)} tone="success" />
+                <MetricCard title={ui("الرصيد المجدول")} value={money(balance)} tone="warning" />
               </div>
               <dl className="grid grid-cols-1 gap-4 rounded-lg border p-4 text-sm sm:grid-cols-2">
                 <div>
-                  <dt className="text-muted-foreground">تاريخ الإنشاء</dt>
+                  <dt className="text-muted-foreground">{ui("تاريخ الإنشاء")}</dt>
                   <dd>{timestamp(advance.created_at)}</dd>
                 </div>
                 <div>
-                  <dt className="text-muted-foreground">الحالة</dt>
+                  <dt className="text-muted-foreground">{ui("الحالة")}</dt>
                   <dd>
                     <Badge variant="secondary">
                       {closure
-                        ? closureLabels[closure.action]
+                        ? ui(closureLabels[closure.action])
                         : (advanceStatus[advance.status] ?? advance.status)}
                     </Badge>
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-muted-foreground">شهر بدء الخصم</dt>
+                  <dt className="text-muted-foreground">{ui("شهر بدء الخصم")}</dt>
                   <dd dir="ltr" className="text-right">
                     {advance.first_deduction_month.slice(0, 7)}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-muted-foreground">القسط الشهري وعدد الأقساط</dt>
+                  <dt className="text-muted-foreground">{ui("القسط الشهري وعدد الأقساط")}</dt>
                   <dd>
-                    {money(Number(advance.installment_amount))} · {advance.installments_count} قسط
-                  </dd>
+                    {money(Number(advance.installment_amount))} · {advance.installments_count}{ui(" قسط")}</dd>
                 </div>
                 <div className="sm:col-span-2">
-                  <dt className="text-muted-foreground">سبب تسجيل السلفة</dt>
+                  <dt className="text-muted-foreground">{ui("سبب تسجيل السلفة")}</dt>
                   <dd className="whitespace-pre-wrap break-words">{advance.purpose || "—"}</dd>
                 </div>
               </dl>
               {closure ? (
                 <section className="space-y-2 rounded-lg border bg-muted/30 p-4 text-sm">
-                  <h3 className="font-semibold">{closureLabels[closure.action]}</h3>
+                  <h3 className="font-semibold">{ui(closureLabels[closure.action])}</h3>
                   <p>
                     {timestamp(closure.closed_at)} · {money(Number(closure.amount))}
                   </p>
@@ -200,13 +198,12 @@ export function AdvanceDetailsDialog({
                 </section>
               ) : (
                 advance.status === "settled" && (
-                  <p className="text-sm text-muted-foreground">
-                    تاريخ آخر تحديث للسلفة المكتملة: {timestamp(advance.updated_at)}
+                  <p className="text-sm text-muted-foreground">{ui("تاريخ آخر تحديث للسلفة المكتملة: ")}{timestamp(advance.updated_at)}
                   </p>
                 )
               )}
               <section className="space-y-3">
-                <h3 className="font-semibold">جدول الأقساط وسجل الاستقطاعات</h3>
+                <h3 className="font-semibold">{ui("جدول الأقساط وسجل الاستقطاعات")}</h3>
                 {installments.length ? (
                   <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full min-w-[36rem] text-sm">
@@ -233,7 +230,7 @@ export function AdvanceDetailsDialog({
                               {item.payroll_runs?.paid_at && Number(item.deducted_amount) > 0
                                 ? timestamp(item.payroll_runs.paid_at)
                                 : Number(item.deducted_amount) > 0
-                                  ? "غير موثق"
+                                  ? ui("غير موثق")
                                   : "—"}
                             </td>
                             <td className="p-3">{item.payroll_runs?.payment_reference || "—"}</td>
@@ -246,15 +243,13 @@ export function AdvanceDetailsDialog({
                     </table>
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground">لا توجد أقساط مسجلة لهذه السلفة.</p>
+                  <p className="text-sm text-muted-foreground">{ui("لا توجد أقساط مسجلة لهذه السلفة.")}</p>
                 )}
               </section>
               {closureQuery.isError && (
                 <div role="alert" className="space-y-2 text-sm text-destructive">
-                  <p>تعذر تحميل سجل الإغلاق. {formatErrorMessage(closureQuery.error)}</p>
-                  <Button variant="outline" onClick={() => void closureQuery.refetch()}>
-                    إعادة المحاولة
-                  </Button>
+                  <p>{ui("تعذر تحميل سجل الإغلاق. ")}{ui(formatErrorMessage(closureQuery.error))}</p>
+                  <Button variant="outline" onClick={() => void closureQuery.refetch()}>{ui("إعادة المحاولة")}</Button>
                 </div>
               )}
               {canManage &&
@@ -265,12 +260,8 @@ export function AdvanceDetailsDialog({
                   <div className="space-y-4 rounded-lg border p-4">
                     {!action ? (
                       <div className="flex flex-wrap gap-2">
-                        <Button variant="outline" onClick={() => setAction("complete")}>
-                          إتمام السلفة
-                        </Button>
-                        <Button variant="destructive" onClick={() => setAction("waive")}>
-                          التنازل عن الرصيد
-                        </Button>
+                        <Button variant="outline" onClick={() => setAction("complete")}>{ui("إتمام السلفة")}</Button>
+                        <Button variant="destructive" onClick={() => setAction("waive")}>{ui("التنازل عن الرصيد")}</Button>
                       </div>
                     ) : (
                       <form
@@ -281,14 +272,14 @@ export function AdvanceDetailsDialog({
                         }}
                       >
                         <h3 className="font-semibold">
-                          {closureLabels[action]} · {money(balance)}
+                          {ui(closureLabels[action])} · {money(balance)}
                         </h3>
                         <p className="text-sm text-muted-foreground">
                           {action === "waive"
-                            ? "سيُعفى الموظف من الرصيد المتبقي وتُغلق أقساطه المجدولة."
-                            : "يُسجل هذا الإجراء تسوية الرصيد خارج الرواتب ويُغلق الأقساط المجدولة."}
+                            ? ui("سيُعفى الموظف من الرصيد المتبقي وتُغلق أقساطه المجدولة.")
+                            : ui("يُسجل هذا الإجراء تسوية الرصيد خارج الرواتب ويُغلق الأقساط المجدولة.")}
                         </p>
-                        <Label htmlFor="advance-closure-reason">السبب أو التوجيه (إلزامي)</Label>
+                        <Label htmlFor="advance-closure-reason">{ui("السبب أو التوجيه (إلزامي)")}</Label>
                         <Textarea
                           id="advance-closure-reason"
                           value={reason}
@@ -304,7 +295,7 @@ export function AdvanceDetailsDialog({
                             variant={action === "waive" ? "destructive" : "default"}
                             disabled={reason.trim().length < 2 || closeAdvance.isPending}
                           >
-                            {closeAdvance.isPending ? "جارٍ الحفظ…" : "تأكيد الإجراء"}
+                            {closeAdvance.isPending ? ui("جارٍ الحفظ…") : ui("تأكيد الإجراء")}
                           </Button>
                           <Button
                             type="button"
@@ -314,9 +305,7 @@ export function AdvanceDetailsDialog({
                               setAction(null);
                               setReason("");
                             }}
-                          >
-                            إلغاء
-                          </Button>
+                          >{ui("إلغاء")}</Button>
                         </div>
                       </form>
                     )}

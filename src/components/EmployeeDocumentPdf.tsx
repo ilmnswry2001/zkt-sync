@@ -1,3 +1,4 @@
+import { ui } from "@/lib/ui-language";
 import { useEffect, useRef, useState } from "react";
 import {
   getDocument,
@@ -69,16 +70,12 @@ export default function EmployeeDocumentPdf({ url }: { url: string }) {
 
   if (failed) {
     return (
-      <p role="alert" className="text-sm text-destructive">
-        تعذر عرض ملف PDF. أغلق المعاينة وافتحها مجدداً، أو نزّل المرفق.
-      </p>
+      <p role="alert" className="text-sm text-destructive">{ui("تعذر عرض ملف PDF. أغلق المعاينة وافتحها مجدداً، أو نزّل المرفق.")}</p>
     );
   }
   if (!pdf)
     return (
-      <p role="status" className="p-4 text-sm">
-        جارٍ تحميل ملف PDF…
-      </p>
+      <p role="status" className="p-4 text-sm">{ui("جارٍ تحميل ملف PDF…")}</p>
     );
 
   return (
@@ -93,11 +90,8 @@ export default function EmployeeDocumentPdf({ url }: { url: string }) {
           variant="outline"
           disabled={page === 1}
           onClick={() => setPage(page - 1)}
-        >
-          السابقة
-        </Button>
-        <span role="status" className="text-sm text-muted-foreground">
-          صفحة {page} من {pdf.numPages}
+        >{ui("السابقة")}</Button>
+        <span role="status" className="text-sm text-muted-foreground">{ui("صفحة ")}{page}{ui(" من ")}{pdf.numPages}
         </span>
         <Button
           type="button"
@@ -105,9 +99,7 @@ export default function EmployeeDocumentPdf({ url }: { url: string }) {
           variant="outline"
           disabled={page === pdf.numPages}
           onClick={() => setPage(page + 1)}
-        >
-          التالية
-        </Button>
+        >{ui("التالية")}</Button>
       </div>
     </div>
   );
@@ -150,19 +142,15 @@ function PdfPage({ pdf, page }: { pdf: PDFDocumentProxy; page: number }) {
   return (
     <>
       {status === "loading" && (
-        <p role="status" className="p-4 text-sm">
-          جارٍ عرض الصفحة…
-        </p>
+        <p role="status" className="p-4 text-sm">{ui("جارٍ عرض الصفحة…")}</p>
       )}
       {status === "error" && (
-        <p role="alert" className="p-4 text-sm text-destructive">
-          تعذر عرض هذه الصفحة.
-        </p>
+        <p role="alert" className="p-4 text-sm text-destructive">{ui("تعذر عرض هذه الصفحة.")}</p>
       )}
       <canvas
         ref={canvasRef}
         role="img"
-        aria-label={`صفحة ${page} من المستند`}
+        aria-label={(ui("صفحة ") + (page) + ui(" من المستند"))}
         hidden={status !== "ready"}
         className="mx-auto h-auto max-w-full bg-white"
       />

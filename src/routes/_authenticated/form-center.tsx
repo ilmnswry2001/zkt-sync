@@ -1,3 +1,4 @@
+import { direction, ui } from "@/lib/ui-language";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -12,7 +13,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { certificationDb as db, copyForm, loadFormsCenter } from "@/lib/certification-center";
 
 export const Route = createFileRoute("/_authenticated/form-center")({
-  head: () => ({ meta: [{ title: "النماذج السابقة — الموارد البشرية" }] }),
+  head: () => ({ meta: [{ title: ui("النماذج السابقة — الموارد البشرية") }] }),
   component: FormsCenter,
 });
 
@@ -43,9 +44,9 @@ function FormsCenter() {
       if (error) throw Error(error.message);
       after?.();
       await center.refetch();
-      toast.success("تم الحفظ");
+      toast.success(ui("تم الحفظ"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "تعذر الحفظ");
+      toast.error(e instanceof Error ? ui(e.message) : ui("تعذر الحفظ"));
     } finally {
       setBusy(false);
     }
@@ -63,47 +64,42 @@ function FormsCenter() {
   }
   if (center.error)
     return (
-      <Card dir="rtl" className="p-6">
-        تعذر تحميل النماذج السابقة <Button onClick={() => center.refetch()}>إعادة المحاولة</Button>
+      <Card dir={direction()} className="p-6">{ui("تعذر تحميل النماذج السابقة ")}<Button onClick={() => center.refetch()}>{ui("إعادة المحاولة")}</Button>
       </Card>
     );
   if (!center.data)
     return (
-      <p dir="rtl" className="p-6">
-        جارٍ تحميل النماذج السابقة…
-      </p>
+      <p dir={direction()} className="p-6">{ui("جارٍ تحميل النماذج السابقة…")}</p>
     );
   return (
-    <main dir="rtl" className="space-y-5 p-4 md:p-6">
+    <main dir={direction()} className="space-y-5 p-4 md:p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-3xl font-bold">النماذج السابقة</h1>
+        <h1 className="text-3xl font-bold">{ui("النماذج السابقة")}</h1>
         <Button variant="outline" onClick={() => setDialog("quick")}>
-          <QrCode className="ml-2 h-4 w-4" />
-          رابط النموذج السريع
-        </Button>
+          <QrCode className="ml-2 h-4 w-4" />{ui("رابط النموذج السريع")}</Button>
       </header>
-      {isHR && <Button onClick={() => setDialog("new")}>+ إضافة نوع استمارة جديدة</Button>}
+      {isHR && <Button onClick={() => setDialog("new")}>{ui("+ إضافة نوع استمارة جديدة")}</Button>}
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard
-          title="إجمالي القوالب"
+          title={ui("إجمالي القوالب")}
           value={templates.length}
           icon={FileText}
           tone="bg-sky-600"
         />
         <StatCard
-          title="قيد المراجعة"
+          title={ui("قيد المراجعة")}
           value={submissions.filter((row) => row.status === "pending_review").length}
           icon={Clock3}
           tone="bg-amber-500"
         />
         <StatCard
-          title="معتمدة"
+          title={ui("معتمدة")}
           value={submissions.filter((row) => row.status === "approved").length}
           icon={CheckCircle2}
           tone="bg-emerald-600"
         />
         <StatCard
-          title="نسبة الإنجاز"
+          title={ui("نسبة الإنجاز")}
           value={
             Math.round(
               (100 * submissions.filter((s) => s.status !== "pending_review").length) /
@@ -118,10 +114,10 @@ function FormsCenter() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>قوالب النماذج الرقمية</CardTitle>
+            <CardTitle>{ui("قوالب النماذج الرقمية")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {!templates.length && <p>لا توجد قوالب نشطة.</p>}
+            {!templates.length && <p>{ui("لا توجد قوالب نشطة.")}</p>}
             {templates.map((template) => (
               <div key={template.id} className="rounded-xl border p-3">
                 <div className="flex items-center justify-between gap-3">
@@ -135,9 +131,7 @@ function FormsCenter() {
                     size="sm"
                     variant="outline"
                     onClick={() => setSelectedTemplate(template.id)}
-                  >
-                    اختر
-                  </Button>
+                  >{ui("اختر")}</Button>
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">{template.description}</p>
               </div>
@@ -147,38 +141,36 @@ function FormsCenter() {
 
         <Card>
           <CardHeader>
-            <CardTitle>توليد رابط النموذج</CardTitle>
+            <CardTitle>{ui("توليد رابط النموذج")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="rounded-xl bg-muted/30 p-4 text-sm">
-              <p className="font-semibold">النموذج المختار</p>
-              <p className="mt-2">{selected?.title ?? "اختر استمارة"}</p>
+              <p className="font-semibold">{ui("النموذج المختار")}</p>
+              <p className="mt-2">{selected?.title ?? ui("اختر استمارة")}</p>
             </div>
             <Button
               disabled={!selected}
               onClick={() => copyForm(selectedTemplate)}
               className="w-full"
             >
-              <QrCode className="ml-2 h-4 w-4" /> إنشاء رابط مباشر
-            </Button>
+              <QrCode className="ml-2 h-4 w-4" />{ui(" إنشاء رابط مباشر")}</Button>
             <Button
               disabled={!selected}
               onClick={() => setDialog("qr")}
               className="w-full"
               variant="outline"
             >
-              <QrCode className="ml-2 h-4 w-4" /> إنشاء رمز QR
-            </Button>
+              <QrCode className="ml-2 h-4 w-4" />{ui(" إنشاء رمز QR")}</Button>
           </CardContent>
         </Card>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>طلبات المراجعة</CardTitle>
+          <CardTitle>{ui("طلبات المراجعة")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {!submissions.length && <p>لا توجد استمارات مرسلة للمراجعة.</p>}
+          {!submissions.length && <p>{ui("لا توجد استمارات مرسلة للمراجعة.")}</p>}
           {submissions.map((submission) => (
             <div key={submission.id} className="rounded-xl border p-3">
               <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -217,16 +209,12 @@ function FormsCenter() {
                   <Button
                     size="sm"
                     onClick={() => handleSubmissionDecision(submission.id, "approved")}
-                  >
-                    اعتماد
-                  </Button>
+                  >{ui("اعتماد")}</Button>
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => handleSubmissionDecision(submission.id, "rejected")}
-                  >
-                    رفض
-                  </Button>
+                  >{ui("رفض")}</Button>
                 </div>
               )}
             </div>

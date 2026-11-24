@@ -1,3 +1,4 @@
+import { direction, displayLocale, ui } from "@/lib/ui-language";
 import { useDirectorySearch } from "@/hooks/use-directory-search";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
@@ -49,7 +50,7 @@ import { printReport, escapeHtml } from "@/lib/report-print";
 export const Route = createFileRoute("/_authenticated/monthly")({
   head: () => ({
     meta: [
-      { title: "كشف الحضور الشهري" },
+      { title: ui("كشف الحضور الشهري") },
       {
         name: "description",
         content: "كشف حضور الموظفين حسب أيام الشهر مع فلاتر ورسم بياني وتعديل الحالات.",
@@ -344,11 +345,11 @@ function MonthlyPage() {
       if (error) throw error;
     },
     onSuccess: async () => {
-      toast.success("تم حفظ أيام تشغيل المركبة");
+      toast.success(ui("تم حفظ أيام تشغيل المركبة"));
       setActiveVehicle(null);
       await qc.invalidateQueries({ queryKey: ["monthly", "vehicle-report"] });
     },
-    onError: (error: Error) => toast.error(`تعذر حفظ حضور المركبة: ${formatErrorMessage(error)}`),
+    onError: (error: Error) => toast.error((ui("تعذر حفظ حضور المركبة: ") + (formatErrorMessage(error)))),
   });
   const saveMachineryAttendance = useMutation({
     mutationFn: async () => {
@@ -366,11 +367,11 @@ function MonthlyPage() {
       if (error) throw error;
     },
     onSuccess: async () => {
-      toast.success("تم حفظ أيام تشغيل الآلية");
+      toast.success(ui("تم حفظ أيام تشغيل الآلية"));
       setActiveMachinery(null);
       await qc.invalidateQueries({ queryKey: ["monthly", "machinery-report"] });
     },
-    onError: (error: Error) => toast.error(`تعذر حفظ حضور الآلية: ${formatErrorMessage(error)}`),
+    onError: (error: Error) => toast.error((ui("تعذر حفظ حضور الآلية: ") + (formatErrorMessage(error)))),
   });
   const exportVehicleReport = () => {
     const workbook = XLSX.utils.book_new();
@@ -404,12 +405,12 @@ function MonthlyPage() {
     const rowsMarkup = vehicleRows
       .map(
         (vehicle) =>
-          `<tr><td>${escapeHtml(vehicle.vehicle_no)}</td><td>${escapeHtml(vehicle.name)}</td><td>${vehicle.vehicle_class === "light" ? "خفيفة" : "ثقيلة"}</td><td>${vehicle.operatingDays}</td><td>${escapeHtml(vehicle.operatingDates.map((date) => Number(date.slice(8)).toLocaleString("ar")).join("، ") || "—")}</td><td>${Number(vehicle.daily_rate).toLocaleString("ar-IQ")}</td><td>${vehicle.total.toLocaleString("ar-IQ")}</td><td>${vehicle.is_active ? "نشطة" : "متوقفة"}</td></tr>`,
+          `<tr><td>${escapeHtml(vehicle.vehicle_no)}</td><td>${escapeHtml(vehicle.name)}</td><td>${vehicle.vehicle_class === "light" ? "خفيفة" : "ثقيلة"}</td><td>${vehicle.operatingDays}</td><td>${escapeHtml(vehicle.operatingDates.map((date) => Number(date.slice(8)).toLocaleString("ar")).join("، ") || "—")}</td><td>${Number(vehicle.daily_rate).toLocaleString(displayLocale())}</td><td>${vehicle.total.toLocaleString(displayLocale())}</td><td>${vehicle.is_active ? "نشطة" : "متوقفة"}</td></tr>`,
       )
       .join("");
-    const body = `<p>الشهر: ${escapeHtml(month)} · عدد المركبات: ${vehicleRows.length} · إجمالي الاستحقاق: ${vehicleTotal.toLocaleString("ar-IQ")} د.ع</p><table><thead><tr><th>رقم المركبة</th><th>المركبة</th><th>الفئة</th><th>أيام الحضور</th><th>تواريخ الحضور</th><th>الأجر اليومي</th><th>المستحق</th><th>الحالة</th></tr></thead><tbody>${rowsMarkup}</tbody></table>`;
+    const body = `<p>الشهر: ${escapeHtml(month)} · عدد المركبات: ${vehicleRows.length} · إجمالي الاستحقاق: ${vehicleTotal.toLocaleString(displayLocale())} د.ع</p><table><thead><tr><th>رقم المركبة</th><th>المركبة</th><th>الفئة</th><th>أيام الحضور</th><th>تواريخ الحضور</th><th>الأجر اليومي</th><th>المستحق</th><th>الحالة</th></tr></thead><tbody>${rowsMarkup}</tbody></table>`;
     if (!printReport(`التقرير الشهري للمركبات — ${month}`, body))
-      toast.error("اسمح بالنوافذ المنبثقة لطباعة التقرير");
+      toast.error(ui("اسمح بالنوافذ المنبثقة لطباعة التقرير"));
   };
   const rows = useMemo(() => data?.rows ?? [], [data?.rows]);
   const chart = useMemo(
@@ -428,11 +429,8 @@ function MonthlyPage() {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold">
-            <CalendarDays className="h-6 w-6 text-primary" /> كشف الحضور الشهري
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            حضور الموظفين يومًا بيوم · اضغط على حالة اليوم لعرض التفاصيل أو تعديلها
-          </p>
+            <CalendarDays className="h-6 w-6 text-primary" />{ui(" كشف الحضور الشهري")}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{ui("حضور الموظفين يومًا بيوم · اضغط على حالة اليوم لعرض التفاصيل أو تعديلها")}</p>
         </div>
         <Button
           variant="outline"
@@ -440,29 +438,25 @@ function MonthlyPage() {
           disabled={isFetching}
           onClick={() => qc.invalidateQueries({ queryKey: ["monthly"] })}
         >
-          <RefreshCw className={cn("ml-2 h-4 w-4", isFetching && "animate-spin")} /> تحديث التقرير
-        </Button>
+          <RefreshCw className={cn("ml-2 h-4 w-4", isFetching && "animate-spin")} />{ui(" تحديث التقرير")}</Button>
       </header>
 
-      <Tabs defaultValue="attendance" dir="rtl" className="space-y-4">
+      <Tabs defaultValue="attendance" dir={direction()} className="space-y-4">
         <TabsList className="grid h-auto w-full grid-cols-1 gap-2 bg-transparent p-0 sm:grid-cols-4">
-          <TabsTrigger value="history" className="min-h-12 rounded-xl border bg-card">سجل التغييرات</TabsTrigger>
+          <TabsTrigger value="history" className="min-h-12 rounded-xl border bg-card">{ui("سجل التغييرات")}</TabsTrigger>
           <TabsTrigger value="attendance" className="min-h-12 rounded-xl border bg-card">
-            <CalendarDays className="ml-2 h-4 w-4" /> كشف حضور الموظفين
-          </TabsTrigger>
+            <CalendarDays className="ml-2 h-4 w-4" />{ui(" كشف حضور الموظفين")}</TabsTrigger>
           <TabsTrigger value="vehicles" className="min-h-12 rounded-xl border bg-card">
-            <Truck className="ml-2 h-4 w-4" /> التقرير الشهري للمركبات
-          </TabsTrigger>
+            <Truck className="ml-2 h-4 w-4" />{ui(" التقرير الشهري للمركبات")}</TabsTrigger>
           <TabsTrigger value="machinery" className="min-h-12 rounded-xl border bg-card">
-            <Cog className="ml-2 h-4 w-4" /> حضور الآليات
-          </TabsTrigger>
+            <Cog className="ml-2 h-4 w-4" />{ui(" حضور الآليات")}</TabsTrigger>
       </TabsList>
       <TabsContent value="history"><EmployeeReportHistory key={month} month={month} /></TabsContent>
       <TabsContent value="attendance" className="mt-0">
       <Card className="min-w-0 overflow-hidden">
         <div className="grid grid-cols-1 gap-3 border-b p-4 sm:grid-cols-2 xl:grid-cols-3">
           <div className="space-y-1.5">
-            <Label htmlFor="report-month">الشهر</Label>
+            <Label htmlFor="report-month">{ui("الشهر")}</Label>
             <Input
               id="report-month"
               type="month"
@@ -478,13 +472,13 @@ function MonthlyPage() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="employee-search">بحث عن موظف</Label>
+            <Label htmlFor="employee-search">{ui("بحث عن موظف")}</Label>
             <div className="relative">
               <Search className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 id="employee-search"
                 className="pr-9"
-                placeholder="حرفان على الأقل من الاسم أو الرقم"
+                placeholder={ui("حرفان على الأقل من الاسم أو الرقم")}
                 maxLength={100}
                 value={search}
                 onChange={(e) => setFilter(setSearch, e.target.value)}
@@ -492,7 +486,7 @@ function MonthlyPage() {
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="employee-filter">الموظف</Label>
+            <Label htmlFor="employee-filter">{ui("الموظف")}</Label>
             <select
               id="employee-filter"
               className={selectClass}
@@ -503,7 +497,7 @@ function MonthlyPage() {
                 setSelectedEmployee(employeeOptions.find((employee) => employee.id === id) ?? null);
               }}
             >
-              <option value="">أول 20 موظفاً مطابقاً</option>
+              <option value="">{ui("أول 20 موظفاً مطابقاً")}</option>
               {selectedEmployee &&
                 !employeeOptions.some((employee) => employee.id === employeeId) && (
                 <option value={employeeId}>
@@ -517,12 +511,12 @@ function MonthlyPage() {
               ))}
             </select>
             {lookup.waiting || employeeLookup.isFetching ? (
-              <p role="status" className="text-xs text-muted-foreground">جارٍ البحث عن الموظفين…</p>
+              <p role="status" className="text-xs text-muted-foreground">{ui("جارٍ البحث عن الموظفين…")}</p>
             ) : employeeLookup.isError ? (
-              <p role="alert" className="text-xs text-destructive">تعذر البحث عن الموظفين.</p>
+              <p role="alert" className="text-xs text-destructive">{ui("تعذر البحث عن الموظفين.")}</p>
             ) : null}
           </div>
-          {filtersError && <p role="alert" className="text-xs text-destructive">تعذر تحميل خيارات الفلاتر.</p>}
+          {filtersError && <p role="alert" className="text-xs text-destructive">{ui("تعذر تحميل خيارات الفلاتر.")}</p>}
           {[
             {
               id: "department",
@@ -550,7 +544,7 @@ function MonthlyPage() {
             },
           ].map((filter) => (
             <div key={filter.id} className="space-y-1.5">
-              <Label htmlFor={filter.id}>{filter.label}</Label>
+              <Label htmlFor={filter.id}>{ui(filter.label)}</Label>
               <select
                 id={filter.id}
                 className={selectClass}
@@ -573,9 +567,7 @@ function MonthlyPage() {
                 checked={summarized}
                 onChange={(e) => setSummarized(e.target.checked)}
                 className="h-4 w-4 accent-primary"
-              />
-              عرض مختصر (الإجماليات)
-            </label>
+              />{ui("عرض مختصر (الإجماليات)")}</label>
             <Button
               size="sm"
               variant="ghost"
@@ -587,20 +579,17 @@ function MonthlyPage() {
                 setShift("");
                 setSelectedEmployee(null);
               }}
-            >
-              مسح الفلاتر
-            </Button>
+            >{ui("مسح الفلاتر")}</Button>
             {data && (
               <span className="mr-auto text-xs text-muted-foreground">
-                {(data?.totalRows ?? 0).toLocaleString("ar")} موظف
-              </span>
+                {(data?.totalRows ?? 0).toLocaleString("ar")}{ui(" موظف")}</span>
             )}
           </div>
         </div>
 
         <div
           className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b px-4 py-3 text-xs"
-          aria-label="دليل حالات الحضور"
+          aria-label={ui("دليل حالات الحضور")}
         >
           {statuses.map((status) => (
             <span key={status.value} className="inline-flex items-center gap-1.5">
@@ -610,44 +599,36 @@ function MonthlyPage() {
                   >
                 {status.code}
               </span>
-              {status.label}
+              {ui(status.label)}
             </span>
           ))}
-          <span className="text-muted-foreground">— لم يحن موعده</span>
-          <span className="text-muted-foreground">• تعديل يدوي</span>
-          <span className="rounded border border-orange-400 bg-orange-50 px-1.5 py-0.5 text-orange-700">
-            إضافي
-          </span>
+          <span className="text-muted-foreground">{ui("— لم يحن موعده")}</span>
+          <span className="text-muted-foreground">{ui("• تعديل يدوي")}</span>
+          <span className="rounded border border-orange-400 bg-orange-50 px-1.5 py-0.5 text-orange-700">{ui("إضافي")}</span>
         </div>
 
         {lookup.waiting || isPending ? (
-          <p role="status" className="py-20 text-center text-muted-foreground">
-            جارٍ تحميل كشف الحضور...
-          </p>
+          <p role="status" className="py-20 text-center text-muted-foreground">{ui("جارٍ تحميل كشف الحضور...")}</p>
         ) : error ? (
           <div role="alert" className="space-y-3 p-10 text-center">
-            <p className="text-destructive">تعذر تحميل التقرير: {error.message}</p>
-            <Button variant="outline" onClick={() => refetch()}>
-              إعادة المحاولة
-            </Button>
+            <p className="text-destructive">{ui("تعذر تحميل التقرير: ")}{error.message}</p>
+            <Button variant="outline" onClick={() => refetch()}>{ui("إعادة المحاولة")}</Button>
           </div>
         ) : !rows.length ? (
           <p role="status" className="py-20 text-center text-muted-foreground">
             {employeeId || department || site || shift || search.trim()
-              ? "لا يوجد موظفون يطابقون الفلاتر المحددة"
-              : "لا يوجد موظفون لعرضهم في التقرير"}
+              ? ui("لا يوجد موظفون يطابقون الفلاتر المحددة")
+              : ui("لا يوجد موظفون لعرضهم في التقرير")}
           </p>
         ) : (
           <>
             <section className="border-b p-4" aria-labelledby="attendance-chart-title">
-              <h2 id="attendance-chart-title" className="mb-3 text-sm font-medium">
-                الحضور والغياب خلال الشهر — الموظفون المعروضون
-              </h2>
+              <h2 id="attendance-chart-title" className="mb-3 text-sm font-medium">{ui("الحضور والغياب خلال الشهر — الموظفون المعروضون")}</h2>
               <div
                 dir="ltr"
                 className="h-56 w-full"
                 role="img"
-                aria-label="رسم يومي للحضور والغياب والإجازات للموظفين المعروضين"
+                aria-label={ui("رسم يومي للحضور والغياب والإجازات للموظفين المعروضين")}
               >
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chart} margin={{ top: 8, right: 12, left: -20, bottom: 5 }}>
@@ -697,27 +678,22 @@ function MonthlyPage() {
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">
-                    الرسم يشمل جميع نتائج الفلاتر، والإجماليات بالساعات. الأيام المستقبلية بلا تسجيل
-                    لا تُحتسب غيابًا.
-              </p>
+              <p className="mt-2 text-xs text-muted-foreground">{ui("الرسم يشمل جميع نتائج الفلاتر، والإجماليات بالساعات. الأيام المستقبلية بلا تسجيل لا تُحتسب غيابًا.")}</p>
             </section>
 
             <div
               className="max-h-[560px] overflow-auto"
               tabIndex={0}
               role="region"
-              aria-label="جدول الحضور الشهري، قابل للتمرير أفقيًا وعموديًا"
+              aria-label={ui("جدول الحضور الشهري، قابل للتمرير أفقيًا وعموديًا")}
             >
               <table className="w-full border-separate border-spacing-0 text-right text-xs">
-                <caption className="sr-only">كشف الحضور لشهر {month}</caption>
+                <caption className="sr-only">{ui("كشف الحضور لشهر ")}{month}</caption>
                 <thead className="sticky top-0 z-20">
                   <tr className="[&>th]:border-b [&>th]:border-l [&>th]:bg-muted [&>th]:px-3 [&>th]:py-3 [&>th]:font-medium [&>th]:whitespace-nowrap">
-                    <th scope="col" className="sticky right-0 z-30 min-w-56">
-                      الموظف / الرقم الوظيفي
-                    </th>
-                    <th scope="col">القسم</th>
-                    <th scope="col">الدوام</th>
+                    <th scope="col" className="sticky right-0 z-30 min-w-56">{ui("الموظف / الرقم الوظيفي")}</th>
+                    <th scope="col">{ui("القسم")}</th>
+                    <th scope="col">{ui("الدوام")}</th>
                     {!summarized &&
                       data?.dates.map((date) => (
                         <th scope="col" key={date} className="min-w-14 text-center">
@@ -729,7 +705,7 @@ function MonthlyPage() {
                       ))}
                     {summaryColumns.map((column) => (
                       <th scope="col" key={column.key} className="text-center">
-                        {column.label}
+                        {ui(column.label)}
                       </th>
                     ))}
                   </tr>
@@ -829,12 +805,11 @@ function MonthlyPage() {
             <footer className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-xs text-muted-foreground">
               <span>
                 {summarized
-                  ? "اضغط على اسم الموظف لعرض تفاصيل الأيام"
-                  : "اسحب الجدول أفقيًا لعرض بقية أيام الشهر"}
+                  ? ui("اضغط على اسم الموظف لعرض تفاصيل الأيام")
+                  : ui("اسحب الجدول أفقيًا لعرض بقية أيام الشهر")}
               </span>
-              <span>
-                عرض {rows.length} من {data?.totalRows ?? 0}
-                {(data?.totalRows ?? 0) > MONTHLY_EMPLOYEE_LIMIT && " · استخدم البحث للوصول إلى بقية الموظفين"}
+              <span>{ui("عرض ")}{rows.length}{ui(" من ")}{data?.totalRows ?? 0}
+                {(data?.totalRows ?? 0) > MONTHLY_EMPLOYEE_LIMIT && ui(" · استخدم البحث للوصول إلى بقية الموظفين")}
               </span>
             </footer>
           </>
@@ -860,14 +835,14 @@ function MonthlyPage() {
               },
               {
                 label: "إجمالي الاستحقاق",
-                value: `${vehicleTotal.toLocaleString("ar-IQ")} د.ع`,
+                value: `${vehicleTotal.toLocaleString(displayLocale())} د.ع`,
                 icon: Banknote,
               },
             ].map((stat) => (
               <Card key={stat.label} className="rounded-2xl">
                 <div className="flex items-center justify-between p-4">
                   <div>
-                    <p className="text-sm text-muted-foreground">{stat.label}</p>
+                    <p className="text-sm text-muted-foreground">{ui(stat.label)}</p>
                     <p className="mt-1 text-xl font-bold tabular-nums">
                       {vehicleReport.isPending ? "—" : stat.value}
                     </p>
@@ -882,10 +857,10 @@ function MonthlyPage() {
         <Card className="p-4">
           <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
             <div>
-              <h2 className="font-semibold">تشغيل المركبات خلال الشهر</h2>
-              <p className="text-xs text-muted-foreground">عدد المركبات المسجّل لها تشغيل في كل يوم · النتائج حسب الفلاتر الحالية</p>
+              <h2 className="font-semibold">{ui("تشغيل المركبات خلال الشهر")}</h2>
+              <p className="text-xs text-muted-foreground">{ui("عدد المركبات المسجّل لها تشغيل في كل يوم · النتائج حسب الفلاتر الحالية")}</p>
             </div>
-            <Badge variant="secondary">{vehicleRows.filter((vehicle) => vehicle.operatingDays > 0).length.toLocaleString("ar")} مركبة مسجلة</Badge>
+            <Badge variant="secondary">{vehicleRows.filter((vehicle) => vehicle.operatingDays > 0).length.toLocaleString("ar")}{ui(" مركبة مسجلة")}</Badge>
           </div>
           <div className="h-64 w-full" dir="ltr">
             <ResponsiveContainer width="100%" height="100%">
@@ -903,11 +878,9 @@ function MonthlyPage() {
           <div className="flex flex-col justify-between gap-4 border-b bg-muted/20 p-4 sm:flex-row sm:items-center sm:p-5">
               <div>
                 <h2 className="flex items-center gap-2 text-lg font-semibold">
-                  <Truck className="h-5 w-5 text-primary" /> مستحقات المركبات لشهر {month}
+                  <Truck className="h-5 w-5 text-primary" />{ui(" مستحقات المركبات لشهر ")}{month}
                 </h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  الاستحقاق = أيام التشغيل المسجلة × الأجر اليومي، وفق بيانات إدارة المركبات.
-                </p>
+                <p className="mt-1 text-sm text-muted-foreground">{ui("الاستحقاق = أيام التشغيل المسجلة × الأجر اليومي، وفق بيانات إدارة المركبات.")}</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -917,16 +890,13 @@ function MonthlyPage() {
                 >
                   <RefreshCw
                     className={cn("ml-2 h-4 w-4", vehicleReport.isFetching && "animate-spin")}
-                  />{" "}
-                  تحديث
-                </Button>
+                  />{" "}{ui("تحديث")}</Button>
                 <Button
                   variant="outline"
                   onClick={printVehicleReport}
                   disabled={!vehicleRows.length}
                 >
-                  <Printer className="ml-2 h-4 w-4" /> طباعة
-                </Button>
+                  <Printer className="ml-2 h-4 w-4" />{ui(" طباعة")}</Button>
                 <Button onClick={exportVehicleReport} disabled={!vehicleRows.length}>
                   <Download className="ml-2 h-4 w-4" /> Excel
                 </Button>
@@ -934,7 +904,7 @@ function MonthlyPage() {
           </div>
           <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-end">
               <div className="w-full space-y-1.5 sm:max-w-xs">
-                <Label htmlFor="vehicle-report-month">شهر التقرير</Label>
+                <Label htmlFor="vehicle-report-month">{ui("شهر التقرير")}</Label>
                 <Input
                   id="vehicle-report-month"
                   type="month"
@@ -946,49 +916,43 @@ function MonthlyPage() {
                 />
               </div>
               <div className="w-full space-y-1.5 sm:max-w-sm">
-                <Label htmlFor="vehicle-report-search">البحث عن مركبة</Label>
+                <Label htmlFor="vehicle-report-search">{ui("البحث عن مركبة")}</Label>
                 <div className="relative">
                   <Search className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="vehicle-report-search"
                     className="pr-9"
-                    placeholder="رقم المركبة أو الاسم"
+                    placeholder={ui("رقم المركبة أو الاسم")}
                     value={vehicleSearch}
                     onChange={(event) => setVehicleSearch(event.target.value)}
                   />
                 </div>
               </div>
               <Badge variant="secondary" className="w-fit sm:mr-auto">
-                {vehicleRows.length.toLocaleString("ar")} مركبة ·{" "}
-                {vehicleTotal.toLocaleString("ar-IQ")} د.ع
-              </Badge>
+                {vehicleRows.length.toLocaleString("ar")}{ui(" مركبة ·")}{" "}
+                {vehicleTotal.toLocaleString(displayLocale())}{ui(" د.ع")}</Badge>
             </div>
             {vehicleReport.isError ? (
               <div role="alert" className="space-y-3 p-10 text-center">
-                <p className="text-destructive">
-                  تعذر تحميل تقرير المركبات: {vehicleReport.error.message}
+                <p className="text-destructive">{ui("تعذر تحميل تقرير المركبات: ")}{vehicleReport.error.message}
                 </p>
-                <Button variant="outline" onClick={() => void vehicleReport.refetch()}>
-                  إعادة المحاولة
-                </Button>
+                <Button variant="outline" onClick={() => void vehicleReport.refetch()}>{ui("إعادة المحاولة")}</Button>
               </div>
             ) : vehicleReport.isPending ? (
-              <p role="status" className="p-12 text-center text-muted-foreground">
-                جارٍ تحميل تقرير المركبات…
-              </p>
+              <p role="status" className="p-12 text-center text-muted-foreground">{ui("جارٍ تحميل تقرير المركبات…")}</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[1100px] text-sm">
                   <thead>
                     <tr className="border-b bg-muted/40 text-right">
-                      <th className="p-3">المركبة</th>
-                      <th className="p-3">الفئة</th>
-                      <th className="p-3">الحالة</th>
-                      <th className="p-3">أيام الحضور</th>
-                      <th className="p-3">تواريخ الحضور</th>
-                      <th className="p-3">الأجر اليومي</th>
-                      <th className="p-3">الاستحقاق</th>
-                      <th className="p-3">تسجيل الدوام</th>
+                      <th className="p-3">{ui("المركبة")}</th>
+                      <th className="p-3">{ui("الفئة")}</th>
+                      <th className="p-3">{ui("الحالة")}</th>
+                      <th className="p-3">{ui("أيام الحضور")}</th>
+                      <th className="p-3">{ui("تواريخ الحضور")}</th>
+                      <th className="p-3">{ui("الأجر اليومي")}</th>
+                      <th className="p-3">{ui("الاستحقاق")}</th>
+                      <th className="p-3">{ui("تسجيل الدوام")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -999,7 +963,7 @@ function MonthlyPage() {
                           <div className="text-xs text-muted-foreground">{vehicle.vehicle_no}</div>
                         </td>
                         <td className="p-3">
-                          {vehicle.vehicle_class === "light" ? "خفيفة" : "ثقيلة"}
+                          {vehicle.vehicle_class === "light" ? ui("خفيفة") : ui("ثقيلة")}
                         </td>
                         <td className="p-3">
                           <span
@@ -1010,42 +974,36 @@ function MonthlyPage() {
                                 : "bg-slate-100 text-slate-600",
                             )}
                           >
-                            {vehicle.is_active ? "نشطة" : "متوقفة"}
+                            {vehicle.is_active ? ui("نشطة") : ui("متوقفة")}
                           </span>
                         </td>
-                        <td className="p-3 tabular-nums">{vehicle.operatingDays} يوم</td>
+                        <td className="p-3 tabular-nums">{vehicle.operatingDays}{ui(" يوم")}</td>
                         <td className="max-w-72 p-3 text-xs leading-6 text-muted-foreground">
                           {vehicle.operatingDates.length
                             ? vehicle.operatingDates
                                 .map((date) => Number(date.slice(8)).toLocaleString("ar"))
                                 .join("، ")
-                            : "لم تُسجّل التواريخ بعد"}
+                            : ui("لم تُسجّل التواريخ بعد")}
                         </td>
                         <td className="p-3 tabular-nums">
-                          {Number(vehicle.daily_rate).toLocaleString("ar-IQ")} د.ع
-                        </td>
+                          {Number(vehicle.daily_rate).toLocaleString(displayLocale())}{ui(" د.ع")}</td>
                         <td className="p-3 font-bold tabular-nums">
-                          {vehicle.total.toLocaleString("ar-IQ")} د.ع
-                        </td>
+                          {vehicle.total.toLocaleString(displayLocale())}{ui(" د.ع")}</td>
                         <td className="p-3">
                           <Button size="sm" variant="outline" onClick={() => { setActiveVehicle(vehicle); setVehicleDatesDraft(vehicle.operatingDates); }}>
-                            <CalendarDays className="ml-2 h-4 w-4" /> تعديل الأيام
-                          </Button>
+                            <CalendarDays className="ml-2 h-4 w-4" />{ui(" تعديل الأيام")}</Button>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr className="bg-muted/30 font-bold">
-                      <td className="p-3" colSpan={3}>
-                        الإجمالي
-                      </td>
+                      <td className="p-3" colSpan={3}>{ui("الإجمالي")}</td>
                       <td className="p-3">
-                        {vehicleRows.reduce((sum, vehicle) => sum + vehicle.operatingDays, 0)} يوم
-                      </td>
+                        {vehicleRows.reduce((sum, vehicle) => sum + vehicle.operatingDays, 0)}{ui(" يوم")}</td>
                       <td className="p-3">—</td>
                       <td className="p-3">—</td>
-                      <td className="p-3">{vehicleTotal.toLocaleString("ar-IQ")} د.ع</td>
+                      <td className="p-3">{vehicleTotal.toLocaleString(displayLocale())}{ui(" د.ع")}</td>
                       <td />
                     </tr>
                   </tfoot>
@@ -1053,8 +1011,8 @@ function MonthlyPage() {
                 {!vehicleRows.length && (
                   <p className="p-10 text-center text-muted-foreground">
                     {vehicleReport.data?.length
-                      ? "لا توجد مركبات تطابق البحث."
-                      : "لا توجد مركبات مسجلة. أضف المركبات وسجل أيام تشغيلها من إدارة المركبات."}
+                      ? ui("لا توجد مركبات تطابق البحث.")
+                      : ui("لا توجد مركبات مسجلة. أضف المركبات وسجل أيام تشغيلها من إدارة المركبات.")}
                   </p>
                 )}
           </div>
@@ -1067,11 +1025,11 @@ function MonthlyPage() {
             { label: "إجمالي الآليات", value: machineryCount.toLocaleString("ar"), icon: Cog },
             { label: "آليات سُجل لها تشغيل", value: machineryRows.filter((machine) => machine.operatingDays > 0).length.toLocaleString("ar"), icon: CalendarDays },
             { label: "أيام التشغيل المسجلة", value: machineryRows.reduce((sum, machine) => sum + machine.operatingDays, 0).toLocaleString("ar"), icon: CalendarDays },
-            { label: "كلفة الآليات المعروضة", value: `${machineryTotal.toLocaleString("ar-IQ")} د.ع`, icon: Banknote },
+            { label: "كلفة الآليات المعروضة", value: `${machineryTotal.toLocaleString(displayLocale())} د.ع`, icon: Banknote },
           ].map((stat) => (
             <Card key={stat.label} className="rounded-2xl">
               <div className="flex items-center justify-between p-4">
-                <div><p className="text-sm text-muted-foreground">{stat.label}</p><p className="mt-1 text-xl font-bold tabular-nums">{machineryReport.isPending ? "—" : stat.value}</p></div>
+                <div><p className="text-sm text-muted-foreground">{ui(stat.label)}</p><p className="mt-1 text-xl font-bold tabular-nums">{machineryReport.isPending ? "—" : stat.value}</p></div>
                 <span className="rounded-xl bg-primary/10 p-2.5 text-primary"><stat.icon className="h-5 w-5" /></span>
               </div>
             </Card>
@@ -1080,10 +1038,10 @@ function MonthlyPage() {
         <Card className="p-4">
           <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
             <div>
-              <h2 className="font-semibold">تشغيل الآليات خلال {month}</h2>
-              <p className="text-xs text-muted-foreground">عدد الآليات المسجل لها تشغيل يومياً في الصفحة الحالية</p>
+              <h2 className="font-semibold">{ui("تشغيل الآليات خلال ")}{month}</h2>
+              <p className="text-xs text-muted-foreground">{ui("عدد الآليات المسجل لها تشغيل يومياً في الصفحة الحالية")}</p>
             </div>
-            <div className="flex items-center gap-2 text-xs"><span className="h-2.5 w-2.5 rounded-full bg-teal-500" /> آليات عاملة</div>
+            <div className="flex items-center gap-2 text-xs"><span className="h-2.5 w-2.5 rounded-full bg-teal-500" />{ui(" آليات عاملة")}</div>
           </div>
           <div className="h-64 w-full" dir="ltr">
             <ResponsiveContainer width="100%" height="100%">
@@ -1101,13 +1059,12 @@ function MonthlyPage() {
             <div className="flex flex-wrap items-end justify-between gap-4 border-b p-4">
               <div>
                 <h2 className="flex items-center gap-2 text-lg font-semibold">
-                  <Cog className="h-5 w-5 text-primary" /> كشف حضور الآليات
-                </h2>
-                <p className="mt-1 text-sm text-muted-foreground">سجل شهري يومي قابل للمراجعة والتعديل · التكلفة = أيام التشغيل × الإيجار اليومي.</p>
+                  <Cog className="h-5 w-5 text-primary" />{ui(" كشف حضور الآليات")}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">{ui("سجل شهري يومي قابل للمراجعة والتعديل · التكلفة = أيام التشغيل × الإيجار اليومي.")}</p>
               </div>
               <div className="grid w-full gap-3 sm:w-auto sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label htmlFor="machinery-report-month">الشهر</Label>
+                  <Label htmlFor="machinery-report-month">{ui("الشهر")}</Label>
                   <Input
                     id="machinery-report-month"
                     type="month"
@@ -1121,13 +1078,13 @@ function MonthlyPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="machinery-report-search">بحث برقم الآلية</Label>
+                  <Label htmlFor="machinery-report-search">{ui("بحث برقم الآلية")}</Label>
                   <div className="relative">
                     <Search className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="machinery-report-search"
                       className="pr-9"
-                      placeholder="رقم الأصل أو الكود"
+                      placeholder={ui("رقم الأصل أو الكود")}
                       value={machinerySearch}
                       onChange={(event) => {
                         setMachinerySearch(event.target.value);
@@ -1140,57 +1097,47 @@ function MonthlyPage() {
             </div>
             {machineryReport.isError ? (
               <div role="alert" className="space-y-3 p-10 text-center">
-                <p className="text-destructive">
-                  تعذر تحميل حضور الآليات: {machineryReport.error.message}
+                <p className="text-destructive">{ui("تعذر تحميل حضور الآليات: ")}{machineryReport.error.message}
                 </p>
-                <p className="text-sm text-muted-foreground">
-                  تحقق من تطبيق ترحيل سجل حضور الآليات في قاعدة البيانات.
-                </p>
-                <Button variant="outline" onClick={() => void machineryReport.refetch()}>
-                  إعادة المحاولة
-                </Button>
+                <p className="text-sm text-muted-foreground">{ui("تحقق من تطبيق ترحيل سجل حضور الآليات في قاعدة البيانات.")}</p>
+                <Button variant="outline" onClick={() => void machineryReport.refetch()}>{ui("إعادة المحاولة")}</Button>
               </div>
             ) : machineryReport.isPending ? (
-              <p role="status" className="p-10 text-center text-muted-foreground">
-                جارٍ تحميل سجل الآليات…
-              </p>
+              <p role="status" className="p-10 text-center text-muted-foreground">{ui("جارٍ تحميل سجل الآليات…")}</p>
             ) : (
               <div className="overflow-x-auto">
                 <div className="flex flex-wrap gap-4 border-b p-3 text-xs text-muted-foreground">
-                  <span><b className="ml-1 text-emerald-700">✓</b> تم تسجيل تشغيل الآلية في ذلك اليوم</span>
-                  <span><b className="ml-1">—</b> لا يوجد تشغيل مسجل</span>
-                  <span>استخدم «تعديل الأيام» لتسجيل الدوام أو تغييره</span>
+                  <span><b className="ml-1 text-emerald-700">✓</b>{ui(" تم تسجيل تشغيل الآلية في ذلك اليوم")}</span>
+                  <span><b className="ml-1">—</b>{ui(" لا يوجد تشغيل مسجل")}</span>
+                  <span>{ui("استخدم «تعديل الأيام» لتسجيل الدوام أو تغييره")}</span>
                 </div>
                 <table className="w-full min-w-[1500px] text-sm">
                   <thead>
                     <tr className="border-b bg-muted/40 text-right">
-                      <th className="sticky right-0 z-10 min-w-48 bg-muted/40 p-3">الآلية / الرقم</th>
-                      <th className="p-3">التصنيف والحالة</th>
+                      <th className="sticky right-0 z-10 min-w-48 bg-muted/40 p-3">{ui("الآلية / الرقم")}</th>
+                      <th className="p-3">{ui("التصنيف والحالة")}</th>
                       {monthDays.map((date) => <th key={date} className="min-w-12 p-2 text-center"><span>{Number(date.slice(-2)).toLocaleString("ar")}</span><small className="block text-muted-foreground">{weekday(date)}</small></th>)}
-                      <th className="p-3">أيام التشغيل</th>
-                      <th className="p-3">الإيجار اليومي</th>
-                      <th className="p-3">الإجمالي</th>
-                      <th className="p-3">إجراء</th>
+                      <th className="p-3">{ui("أيام التشغيل")}</th>
+                      <th className="p-3">{ui("الإيجار اليومي")}</th>
+                      <th className="p-3">{ui("الإجمالي")}</th>
+                      <th className="p-3">{ui("إجراء")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {machineryRows.map((machine) => (
                       <tr key={machine.id} className="border-b hover:bg-muted/20">
                         <td className="sticky right-0 z-[1] bg-background p-3 font-medium">{machine.name}<small className="block text-muted-foreground">{machine.asset_number || machine.code}</small></td>
-                        <td className="p-3">{machine.category || "—"}<small className="block text-muted-foreground">{machine.status === "active" ? "نشطة" : machine.status === "maintenance" ? "قيد الصيانة" : "متوقفة"}</small></td>
+                        <td className="p-3">{machine.category || "—"}<small className="block text-muted-foreground">{machine.status === "active" ? ui("نشطة") : machine.status === "maintenance" ? ui("قيد الصيانة") : ui("متوقفة")}</small></td>
                         {monthDays.map((date) => {
                           const operated = machine.operatingDates.includes(date);
                           return <td key={date} className="border-x p-1 text-center"><span className={cn("inline-flex h-8 min-w-8 items-center justify-center rounded font-bold", operated ? "bg-emerald-100 text-emerald-800" : "bg-muted/60 text-muted-foreground")}>{operated ? "✓" : "—"}</span></td>;
                         })}
                         <td className="p-3 tabular-nums">
-                          {machine.operatingDays.toLocaleString("ar")} يوم
-                        </td>
+                          {machine.operatingDays.toLocaleString("ar")}{ui(" يوم")}</td>
                         <td className="p-3 tabular-nums">
-                          {Number(machine.daily_rent).toLocaleString("ar-IQ")} د.ع
-                        </td>
+                          {Number(machine.daily_rent).toLocaleString(displayLocale())}{ui(" د.ع")}</td>
                         <td className="p-3 font-bold tabular-nums">
-                          {machine.total.toLocaleString("ar-IQ")} د.ع
-                        </td>
+                          {machine.total.toLocaleString(displayLocale())}{ui(" د.ع")}</td>
                         <td className="p-3">
                           <Button
                             size="sm"
@@ -1200,34 +1147,28 @@ function MonthlyPage() {
                               setMachineryDatesDraft(machine.operatingDates);
                             }}
                           >
-                            <CalendarDays className="ml-2 h-4 w-4" /> تعديل الأيام
-                          </Button>
+                            <CalendarDays className="ml-2 h-4 w-4" />{ui(" تعديل الأيام")}</Button>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr className="bg-muted/30 font-bold">
-                      <td className="sticky right-0 z-[1] bg-muted/30 p-3" colSpan={2}>
-                        الآليات المعروضة: {machineryRows.length.toLocaleString("ar")} من أصل {machineryCount.toLocaleString("ar")}
+                      <td className="sticky right-0 z-[1] bg-muted/30 p-3" colSpan={2}>{ui("الآليات المعروضة: ")}{machineryRows.length.toLocaleString("ar")}{ui(" من أصل ")}{machineryCount.toLocaleString("ar")}
                       </td>
                       {monthDays.map((date) => <td key={date} className="p-1" />)}
                       <td className="p-3">
                         {machineryRows
                           .reduce((sum, machine) => sum + machine.operatingDays, 0)
-                          .toLocaleString("ar")}{" "}
-                        يوم
-                      </td>
+                          .toLocaleString("ar")}{" "}{ui("يوم")}</td>
                       <td className="p-3">—</td>
-                      <td className="p-3">{machineryTotal.toLocaleString("ar-IQ")} د.ع</td>
+                      <td className="p-3">{machineryTotal.toLocaleString(displayLocale())}{ui(" د.ع")}</td>
                       <td />
                     </tr>
                   </tfoot>
                 </table>
                 {!machineryRows.length && (
-                  <p className="p-10 text-center text-muted-foreground">
-                    لا توجد آليات تطابق رقم البحث.
-                  </p>
+                  <p className="p-10 text-center text-muted-foreground">{ui("لا توجد آليات تطابق رقم البحث.")}</p>
                 )}
                 {machineryCount > 50 && (
                   <div className="flex items-center justify-between gap-3 border-t p-4">
@@ -1235,19 +1176,13 @@ function MonthlyPage() {
                       variant="outline"
                       disabled={machineryPage === 0 || machineryReport.isFetching}
                       onClick={() => setMachineryPage((current) => Math.max(0, current - 1))}
-                    >
-                      الصفحة السابقة
-                    </Button>
-                    <span className="text-sm text-muted-foreground">
-                      صفحة {(machineryPage + 1).toLocaleString("ar")} من {machineryPageCount.toLocaleString("ar")} · 50 آلية كحد أقصى
-                    </span>
+                    >{ui("الصفحة السابقة")}</Button>
+                    <span className="text-sm text-muted-foreground">{ui("صفحة ")}{(machineryPage + 1).toLocaleString("ar")}{ui(" من ")}{machineryPageCount.toLocaleString("ar")}{ui(" · 50 آلية كحد أقصى")}</span>
                     <Button
                       variant="outline"
                       disabled={machineryPage + 1 >= machineryPageCount || machineryReport.isFetching}
                       onClick={() => setMachineryPage((current) => current + 1)}
-                    >
-                      الصفحة التالية
-                    </Button>
+                    >{ui("الصفحة التالية")}</Button>
                   </div>
                 )}
               </div>
@@ -1261,7 +1196,7 @@ function MonthlyPage() {
           if (!open) setSelection(null);
         }}
       >
-        <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+        <DialogContent dir={direction()} className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           {selection && (
             <EmployeeDetails
               key={`${selection.employeeId}-${month}`}
@@ -1278,10 +1213,10 @@ function MonthlyPage() {
           if (!open) setActiveMachinery(null);
         }}
       >
-        <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent dir={direction()} className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           {activeMachinery && (
             <MonthlyOperatingDaysForm
-              title="تسجيل أيام تشغيل الآلية"
+              title={ui("تسجيل أيام تشغيل الآلية")}
               subtitle={`${activeMachinery.name} · ${activeMachinery.asset_number || activeMachinery.code} · ${month}`}
               month={month}
               dailyRate={Number(activeMachinery.daily_rent ?? 0)}
@@ -1299,10 +1234,10 @@ function MonthlyPage() {
           if (!open) setActiveVehicle(null);
         }}
       >
-        <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent dir={direction()} className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           {activeVehicle && (
             <MonthlyOperatingDaysForm
-              title="تسجيل أيام تشغيل المركبة"
+              title={ui("تسجيل أيام تشغيل المركبة")}
               subtitle={`${activeVehicle.name} · ${activeVehicle.vehicle_no} · ${month}`}
               month={month}
               dailyRate={Number(activeVehicle.daily_rate ?? 0)}
@@ -1348,10 +1283,10 @@ function MonthlyOperatingDaysForm({
       </DialogHeader>
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-muted/20 p-3">
         <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs">
-          <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-emerald-500" /> يوم تشغيل مسجل</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded border bg-background" /> لا يوجد تشغيل</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-emerald-500" />{ui(" يوم تشغيل مسجل")}</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded border bg-background" />{ui(" لا يوجد تشغيل")}</span>
         </div>
-        <Button type="button" variant="ghost" size="sm" onClick={() => setDates([])}>مسح أيام الشهر</Button>
+        <Button type="button" variant="ghost" size="sm" onClick={() => setDates([])}>{ui("مسح أيام الشهر")}</Button>
       </div>
       <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
         {daysOfWeek.map((day) => <div key={day} className="py-2 text-center text-[10px] font-medium text-muted-foreground sm:text-xs">{day}</div>)}
@@ -1365,19 +1300,19 @@ function MonthlyOperatingDaysForm({
               type="button"
               variant="outline"
               aria-pressed={selected}
-              aria-label={`${day} ${selected ? "يوم تشغيل مسجل" : "لا يوجد تشغيل"}`}
+              aria-label={((day) + " " + (selected ? "يوم تشغيل مسجل" : "لا يوجد تشغيل"))}
               className={cn("h-11 flex-col gap-0 p-1 sm:h-12", selected && "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white")}
               onClick={() => setDates((current) => selected ? current.filter((item) => item !== date) : [...current, date].sort())}
             >
               <span className="text-sm font-bold">{day.toLocaleString("ar")}</span>
-              <span className={cn("text-[9px]", selected ? "text-emerald-50" : "text-muted-foreground")}>{selected ? "عمل" : "—"}</span>
+              <span className={cn("text-[9px]", selected ? "text-emerald-50" : "text-muted-foreground")}>{selected ? ui("عمل") : "—"}</span>
             </Button>
           );
         })}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-        <p className="text-sm">أيام التشغيل: <b>{dates.length.toLocaleString("ar")}</b> · الأجر اليومي: <b>{dailyRate.toLocaleString("ar-IQ")} د.ع</b> · الإجمالي: <b>{(dates.length * dailyRate).toLocaleString("ar-IQ")} د.ع</b></p>
-        <Button onClick={onSave} disabled={saving}>{saving ? "جارٍ الحفظ…" : "حفظ أيام التشغيل"}</Button>
+        <p className="text-sm">{ui("أيام التشغيل: ")}<b>{dates.length.toLocaleString("ar")}</b>{ui(" · الأجر اليومي: ")}<b>{dailyRate.toLocaleString(displayLocale())}{ui(" د.ع")}</b>{ui(" · الإجمالي: ")}<b>{(dates.length * dailyRate).toLocaleString(displayLocale())}{ui(" د.ع")}</b></p>
+        <Button onClick={onSave} disabled={saving}>{saving ? ui("جارٍ الحفظ…") : ui("حفظ أيام التشغيل")}</Button>
       </div>
     </div>
   );
@@ -1412,9 +1347,9 @@ function EmployeeDetails({
       }),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["monthly"] });
-      toast.success("تم تحديث اليوم");
+      toast.success(ui("تم تحديث اليوم"));
     },
-    onError: (e: Error) => toast.error(formatErrorMessage(e)),
+    onError: (e: Error) => toast.error(ui(formatErrorMessage(e))),
   });
   const day = data?.days.find((d) => d.date === date);
   const status = day?.status ? computedStatusLabels[day.status] : undefined;
@@ -1422,17 +1357,15 @@ function EmployeeDetails({
     <>
       <DialogHeader className="pt-3 sm:text-right">
         <DialogTitle>
-          {data ? `${data.employee.full_name} — ${data.employee.employee_no}` : "تفاصيل الموظف"}
+          {data ? `${data.employee.full_name} — ${data.employee.employee_no}` : ui("تفاصيل الموظف")}
         </DialogTitle>
-        <DialogDescription>تفاصيل الحضور والأجر لشهر {month}</DialogDescription>
+        <DialogDescription>{ui("تفاصيل الحضور والأجر لشهر ")}{month}</DialogDescription>
       </DialogHeader>
-      {isPending && <p role="status">جارٍ تحميل التفاصيل...</p>}
+      {isPending && <p role="status">{ui("جارٍ تحميل التفاصيل...")}</p>}
       {error && (
         <div role="alert" className="space-y-2 text-destructive">
-          <p>تعذر تحميل التفاصيل: {error.message}</p>
-          <Button variant="outline" onClick={() => refetch()}>
-            إعادة المحاولة
-          </Button>
+          <p>{ui("تعذر تحميل التفاصيل: ")}{error.message}</p>
+          <Button variant="outline" onClick={() => refetch()}>{ui("إعادة المحاولة")}</Button>
         </div>
       )}
       {data && day && (
@@ -1445,13 +1378,13 @@ function EmployeeDetails({
               <div className="min-w-0">
                 <p className="truncate text-base font-bold">{data.employee.full_name}</p>
                 <p className="text-xs opacity-90">
-                  {data.employee.departments?.name ?? "بدون قسم"} ·{" "}
-                  {data.employee.shifts?.name ?? "بدون دوام"}
+                  {data.employee.departments?.name ?? ui("بدون قسم")} ·{" "}
+                  {data.employee.shifts?.name ?? ui("بدون دوام")}
                   {data.employee.sites ? ` · ${data.employee.sites.name}` : ""}
                 </p>
               </div>
               <span className="mr-auto rounded-full bg-background/20 px-3 py-1 text-xs font-semibold">
-                {data.payroll.payType === "daily" ? "أجر يومي" : "راتب شهري"}
+                {data.payroll.payType === "daily" ? ui("أجر يومي") : ui("راتب شهري")}
               </span>
             </div>
             <div className="mt-4 grid grid-cols-4 gap-2 text-center">
@@ -1463,13 +1396,13 @@ function EmployeeDetails({
               ].map(([label, value]) => (
                 <div key={label} className="rounded-xl bg-background/15 p-2">
                   <p className="text-lg font-bold">{value}</p>
-                  <p className="text-[11px] opacity-90">{label}</p>
+                  <p className="text-[11px] opacity-90">{ui(label)}</p>
                 </div>
               ))}
             </div>
           </div>
           <div className="space-y-2">
-            <Label>أيام الشهر — اختر يوماً</Label>
+            <Label>{ui("أيام الشهر — اختر يوماً")}</Label>
             <div className="grid grid-cols-7 gap-1.5">
               {data.days.map((d) => {
                 const s = d.status ? computedStatusLabels[d.status] : undefined;
@@ -1499,10 +1432,10 @@ function EmployeeDetails({
             </p>
             <div className="mb-4 flex items-center justify-between">
               <span className={cn("rounded px-2 py-1 font-medium", status?.className)}>
-                {status?.label ?? "لم يحن موعده"}
+                {ui(status?.label) ?? ui("لم يحن موعده")}
               </span>
               <span className="text-xs text-muted-foreground">
-                {day.manual ? "تعديل يدوي" : day.punches ? "البصمة" : "لا توجد بصمات"}
+                {day.manual ? ui("تعديل يدوي") : day.punches ? ui("البصمة") : ui("لا توجد بصمات")}
               </span>
             </div>
             <dl className="grid grid-cols-2 gap-4">
@@ -1513,13 +1446,13 @@ function EmployeeDetails({
                 ["الوقت الإضافي", `${day.overtime_hours} س`],
               ].map(([label, value]) => (
                 <div key={label}>
-                  <dt className="text-xs text-muted-foreground">{label}</dt>
+                  <dt className="text-xs text-muted-foreground">{ui(label)}</dt>
                   <dd className="mt-1 font-medium">{value}</dd>
                 </div>
               ))}
             </dl>
             <div className="mt-4 space-y-2">
-              <Label htmlFor="day-status">تعديل حالة اليوم</Label>
+              <Label htmlFor="day-status">{ui("تعديل حالة اليوم")}</Label>
               <select
                 id="day-status"
                 className={selectClass}
@@ -1530,17 +1463,15 @@ function EmployeeDetails({
                   mutation.mutate({ date: day.date, status, notes: day.notes });
                 }}
               >
-                <option value="auto">تلقائي (البصمة)</option>
+                <option value="auto">{ui("تلقائي (البصمة)")}</option>
                 {statuses.map((s) => (
                   <option key={s.value} value={s.value}>
-                    {s.label}
+                    {ui(s.label)}
                   </option>
                 ))}
               </select>
               {mutation.isPending && (
-                <p role="status" className="text-xs text-muted-foreground">
-                  جارٍ الحفظ...
-                </p>
+                <p role="status" className="text-xs text-muted-foreground">{ui("جارٍ الحفظ...")}</p>
               )}
               {day.notes && <p className="text-xs text-muted-foreground">{day.notes}</p>}
             </div>
@@ -1548,7 +1479,7 @@ function EmployeeDetails({
           <div className="grid grid-cols-3 gap-3">
             {summaryColumns.map((column) => (
               <div key={column.key}>
-                <p className="text-xs text-muted-foreground">{column.label}</p>
+                <p className="text-xs text-muted-foreground">{ui(column.label)}</p>
                 <p className={cn("mt-1 font-semibold", column.className)}>
                   {data.summary[column.key]}
                 </p>
@@ -1556,8 +1487,7 @@ function EmployeeDetails({
             ))}
           </div>
           <section className="border-t pt-4">
-            <h3 className="mb-3 font-semibold">
-              ملخص الأجر — {data.payroll.payType === "daily" ? "موظف يومي" : "موظف شهري"}
+            <h3 className="mb-3 font-semibold">{ui("ملخص الأجر — ")}{data.payroll.payType === "daily" ? ui("موظف يومي") : ui("موظف شهري")}
             </h3>
             <dl className="grid grid-cols-2 gap-4">
               {(
@@ -1574,11 +1504,11 @@ function EmployeeDetails({
                 ] as [string, number][]
               ).map(([label, value]) => (
                 <div key={label}>
-                  <dt className="text-xs text-muted-foreground">{label}</dt>
+                  <dt className="text-xs text-muted-foreground">{ui(label)}</dt>
                   <dd className="mt-1 font-semibold">
                     {value.toLocaleString()}{" "}
                     {label.includes("أيام") || label.includes("الأيام")
-                      ? "يوم"
+                      ? ui("يوم")
                       : data.payroll.currency}
                   </dd>
                 </div>

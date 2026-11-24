@@ -1,3 +1,4 @@
+import { ui } from "@/lib/ui-language";
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -38,14 +39,14 @@ export function PrivateStorageMedia({
     },
   });
   if (!path) {
-    if (!/^(https?:\/\/|\/(?!\/))/.test(reference)) return <span>مرجع مرفق غير صالح</span>;
+    if (!/^(https?:\/\/|\/(?!\/))/.test(reference)) return <span>{ui("مرجع مرفق غير صالح")}</span>;
     return <>{children(reference)}</>;
   }
   if (!user || signed.isError)
-    return <span className="text-xs text-muted-foreground">تعذر عرض المرفق</span>;
+    return <span className="text-xs text-muted-foreground">{ui("تعذر عرض المرفق")}</span>;
   return signed.data ? (
     <>{children(signed.data)}</>
   ) : (
-    <span className="text-xs text-muted-foreground">جارٍ تحميل المرفق…</span>
+    <span className="text-xs text-muted-foreground">{ui("جارٍ تحميل المرفق…")}</span>
   );
 }

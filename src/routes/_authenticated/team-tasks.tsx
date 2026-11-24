@@ -1,3 +1,4 @@
+import { ui } from "@/lib/ui-language";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -23,7 +24,7 @@ import { CheckCircle2, ClipboardList, Clock3, MessageSquare, Save, Users } from 
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/team-tasks")({
-  head: () => ({ meta: [{ title: "مهام الفريق" }] }),
+  head: () => ({ meta: [{ title: ui("مهام الفريق") }] }),
   component: TeamTasksPage,
 });
 
@@ -126,19 +127,17 @@ function TeamTasksPage() {
       .from("employee_tasks")
       .update({ manager_note: note })
       .eq("id", task.id);
-    if (error) return toast.error(formatErrorMessage(error));
+    if (error) return toast.error(ui(formatErrorMessage(error)));
     await queryClient.invalidateQueries({ queryKey: ["team-tasks"] });
-    toast.success("تم حفظ ملاحظة المدير");
+    toast.success(ui("تم حفظ ملاحظة المدير"));
   };
 
   if (!canSeeAll && !allowedIds.length) {
     return (
       <Card className="border-warning/40">
         <CardContent className="p-8 text-center">
-          <h1 className="text-2xl font-bold">مهام الفريق</h1>
-          <p className="mt-2 text-muted-foreground">
-            لم يتم تعيين أقسام لهذا الحساب. اطلب من مدير النظام تحديد نطاق الوصول.
-          </p>
+          <h1 className="text-2xl font-bold">{ui("مهام الفريق")}</h1>
+          <p className="mt-2 text-muted-foreground">{ui("لم يتم تعيين أقسام لهذا الحساب. اطلب من مدير النظام تحديد نطاق الوصول.")}</p>
         </CardContent>
       </Card>
     );
@@ -148,29 +147,27 @@ function TeamTasksPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">مهام الفريق</h1>
-          <p className="mt-1 text-muted-foreground">
-            متابعة مهام أعضاء الفريق وإضافة ملاحظات إدارية ضمن الأقسام المسموحة
-          </p>
+          <h1 className="text-3xl font-bold">{ui("مهام الفريق")}</h1>
+          <p className="mt-1 text-muted-foreground">{ui("متابعة مهام أعضاء الفريق وإضافة ملاحظات إدارية ضمن الأقسام المسموحة")}</p>
         </div>
         <Badge variant="outline">
           {canSeeAll
-            ? "مدير النظام / الموارد البشرية"
+            ? ui("مدير النظام / الموارد البشرية")
             : roles.includes("department_manager")
-              ? "مدير إدارة"
-              : "مشاهدة محدودة"}
+              ? ui("مدير إدارة")
+              : ui("مشاهدة محدودة")}
         </Badge>
       </div>
       <Card>
         <CardContent className="flex flex-wrap items-end gap-4 p-4">
           <div className="w-full sm:w-56">
-            <Label>القسم</Label>
+            <Label>{ui("القسم")}</Label>
             <Select value={effectiveDepartmentId} onValueChange={setDepartmentId}>
               <SelectTrigger>
-                <SelectValue placeholder="كل الأقسام المسموحة" />
+                <SelectValue placeholder={ui("كل الأقسام المسموحة")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">كل الأقسام المسموحة</SelectItem>
+                <SelectItem value="all">{ui("كل الأقسام المسموحة")}</SelectItem>
                 {departments
                   .filter((item) => allowedIds.includes(item.id))
                   .map((item) => (
@@ -182,7 +179,7 @@ function TeamTasksPage() {
             </Select>
           </div>
           <div>
-            <Label>التاريخ</Label>
+            <Label>{ui("التاريخ")}</Label>
             <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
           </div>
           <Button
@@ -191,20 +188,18 @@ function TeamTasksPage() {
               setDate(today);
               setDepartmentId("all");
             }}
-          >
-            اليوم
-          </Button>
+          >{ui("اليوم")}</Button>
         </CardContent>
       </Card>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat icon={ClipboardList} label="كل المهام" value={stats.total} />
-        <Stat icon={CheckCircle2} label="منجزة" value={stats.completed} tone="green" />
-        <Stat icon={Clock3} label="قيد التنفيذ" value={stats.inProgress} tone="orange" />
-        <Stat icon={MessageSquare} label="ملاحظات المدير" value={stats.notes} tone="blue" />
+        <Stat icon={ClipboardList} label={ui("كل المهام")} value={stats.total} />
+        <Stat icon={CheckCircle2} label={ui("منجزة")} value={stats.completed} tone="green" />
+        <Stat icon={Clock3} label={ui("قيد التنفيذ")} value={stats.inProgress} tone="orange" />
+        <Stat icon={MessageSquare} label={ui("ملاحظات المدير")} value={stats.notes} tone="blue" />
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>مهام الفريق — {date}</CardTitle>
+          <CardTitle>{ui("مهام الفريق — ")}{date}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {tasks.map((task) => {
@@ -216,40 +211,37 @@ function TeamTasksPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-semibold">{task.title}</h3>
                       <Badge variant={task.status === "completed" ? "default" : "secondary"}>
-                        {task.status === "completed" ? "منجزة" : "قيد التنفيذ"}
+                        {task.status === "completed" ? ui("منجزة") : ui("قيد التنفيذ")}
                       </Badge>
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">
                       <Users className="ml-1 inline h-4 w-4" />
                       {profile?.full_name ?? profile?.email ?? task.created_by}
-                      {task.duration_minutes ? ` · ${task.duration_minutes} دقيقة` : ""}
+                      {task.duration_minutes ? (" · " + (task.duration_minutes) + ui(" دقيقة")) : ""}
                     </p>
                     {task.description && (
                       <p className="mt-3 whitespace-pre-wrap text-sm">{task.description}</p>
                     )}
                   </div>
                   <div className="w-full lg:max-w-md">
-                    <Label>ملاحظة المدير</Label>
+                    <Label>{ui("ملاحظة المدير")}</Label>
                     <Textarea
                       value={draftNotes[task.id] ?? task.manager_note ?? ""}
                       onChange={(event) =>
                         setDraftNotes((current) => ({ ...current, [task.id]: event.target.value }))
                       }
-                      placeholder="أضف توجيهاً أو ملاحظة تقييمية..."
+                      placeholder={ui("أضف توجيهاً أو ملاحظة تقييمية...")}
                       rows={2}
                     />
                     <Button size="sm" className="mt-2" onClick={() => void saveNote(task)}>
-                      <Save className="ml-2 h-4 w-4" /> حفظ الملاحظة
-                    </Button>
+                      <Save className="ml-2 h-4 w-4" />{ui(" حفظ الملاحظة")}</Button>
                   </div>
                 </div>
               </div>
             );
           })}
           {!tasks.length && (
-            <div className="py-12 text-center text-muted-foreground">
-              لا توجد مهام ضمن القسم والتاريخ المحددين.
-            </div>
+            <div className="py-12 text-center text-muted-foreground">{ui("لا توجد مهام ضمن القسم والتاريخ المحددين.")}</div>
           )}
         </CardContent>
       </Card>
@@ -275,7 +267,7 @@ function Stat({
           className={`h-5 w-5 ${tone === "green" ? "text-emerald-600" : tone === "orange" ? "text-orange-600" : tone === "blue" ? "text-blue-600" : "text-primary"}`}
         />
         <div>
-          <p className="text-xs text-muted-foreground">{label}</p>
+          <p className="text-xs text-muted-foreground">{ui(label)}</p>
           <p className="text-xl font-bold">{value}</p>
         </div>
       </CardContent>

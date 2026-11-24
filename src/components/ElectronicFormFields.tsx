@@ -1,3 +1,4 @@
+import { ui } from "@/lib/ui-language";
 import {
   fields,
   latin,
@@ -52,7 +53,7 @@ export function ElectronicFormFields({
           />
         ) : f.input === "select" ? (
           <select {...props} value={String(v ?? "")} onChange={(e) => set(e.target.value)}>
-            <option value="">اختر</option>
+            <option value="">{ui("اختر")}</option>
             {f.options?.map((o) => (
               <option key={o}>{o}</option>
             ))}
@@ -85,7 +86,7 @@ export function ElectronicFormFields({
           />
         )}
         {f.input === "phone" && !!v && !/^\d{11}$/.test(String(v)) && (
-          <small>تحقق من الرقم، المعتاد 11 رقماً.</small>
+          <small>{ui("تحقق من الرقم، المعتاد 11 رقماً.")}</small>
         )}
       </label>
     );
@@ -132,8 +133,7 @@ export function ElectronicFormFields({
                   variant="outline"
                   disabled={disabled}
                   onClick={() => change({ ...data, [key]: rows.filter((_, j) => j !== index) })}
-                >
-                  حذف الصف {index + 1}
+                >{ui("حذف الصف ")}{index + 1}
                 </Button>
               </div>
             ))}
@@ -142,9 +142,7 @@ export function ElectronicFormFields({
               variant="outline"
               disabled={disabled || rows.length >= s.max_rows!}
               onClick={() => change({ ...data, [key]: [...rows, {}] })}
-            >
-              إضافة شخص
-            </Button>
+            >{ui("إضافة شخص")}</Button>
           </fieldset>
         );
       })}

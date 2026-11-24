@@ -1,3 +1,4 @@
+import { direction, displayLocale, ui } from "@/lib/ui-language";
 import { payrollSlipReportsDb, type PayrollSlipRow } from "@/lib/payroll-slip-reports-client";
 import { useDirectorySearch } from "@/hooks/use-directory-search";
 import { formatErrorMessage } from "@/lib/error-message";
@@ -37,7 +38,7 @@ import {
 } from "@/lib/monthly-report";
 
 export const Route = createFileRoute("/_authenticated/payroll")({
-  head: () => ({ meta: [{ title: "الرواتب" }] }),
+  head: () => ({ meta: [{ title: ui("الرواتب") }] }),
   beforeLoad: requireFinanceRouteAccess,
   component: PayrollPage,
 });
@@ -125,30 +126,30 @@ function PayrollSlipPreview({ row, month }: { row: PayrollSlipRow; month: string
   return (
     <article className="mx-auto flex aspect-[2/3] w-full max-w-[100mm] flex-col overflow-hidden border border-slate-200 bg-white p-[5%] text-slate-900 shadow-md">
       <header className="flex h-[17%] shrink-0 items-center justify-between rounded-lg bg-gradient-to-l from-teal-700 to-cyan-700 px-[5%] text-white">
-        <div><span className="block text-xs">صافي الراتب</span><b className="mt-1 block text-xl" dir="ltr">{money(row.total)}</b></div>
-        <div className="text-left text-xs">د.ع<br />{month}</div>
+        <div><span className="block text-xs">{ui("صافي الراتب")}</span><b className="mt-1 block text-xl" dir="ltr">{money(row.total)}</b></div>
+        <div className="text-left text-xs">{ui("د.ع")}<br />{month}</div>
       </header>
       <section className="mt-[3%] grid shrink-0 grid-cols-3 gap-2 text-right text-xs">
-        <div className="rounded bg-slate-50 p-2"><span className="text-slate-500">الأساسي</span><b className="mt-1 block">{money(row.payroll.basePay)}</b></div>
-        <div className="rounded bg-slate-50 p-2"><span className="text-slate-500">الإضافي</span><b className="mt-1 block">{money(row.payroll.overtimePay + row.additions)}</b></div>
-        <div className="rounded bg-slate-50 p-2"><span className="text-slate-500">الاستقطاع</span><b className="mt-1 block">{money(row.deductions)}</b></div>
+        <div className="rounded bg-slate-50 p-2"><span className="text-slate-500">{ui("الأساسي")}</span><b className="mt-1 block">{money(row.payroll.basePay)}</b></div>
+        <div className="rounded bg-slate-50 p-2"><span className="text-slate-500">{ui("الإضافي")}</span><b className="mt-1 block">{money(row.payroll.overtimePay + row.additions)}</b></div>
+        <div className="rounded bg-slate-50 p-2"><span className="text-slate-500">{ui("الاستقطاع")}</span><b className="mt-1 block">{money(row.deductions)}</b></div>
       </section>
       <section className="mt-[3%] grid shrink-0 grid-cols-2 gap-x-4 gap-y-2 rounded border border-slate-200 p-[4%] text-xs">
-        <div><span className="text-slate-500">الموظف</span><b className="block">{row.employee.full_name}</b></div>
-        <div><span className="text-slate-500">الرقم</span><b className="block">{row.employee.employee_no}</b></div>
-        <div><span className="text-slate-500">القسم</span><b className="block">{row.employee.departments?.name || "—"}</b></div>
-        <div><span className="text-slate-500">أيام العمل</span><b className="block">{row.summary.presentDays} يوم</b></div>
+        <div><span className="text-slate-500">{ui("الموظف")}</span><b className="block">{row.employee.full_name}</b></div>
+        <div><span className="text-slate-500">{ui("الرقم")}</span><b className="block">{row.employee.employee_no}</b></div>
+        <div><span className="text-slate-500">{ui("القسم")}</span><b className="block">{row.employee.departments?.name || "—"}</b></div>
+        <div><span className="text-slate-500">{ui("أيام العمل")}</span><b className="block">{row.summary.presentDays}{ui(" يوم")}</b></div>
       </section>
-      <div className="mt-[3%] flex shrink-0 justify-between bg-slate-100 px-3 py-2 text-xs font-semibold"><span>تفاصيل الراتب</span><span>د.ع</span></div>
+      <div className="mt-[3%] flex shrink-0 justify-between bg-slate-100 px-3 py-2 text-xs font-semibold"><span>{ui("تفاصيل الراتب")}</span><span>{ui("د.ع")}</span></div>
       <div className="min-h-0 flex-1 overflow-auto text-xs">
-        <div className="flex justify-between border-b border-slate-100 py-2"><span>الراتب الأساسي</span><b>{money(row.payroll.basePay)}</b></div>
-        <div className="flex justify-between border-b border-slate-100 py-2"><span>الساعات الإضافية ({roundMoney(row.payroll.overtimeHours)} ساعة)</span><b>{money(row.payroll.overtimePay)}</b></div>
-        <div className="flex justify-between border-b border-slate-100 py-2"><span>الإضافات والمكافآت</span><b>{money(row.additions)}</b></div>
-        {deductions.map((item, index) => <div key={`${item.label}-${index}`} className="flex justify-between border-b border-slate-100 py-2"><span>{item.label}</span><b>−{money(item.amount)}</b></div>)}
-        <div className="flex justify-between border-b border-slate-100 py-2"><span>إجمالي الاستقطاعات</span><b>−{money(row.deductions)}</b></div>
+        <div className="flex justify-between border-b border-slate-100 py-2"><span>{ui("الراتب الأساسي")}</span><b>{money(row.payroll.basePay)}</b></div>
+        <div className="flex justify-between border-b border-slate-100 py-2"><span>{ui("الساعات الإضافية (")}{roundMoney(row.payroll.overtimeHours)}{ui(" ساعة)")}</span><b>{money(row.payroll.overtimePay)}</b></div>
+        <div className="flex justify-between border-b border-slate-100 py-2"><span>{ui("الإضافات والمكافآت")}</span><b>{money(row.additions)}</b></div>
+        {deductions.map((item, index) => <div key={`${item.label}-${index}`} className="flex justify-between border-b border-slate-100 py-2"><span>{ui(item.label)}</span><b>−{money(item.amount)}</b></div>)}
+        <div className="flex justify-between border-b border-slate-100 py-2"><span>{ui("إجمالي الاستقطاعات")}</span><b>−{money(row.deductions)}</b></div>
       </div>
-      <footer className="mt-[3%] flex shrink-0 justify-between rounded bg-teal-50 px-3 py-2 text-sm font-semibold"><span>صافي الراتب</span><b>{money(row.total)}</b></footer>
-      <div className="mt-2 shrink-0 border-t pt-2 text-[10px] text-slate-500">صادرة إلكترونيًا من نظام الموارد البشرية</div>
+      <footer className="mt-[3%] flex shrink-0 justify-between rounded bg-teal-50 px-3 py-2 text-sm font-semibold"><span>{ui("صافي الراتب")}</span><b>{money(row.total)}</b></footer>
+      <div className="mt-2 shrink-0 border-t pt-2 text-[10px] text-slate-500">{ui("صادرة إلكترونيًا من نظام الموارد البشرية")}</div>
     </article>
   );
 }
@@ -490,10 +491,10 @@ function PayrollPage() {
     onSuccess: (flags) => {
       setAuditedMonth(month);
       setAuditFlags(flags);
-      if (flags.length) toast.warning(`اكتمل التدقيق مع ${flags.length} تنبيهًا يحتاج المراجعة`);
-      else toast.success("اكتمل التدقيق الذكي، ولا توجد مؤشرات معلقة");
+      if (flags.length) toast.warning((ui("اكتمل التدقيق مع ") + (flags.length) + ui(" تنبيهًا يحتاج المراجعة")));
+      else toast.success(ui("اكتمل التدقيق الذكي، ولا توجد مؤشرات معلقة"));
     },
-    onError: (error) => toast.error(`تعذر تدقيق الرواتب: ${error.message}`),
+    onError: (error) => toast.error((ui("تعذر تدقيق الرواتب: ") + (error.message))),
   });
   const generateSlips = useMutation({
     mutationFn: async (reportMonth: string) => {
@@ -530,9 +531,9 @@ function PayrollPage() {
       setSlipPage(0);
       setSlipSearch("");
       await queryClient.invalidateQueries({ queryKey: slipQueryKey });
-      toast.success("تم إنشاء قصاصات الرواتب وحفظها");
+      toast.success(ui("تم إنشاء قصاصات الرواتب وحفظها"));
     },
-    onError: (error) => toast.error(formatErrorMessage(error, "تعذر إنشاء القصاصات")),
+    onError: (error) => toast.error(ui(formatErrorMessage(error, "تعذر إنشاء القصاصات"))),
   });
   const deleteSlips = useMutation({
     mutationFn: async (revision: string) => {
@@ -544,9 +545,9 @@ function PayrollPage() {
       setSlipPage(0);
       setSlipSearch("");
       await queryClient.invalidateQueries({ queryKey: slipQueryKey });
-      toast.success("تم حذف تقرير القصاصات");
+      toast.success(ui("تم حذف تقرير القصاصات"));
     },
-    onError: (error) => toast.error(formatErrorMessage(error, "تعذر حذف القصاصات")),
+    onError: (error) => toast.error(ui(formatErrorMessage(error, "تعذر حذف القصاصات"))),
   });
   const isLocked = payrollRun?.status === "approved" || payrollRun?.status === "paid";
   const recalculatePayroll = useMutation({
@@ -578,10 +579,10 @@ function PayrollPage() {
       setRecalculateOpen(false);
       await queryClient.invalidateQueries({ queryKey: ["payroll", month] });
       toast.success(
-        "تم حفظ نسخة المسير السابق وإعادة الاحتساب وإرسال المسير للمراجعة. يلزم اعتماده مجدداً قبل الصرف.",
+        ui("تم حفظ نسخة المسير السابق وإعادة الاحتساب وإرسال المسير للمراجعة. يلزم اعتماده مجدداً قبل الصرف."),
       );
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error(ui(error.message)),
   });
   const savePayrollRun = useMutation({
     mutationFn: async (action: "draft" | "review" | "approve" | "pay") => {
@@ -596,7 +597,7 @@ function PayrollPage() {
       if (action === "review") runPayload.reviewed_by = auth.user.id;
       if (action === "approve") { runPayload.status = "approved"; runPayload.approved_by = auth.user.id; }
       if (action === "pay") {
-        const reference=window.prompt("رقم مرجع التحويل أو سند الصرف (اختياري)");
+        const reference=window.prompt(ui("رقم مرجع التحويل أو سند الصرف (اختياري)"));
         if(reference===null) return;
         const {error}=await supabase.rpc("pay_payroll_with_advances",{p_run:payrollRun!.id,p_method:paymentMethod,p_reference:reference||null});
         if(error) throw error;
@@ -635,9 +636,9 @@ function PayrollPage() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["payroll", month] });
-      toast.success("تم تحديث دورة الرواتب");
+      toast.success(ui("تم تحديث دورة الرواتب"));
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => toast.error(ui(error.message)),
   });
   const vehicleRows = (kind: Vehicle["vehicle_class"]) =>
     (query.data?.vehicles ?? [])
@@ -730,7 +731,7 @@ function PayrollPage() {
   };
   const exportBankPayroll = (format: "xlsx" | "csv") => {
     if (!bankRows.length) {
-      toast.error("لا توجد حسابات مصرفية أو أرقام دفع مسجلة للموظفين");
+      toast.error(ui("لا توجد حسابات مصرفية أو أرقام دفع مسجلة للموظفين"));
       return;
     }
     const sheetRows = bankRows.map(({ employee, total: net }) => ({
@@ -759,21 +760,21 @@ function PayrollPage() {
     XLSX.writeFile(workbook, `كشف_مصرفي_للرواتب_${month}.${format}`, { bookType: format });
     const skipped = rows.length - bankRows.length;
     if (skipped)
-      toast.warning(`تم التصدير، واستُبعد ${skipped} موظف لعدم تسجيل حساب مصرفي أو رقم دفع`);
-    else toast.success("تم تنزيل كشف الصرف المصرفي");
+      toast.warning((ui("تم التصدير، واستُبعد ") + (skipped) + ui(" موظف لعدم تسجيل حساب مصرفي أو رقم دفع")));
+    else toast.success(ui("تم تنزيل كشف الصرف المصرفي"));
   };
   const printCashVouchers = () => {
     if (auditedMonth !== month) {
-      toast.error("أكمل التدقيق الذكي لهذا الشهر قبل إصدار قسائم الصرف");
+      toast.error(ui("أكمل التدقيق الذكي لهذا الشهر قبل إصدار قسائم الصرف"));
       return;
     }
     if (!cashRows.length) {
-      toast.error("لا توجد عمالة يومية أو عقود نقدية في كشف هذا الشهر");
+      toast.error(ui("لا توجد عمالة يومية أو عقود نقدية في كشف هذا الشهر"));
       return;
     }
     const printWindow = window.open("about:blank", "_blank", "width=1100,height=850");
     if (!printWindow) {
-      toast.error("اسمح بالنوافذ المنبثقة لطباعة قسائم الصرف");
+      toast.error(ui("اسمح بالنوافذ المنبثقة لطباعة قسائم الصرف"));
       return;
     }
     const voucher = (row: (typeof cashRows)[number]) => {
@@ -802,7 +803,7 @@ function PayrollPage() {
     const html = buildPayrollSlipHtml(row, slipMonth);
     const printWindow = window.open("about:blank", "_blank", "width=520,height=760");
     if (!printWindow) {
-      toast.error("اسمح بالنوافذ المنبثقة لطباعة القصاصة");
+      toast.error(ui("اسمح بالنوافذ المنبثقة لطباعة القصاصة"));
       return;
     }
     printWindow.document.open();
@@ -812,72 +813,65 @@ function PayrollPage() {
     printWindow.setTimeout(() => printWindow.print(), 300);
   };
   return (
-    <div dir="rtl" className="space-y-6">
+    <div dir={direction()} className="space-y-6">
       <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
         <div className="flex items-center gap-3">
           <div className="rounded-2xl bg-primary/10 p-3">
             <Banknote className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold">الرواتب</h1>
-            <p className="text-muted-foreground">تقارير الرواتب والحضور والاستحقاقات الشهرية</p>
+            <h1 className="text-3xl font-bold">{ui("الرواتب")}</h1>
+            <p className="text-muted-foreground">{ui("تقارير الرواتب والحضور والاستحقاقات الشهرية")}</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" asChild>
             <a href="/vehicles">
-              <Truck className="ml-2 h-4 w-4" /> إدارة المركبات
-            </a>
+              <Truck className="ml-2 h-4 w-4" />{ui(" إدارة المركبات")}</a>
           </Button>
           <Button variant="outline" onClick={() => activeTab === "slips" ? savedSlips.refetch() : query.refetch()}
             disabled={query.isFetching || savedSlips.isFetching}>
-            <RefreshCw className={`ml-2 h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} /> تحديث
-          </Button>
+            <RefreshCw className={`ml-2 h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} />{ui(" تحديث")}</Button>
           <Button variant="outline" onClick={() => auditMutation.mutate()} disabled={auditMutation.isPending || query.isLoading}>
             <ClipboardCheck className="ml-2 h-4 w-4" />
-            {auditMutation.isPending ? "جارٍ التدقيق..." : "تدقيق ذكي قبل الصرف"}
+            {auditMutation.isPending ? ui("جارٍ التدقيق...") : ui("تدقيق ذكي قبل الصرف")}
           </Button>
           <Button onClick={() => exportExcel()} disabled={!filteredRows.length || query.isLoading}>
-            <Download className="ml-2 h-4 w-4" /> تصدير Excel
-          </Button>
+            <Download className="ml-2 h-4 w-4" />{ui(" تصدير Excel")}</Button>
           <Button
             variant="outline"
             onClick={() => exportBankPayroll("xlsx")}
             disabled={query.isLoading}
           >
-            <Download className="ml-2 h-4 w-4" /> كشف مصرفي Excel
-          </Button>
+            <Download className="ml-2 h-4 w-4" />{ui(" كشف مصرفي Excel")}</Button>
           <Button
             variant="outline"
             onClick={() => exportBankPayroll("csv")}
             disabled={query.isLoading}
           >
-            <Download className="ml-2 h-4 w-4" /> كشف مصرفي CSV
-          </Button>
+            <Download className="ml-2 h-4 w-4" />{ui(" كشف مصرفي CSV")}</Button>
           <Button
             variant="outline"
             onClick={printCashVouchers}
             disabled={!cashRows.length || query.isLoading}
           >
-            <Printer className="ml-2 h-4 w-4" /> طباعة قسائم الصرف النقدية
-          </Button>
+            <Printer className="ml-2 h-4 w-4" />{ui(" طباعة قسائم الصرف النقدية")}</Button>
         </div>
       </div>
       {auditedMonth === month && (
         <Card className={auditFlags.length ? "border-red-500/30 bg-red-500/5" : "border-emerald-500/30 bg-emerald-500/5"}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <AlertTriangle className="h-5 w-5" />
-              نتائج تدقيق {month}: {auditFlags.length ? `${auditFlags.length} تنبيه` : "لا توجد تنبيهات"}
+              <AlertTriangle className="h-5 w-5" />{ui("نتائج تدقيق ")}{month}: {auditFlags.length ? ((auditFlags.length) + ui(" تنبيه")) : ui("لا توجد تنبيهات")}
             </CardTitle>
           </CardHeader>
           {auditFlags.length > 0 && (
             <CardContent className="space-y-2">
               {auditFlags.map((flag) => (
                 <div key={flag.id} className="rounded-lg border p-3 text-sm">
-                  <b>{flag.entity_name ?? "موظف"} · {flag.anomaly_type === "DAILY_WAGE_DURING_LEAVE" ? "أجر يومي أثناء إجازة" : "إضافي دون تسجيل انصراف"}</b>
+                  <b>{flag.entity_name ?? ui("موظف")} · {flag.anomaly_type === "DAILY_WAGE_DURING_LEAVE" ? ui("أجر يومي أثناء إجازة") : ui("إضافي دون تسجيل انصراف")}</b>
                   <span className="mr-2 text-muted-foreground">
-                    {flag.details.work_date ?? ""}{flag.details.overtime_hours ? ` · ${flag.details.overtime_hours} ساعة` : ""}
+                    {flag.details.work_date ?? ""}{flag.details.overtime_hours ? (" · " + (flag.details.overtime_hours) + ui(" ساعة")) : ""}
                   </span>
                 </div>
               ))}
@@ -888,42 +882,41 @@ function PayrollPage() {
       {activeTab !== "slips" && <Card>
         <CardHeader className="gap-3 border-b sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <CardTitle>دورة راتب {month}</CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
-              الحالة: {({ draft: "مسودة", review: "قيد المراجعة", approved: "معتمد", paid: "مصروف" } as Record<string, string>)[payrollRun?.status ?? "draft"]}
-              {payrollRun?.payment_method ? ` · طريقة الصرف: ${payrollRun.payment_method === "bank" ? "تحويل مصرفي" : "نقدًا"}` : ""}
+            <CardTitle>{ui("دورة راتب ")}{month}</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">{ui("الحالة: ")}{({ draft: "مسودة", review: "قيد المراجعة", approved: "معتمد", paid: "مصروف" } as Record<string, string>)[payrollRun?.status ?? "draft"]}
+              {payrollRun?.payment_method ? (ui(" · طريقة الصرف: ") + (payrollRun.payment_method === "bank" ? "تحويل مصرفي" : "نقدًا")) : ""}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-              <SelectTrigger className="w-40"><SelectValue placeholder="طريقة الصرف" /></SelectTrigger>
-              <SelectContent><SelectItem value="cash">نقدًا</SelectItem><SelectItem value="bank">تحويل مصرفي</SelectItem></SelectContent>
+              <SelectTrigger className="w-40"><SelectValue placeholder={ui("طريقة الصرف")} /></SelectTrigger>
+              <SelectContent><SelectItem value="cash">{ui("نقدًا")}</SelectItem><SelectItem value="bank">{ui("تحويل مصرفي")}</SelectItem></SelectContent>
             </Select>
             {isPayrollOperator && !isLocked && <>
-              <Button variant="outline" disabled={savePayrollRun.isPending || !query.data || query.isLoading} onClick={() => savePayrollRun.mutate("draft")}>حفظ المسودة</Button>
-              <Button disabled={savePayrollRun.isPending || query.isLoading || !rows.length} onClick={() => savePayrollRun.mutate("review")}>إرسال للمراجعة</Button>
+              <Button variant="outline" disabled={savePayrollRun.isPending || !query.data || query.isLoading} onClick={() => savePayrollRun.mutate("draft")}>{ui("حفظ المسودة")}</Button>
+              <Button disabled={savePayrollRun.isPending || query.isLoading || !rows.length} onClick={() => savePayrollRun.mutate("review")}>{ui("إرسال للمراجعة")}</Button>
             </>}
-            {(isPayrollOperator || isCeo) && payrollRun && payrollRun.status !== "paid" && <Button variant="outline" disabled={query.isFetching || recalculatePayroll.isPending} onClick={()=>setRecalculateOpen(true)}><RefreshCw className="h-4 w-4" />إعادة احتساب وتحديث المسير من أجور التخصصات</Button>}
-            {isCeo && payrollRun?.status === "review" && <Button disabled={savePayrollRun.isPending} onClick={() => savePayrollRun.mutate("approve")}>اعتماد المسير</Button>}
-            {isPayrollOperator && payrollRun?.status === "approved" && <Button disabled={savePayrollRun.isPending} onClick={() => savePayrollRun.mutate("pay")}>تأكيد صرف الرواتب</Button>}
-            <Badge variant="secondary">الإجمالي الصافي: {money(total)}</Badge>
+            {(isPayrollOperator || isCeo) && payrollRun && payrollRun.status !== "paid" && <Button variant="outline" disabled={query.isFetching || recalculatePayroll.isPending} onClick={()=>setRecalculateOpen(true)}><RefreshCw className="h-4 w-4" />{ui("إعادة احتساب وتحديث المسير من أجور التخصصات")}</Button>}
+            {isCeo && payrollRun?.status === "review" && <Button disabled={savePayrollRun.isPending} onClick={() => savePayrollRun.mutate("approve")}>{ui("اعتماد المسير")}</Button>}
+            {isPayrollOperator && payrollRun?.status === "approved" && <Button disabled={savePayrollRun.isPending} onClick={() => savePayrollRun.mutate("pay")}>{ui("تأكيد صرف الرواتب")}</Button>}
+            <Badge variant="secondary">{ui("الإجمالي الصافي: ")}{money(total)}</Badge>
           </div>
         </CardHeader>
         <CardContent className="space-y-3 p-4">
           <div className="overflow-x-auto rounded-xl border">
             <table className="w-full min-w-[520px] text-sm">
-              <thead><tr className="border-b bg-muted/40 text-right"><th className="p-3">الموظف</th><th className="p-3">القسط المستحق هذا الشهر</th><th className="p-3">الصافي بعد الخصم</th></tr></thead>
+              <thead><tr className="border-b bg-muted/40 text-right"><th className="p-3">{ui("الموظف")}</th><th className="p-3">{ui("القسط المستحق هذا الشهر")}</th><th className="p-3">{ui("الصافي بعد الخصم")}</th></tr></thead>
               <tbody>{rows.filter((row) => row.advanceDeduction > 0).map((row) => <tr key={row.employee.id} className="border-b"><td className="p-3">{row.employee.full_name}</td><td className="p-3">{money(row.advanceDeduction)}</td><td className="p-3">{money(row.total)}</td></tr>)}
-                {!rows.some((row) => row.advanceDeduction > 0) && <tr><td colSpan={3} className="p-6 text-center text-muted-foreground">لا توجد أقساط سلف مستحقة لهذا الشهر.</td></tr>}
+                {!rows.some((row) => row.advanceDeduction > 0) && <tr><td colSpan={3} className="p-6 text-center text-muted-foreground">{ui("لا توجد أقساط سلف مستحقة لهذا الشهر.")}</td></tr>}
               </tbody>
             </table>
           </div>
-          {payrollRun?.payment_reference && <p className="text-sm text-muted-foreground">مرجع الصرف: {payrollRun.payment_reference}</p>}
+          {payrollRun?.payment_reference && <p className="text-sm text-muted-foreground">{ui("مرجع الصرف: ")}{payrollRun.payment_reference}</p>}
         </CardContent>
       </Card>}
             <Card>
               <CardContent className="p-4">
-                <Label htmlFor="payroll-month">شهر الراتب</Label>
+                <Label htmlFor="payroll-month">{ui("شهر الراتب")}</Label>
                 <Input
                   id="payroll-month"
                   type="month"
@@ -940,32 +933,22 @@ function PayrollPage() {
                 />
               </CardContent>
             </Card>
-      <Tabs value={activeTab} onValueChange={setActiveTab} dir="rtl" className="space-y-5">
+      <Tabs value={activeTab} onValueChange={setActiveTab} dir={direction()} className="space-y-5">
         <TabsList className="grid h-auto w-full grid-cols-1 gap-2 bg-transparent sm:grid-cols-2 xl:grid-cols-5">
-          <TabsTrigger value="slips" className="min-h-11 rounded-xl border bg-card">قصاصات الرواتب المحفوظة</TabsTrigger>
-          <TabsTrigger value="employees" className="min-h-11 rounded-xl border bg-card">
-            رواتب الموظفين
-          </TabsTrigger>
-          <TabsTrigger value="light-vehicles" className="min-h-11 rounded-xl border bg-card">
-            رواتب المركبات الخفيفة
-          </TabsTrigger>
-          <TabsTrigger value="heavy-vehicles" className="min-h-11 rounded-xl border bg-card">
-            رواتب المركبات الثقيلة
-          </TabsTrigger>
-          <TabsTrigger value="machinery" className="min-h-11 rounded-xl border bg-card">
-            رواتب الآليات الثقيلة
-          </TabsTrigger>
+          <TabsTrigger value="slips" className="min-h-11 rounded-xl border bg-card">{ui("قصاصات الرواتب المحفوظة")}</TabsTrigger>
+          <TabsTrigger value="employees" className="min-h-11 rounded-xl border bg-card">{ui("رواتب الموظفين")}</TabsTrigger>
+          <TabsTrigger value="light-vehicles" className="min-h-11 rounded-xl border bg-card">{ui("رواتب المركبات الخفيفة")}</TabsTrigger>
+          <TabsTrigger value="heavy-vehicles" className="min-h-11 rounded-xl border bg-card">{ui("رواتب المركبات الثقيلة")}</TabsTrigger>
+          <TabsTrigger value="machinery" className="min-h-11 rounded-xl border bg-card">{ui("رواتب الآليات الثقيلة")}</TabsTrigger>
         </TabsList>
         <TabsContent value="slips">
           <Card>
             <CardHeader className="gap-3 border-b sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <CardTitle>آخر تقرير قصاصات محفوظ</CardTitle>
+                <CardTitle>{ui("آخر تقرير قصاصات محفوظ")}</CardTitle>
                 {savedSlips.data && (
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    شهر {savedSlips.data.month} · {savedSlips.data.employee_count} موظف
-                    {" · "}
-                    {new Date(savedSlips.data.generated_at).toLocaleString("ar-IQ", {
+                  <p className="mt-2 text-sm text-muted-foreground">{ui("شهر ")}{savedSlips.data.month} · {savedSlips.data.employee_count}{ui(" موظف")}{" · "}
+                    {new Date(savedSlips.data.generated_at).toLocaleString(displayLocale(), {
                       dateStyle: "medium", timeStyle: "short", timeZone: COMPANY_TIME_ZONE,
                     })}
                   </p>
@@ -974,48 +957,44 @@ function PayrollPage() {
               {canManageSlips && <div className="flex flex-wrap gap-2">
                 <Button disabled={generateSlips.isPending || deleteSlips.isPending || slipsSchemaUnavailable}
                   onClick={() => generateSlips.mutate(month)}>
-                  {generateSlips.isPending ? "جارٍ إنشاء القصاصات…" : `إنشاء قصاصات الرواتب · ${month}`}
+                  {generateSlips.isPending ? ui("جارٍ إنشاء القصاصات…") : (ui("إنشاء قصاصات الرواتب · ") + (month))}
                 </Button>
                 {savedSlips.data && (
                   <Button variant="outline" className="text-destructive" disabled={generateSlips.isPending || deleteSlips.isPending}
                     onClick={() => {
                       const report = savedSlips.data;
                       if (report) setDeleteTarget({ revision: report.revision, month: report.month });
-                    }}>
-                    حذف تقرير القصاصات
-                  </Button>
+                    }}>{ui("حذف تقرير القصاصات")}</Button>
                 )}
               </div>}
             </CardHeader>
             <CardContent className="space-y-4 p-4">
               {(savedSlips.data || slipSearch) && (
                 <div className="flex max-w-sm flex-col gap-2">
-                  <Label htmlFor="saved-slip-search">بحث في القصاصات المحفوظة</Label>
+                  <Label htmlFor="saved-slip-search">{ui("بحث في القصاصات المحفوظة")}</Label>
                   <Input id="saved-slip-search" maxLength={100} value={slipSearch}
                     onChange={(event) => { setSlipSearch(event.target.value); setSlipPage(0); }}
-                    placeholder="الاسم أو الرقم الوظيفي" />
+                    placeholder={ui("الاسم أو الرقم الوظيفي")} />
                 </div>
               )}
-              {slipLookup.waiting || savedSlips.isPending ? <p role="status">جارٍ تحميل القصاصات…</p> :
+              {slipLookup.waiting || savedSlips.isPending ? <p role="status">{ui("جارٍ تحميل القصاصات…")}</p> :
                 savedSlips.isError ? (
                   <div role="alert" className="space-y-3">
                     <p className="text-destructive">
                       {slipsSchemaUnavailable
-                        ? "دالة القصاصات غير متاحة في قاعدة البيانات المتصلة. تحقق من تطبيق ترحيل القصاصات وتحديث مخطط Supabase."
-                        : formatErrorMessage(savedSlips.error, "تعذر تحميل القصاصات")}
+                        ? ui("دالة القصاصات غير متاحة في قاعدة البيانات المتصلة. تحقق من تطبيق ترحيل القصاصات وتحديث مخطط Supabase.")
+                        : ui(formatErrorMessage(savedSlips.error, "تعذر تحميل القصاصات"))}
                     </p>
-                    <Button variant="outline" onClick={() => void savedSlips.refetch()}>
-                      إعادة المحاولة
-                    </Button>
+                    <Button variant="outline" onClick={() => void savedSlips.refetch()}>{ui("إعادة المحاولة")}</Button>
                   </div>
                 ) :
-                !savedSlips.data ? <p className="text-muted-foreground">لا يوجد تقرير قصاصات محفوظ.</p> : (
+                !savedSlips.data ? <p className="text-muted-foreground">{ui("لا يوجد تقرير قصاصات محفوظ.")}</p> : (
                   <>
                     {savedSlips.data.rows.length ? (
                       <div className="overflow-x-auto rounded-xl border">
                         <table className="w-full min-w-[32rem] text-sm">
                           <thead className="border-b bg-muted/40 text-right"><tr>
-                            {["الموظف", "صافي الراتب", "القصاصة"].map((label) => <th key={label} scope="col" className="p-3">{label}</th>)}
+                            {["الموظف", "صافي الراتب", "القصاصة"].map((label) => <th key={label} scope="col" className="p-3">{ui(label)}</th>)}
                           </tr></thead>
                           <tbody>{savedSlips.data.rows.map((row, index) => {
                             const reportMonth = savedSlips.data!.month;
@@ -1024,23 +1003,21 @@ function PayrollPage() {
                               <td className="p-3 font-medium">{money(row.total)}</td>
                               <td className="p-3"><div className="flex flex-wrap gap-2">
                                 <Button size="sm" variant="outline" onClick={() => setPreviewRow({ row, month: reportMonth })}>
-                                  <Eye className="h-4 w-4" /> عرض القصاصة
-                                </Button>
+                                  <Eye className="h-4 w-4" />{ui(" عرض القصاصة")}</Button>
                                 <Button size="sm" variant="outline" onClick={() => printSlip(row, reportMonth)}>
-                                  <Printer className="h-4 w-4" /> طباعة
-                                </Button>
+                                  <Printer className="h-4 w-4" />{ui(" طباعة")}</Button>
                               </div></td>
                             </tr>;
                           })}</tbody>
                         </table>
                       </div>
-                    ) : <p className="text-muted-foreground">لا توجد قصاصات مطابقة للبحث.</p>}
+                    ) : <p className="text-muted-foreground">{ui("لا توجد قصاصات مطابقة للبحث.")}</p>}
                     {(slipPage > 0 || savedSlips.data.matching_count > slipPageSize) && (
                       <div className="flex flex-wrap items-center gap-3">
-                        <Button variant="outline" disabled={slipPage === 0} onClick={() => setSlipPage(slipPage - 1)}>السابق</Button>
-                        <span>صفحة {slipPage + 1}</span>
+                        <Button variant="outline" disabled={slipPage === 0} onClick={() => setSlipPage(slipPage - 1)}>{ui("السابق")}</Button>
+                        <span>{ui("صفحة ")}{slipPage + 1}</span>
                         <Button variant="outline" disabled={(slipPage + 1) * slipPageSize >= savedSlips.data.matching_count}
-                          onClick={() => setSlipPage(slipPage + 1)}>التالي</Button>
+                          onClick={() => setSlipPage(slipPage + 1)}>{ui("التالي")}</Button>
                       </div>
                     )}
                   </>
@@ -1053,22 +1030,20 @@ function PayrollPage() {
             <Card>
               <CardContent className="flex h-full items-center justify-between p-4">
                 <div>
-                  <p className="text-sm text-muted-foreground">صافي رواتب الموظفين</p>
+                  <p className="text-sm text-muted-foreground">{ui("صافي رواتب الموظفين")}</p>
                   <p className="mt-1 text-2xl font-bold">{money(total)}</p>
                 </div>
-                <Badge variant="secondary">{query.data?.employeeCount ?? 0} موظف</Badge>
+                <Badge variant="secondary">{query.data?.employeeCount ?? 0}{ui(" موظف")}</Badge>
               </CardContent>
             </Card>
           </div>
           <Card className="overflow-hidden">
             <CardHeader className="gap-3 border-b bg-muted/20 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <CardTitle>تقرير رواتب الموظفين</CardTitle>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  يشمل احتساب الحضور والراحة والعطل والإضافي والإضافات والاستقطاعات.
-                  {` · ${query.data?.employeeCount ?? 0} موظفًا`}
+                <CardTitle>{ui("تقرير رواتب الموظفين")}</CardTitle>
+                <p className="mt-1 text-sm text-muted-foreground">{ui("يشمل احتساب الحضور والراحة والعطل والإضافي والإضافات والاستقطاعات.")}{(" · " + (query.data?.employeeCount ?? 0) + ui(" موظفًا"))}
                   {query.data?.employeeCount && rows.length > bankRows.length
-                    ? ` · بعض نتائج البنك تخص الصفحة الحالية فقط`
+                    ? ui(" · بعض نتائج البنك تخص الصفحة الحالية فقط")
                     : ""}
                 </p>
               </div>
@@ -1077,33 +1052,30 @@ function PayrollPage() {
                 <Input
                   value={search}
                   onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                  placeholder="ابحث بالاسم أو الرقم"
+                  placeholder={ui("ابحث بالاسم أو الرقم")}
                   className="pr-9"
                 />
               </div>
             </CardHeader>
             <CardContent className="p-0">
               {query.isError ? (
-                <div className="p-8 text-center text-destructive">
-                  تعذر تحميل تقرير الرواتب: {(query.error as Error).message}
+                <div className="p-8 text-center text-destructive">{ui("تعذر تحميل تقرير الرواتب: ")}{(query.error as Error).message}
                 </div>
               ) : query.isLoading ? (
-                <div className="p-8 text-center text-muted-foreground">
-                  جارٍ تحميل بيانات الرواتب…
-                </div>
+                <div className="p-8 text-center text-muted-foreground">{ui("جارٍ تحميل بيانات الرواتب…")}</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[1100px] text-sm">
                     <thead>
                       <tr className="border-b bg-muted/40 text-right">
-                        <th className="p-3">الموظف</th>
-                        <th className="p-3">الحضور</th>
-                        <th className="p-3">الإجازات</th>
-                        <th className="p-3">الأجر الأساسي</th>
-                        <th className="p-3">الإضافي</th>
-                        <th className="p-3">الإضافات</th>
-                        <th className="p-3">الاستقطاعات</th>
-                        <th className="p-3">الصافي</th>
+                        <th className="p-3">{ui("الموظف")}</th>
+                        <th className="p-3">{ui("الحضور")}</th>
+                        <th className="p-3">{ui("الإجازات")}</th>
+                        <th className="p-3">{ui("الأجر الأساسي")}</th>
+                        <th className="p-3">{ui("الإضافي")}</th>
+                        <th className="p-3">{ui("الإضافات")}</th>
+                        <th className="p-3">{ui("الاستقطاعات")}</th>
+                        <th className="p-3">{ui("الصافي")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1117,18 +1089,17 @@ function PayrollPage() {
                             {!isLocked && <p className={row.wage.source==="default"?"text-xs text-warning":"text-xs text-muted-foreground"}>{({linked:"سلم مرتبط",specialty:"مطابقة تخصص",base:"راتب أساسي",default:"أجر افتراضي — راجعه"})[row.wage.source]} · {money(row.payType==="daily"?row.wage.dailyRate:row.wage.monthlySalary)}</p>}
                             <div className="text-xs text-muted-foreground">
                               {row.employee.employee_no} ·{" "}
-                              {row.payType === "daily" ? "يومي" : "شهري"}
+                              {row.payType === "daily" ? ui("يومي") : ui("شهري")}
                             </div>
                           </td>
                           <td className="p-3">
-                            {row.summary.presentDays} يوم{" "}
+                            {row.summary.presentDays}{ui(" يوم")}{" "}
                             <div className="text-xs text-muted-foreground">
-                              {row.payroll.overtimeHours} س إضافي
-                            </div>
+                              {row.payroll.overtimeHours}{ui(" س إضافي")}</div>
                           </td>
                           <td className="p-3">
-                            <span className="block">مدفوعة: {row.payroll.leaveDays}</span>
-                            <span className="text-xs text-muted-foreground">بدون راتب: {row.payroll.unpaidLeaveDays}</span>
+                            <span className="block">{ui("مدفوعة: ")}{row.payroll.leaveDays}</span>
+                            <span className="text-xs text-muted-foreground">{ui("بدون راتب: ")}{row.payroll.unpaidLeaveDays}</span>
                           </td>
                           <td className="p-3">{money(row.payroll.basePay)}</td>
                           <td className="p-3">{money(row.payroll.overtimePay)}</td>
@@ -1140,15 +1111,11 @@ function PayrollPage() {
                     </tbody>
                   </table>
                   {!filteredRows.length && (
-                    <p className="py-10 text-center text-muted-foreground">
-                      لا توجد بيانات مطابقة.
-                    </p>
+                    <p className="py-10 text-center text-muted-foreground">{ui("لا توجد بيانات مطابقة.")}</p>
                   )}
                   {(query.data?.employeeCount ?? 0) > pageSize && (
                     <div className="flex flex-wrap items-center justify-between gap-3 border-t p-4">
-                      <p className="text-sm text-muted-foreground">
-                        عرض {((page - 1) * pageSize) + 1}–{Math.min(page * pageSize, query.data?.employeeCount ?? 0)} من {query.data?.employeeCount ?? 0} موظفًا
-                      </p>
+                      <p className="text-sm text-muted-foreground">{ui("عرض ")}{((page - 1) * pageSize) + 1}–{Math.min(page * pageSize, query.data?.employeeCount ?? 0)}{ui(" من ")}{query.data?.employeeCount ?? 0}{ui(" موظفًا")}</p>
                       <Pagination className="mx-0 w-auto">
                         <PaginationContent>
                           <PaginationItem>
@@ -1192,32 +1159,29 @@ function PayrollPage() {
             >
               <div className="flex flex-col justify-between gap-3 rounded-xl border bg-card p-4 sm:flex-row sm:items-center">
                 <div>
-                  <h2 className="font-semibold">
-                    رواتب المركبات {kind === "light" ? "الخفيفة" : "الثقيلة"}
+                  <h2 className="font-semibold">{ui("رواتب المركبات ")}{kind === "light" ? ui("الخفيفة") : ui("الثقيلة")}
                   </h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    الاستحقاق = أيام التشغيل × الأجر اليومي · شهر {month}
+                  <p className="mt-1 text-sm text-muted-foreground">{ui("الاستحقاق = أيام التشغيل × الأجر اليومي · شهر ")}{month}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Badge variant="secondary">{vehicles.length} مركبة</Badge>
+                  <Badge variant="secondary">{vehicles.length}{ui(" مركبة")}</Badge>
                   <Button onClick={() => exportExcel(kind)} disabled={!vehicles.length}>
-                    <Download className="ml-2 h-4 w-4" /> تصدير Excel
-                  </Button>
+                    <Download className="ml-2 h-4 w-4" />{ui(" تصدير Excel")}</Button>
                 </div>
               </div>
               <Card>
                 <CardHeader>
-                  <CardTitle>إجمالي المستحق: {money(vehicleTotal)}</CardTitle>
+                  <CardTitle>{ui("إجمالي المستحق: ")}{money(vehicleTotal)}</CardTitle>
                 </CardHeader>
                 <CardContent className="overflow-x-auto p-0">
                   <table className="w-full min-w-[700px] text-sm">
                     <thead>
                       <tr className="border-b bg-muted/40 text-right">
-                        <th className="p-3">المركبة</th>
-                        <th className="p-3">أيام التشغيل</th>
-                        <th className="p-3">الأجر اليومي</th>
-                        <th className="p-3">المستحق</th>
+                        <th className="p-3">{ui("المركبة")}</th>
+                        <th className="p-3">{ui("أيام التشغيل")}</th>
+                        <th className="p-3">{ui("الأجر اليومي")}</th>
+                        <th className="p-3">{ui("المستحق")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1229,7 +1193,7 @@ function PayrollPage() {
                               {vehicle.vehicle_no}
                             </div>
                           </td>
-                          <td className="p-3">{operatingDays} يوم</td>
+                          <td className="p-3">{operatingDays}{ui(" يوم")}</td>
                           <td className="p-3">{money(Number(vehicle.daily_rate))}</td>
                           <td className="p-3 font-bold">{money(net)}</td>
                         </tr>
@@ -1237,11 +1201,8 @@ function PayrollPage() {
                     </tbody>
                   </table>
                   {!vehicles.length && (
-                    <p className="p-8 text-center text-muted-foreground">
-                      لا توجد مركبات مسجلة في هذا التصنيف.{" "}
-                      <a className="text-primary underline" href="/vehicles">
-                        إدارة المركبات
-                      </a>
+                    <p className="p-8 text-center text-muted-foreground">{ui("لا توجد مركبات مسجلة في هذا التصنيف.")}{" "}
+                      <a className="text-primary underline" href="/vehicles">{ui("إدارة المركبات")}</a>
                     </p>
                   )}
                 </CardContent>
@@ -1251,35 +1212,35 @@ function PayrollPage() {
         })}
         <TabsContent value="machinery" className="space-y-5">
           <div className="flex flex-col justify-between gap-3 rounded-xl border bg-card p-4 sm:flex-row sm:items-center">
-            <div><h2 className="font-semibold">رواتب الآليات الثقيلة</h2><p className="mt-1 text-sm text-muted-foreground">المستحق = أيام الحضور المسجلة في كشف الآليات × الإيجار اليومي · شهر {month}</p></div>
-            <div className="flex items-center gap-3"><Badge variant="secondary">{machineryRows().length} آلية</Badge><Button onClick={() => exportExcel("machinery")} disabled={!machineryRows().length}><Download className="ml-2 h-4 w-4" />تصدير Excel</Button></div>
+            <div><h2 className="font-semibold">{ui("رواتب الآليات الثقيلة")}</h2><p className="mt-1 text-sm text-muted-foreground">{ui("المستحق = أيام الحضور المسجلة في كشف الآليات × الإيجار اليومي · شهر ")}{month}</p></div>
+            <div className="flex items-center gap-3"><Badge variant="secondary">{machineryRows().length}{ui(" آلية")}</Badge><Button onClick={() => exportExcel("machinery")} disabled={!machineryRows().length}><Download className="ml-2 h-4 w-4" />{ui("تصدير Excel")}</Button></div>
           </div>
-          <Card><CardHeader><CardTitle>إجمالي مستحق الآليات: {money(machineryRows().reduce((sum, row) => sum + row.total, 0))}</CardTitle></CardHeader>
-            <CardContent className="overflow-x-auto p-0"><table className="w-full min-w-[760px] text-sm"><thead><tr className="border-b bg-muted/40 text-right"><th className="p-3">الآلية</th><th className="p-3">التصنيف</th><th className="p-3">أيام الحضور</th><th className="p-3">الإيجار اليومي</th><th className="p-3">المستحق</th></tr></thead>
-              <tbody>{machineryRows().map(({ machine, operatingDays, total: net }) => <tr key={machine.id} className="border-b"><td className="p-3"><b>{machine.name}</b><div className="text-xs text-muted-foreground">{machine.code}{machine.asset_number ? ` · ${machine.asset_number}` : ""}</div></td><td className="p-3">{machine.category || "—"}</td><td className="p-3">{operatingDays} يوم</td><td className="p-3">{money(Number(machine.daily_rent ?? 0))}</td><td className="p-3 font-bold">{money(net)}</td></tr>)}</tbody>
-            </table>{!machineryRows().length && <p className="p-8 text-center text-muted-foreground">لا توجد آليات نشطة مسجلة. راجع سجل الآليات.</p>}</CardContent>
+          <Card><CardHeader><CardTitle>{ui("إجمالي مستحق الآليات: ")}{money(machineryRows().reduce((sum, row) => sum + row.total, 0))}</CardTitle></CardHeader>
+            <CardContent className="overflow-x-auto p-0"><table className="w-full min-w-[760px] text-sm"><thead><tr className="border-b bg-muted/40 text-right"><th className="p-3">{ui("الآلية")}</th><th className="p-3">{ui("التصنيف")}</th><th className="p-3">{ui("أيام الحضور")}</th><th className="p-3">{ui("الإيجار اليومي")}</th><th className="p-3">{ui("المستحق")}</th></tr></thead>
+              <tbody>{machineryRows().map(({ machine, operatingDays, total: net }) => <tr key={machine.id} className="border-b"><td className="p-3"><b>{machine.name}</b><div className="text-xs text-muted-foreground">{machine.code}{machine.asset_number ? ` · ${machine.asset_number}` : ""}</div></td><td className="p-3">{machine.category || "—"}</td><td className="p-3">{operatingDays}{ui(" يوم")}</td><td className="p-3">{money(Number(machine.daily_rent ?? 0))}</td><td className="p-3 font-bold">{money(net)}</td></tr>)}</tbody>
+            </table>{!machineryRows().length && <p className="p-8 text-center text-muted-foreground">{ui("لا توجد آليات نشطة مسجلة. راجع سجل الآليات.")}</p>}</CardContent>
           </Card>
         </TabsContent>
       </Tabs>
       <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open && !deleteSlips.isPending) setDeleteTarget(null); }}>
-        <AlertDialogContent dir="rtl">
+        <AlertDialogContent dir={direction()}>
           <AlertDialogHeader>
-            <AlertDialogTitle>حذف تقرير القصاصات لشهر {deleteTarget?.month}؟</AlertDialogTitle>
-            <AlertDialogDescription>سيُحذف تقرير القصاصات المحفوظ لهذا الشهر. يبقى مسير الرواتب وسجل الصرف محفوظين.</AlertDialogDescription>
+            <AlertDialogTitle>{ui("حذف تقرير القصاصات لشهر ")}{deleteTarget?.month}؟</AlertDialogTitle>
+            <AlertDialogDescription>{ui("سيُحذف تقرير القصاصات المحفوظ لهذا الشهر. يبقى مسير الرواتب وسجل الصرف محفوظين.")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleteSlips.isPending}>إلغاء</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleteSlips.isPending}>{ui("إلغاء")}</AlertDialogCancel>
             <AlertDialogAction disabled={deleteSlips.isPending} onClick={(event) => {
               event.preventDefault();
               if (deleteTarget) deleteSlips.mutate(deleteTarget.revision);
-            }}>{deleteSlips.isPending ? "جارٍ الحذف…" : "حذف التقرير"}</AlertDialogAction>
+            }}>{deleteSlips.isPending ? ui("جارٍ الحذف…") : ui("حذف التقرير")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
       <Dialog open={previewRow !== null} onOpenChange={(open) => !open && setPreviewRow(null)}>
-        <DialogContent dir="rtl" className="max-h-[95vh] w-[calc(100vw-2rem)] max-w-[680px] overflow-y-auto p-4 sm:p-6">
+        <DialogContent dir={direction()} className="max-h-[95vh] w-[calc(100vw-2rem)] max-w-[680px] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>قصاصة راتب — {previewRow?.row.employee.full_name}</DialogTitle>
+            <DialogTitle>{ui("قصاصة راتب — ")}{previewRow?.row.employee.full_name}</DialogTitle>
           </DialogHeader>
           {previewRow && (
             <div className="max-h-[78vh] w-full overflow-auto rounded-lg bg-slate-100 p-3 sm:p-5">
@@ -1294,47 +1255,36 @@ function PayrollPage() {
           if (!recalculatePayroll.isPending) setRecalculateOpen(open);
         }}
       >
-        <DialogContent dir="rtl" className="max-h-[90dvh] space-y-5 overflow-y-auto">
+        <DialogContent dir={direction()} className="max-h-[90dvh] space-y-5 overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>مراجعة إعادة احتساب مسير {month}</DialogTitle>
+            <DialogTitle>{ui("مراجعة إعادة احتساب مسير ")}{month}</DialogTitle>
           </DialogHeader>
-          <p className="text-sm leading-7 text-muted-foreground">
-            تُحفظ نسخة من المبالغ القديمة، ثم يُعاد المسير للمراجعة والاعتماد. لا يتم صرف الرواتب
-            أو استهلاك أقساط السلف الآن.
-          </p>
+          <p className="text-sm leading-7 text-muted-foreground">{ui("تُحفظ نسخة من المبالغ القديمة، ثم يُعاد المسير للمراجعة والاعتماد. لا يتم صرف الرواتب أو استهلاك أقساط السلف الآن.")}</p>
           <div className="grid grid-cols-2 gap-4">
             <div className="rounded-xl border p-4">
-              <p className="text-xs text-muted-foreground">الصافي المحفوظ / الحالي</p>
+              <p className="text-xs text-muted-foreground">{ui("الصافي المحفوظ / الحالي")}</p>
               <b className="mt-3 block">{money(total)}</b>
             </div>
             <div className="rounded-xl border p-4">
-              <p className="text-xs text-muted-foreground">الصافي بعد الاحتساب</p>
+              <p className="text-xs text-muted-foreground">{ui("الصافي بعد الاحتساب")}</p>
               <b className="mt-3 block">
                 {money(recalculatedRows.reduce((sum, row) => sum + row.total, 0))}
               </b>
             </div>
           </div>
-          <p className="text-sm">
-            الموظفون: {recalculatedRows.length} · أجور تخصصات:{" "}
-            {recalculatedRows.filter((row) => row.wage.source === "specialty").length} · أجور
-            افتراضية تحتاج مراجعة:{" "}
+          <p className="text-sm">{ui("الموظفون: ")}{recalculatedRows.length}{ui(" · أجور تخصصات:")}{" "}
+            {recalculatedRows.filter((row) => row.wage.source === "specialty").length}{ui(" · أجور افتراضية تحتاج مراجعة:")}{" "}
             {recalculatedRows.filter((row) => row.wage.source === "default").length}
           </p>
-          <p className="text-sm">
-            أقساط السلف المقترحة:{" "}
+          <p className="text-sm">{ui("أقساط السلف المقترحة:")}{" "}
             {money(recalculatedRows.reduce((sum, row) => sum + row.advanceDeduction, 0))}
           </p>
-          <p className="text-xs leading-6 text-warning">
-            راجع الأجور الافتراضية قبل التأكيد. اليومي: حضور فعلي فقط، دون WO أو إجازات وعطلات غير
-            معمول بها. الاستقطاع النهائي يُتحقق منه في قاعدة البيانات.
-          </p>
+          <p className="text-xs leading-6 text-warning">{ui("راجع الأجور الافتراضية قبل التأكيد. اليومي: حضور فعلي فقط، دون WO أو إجازات وعطلات غير معمول بها. الاستقطاع النهائي يُتحقق منه في قاعدة البيانات.")}</p>
           <details className="space-y-3">
-            <summary className="cursor-pointer text-sm font-medium">
-              تدقيق أجور الموظفين قبل إعادة الاحتساب
-            </summary>
+            <summary className="cursor-pointer text-sm font-medium">{ui("تدقيق أجور الموظفين قبل إعادة الاحتساب")}</summary>
             <Input
-              aria-label="بحث في معاينة إعادة الاحتساب"
-              placeholder="ابحث بالاسم أو رقم الموظف"
+              aria-label={ui("بحث في معاينة إعادة الاحتساب")}
+              placeholder={ui("ابحث بالاسم أو رقم الموظف")}
               value={recalculationSearch}
               onChange={(e) => setRecalculationSearch(e.target.value)}
             />
@@ -1342,9 +1292,9 @@ function PayrollPage() {
               <table className="w-full text-right text-xs">
                 <thead>
                   <tr>
-                    <th className="p-2">الموظف / الأجر</th>
-                    <th className="p-2">الحضور</th>
-                    <th className="p-2">الصافي</th>
+                    <th className="p-2">{ui("الموظف / الأجر")}</th>
+                    <th className="p-2">{ui("الحضور")}</th>
+                    <th className="p-2">{ui("الصافي")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1361,7 +1311,7 @@ function PayrollPage() {
                           {row.employee.full_name}
                           <p className="mt-1 text-muted-foreground">
                             {row.employee.employee_no} ·{" "}
-                            {row.payType === "daily" ? "يومي" : "شهري"} ·{" "}
+                            {row.payType === "daily" ? ui("يومي") : ui("شهري")} ·{" "}
                             {money(
                               row.payType === "daily"
                                 ? row.wage.dailyRate
@@ -1369,7 +1319,7 @@ function PayrollPage() {
                             )}{" "}
                             ·{" "}
                             {row.wage.source === "default"
-                              ? "افتراضي يحتاج مراجعة"
+                              ? ui("افتراضي يحتاج مراجعة")
                               : row.wage.wageTitle}
                           </p>
                         </td>
@@ -1380,18 +1330,15 @@ function PayrollPage() {
                 </tbody>
               </table>
             </div>
-            <p className="text-xs text-muted-foreground">
-              تعرض المعاينة أول 30 نتيجة؛ استخدم البحث للوصول إلى أي موظف. يشمل التحديث جميع
-              الموظفين.
-            </p>
+            <p className="text-xs text-muted-foreground">{ui("تعرض المعاينة أول 30 نتيجة؛ استخدم البحث للوصول إلى أي موظف. يشمل التحديث جميع الموظفين.")}</p>
           </details>
           <Button
             disabled={recalculatePayroll.isPending || query.isFetching || !recalculatedRows.length}
             onClick={() => recalculatePayroll.mutate()}
           >
             {recalculatePayroll.isPending
-              ? "جارٍ إعادة الاحتساب…"
-              : "تأكيد إعادة الاحتساب وإرساله للمراجعة"}
+              ? ui("جارٍ إعادة الاحتساب…")
+              : ui("تأكيد إعادة الاحتساب وإرساله للمراجعة")}
           </Button>
         </DialogContent>
       </Dialog>

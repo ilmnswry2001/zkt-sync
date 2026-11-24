@@ -1,3 +1,4 @@
+import { displayLocale, ui } from "@/lib/ui-language";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Fingerprint } from "lucide-react";
@@ -61,7 +62,7 @@ export function PlanBiometricMatch({
       for (const p of (data ?? []) as Punch[]) {
         if (p.is_suspicious || !p.employee_id || first.has(p.employee_id)) continue;
         first.set(p.employee_id, {
-          time: new Date(p.verify_time).toLocaleTimeString("ar-IQ", {
+          time: new Date(p.verify_time).toLocaleTimeString(displayLocale(), {
             hour: "2-digit",
             minute: "2-digit",
             timeZone: "Asia/Baghdad",
@@ -88,8 +89,7 @@ export function PlanBiometricMatch({
     <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 font-bold">
-          <Fingerprint className="h-4 w-4 text-primary" />
-          مطابقة الخطة مع البصمة ليوم {planDate.slice(0, 10)}
+          <Fingerprint className="h-4 w-4 text-primary" />{ui("مطابقة الخطة مع البصمة ليوم ")}{planDate.slice(0, 10)}
         </div>
         <Button
           type="button"
@@ -98,17 +98,16 @@ export function PlanBiometricMatch({
           onClick={() => (enabled ? query.refetch() : setEnabled(true))}
           disabled={query.isFetching}
         >
-          {query.isFetching ? "جارٍ المطابقة..." : enabled ? "تحديث المطابقة" : "مطابقة مع البصمة"}
+          {query.isFetching ? ui("جارٍ المطابقة...") : enabled ? ui("تحديث المطابقة") : ui("مطابقة مع البصمة")}
         </Button>
       </div>
-      {query.error && <p className="mt-2 text-sm text-destructive">تعذر قراءة حركات البصمة.</p>}
+      {query.error && <p className="mt-2 text-sm text-destructive">{ui("تعذر قراءة حركات البصمة.")}</p>}
       {query.data && (
         <>
           <div className="mt-3 flex flex-wrap gap-2 text-sm">
-            <Badge>ملتزم بالخطة: {present}</Badge>
-            <Badge variant="destructive">لم يبصم: {employees.length - present}</Badge>
-            <Badge variant="outline">
-              نسبة التنفيذ: {Math.round((present / employees.length) * 100)}%
+            <Badge>{ui("ملتزم بالخطة: ")}{present}</Badge>
+            <Badge variant="destructive">{ui("لم يبصم: ")}{employees.length - present}</Badge>
+            <Badge variant="outline">{ui("نسبة التنفيذ: ")}{Math.round((present / employees.length) * 100)}%
             </Badge>
           </div>
           <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -124,7 +123,7 @@ export function PlanBiometricMatch({
                     {e.specialty} · {e.employee_no || "—"}
                   </p>
                   <p className={`mt-1 text-xs font-medium ${hit ? "text-primary" : "text-destructive"}`}>
-                    {hit ? `حاضر ${hit.time} · ${hit.device}` : "لم يُسجّل بصمة"}
+                    {hit ? (ui("حاضر ") + (hit.time) + " · " + (hit.device)) : ui("لم يُسجّل بصمة")}
                   </p>
                 </div>
               );

@@ -1,3 +1,4 @@
+import { direction, displayLocale, ui } from "@/lib/ui-language";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useState } from "react";
@@ -52,33 +53,29 @@ export function EmployeeReportHistory({
     },
   });
   return (
-    <section dir="rtl" className="space-y-3 rounded-xl border bg-card p-4">
-      <h3 className="font-semibold">سجل التغييرات</h3>
+    <section dir={direction()} className="space-y-3 rounded-xl border bg-card p-4">
+      <h3 className="font-semibold">{ui("سجل التغييرات")}</h3>
       {history.isLoading
-        ? "جارٍ تحميل السجل…"
+        ? ui("جارٍ تحميل السجل…")
         : history.isError
-          ? "تعذر تحميل سجل التغييرات"
+          ? ui("تعذر تحميل سجل التغييرات")
           : !history.data?.length
-            ? "لا توجد تغييرات مسجلة"
+            ? ui("لا توجد تغييرات مسجلة")
             : history.data.slice(0, 20).map((row) => (
                 <p key={row.id} className="border-b pb-2 text-sm">
                   <b>{row.actor_name}</b> ·{" "}
-                  {row.action === "DELETE" ? "حذف" : row.action === "INSERT" ? "إضافة" : "تعديل"}{" "}
-                  {labels[row.source]} · {row.subject_name} {row.effective_date}{" "}
+                  {row.action === "DELETE" ? ui("حذف") : row.action === "INSERT" ? ui("إضافة") : ui("تعديل")}{" "}
+                  {ui(labels[row.source])} · {row.subject_name} {row.effective_date}{" "}
                   <span className="block text-muted-foreground">
-                    {new Date(row.created_at).toLocaleString("ar-IQ", { timeZone: "Asia/Baghdad" })}
+                    {new Date(row.created_at).toLocaleString(displayLocale(), { timeZone: "Asia/Baghdad" })}
                   </span>
                 </p>
               ))}
       {page > 0 && (
-        <Button variant="outline" onClick={() => setPage(page - 1)}>
-          السابق
-        </Button>
+        <Button variant="outline" onClick={() => setPage(page - 1)}>{ui("السابق")}</Button>
       )}
       {(history.data?.length ?? 0) > 20 && (
-        <Button variant="outline" onClick={() => setPage(page + 1)}>
-          التالي
-        </Button>
+        <Button variant="outline" onClick={() => setPage(page + 1)}>{ui("التالي")}</Button>
       )}
     </section>
   );

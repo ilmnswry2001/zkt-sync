@@ -1,3 +1,4 @@
+import { direction, displayLocale, ui } from "@/lib/ui-language";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -15,14 +16,14 @@ import { AdvanceDetailsDialog } from "@/components/AdvanceDetailsDialog";
 import { advanceInstallmentStatus } from "@/lib/advance-closures-client";
 
 export const Route = createFileRoute("/_authenticated/advances")({
-  head: () => ({ meta: [{ title: "السلف" }] }),
+  head: () => ({ meta: [{ title: ui("السلف") }] }),
   beforeLoad: requireFinanceRouteAccess,
   component: AdvancesPage,
 });
 
 type EmployeeOption = { id: string; employee_no: string; full_name: string };
 const pageSize = 20;
-const money = (amount: number) => `${Number(amount).toLocaleString("ar-IQ")} د.ع`;
+const money = (amount: number) => `${Number(amount).toLocaleString(displayLocale())} د.ع`;
 
 function AdvancesPage() {
   const { financeUserId, canManageAdvances } = Route.useRouteContext();
@@ -161,9 +162,9 @@ function AdvancesPage() {
       setSearch("");
       void qc.invalidateQueries({ queryKey: ["advances", financeUserId, "installments"] });
       void qc.invalidateQueries({ queryKey: ["payroll"] });
-      toast.success("تم تسجيل السلفة وجدولة أقساطها");
+      toast.success(ui("تم تسجيل السلفة وجدولة أقساطها"));
     },
-    onError: (error) => toast.error(formatErrorMessage(error, "تعذر تسجيل السلفة")),
+    onError: (error) => toast.error(ui(formatErrorMessage(error, "تعذر تسجيل السلفة"))),
   });
   const results = lookup.valid && !lookup.waiting ? (employees.data ?? []) : [];
   const options =
@@ -171,15 +172,15 @@ function AdvancesPage() {
   const rows = installments.data?.rows ?? [];
 
   return (
-    <div dir="rtl" className="space-y-6">
+    <div dir={direction()} className="space-y-6">
       <header>
-        <h1 className="text-3xl font-bold">السلف</h1>
-        <p className="mt-1 text-muted-foreground">تسجيل سلف الموظفين ومتابعة أقساطها حسب الشهر.</p>
+        <h1 className="text-3xl font-bold">{ui("السلف")}</h1>
+        <p className="mt-1 text-muted-foreground">{ui("تسجيل سلف الموظفين ومتابعة أقساطها حسب الشهر.")}</p>
       </header>
       {canManageAdvances && (
         <Card>
           <CardHeader>
-            <CardTitle>تسجيل سلفة</CardTitle>
+            <CardTitle>{ui("تسجيل سلفة")}</CardTitle>
           </CardHeader>
           <CardContent>
             <form
@@ -191,15 +192,15 @@ function AdvancesPage() {
               }}
             >
               <div className="flex flex-col gap-3 sm:col-span-2">
-                <Label htmlFor="advance-search">بحث عن الموظف</Label>
+                <Label htmlFor="advance-search">{ui("بحث عن الموظف")}</Label>
                 <Input
                   id="advance-search"
                   value={search}
                   maxLength={100}
-                  placeholder="ابحث بالاسم أو الرقم الوظيفي"
+                  placeholder={ui("ابحث بالاسم أو الرقم الوظيفي")}
                   onChange={(event) => setSearch(event.target.value)}
                 />
-                <Label htmlFor="advance-employee">الموظف</Label>
+                <Label htmlFor="advance-employee">{ui("الموظف")}</Label>
                 <select
                   id="advance-employee"
                   required
@@ -209,7 +210,7 @@ function AdvancesPage() {
                     setEmployee(options.find(({ id }) => id === event.target.value) ?? null)
                   }
                 >
-                  <option value="">اختر الموظف</option>
+                  <option value="">{ui("اختر الموظف")}</option>
                   {options.map((person) => (
                     <option key={person.id} value={person.id}>
                       {person.employee_no} — {person.full_name}
@@ -218,18 +219,18 @@ function AdvancesPage() {
                 </select>
                 <p className="text-sm text-muted-foreground" role="status">
                   {!lookup.valid
-                    ? "اكتب حرفين أو رقمين على الأقل."
+                    ? ui("اكتب حرفين أو رقمين على الأقل.")
                     : lookup.waiting || employees.isFetching
-                      ? "جارٍ البحث…"
+                      ? ui("جارٍ البحث…")
                       : employees.isError
-                        ? "تعذر البحث عن الموظفين."
+                        ? ui("تعذر البحث عن الموظفين.")
                         : !results.length
-                          ? "لا يوجد موظف مطابق."
+                          ? ui("لا يوجد موظف مطابق.")
                           : ""}
                 </p>
               </div>
               <div className="flex flex-col gap-3">
-                <Label htmlFor="advance-amount">مبلغ السلفة بالدينار</Label>
+                <Label htmlFor="advance-amount">{ui("مبلغ السلفة بالدينار")}</Label>
                 <Input
                   id="advance-amount"
                   name="amount"
@@ -240,7 +241,7 @@ function AdvancesPage() {
                 />
               </div>
               <div className="flex flex-col gap-3">
-                <Label htmlFor="advance-installment">القسط الشهري بالدينار</Label>
+                <Label htmlFor="advance-installment">{ui("القسط الشهري بالدينار")}</Label>
                 <Input
                   id="advance-installment"
                   name="installment_amount"
@@ -251,7 +252,7 @@ function AdvancesPage() {
                 />
               </div>
               <div className="flex flex-col gap-3">
-                <Label htmlFor="advance-start">شهر بدء الخصم</Label>
+                <Label htmlFor="advance-start">{ui("شهر بدء الخصم")}</Label>
                 <Input
                   id="advance-start"
                   type="month"
@@ -262,7 +263,7 @@ function AdvancesPage() {
                 />
               </div>
               <div className="flex flex-col gap-3">
-                <Label htmlFor="advance-purpose">السبب (اختياري)</Label>
+                <Label htmlFor="advance-purpose">{ui("السبب (اختياري)")}</Label>
                 <Input id="advance-purpose" name="purpose" />
               </div>
               <Button
@@ -270,7 +271,7 @@ function AdvancesPage() {
                 disabled={!employee || createAdvance.isPending}
                 className="w-fit"
               >
-                {createAdvance.isPending ? "جارٍ تسجيل السلفة…" : "تسجيل السلفة"}
+                {createAdvance.isPending ? ui("جارٍ تسجيل السلفة…") : ui("تسجيل السلفة")}
               </Button>
             </form>
           </CardContent>
@@ -278,9 +279,9 @@ function AdvancesPage() {
       )}
       <Card>
         <CardHeader className="gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <CardTitle>أقساط السلف</CardTitle>
+          <CardTitle>{ui("أقساط السلف")}</CardTitle>
           <div className="flex flex-col gap-3">
-            <Label htmlFor="advance-report-month">شهر الأقساط</Label>
+            <Label htmlFor="advance-report-month">{ui("شهر الأقساط")}</Label>
             <Input
               id="advance-report-month"
               type="month"
@@ -296,13 +297,12 @@ function AdvancesPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {installments.isPending ? (
-            <p role="status">جارٍ تحميل الأقساط…</p>
+            <p role="status">{ui("جارٍ تحميل الأقساط…")}</p>
           ) : installments.isError ? (
-            <p role="alert" className="text-destructive">
-              تعذر تحميل الأقساط. {formatErrorMessage(installments.error)}
+            <p role="alert" className="text-destructive">{ui("تعذر تحميل الأقساط. ")}{ui(formatErrorMessage(installments.error))}
             </p>
           ) : !rows.length ? (
-            <p className="text-muted-foreground">لا توجد أقساط لهذا الشهر.</p>
+            <p className="text-muted-foreground">{ui("لا توجد أقساط لهذا الشهر.")}</p>
           ) : (
             <div className="overflow-x-auto rounded-xl border">
               <table className="w-full min-w-[32rem] text-sm">
@@ -310,7 +310,7 @@ function AdvancesPage() {
                   <tr>
                     {["الموظف", "مبلغ القسط", "المخصوم", "الحالة", "السلفة"].map((heading) => (
                       <th key={heading} scope="col" className="p-3">
-                        {heading}
+                        {ui(heading)}
                       </th>
                     ))}
                   </tr>
@@ -326,16 +326,14 @@ function AdvancesPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          aria-label={`عرض تفاصيل سلفة ${row.employeeName}`}
+                          aria-label={(ui("عرض تفاصيل سلفة ") + (row.employeeName))}
                           onClick={() =>
                             setSelectedAdvance({
                               id: row.advance_id,
                               employeeName: row.employeeName,
                             })
                           }
-                        >
-                          عرض التفاصيل
-                        </Button>
+                        >{ui("عرض التفاصيل")}</Button>
                       </td>
                     </tr>
                   ))}
@@ -349,10 +347,8 @@ function AdvancesPage() {
                 variant="outline"
                 disabled={page === 0 || installments.isFetching}
                 onClick={() => setPage(page - 1)}
-              >
-                السابق
-              </Button>
-              <span>صفحة {page + 1}</span>
+              >{ui("السابق")}</Button>
+              <span>{ui("صفحة ")}{page + 1}</span>
               <Button
                 variant="outline"
                 disabled={
@@ -360,9 +356,7 @@ function AdvancesPage() {
                   installments.isFetching
                 }
                 onClick={() => setPage(page + 1)}
-              >
-                التالي
-              </Button>
+              >{ui("التالي")}</Button>
             </div>
           )}
         </CardContent>

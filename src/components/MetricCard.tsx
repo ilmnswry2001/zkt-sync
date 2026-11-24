@@ -1,3 +1,4 @@
+import { ui } from "@/lib/ui-language";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -36,7 +37,7 @@ export function MetricCard({
         </div>
         {loading ? (
           <div
-            aria-label="جارٍ التحميل"
+            aria-label={ui("جارٍ التحميل")}
             className="my-3 h-10 w-28 animate-pulse rounded-md bg-muted"
           />
         ) : (

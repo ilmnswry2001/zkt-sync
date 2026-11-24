@@ -1,3 +1,4 @@
+import { ui } from "@/lib/ui-language";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -58,7 +59,7 @@ import {
 export const Route = createFileRoute("/_authenticated/team-follow-up")({
   head: () => ({
     meta: [
-      { title: "متابعة الفريق | ZKT Sync" },
+      { title: ui("متابعة الفريق | ZKT Sync") },
       {
         name: "description",
         content:
@@ -520,9 +521,9 @@ function TeamFollowUpPage() {
     if (!evaluationEmployee) return;
     const score = Number(evaluationScore);
     if (!Number.isInteger(score) || score < 0 || score > 100)
-      return toast.error("أدخل درجة صحيحة من 0 إلى 100");
+      return toast.error(ui("أدخل درجة صحيحة من 0 إلى 100"));
     if (evaluationByEmployee.has(evaluationEmployee.id))
-      return toast.error("تم تقييم هذا الموظف هذا الشهر بالفعل");
+      return toast.error(ui("تم تقييم هذا الموظف هذا الشهر بالفعل"));
     const { data, error } = await (
       supabase as unknown as { rpc: (fn: string, args: Record<string, unknown>) => any }
     ).rpc("submit_employee_monthly_evaluation", {
@@ -532,28 +533,28 @@ function TeamFollowUpPage() {
     });
     if (error)
       return toast.error(
-        error.message.includes("تم تقييم") ? "تم تقييم هذا الموظف هذا الشهر بالفعل" : error.message,
+        error.message.includes("تم تقييم") ? ui("تم تقييم هذا الموظف هذا الشهر بالفعل") : ui(error.message),
       );
     await queryClient.invalidateQueries({ queryKey: ["team-follow-up-evaluations"] });
     setEvaluationEmployee(null);
     setEvaluationScore("");
     toast.success(
       Number(data?.[0]?.bonus_added ?? 0) > 0
-        ? "تم حفظ التقييم وإضافة مكافأة 100,000 دينار عراقي"
-        : "تم حفظ التقييم بدون مكافأة",
+        ? ui("تم حفظ التقييم وإضافة مكافأة 100,000 دينار عراقي")
+        : ui("تم حفظ التقييم بدون مكافأة"),
     );
   };
   const sendGuidance = async () => {
-    if (!user || !isDepartmentManager) return toast.error("إرسال التوجيه متاح لرئيس القسم فقط");
+    if (!user || !isDepartmentManager) return toast.error(ui("إرسال التوجيه متاح لرئيس القسم فقط"));
     const title = guidanceTitle.trim();
     const content = guidanceContent.trim();
-    if (title.length < 2) return toast.error("اكتب عنوان التوجيه بوضوح");
-    if (!content) return toast.error("اكتب محتوى التوجيه قبل الإرسال");
-    if (content.length > 5000) return toast.error("يجب ألا يتجاوز التوجيه 5000 حرف");
+    if (title.length < 2) return toast.error(ui("اكتب عنوان التوجيه بوضوح"));
+    if (!content) return toast.error(ui("اكتب محتوى التوجيه قبل الإرسال"));
+    if (content.length > 5000) return toast.error(ui("يجب ألا يتجاوز التوجيه 5000 حرف"));
     const selected = guidanceRecipient === "all"
       ? guidanceRecipients
       : guidanceRecipients.filter((recipient) => recipient.userId === guidanceRecipient);
-    if (!selected.length) return toast.error("لا توجد حسابات موظفين مرتبطة بالقسم المحدد");
+    if (!selected.length) return toast.error(ui("لا توجد حسابات موظفين مرتبطة بالقسم المحدد"));
 
     setIsSendingGuidance(true);
     try {
@@ -580,18 +581,18 @@ function TeamFollowUpPage() {
         .from("employee_guidance_notes")
         .insert(payload)
         .select("id");
-      if (error) return toast.error(`تعذر إرسال التوجيه: ${formatErrorMessage(error)}`);
+      if (error) return toast.error((ui("تعذر إرسال التوجيه: ") + (formatErrorMessage(error))));
       if (!data || data.length !== selected.length) {
-        return toast.error("لم يتم تأكيد حفظ التوجيه لكل المستلمين؛ تحقق من ربط حسابات الموظفين.");
+        return toast.error(ui("لم يتم تأكيد حفظ التوجيه لكل المستلمين؛ تحقق من ربط حسابات الموظفين."));
       }
       setGuidanceTitle("");
       setGuidanceContent("");
       await queryClient.invalidateQueries({ queryKey: ["employee-guidance"] });
       toast.success(guidanceRecipient === "all"
-        ? `تم إرسال التوجيه إلى ${selected.length} من موظفي النطاق المحدد`
-        : "تم إرسال التوجيه إلى الموظف المحدد");
+        ? (ui("تم إرسال التوجيه إلى ") + (selected.length) + ui(" من موظفي النطاق المحدد"))
+        : ui("تم إرسال التوجيه إلى الموظف المحدد"));
     } catch (error) {
-      toast.error(`تعذر إرسال التوجيه: ${formatErrorMessage(error, "حدث خطأ غير متوقع")}`);
+      toast.error((ui("تعذر إرسال التوجيه: ") + (formatErrorMessage(error, "حدث خطأ غير متوقع"))));
     } finally {
       setIsSendingGuidance(false);
     }
@@ -602,17 +603,17 @@ function TeamFollowUpPage() {
       .from("employee_tasks")
       .update({ manager_note: managerNote.trim() || null })
       .eq("id", task.id);
-    if (error) return toast.error(`تعذر حفظ ملاحظة المهمة: ${formatErrorMessage(error)}`);
+    if (error) return toast.error((ui("تعذر حفظ ملاحظة المهمة: ") + (formatErrorMessage(error))));
     await queryClient.invalidateQueries({ queryKey: ["team-follow-up-tasks"] });
-    toast.success("تم حفظ ملاحظة المهمة");
+    toast.success(ui("تم حفظ ملاحظة المهمة"));
   };
   const createTaskTemplate = async () => {
     const title = templateForm.title.trim();
     const targetDepartment = effectiveDepartmentId === "all" ? allowedDepartmentIds[0] : effectiveDepartmentId;
-    if (!title || title.length < 2) return toast.error("اكتب اسم القالب بوضوح");
-    if (!targetDepartment) return toast.error("اختر قسماً لإنشاء القالب");
+    if (!title || title.length < 2) return toast.error(ui("اكتب اسم القالب بوضوح"));
+    if (!targetDepartment) return toast.error(ui("اختر قسماً لإنشاء القالب"));
     const { data: authData } = await supabase.auth.getUser();
-    if (!authData.user) return toast.error("يجب تسجيل الدخول أولاً");
+    if (!authData.user) return toast.error(ui("يجب تسجيل الدخول أولاً"));
     const client = supabase as unknown as { from: (table: string) => any };
     const { error } = await client.from("team_task_templates").insert({
       department_id: targetDepartment,
@@ -626,10 +627,10 @@ function TeamFollowUpPage() {
       assignee_employee_ids: [],
       created_by: authData.user.id,
     });
-    if (error) return toast.error(`تعذر حفظ القالب: ${formatErrorMessage(error)}`);
+    if (error) return toast.error((ui("تعذر حفظ القالب: ") + (formatErrorMessage(error))));
     setTemplateForm({ title: "", description: "", recurrenceRule: "daily", priority: "normal", startDate: today, endDate: "", scheduledTime: "" });
     await taskTemplatesQuery.refetch();
-    toast.success("تم حفظ المهمة المجدولة");
+    toast.success(ui("تم حفظ المهمة المجدولة"));
   };
   const siteRows = siteIds
     .map((siteId) => {
@@ -662,9 +663,7 @@ function TeamFollowUpPage() {
   const tasks = (
     <div className="space-y-4">
       {dailyTasks.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-muted-foreground/30 bg-muted/20 p-6 text-center text-sm text-muted-foreground">
-          لا توجد مهام يومية في هذا التاريخ. يمكنك اختيار يوم آخر أو إضافة مهمة لاحقاً.
-        </div>
+        <div className="rounded-xl border border-dashed border-muted-foreground/30 bg-muted/20 p-6 text-center text-sm text-muted-foreground">{ui("لا توجد مهام يومية في هذا التاريخ. يمكنك اختيار يوم آخر أو إضافة مهمة لاحقاً.")}</div>
       ) : (
         dailyTasks.map((task) => {
           const owner = profileById.get(task.created_by);
@@ -675,23 +674,22 @@ function TeamFollowUpPage() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h3 className="text-lg font-semibold">{task.title}</h3>
-                  <p className="text-xs text-muted-foreground">{owner?.full_name ?? "مستخدم"}</p>
+                  <p className="text-xs text-muted-foreground">{owner?.full_name ?? ui("مستخدم")}</p>
                 </div>
                 <Badge variant={task.status === "completed" ? "default" : "secondary"}>
-                  {task.status === "completed" ? "منجزة" : "قيد التنفيذ"}
+                  {task.status === "completed" ? ui("منجزة") : ui("قيد التنفيذ")}
                 </Badge>
               </div>
 
               <p className="mt-3 text-sm text-muted-foreground">
-                {task.description || "لا يوجد وصف إضافي لهذه المهمة."}
+                {task.description || ui("لا يوجد وصف إضافي لهذه المهمة.")}
               </p>
 
               <div className="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1">
-                  <Clock3 className="h-3.5 w-3.5" /> {task.duration_minutes} دقيقة
-                </span>
+                  <Clock3 className="h-3.5 w-3.5" /> {task.duration_minutes}{ui(" دقيقة")}</span>
                 <span className="flex items-center gap-1">
-                  <Users className="h-3.5 w-3.5" /> {owner?.full_name ?? "مستخدم"}
+                  <Users className="h-3.5 w-3.5" /> {owner?.full_name ?? ui("مستخدم")}
                 </span>
                 <span className="flex items-center gap-1">
                   <FileText className="h-3.5 w-3.5" /> {task.task_date}
@@ -699,19 +697,18 @@ function TeamFollowUpPage() {
               </div>
 
               <div className="mt-4 space-y-2">
-                <Label>ملاحظة المدير</Label>
+                <Label>{ui("ملاحظة المدير")}</Label>
                 <Textarea
                   value={managerNoteValue}
                   onChange={(event) =>
                     setTaskNotes((current) => ({ ...current, [task.id]: event.target.value }))
                   }
-                  placeholder="أضف ملاحظة أو توجيه لهذا الموظف..."
+                  placeholder={ui("أضف ملاحظة أو توجيه لهذا الموظف...")}
                   rows={3}
                 />
                 <div className="flex justify-end">
                   <Button size="sm" onClick={() => updateTaskNote(task)}>
-                    <Save className="ml-2 h-4 w-4" /> حفظ الملاحظة
-                  </Button>
+                    <Save className="ml-2 h-4 w-4" />{ui(" حفظ الملاحظة")}</Button>
                 </div>
               </div>
             </div>
@@ -725,19 +722,19 @@ function TeamFollowUpPage() {
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
       <Stat
         icon={Users}
-        label="عدد الموظفين الظاهرين"
+        label={ui("عدد الموظفين الظاهرين")}
         value={teamVisibleEmployees.length}
         tone="blue"
       />
-      <Stat icon={ClipboardList} label="عدد مسؤولي المواقع" value={siteAdminCount} tone="green" />
-      <Stat icon={FileText} label="عدد المواقع" value={siteRows.length} tone="purple" />
+      <Stat icon={ClipboardList} label={ui("عدد مسؤولي المواقع")} value={siteAdminCount} tone="green" />
+      <Stat icon={FileText} label={ui("عدد المواقع")} value={siteRows.length} tone="purple" />
       <Stat
         icon={CheckCircle2}
-        label="نسبة تغطية تقارير المواقع"
+        label={ui("نسبة تغطية تقارير المواقع")}
         value={`${reportCoverage}%`}
         tone="orange"
       />
-      <Stat icon={MessageSquare} label="عدد الملاحظات المسجلة" value={notesCount} tone="green" />
+      <Stat icon={MessageSquare} label={ui("عدد الملاحظات المسجلة")} value={notesCount} tone="green" />
     </div>
   );
 
@@ -745,31 +742,28 @@ function TeamFollowUpPage() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <ClipboardList className="h-5 w-5 text-primary" /> مواقع القسم
-        </CardTitle>
+          <ClipboardList className="h-5 w-5 text-primary" />{ui(" مواقع القسم")}</CardTitle>
       </CardHeader>
       <CardContent>
         {siteRows.length === 0 ? (
-          <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-            لا توجد مواقع ضمن القسم المحدد. اختر قسماً آخر أو جرّب تاريخاً مختلفاً.
-          </div>
+          <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">{ui("لا توجد مواقع ضمن القسم المحدد. اختر قسماً آخر أو جرّب تاريخاً مختلفاً.")}</div>
         ) : (
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>اسم الموقع</TableHead>
-                  <TableHead>رمز العقد</TableHead>
-                  <TableHead>عدد الموظفين</TableHead>
-                  <TableHead>مسؤول الموقع</TableHead>
-                  <TableHead>حالة التقرير</TableHead>
-                  <TableHead>ملاحظات التقرير</TableHead>
+                  <TableHead>{ui("اسم الموقع")}</TableHead>
+                  <TableHead>{ui("رمز العقد")}</TableHead>
+                  <TableHead>{ui("عدد الموظفين")}</TableHead>
+                  <TableHead>{ui("مسؤول الموقع")}</TableHead>
+                  <TableHead>{ui("حالة التقرير")}</TableHead>
+                  <TableHead>{ui("ملاحظات التقرير")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {siteRows.map(({ site, team, administrators, report }) => (
                   <TableRow key={site?.id ?? `site-${Math.random()}`}>
-                    <TableCell className="font-medium">{site?.name ?? "غير معروف"}</TableCell>
+                    <TableCell className="font-medium">{site?.name ?? ui("غير معروف")}</TableCell>
                     <TableCell>{site?.ctr_code ?? "—"}</TableCell>
                     <TableCell>{team.length}</TableCell>
                     <TableCell>
@@ -779,17 +773,13 @@ function TeamFollowUpPage() {
                     </TableCell>
                     <TableCell>
                       {report ? (
-                        <Badge className="bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">
-                          تم التحديث
-                        </Badge>
+                        <Badge className="bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">{ui("تم التحديث")}</Badge>
                       ) : (
-                        <Badge variant="outline" className="text-amber-700 border-amber-300">
-                          غير مكتمل
-                        </Badge>
+                        <Badge variant="outline" className="text-amber-700 border-amber-300">{ui("غير مكتمل")}</Badge>
                       )}
                     </TableCell>
                     <TableCell className="max-w-xs text-sm text-muted-foreground">
-                      {report?.notes?.trim() ? report.notes : "لا توجد ملاحظات."}
+                      {report?.notes?.trim() ? report.notes : ui("لا توجد ملاحظات.")}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -806,14 +796,11 @@ function TeamFollowUpPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <CheckCircle2 className="h-5 w-5 text-primary" /> تقييم الموظفين
-          </CardTitle>
+            <CheckCircle2 className="h-5 w-5 text-primary" />{ui(" تقييم الموظفين")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {teamVisibleEmployees.length === 0 ? (
-            <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-              لا يوجد موظفون في هذا النطاق ليتم تقييمهم.
-            </div>
+            <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">{ui("لا يوجد موظفون في هذا النطاق ليتم تقييمهم.")}</div>
           ) : (
             teamVisibleEmployees.map((employee) => {
               const existingEvaluation = evaluationByEmployee.get(employee.id);
@@ -836,11 +823,10 @@ function TeamFollowUpPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       {existingEvaluation ? (
-                        <Badge className="bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">
-                          التقييم الحالي: {existingEvaluation.score}
+                        <Badge className="bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">{ui("التقييم الحالي: ")}{existingEvaluation.score}
                         </Badge>
                       ) : (
-                        <Badge variant="outline">لا يوجد تقييم</Badge>
+                        <Badge variant="outline">{ui("لا يوجد تقييم")}</Badge>
                       )}
                       <Button
                         variant="outline"
@@ -852,16 +838,14 @@ function TeamFollowUpPage() {
                         }}
                         disabled={Boolean(existingEvaluation)}
                       >
-                        <Save className="ml-2 h-4 w-4" /> تقييم الموظف
-                      </Button>
+                        <Save className="ml-2 h-4 w-4" />{ui(" تقييم الموظف")}</Button>
                     </div>
                   </div>
 
                   <div className="mt-3 grid gap-2 text-sm text-muted-foreground md:grid-cols-3">
-                    <span>أيام الحضور: {attendanceByEmployee[employee.id] ?? 0}</span>
-                    <span>مهام هذا الشهر: {employeeTaskCount}</span>
-                    <span>
-                      القسم: {departmentById.get(employee.department_id ?? "")?.name ?? "غير محدد"}
+                    <span>{ui("أيام الحضور: ")}{attendanceByEmployee[employee.id] ?? 0}</span>
+                    <span>{ui("مهام هذا الشهر: ")}{employeeTaskCount}</span>
+                    <span>{ui("القسم: ")}{departmentById.get(employee.department_id ?? "")?.name ?? ui("غير محدد")}
                     </span>
                   </div>
                 </div>
@@ -882,21 +866,21 @@ function TeamFollowUpPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>تقييم الموظف</DialogTitle>
+            <DialogTitle>{ui("تقييم الموظف")}</DialogTitle>
             <DialogDescription>
-              {evaluationEmployee ? `تقييم ${evaluationEmployee.full_name}` : "تقييم الموظف"}
+              {evaluationEmployee ? (ui("تقييم ") + (evaluationEmployee.full_name)) : ui("تقييم الموظف")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div>
-              <Label>الدرجة</Label>
+              <Label>{ui("الدرجة")}</Label>
               <Input
                 type="number"
                 min={0}
                 max={100}
                 value={evaluationScore}
                 onChange={(event) => setEvaluationScore(event.target.value)}
-                placeholder="أدخل درجة من 0 إلى 100"
+                placeholder={ui("أدخل درجة من 0 إلى 100")}
               />
             </div>
             <div className="flex justify-end gap-2">
@@ -906,10 +890,8 @@ function TeamFollowUpPage() {
                   setEvaluationEmployee(null);
                   setEvaluationScore("");
                 }}
-              >
-                إلغاء
-              </Button>
-              <Button onClick={submitEvaluation}>حفظ التقييم</Button>
+              >{ui("إلغاء")}</Button>
+              <Button onClick={submitEvaluation}>{ui("حفظ التقييم")}</Button>
             </div>
           </div>
         </DialogContent>
@@ -922,9 +904,7 @@ function TeamFollowUpPage() {
       <div className="space-y-6">
         <Card>
           <CardContent className="flex min-h-[220px] items-center justify-center gap-3 p-8 text-muted-foreground">
-            <Clock3 className="h-5 w-5 animate-pulse" />
-            جاري تحميل بيانات متابعة الفريق...
-          </CardContent>
+            <Clock3 className="h-5 w-5 animate-pulse" />{ui("جاري تحميل بيانات متابعة الفريق...")}</CardContent>
         </Card>
       </div>
     );
@@ -937,11 +917,8 @@ function TeamFollowUpPage() {
           <CardContent className="p-6 flex items-start gap-3">
             <AlertTriangle className="text-warning mt-1" />
             <div>
-              <h1 className="text-2xl font-bold">متابعة الفريق</h1>
-              <p className="text-muted-foreground mt-2">
-                لم يتم تعيينك كرئيس لأي قسم بعد. اطلب من مدير النظام تعيين حسابك في حقل رئيس القسم
-                من صفحة الأقسام.
-              </p>
+              <h1 className="text-2xl font-bold">{ui("متابعة الفريق")}</h1>
+              <p className="text-muted-foreground mt-2">{ui("لم يتم تعيينك كرئيس لأي قسم بعد. اطلب من مدير النظام تعيين حسابك في حقل رئيس القسم من صفحة الأقسام.")}</p>
             </div>
           </CardContent>
         </Card>
@@ -956,29 +933,29 @@ function TeamFollowUpPage() {
         <div className="pointer-events-none absolute -bottom-36 right-1/4 h-72 w-72 rounded-full bg-emerald-300/15 blur-3xl" />
         <div className="relative flex flex-wrap items-end justify-between gap-5">
           <div>
-            <Badge className="mb-3 border-white/20 bg-white/10 text-white hover:bg-white/10"><Sparkles className="ml-1.5 h-3.5 w-3.5" /> مركز قيادة الفريق</Badge>
-            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">متابعة الفريق</h1>
-            <p className="mt-2 max-w-2xl text-sm text-teal-50/80 sm:text-base">صورة يومية واضحة للمهام والإنجازات والحضور، مع أدوات عملية لتوجيه الفريق ومتابعة المواقع.</p>
+            <Badge className="mb-3 border-white/20 bg-white/10 text-white hover:bg-white/10"><Sparkles className="ml-1.5 h-3.5 w-3.5" />{ui(" مركز قيادة الفريق")}</Badge>
+            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{ui("متابعة الفريق")}</h1>
+            <p className="mt-2 max-w-2xl text-sm text-teal-50/80 sm:text-base">{ui("صورة يومية واضحة للمهام والإنجازات والحضور، مع أدوات عملية لتوجيه الفريق ومتابعة المواقع.")}</p>
           </div>
           <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3 backdrop-blur-sm">
-            <p className="text-xs text-teal-50/70">صلاحية العرض</p>
-            <p className="mt-1 font-semibold">{canSeeAll ? "مدير النظام / الموارد البشرية" : isDepartmentManager ? "رئيس القسم" : roles.includes("supervisor") ? "مشرف" : "مشاهدة محدودة"}</p>
+            <p className="text-xs text-teal-50/70">{ui("صلاحية العرض")}</p>
+            <p className="mt-1 font-semibold">{canSeeAll ? ui("مدير النظام / الموارد البشرية") : isDepartmentManager ? ui("رئيس القسم") : roles.includes("supervisor") ? ui("مشرف") : ui("مشاهدة محدودة")}</p>
           </div>
         </div>
         <div className="relative mt-6 grid grid-cols-2 gap-3 border-t border-white/15 pt-5 sm:grid-cols-4">
-          {[["أفراد الفريق", teamVisibleEmployees.length], ["مهام اليوم", dailyTasks.length], ["المواقع", siteIds.length], ["تغطية التقارير", `${reportCoverage}%`]].map(([label, value]) => <div key={String(label)} className="rounded-xl bg-white/[0.07] px-4 py-3"><p className="text-xs text-teal-50/70">{label}</p><p className="mt-1 text-2xl font-bold">{value}</p></div>)}
+          {[["أفراد الفريق", teamVisibleEmployees.length], ["مهام اليوم", dailyTasks.length], ["المواقع", siteIds.length], ["تغطية التقارير", `${reportCoverage}%`]].map(([label, value]) => <div key={String(label)} className="rounded-xl bg-white/[0.07] px-4 py-3"><p className="text-xs text-teal-50/70">{ui(label)}</p><p className="mt-1 text-2xl font-bold">{value}</p></div>)}
         </div>
       </section>
       <Card className="overflow-hidden rounded-2xl border-slate-200/80 shadow-sm dark:border-slate-800">
         <CardContent className="flex flex-wrap items-end gap-4 p-4 sm:p-5">
           <div className="w-full sm:w-64">
-            <Label>القسم</Label>
+            <Label>{ui("القسم")}</Label>
             <Select value={effectiveDepartmentId} onValueChange={setDepartmentId}>
               <SelectTrigger>
-                <SelectValue placeholder="كل الأقسام المسموحة" />
+                <SelectValue placeholder={ui("كل الأقسام المسموحة")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">كل الأقسام المسموحة</SelectItem>
+                <SelectItem value="all">{ui("كل الأقسام المسموحة")}</SelectItem>
                 {departments
                   .filter((department) => allowedDepartmentIds.includes(department.id))
                   .map((department) => (
@@ -990,7 +967,7 @@ function TeamFollowUpPage() {
             </Select>
           </div>
           <div className="w-full sm:w-48">
-            <Label>تاريخ التقارير</Label>
+            <Label>{ui("تاريخ التقارير")}</Label>
             <Input type="date" value={date} onChange={(event) => setDate(event.target.value || today)} />
           </div>
           <Button
@@ -999,37 +976,31 @@ function TeamFollowUpPage() {
               setDate(today);
               setDepartmentId("all");
             }}
-          >
-            اليوم
-          </Button>
+          >{ui("اليوم")}</Button>
         </CardContent>
       </Card>
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
         <TabsList className={`grid h-auto w-full ${isDepartmentManager ? "grid-cols-2 sm:grid-cols-6" : "grid-cols-2 sm:grid-cols-5"} gap-1 rounded-2xl border bg-muted/60 p-1.5`}>
-          <TabsTrigger className="rounded-xl py-2.5" value="tasks">مهام الفريق</TabsTrigger>
-          <TabsTrigger className="rounded-xl py-2.5" value="scheduled">المهام المجدولة</TabsTrigger>
-          <TabsTrigger className="rounded-xl py-2.5" value="stats">الإحصائيات</TabsTrigger>
-          <TabsTrigger className="rounded-xl py-2.5" value="team">المتابعة اليومية</TabsTrigger>
-          <TabsTrigger className="rounded-xl py-2.5" value="evaluation">تقييم الموظفين</TabsTrigger>
-          {isDepartmentManager && <TabsTrigger className="rounded-xl py-2.5" value="guidance">إرسال التوجيه</TabsTrigger>}
+          <TabsTrigger className="rounded-xl py-2.5" value="tasks">{ui("مهام الفريق")}</TabsTrigger>
+          <TabsTrigger className="rounded-xl py-2.5" value="scheduled">{ui("المهام المجدولة")}</TabsTrigger>
+          <TabsTrigger className="rounded-xl py-2.5" value="stats">{ui("الإحصائيات")}</TabsTrigger>
+          <TabsTrigger className="rounded-xl py-2.5" value="team">{ui("المتابعة اليومية")}</TabsTrigger>
+          <TabsTrigger className="rounded-xl py-2.5" value="evaluation">{ui("تقييم الموظفين")}</TabsTrigger>
+          {isDepartmentManager && <TabsTrigger className="rounded-xl py-2.5" value="guidance">{ui("إرسال التوجيه")}</TabsTrigger>}
         </TabsList>
         {failures.length > 0 ? <Card role="alert"><CardContent className="space-y-3 p-5">
-          {failures.map(({ label, query }) => <p key={label}>تعذر تحميل {label}: {formatErrorMessage(query.error)}</p>)}
-          <Button variant="outline" onClick={retryPageLoad}>إعادة المحاولة</Button>
+          {failures.map(({ label, query }) => <p key={label}>{ui("تعذر تحميل ")}{ui(label)}: {ui(formatErrorMessage(query.error))}</p>)}
+          <Button variant="outline" onClick={retryPageLoad}>{ui("إعادة المحاولة")}</Button>
         </CardContent></Card> : isTabLoading ? (
           <Card><CardContent className="flex items-center gap-3 p-5 text-muted-foreground" role="status">
-            <Clock3 className="h-5 w-5 animate-pulse" /> جارٍ تحميل بيانات التبويب…
-          </CardContent></Card>
+            <Clock3 className="h-5 w-5 animate-pulse" />{ui(" جارٍ تحميل بيانات التبويب…")}</CardContent></Card>
         ) : <>
         <TabsContent value="tasks" className="space-y-5">
           <Card className="border-primary/20">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <ListChecks className="h-5 w-5 text-primary" /> مهام الفريق اليومية
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                مهام اليوم الحالي مع إمكانية الاطلاع وإضافة الملاحظات.
-              </p>
+                <ListChecks className="h-5 w-5 text-primary" />{ui(" مهام الفريق اليومية")}</CardTitle>
+              <p className="text-sm text-muted-foreground">{ui("مهام اليوم الحالي مع إمكانية الاطلاع وإضافة الملاحظات.")}</p>
             </CardHeader>
             <CardContent className="space-y-5">{tasks}</CardContent>
           </Card>
@@ -1038,26 +1009,26 @@ function TeamFollowUpPage() {
         <TabsContent value="scheduled" className="space-y-5">
           <Card className="border-primary/20">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2"><CalendarDays className="h-5 w-5 text-primary" /> إنشاء مهمة متكررة</CardTitle>
-              <p className="text-sm text-muted-foreground">أنشئ قالباً يومياً أو أسبوعياً ليظهر ضمن جدول مهام القسم.</p>
+              <CardTitle className="flex items-center gap-2"><CalendarDays className="h-5 w-5 text-primary" />{ui(" إنشاء مهمة متكررة")}</CardTitle>
+              <p className="text-sm text-muted-foreground">{ui("أنشئ قالباً يومياً أو أسبوعياً ليظهر ضمن جدول مهام القسم.")}</p>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <div className="lg:col-span-2"><Label>اسم المهمة</Label><Input className="mt-2" value={templateForm.title} onChange={(event) => setTemplateForm((current) => ({ ...current, title: event.target.value }))} placeholder="مثال: مراجعة التقرير اليومي" /></div>
-              <div><Label>التكرار</Label><select className="mt-2 flex h-10 w-full rounded-md border bg-background px-3 text-sm" value={templateForm.recurrenceRule} onChange={(event) => setTemplateForm((current) => ({ ...current, recurrenceRule: event.target.value }))}><option value="daily">يومياً</option><option value="weekdays">أيام العمل</option><option value="weekly">أسبوعياً</option><option value="monthly">شهرياً</option><option value="interval">كل فترة</option></select></div>
-              <div><Label>الأولوية</Label><select className="mt-2 flex h-10 w-full rounded-md border bg-background px-3 text-sm" value={templateForm.priority} onChange={(event) => setTemplateForm((current) => ({ ...current, priority: event.target.value }))}><option value="normal">عادية</option><option value="low">منخفضة</option><option value="high">عالية</option><option value="urgent">عاجلة</option></select></div>
-              <div className="lg:col-span-2"><Label>الوصف</Label><Textarea className="mt-2" value={templateForm.description} onChange={(event) => setTemplateForm((current) => ({ ...current, description: event.target.value }))} placeholder="تفاصيل المهمة المتكررة" rows={2} /></div>
-              <div><Label>تاريخ البدء</Label><Input className="mt-2" type="date" value={templateForm.startDate} onChange={(event) => setTemplateForm((current) => ({ ...current, startDate: event.target.value }))} /></div>
-              <div><Label>تاريخ الانتهاء</Label><Input className="mt-2" type="date" value={templateForm.endDate} onChange={(event) => setTemplateForm((current) => ({ ...current, endDate: event.target.value }))} /></div>
-              <div><Label>الوقت</Label><Input className="mt-2" type="time" value={templateForm.scheduledTime} onChange={(event) => setTemplateForm((current) => ({ ...current, scheduledTime: event.target.value }))} /></div>
-              <div className="flex items-end"><Button className="w-full" onClick={() => void createTaskTemplate()} disabled={!canSeeAll && !isDepartmentManager}><CalendarDays className="ml-2 h-4 w-4" /> حفظ الجدولة</Button></div>
+              <div className="lg:col-span-2"><Label>{ui("اسم المهمة")}</Label><Input className="mt-2" value={templateForm.title} onChange={(event) => setTemplateForm((current) => ({ ...current, title: event.target.value }))} placeholder={ui("مثال: مراجعة التقرير اليومي")} /></div>
+              <div><Label>{ui("التكرار")}</Label><select className="mt-2 flex h-10 w-full rounded-md border bg-background px-3 text-sm" value={templateForm.recurrenceRule} onChange={(event) => setTemplateForm((current) => ({ ...current, recurrenceRule: event.target.value }))}><option value="daily">{ui("يومياً")}</option><option value="weekdays">{ui("أيام العمل")}</option><option value="weekly">{ui("أسبوعياً")}</option><option value="monthly">{ui("شهرياً")}</option><option value="interval">{ui("كل فترة")}</option></select></div>
+              <div><Label>{ui("الأولوية")}</Label><select className="mt-2 flex h-10 w-full rounded-md border bg-background px-3 text-sm" value={templateForm.priority} onChange={(event) => setTemplateForm((current) => ({ ...current, priority: event.target.value }))}><option value="normal">{ui("عادية")}</option><option value="low">{ui("منخفضة")}</option><option value="high">{ui("عالية")}</option><option value="urgent">{ui("عاجلة")}</option></select></div>
+              <div className="lg:col-span-2"><Label>{ui("الوصف")}</Label><Textarea className="mt-2" value={templateForm.description} onChange={(event) => setTemplateForm((current) => ({ ...current, description: event.target.value }))} placeholder={ui("تفاصيل المهمة المتكررة")} rows={2} /></div>
+              <div><Label>{ui("تاريخ البدء")}</Label><Input className="mt-2" type="date" value={templateForm.startDate} onChange={(event) => setTemplateForm((current) => ({ ...current, startDate: event.target.value }))} /></div>
+              <div><Label>{ui("تاريخ الانتهاء")}</Label><Input className="mt-2" type="date" value={templateForm.endDate} onChange={(event) => setTemplateForm((current) => ({ ...current, endDate: event.target.value }))} /></div>
+              <div><Label>{ui("الوقت")}</Label><Input className="mt-2" type="time" value={templateForm.scheduledTime} onChange={(event) => setTemplateForm((current) => ({ ...current, scheduledTime: event.target.value }))} /></div>
+              <div className="flex items-end"><Button className="w-full" onClick={() => void createTaskTemplate()} disabled={!canSeeAll && !isDepartmentManager}><CalendarDays className="ml-2 h-4 w-4" />{ui(" حفظ الجدولة")}</Button></div>
             </CardContent>
           </Card>
           <Card>
-            <CardHeader><CardTitle>القوالب النشطة</CardTitle></CardHeader>
+            <CardHeader><CardTitle>{ui("القوالب النشطة")}</CardTitle></CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {(taskTemplatesQuery.data ?? []).map((template) => <div key={template.id} className="rounded-xl border p-4"><div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold">{template.title}</h3><p className="mt-1 text-xs text-muted-foreground">{template.description || "بدون وصف"}</p></div><Badge variant="outline">{template.recurrence_rule === "daily" ? "يومي" : template.recurrence_rule === "weekly" ? "أسبوعي" : template.recurrence_rule === "monthly" ? "شهري" : template.recurrence_rule}</Badge></div><p className="mt-3 text-xs text-muted-foreground">يبدأ {template.start_date}{template.end_date ? ` وينتهي ${template.end_date}` : ""}{template.scheduled_time ? ` · الساعة ${template.scheduled_time}` : ""}</p></div>)}
-              {!taskTemplatesQuery.isLoading && !taskTemplatesQuery.data?.length && <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground md:col-span-2 xl:col-span-3">لا توجد مهام مجدولة لهذا النطاق. أنشئ أول قالب من النموذج أعلاه.</div>}
-              {taskTemplatesQuery.isError && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 md:col-span-2 xl:col-span-3">تعذر قراءة القوالب. تأكد من تنفيذ Migration `20261004120000_team_management_workflow.sql` في Lovable/Supabase.</div>}
+              {(taskTemplatesQuery.data ?? []).map((template) => <div key={template.id} className="rounded-xl border p-4"><div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold">{template.title}</h3><p className="mt-1 text-xs text-muted-foreground">{template.description || ui("بدون وصف")}</p></div><Badge variant="outline">{template.recurrence_rule === "daily" ? ui("يومي") : template.recurrence_rule === "weekly" ? ui("أسبوعي") : template.recurrence_rule === "monthly" ? ui("شهري") : template.recurrence_rule}</Badge></div><p className="mt-3 text-xs text-muted-foreground">{ui("يبدأ ")}{template.start_date}{template.end_date ? (ui(" وينتهي ") + (template.end_date)) : ""}{template.scheduled_time ? (ui(" · الساعة ") + (template.scheduled_time)) : ""}</p></div>)}
+              {!taskTemplatesQuery.isLoading && !taskTemplatesQuery.data?.length && <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground md:col-span-2 xl:col-span-3">{ui("لا توجد مهام مجدولة لهذا النطاق. أنشئ أول قالب من النموذج أعلاه.")}</div>}
+              {taskTemplatesQuery.isError && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 md:col-span-2 xl:col-span-3">{ui("تعذر قراءة القوالب. تأكد من تنفيذ Migration `20261004120000_team_management_workflow.sql` في Lovable/Supabase.")}</div>}
             </CardContent>
           </Card>
         </TabsContent>
@@ -1065,22 +1036,22 @@ function TeamFollowUpPage() {
         {isDepartmentManager && <TabsContent value="guidance" className="space-y-5">
           <Card className="overflow-hidden rounded-3xl border-0 bg-gradient-to-br from-teal-950 via-teal-900 to-emerald-800 text-white shadow-xl">
             <CardHeader className="border-b border-white/10 pb-5">
-              <Badge className="w-fit border-white/20 bg-white/10 text-white hover:bg-white/10"><Megaphone className="ml-1.5 h-3.5 w-3.5" /> توجيه رئيس القسم</Badge>
-              <CardTitle className="mt-3 text-2xl">وجّه فريقك بوضوح</CardTitle>
-              <p className="text-sm text-teal-50/75">أرسل تعليمات اليوم إلى كامل الفريق أو موظف محدد. ستظهر الرسالة في تبويب التوجيهات ضمن مهامي اليومية.</p>
+              <Badge className="w-fit border-white/20 bg-white/10 text-white hover:bg-white/10"><Megaphone className="ml-1.5 h-3.5 w-3.5" />{ui(" توجيه رئيس القسم")}</Badge>
+              <CardTitle className="mt-3 text-2xl">{ui("وجّه فريقك بوضوح")}</CardTitle>
+              <p className="text-sm text-teal-50/75">{ui("أرسل تعليمات اليوم إلى كامل الفريق أو موظف محدد. ستظهر الرسالة في تبويب التوجيهات ضمن مهامي اليومية.")}</p>
             </CardHeader>
             <CardContent className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
               <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.06] p-4">
-                <div><p className="text-xs text-teal-50/70">نطاق الإرسال</p><p className="mt-1 font-semibold">{guidanceDepartmentForView ? departmentById.get(guidanceDepartmentForView)?.name ?? "القسم المعيّن" : "الأقسام المعيّنة لك"}</p></div>
-                <div><Label htmlFor="team-guidance-recipient" className="text-white">إرسال إلى</Label><select id="team-guidance-recipient" className="mt-2 flex h-11 w-full rounded-xl border border-white/15 bg-slate-950/35 px-3 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-300" value={guidanceRecipient} onChange={(event) => setGuidanceRecipient(event.target.value)}><option className="text-slate-900" value="all">جميع موظفي النطاق ({guidanceRecipients.length})</option>{guidanceRecipients.map((recipient) => <option className="text-slate-900" key={recipient.userId} value={recipient.userId}>{recipient.name}</option>)}</select></div>
-                <div className="rounded-xl bg-white/[0.07] p-3 text-sm text-teal-50/80"><Users className="ml-2 inline h-4 w-4" />{guidanceRecipient === "all" ? `${guidanceRecipients.length} موظف مرتبط بحساب` : "سيصل التوجيه إلى الموظف المحدد"}</div>
-                {!profilesQuery.isLoading && !employeesQuery.isLoading && guidanceRecipients.length === 0 && <p className="text-xs leading-5 text-amber-100">تعذر ربط حسابات الموظفين بهذا النطاق. يلزم تطابق البريد أو اسم فريد بين حساب المستخدم وسجل الموظف.</p>}
-                {teamVisibleEmployees.length > guidanceRecipients.length && <p className="text-xs leading-5 text-amber-100">لن تظهر التوجيهات إلا للحسابات المرتبطة ببريد مطابق أو باسم فريد؛ الأسماء المتكررة تحتاج ربط البريد لتجنب إرسالها إلى حساب خاطئ.</p>}
+                <div><p className="text-xs text-teal-50/70">{ui("نطاق الإرسال")}</p><p className="mt-1 font-semibold">{guidanceDepartmentForView ? departmentById.get(guidanceDepartmentForView)?.name ?? ui("القسم المعيّن") : ui("الأقسام المعيّنة لك")}</p></div>
+                <div><Label htmlFor="team-guidance-recipient" className="text-white">{ui("إرسال إلى")}</Label><select id="team-guidance-recipient" className="mt-2 flex h-11 w-full rounded-xl border border-white/15 bg-slate-950/35 px-3 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-300" value={guidanceRecipient} onChange={(event) => setGuidanceRecipient(event.target.value)}><option className="text-slate-900" value="all">{ui("جميع موظفي النطاق (")}{guidanceRecipients.length})</option>{guidanceRecipients.map((recipient) => <option className="text-slate-900" key={recipient.userId} value={recipient.userId}>{recipient.name}</option>)}</select></div>
+                <div className="rounded-xl bg-white/[0.07] p-3 text-sm text-teal-50/80"><Users className="ml-2 inline h-4 w-4" />{guidanceRecipient === "all" ? ((guidanceRecipients.length) + ui(" موظف مرتبط بحساب")) : ui("سيصل التوجيه إلى الموظف المحدد")}</div>
+                {!profilesQuery.isLoading && !employeesQuery.isLoading && guidanceRecipients.length === 0 && <p className="text-xs leading-5 text-amber-100">{ui("تعذر ربط حسابات الموظفين بهذا النطاق. يلزم تطابق البريد أو اسم فريد بين حساب المستخدم وسجل الموظف.")}</p>}
+                {teamVisibleEmployees.length > guidanceRecipients.length && <p className="text-xs leading-5 text-amber-100">{ui("لن تظهر التوجيهات إلا للحسابات المرتبطة ببريد مطابق أو باسم فريد؛ الأسماء المتكررة تحتاج ربط البريد لتجنب إرسالها إلى حساب خاطئ.")}</p>}
               </div>
               <div className="space-y-4 rounded-2xl bg-white p-4 text-slate-900 sm:p-5">
-                <div><Label htmlFor="team-guidance-title">عنوان التوجيه</Label><Input id="team-guidance-title" value={guidanceTitle} onChange={(event) => setGuidanceTitle(event.target.value)} placeholder="مثال: أولويات العمل لهذا اليوم" maxLength={200} className="mt-2 h-11 rounded-xl" /></div>
-                <div><div className="flex items-center justify-between gap-2"><Label htmlFor="team-guidance-content">التعليمات</Label><span className="text-xs text-muted-foreground">{guidanceContent.length}/5000</span></div><Textarea id="team-guidance-content" value={guidanceContent} onChange={(event) => setGuidanceContent(event.target.value)} placeholder="اكتب التوجيه بوضوح، وحدد الأولويات والإجراءات المطلوبة..." maxLength={5000} className="mt-2 min-h-36 resize-y rounded-xl" /></div>
-                <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4"><span className="text-xs text-muted-foreground">سيُحفظ بتاريخ {date}</span><Button onClick={() => void sendGuidance()} disabled={isSendingGuidance || profilesQuery.isLoading || employeesQuery.isLoading || !guidanceRecipients.length} className="bg-gradient-to-l from-teal-700 to-emerald-600 font-semibold text-white shadow-md shadow-teal-900/15 hover:from-teal-800 hover:to-emerald-700">{isSendingGuidance ? <><Clock3 className="ml-2 h-4 w-4 animate-spin" /> جارٍ الإرسال</> : <><Send className="ml-2 h-4 w-4" /> إرسال التوجيه</>}</Button></div>
+                <div><Label htmlFor="team-guidance-title">{ui("عنوان التوجيه")}</Label><Input id="team-guidance-title" value={guidanceTitle} onChange={(event) => setGuidanceTitle(event.target.value)} placeholder={ui("مثال: أولويات العمل لهذا اليوم")} maxLength={200} className="mt-2 h-11 rounded-xl" /></div>
+                <div><div className="flex items-center justify-between gap-2"><Label htmlFor="team-guidance-content">{ui("التعليمات")}</Label><span className="text-xs text-muted-foreground">{guidanceContent.length}/5000</span></div><Textarea id="team-guidance-content" value={guidanceContent} onChange={(event) => setGuidanceContent(event.target.value)} placeholder={ui("اكتب التوجيه بوضوح، وحدد الأولويات والإجراءات المطلوبة...")} maxLength={5000} className="mt-2 min-h-36 resize-y rounded-xl" /></div>
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4"><span className="text-xs text-muted-foreground">{ui("سيُحفظ بتاريخ ")}{date}</span><Button onClick={() => void sendGuidance()} disabled={isSendingGuidance || profilesQuery.isLoading || employeesQuery.isLoading || !guidanceRecipients.length} className="bg-gradient-to-l from-teal-700 to-emerald-600 font-semibold text-white shadow-md shadow-teal-900/15 hover:from-teal-800 hover:to-emerald-700">{isSendingGuidance ? <><Clock3 className="ml-2 h-4 w-4 animate-spin" />{ui(" جارٍ الإرسال")}</> : <><Send className="ml-2 h-4 w-4" />{ui(" إرسال التوجيه")}</>}</Button></div>
               </div>
             </CardContent>
           </Card>
@@ -1089,10 +1060,8 @@ function TeamFollowUpPage() {
         <TabsContent value="stats" className="space-y-5">
           <Card>
             <CardHeader>
-              <CardTitle>إحصائيات الموظفين — {date.slice(0, 7)}</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                عدد مهام اليوم، تفاصيل مهام اليوم، والمهام المنجزة لكل موظف.
-              </p>
+              <CardTitle>{ui("إحصائيات الموظفين — ")}{date.slice(0, 7)}</CardTitle>
+              <p className="text-sm text-muted-foreground">{ui("عدد مهام اليوم، تفاصيل مهام اليوم، والمهام المنجزة لكل موظف.")}</p>
             </CardHeader>
             <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               {employeeTaskStats.map(
@@ -1127,29 +1096,29 @@ function TeamFollowUpPage() {
                               {employee.employee_no} · {profile?.email ?? employee.email ?? ""}
                             </p>
                           </div>
-                          <Badge variant="outline">{todayCount} اليوم</Badge>
+                          <Badge variant="outline">{todayCount}{ui(" اليوم")}</Badge>
                         </div>
                         <div className="mt-4 grid grid-cols-3 gap-2 text-center">
                           <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900/70">
                             <p className="text-xl font-bold">{todayCount}</p>
-                            <p className="text-[11px] text-muted-foreground">مهام اليوم</p>
+                            <p className="text-[11px] text-muted-foreground">{ui("مهام اليوم")}</p>
                           </div>
                           <div className="rounded-xl bg-emerald-50 p-3 dark:bg-emerald-950/30">
                             <p className="text-xl font-bold text-emerald-700 dark:text-emerald-400">
                               {completed}
                             </p>
-                            <p className="text-[11px] text-muted-foreground">مكتملة</p>
+                            <p className="text-[11px] text-muted-foreground">{ui("مكتملة")}</p>
                           </div>
                           <div className="rounded-xl bg-cyan-50 p-3 dark:bg-cyan-950/30">
                             <p className="text-xl font-bold text-cyan-800 dark:text-cyan-300">
                               {total}
                             </p>
-                            <p className="text-[11px] text-muted-foreground">إجمالي الشهر</p>
+                            <p className="text-[11px] text-muted-foreground">{ui("إجمالي الشهر")}</p>
                           </div>
                         </div>
                         <div className="mt-3 rounded-xl border bg-background/70 p-3">
                           <div className="mb-2 flex items-center justify-between text-xs">
-                            <span className="text-muted-foreground">إنجاز المهام الشهرية</span>
+                            <span className="text-muted-foreground">{ui("إنجاز المهام الشهرية")}</span>
                             <span className="font-semibold text-emerald-700 dark:text-emerald-400">
                               {taskCompletion}%
                             </span>
@@ -1160,10 +1129,7 @@ function TeamFollowUpPage() {
                               style={{ width: `${taskCompletion}%` }}
                             />
                           </div>
-                          <p className="mt-2 text-xs text-muted-foreground">
-                            الوقت المسجل: {Math.floor(taskMinutes / 60)} س {taskMinutes % 60} د ·
-                            الحضور: {daysPresent} يوم
-                          </p>
+                          <p className="mt-2 text-xs text-muted-foreground">{ui("الوقت المسجل: ")}{Math.floor(taskMinutes / 60)}{ui(" س ")}{taskMinutes % 60}{ui(" د · الحضور: ")}{daysPresent}{ui(" يوم")}</p>
                         </div>
                         <div className="mt-3 rounded-xl border p-3">
                           {tasks.filter((task) => task.task_date === date).length ? (
@@ -1175,7 +1141,7 @@ function TeamFollowUpPage() {
                                 </p>
                               ))
                           ) : (
-                            <p className="text-sm text-muted-foreground">لا توجد مهام اليوم</p>
+                            <p className="text-sm text-muted-foreground">{ui("لا توجد مهام اليوم")}</p>
                           )}
                         </div>
                         <Button
@@ -1200,17 +1166,14 @@ function TeamFollowUpPage() {
                             })
                           }
                         >
-                          <Eye className="ml-2 h-4 w-4" /> عرض سجل الموظف
-                        </Button>
+                          <Eye className="ml-2 h-4 w-4" />{ui(" عرض سجل الموظف")}</Button>
                       </CardContent>
                     </Card>
                   );
                 },
               )}
               {!employeeTaskStats.length && (
-                <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground md:col-span-2 xl:col-span-3">
-                  لا يوجد موظفون ضمن نطاق الأقسام المحدد.
-                </div>
+                <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground md:col-span-2 xl:col-span-3">{ui("لا يوجد موظفون ضمن نطاق الأقسام المحدد.")}</div>
               )}
             </CardContent>
           </Card>
@@ -1222,11 +1185,8 @@ function TeamFollowUpPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-primary" /> المتابعة اليومية للفريق
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                أسماء الموظفين المسندين إلى هذا القسم فقط، مع بطاقة مختصرة وتقييمهم وسجل مهامهم.
-              </p>
+                <Users className="h-5 w-5 text-primary" />{ui(" المتابعة اليومية للفريق")}</CardTitle>
+              <p className="text-sm text-muted-foreground">{ui("أسماء الموظفين المسندين إلى هذا القسم فقط، مع بطاقة مختصرة وتقييمهم وسجل مهامهم.")}</p>
             </CardHeader>
             <CardContent className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
               {teamVisibleEmployees.map((employee) => {
@@ -1254,29 +1214,28 @@ function TeamFollowUpPage() {
                       <Badge variant="outline">{employee.status}</Badge>
                     </div>
                     <div className="mt-4 space-y-2 text-sm text-muted-foreground">
-                      <p>
-                        القسم:{" "}
-                        {departmentById.get(employee.department_id ?? "")?.name ?? "غير محدد"}
+                      <p>{ui("القسم:")}{" "}
+                        {departmentById.get(employee.department_id ?? "")?.name ?? ui("غير محدد")}
                       </p>
-                      <p>الموقع: {siteById.get(employee.site_id ?? "")?.name ?? "غير محدد"}</p>
-                      <p>المنصب: {employee.position ?? "غير محدد"}</p>
+                      <p>{ui("الموقع: ")}{siteById.get(employee.site_id ?? "")?.name ?? ui("غير محدد")}</p>
+                      <p>{ui("المنصب: ")}{employee.position ?? ui("غير محدد")}</p>
                     </div>
                     <div className="mt-4 grid grid-cols-3 gap-2 text-center">
                       <div className="rounded-md bg-muted/50 p-2">
                         <p className="text-lg font-bold">{employeeDays}</p>
-                        <p className="text-[10px] text-muted-foreground">أيام الحضور</p>
+                        <p className="text-[10px] text-muted-foreground">{ui("أيام الحضور")}</p>
                       </div>
                       <div className="rounded-md bg-emerald-50 p-2 dark:bg-emerald-950/30">
                         <p className="text-lg font-bold text-emerald-700 dark:text-emerald-400">
                           {existingEvaluation?.score ?? "—"}
                         </p>
-                        <p className="text-[10px] text-muted-foreground">التقييم</p>
+                        <p className="text-[10px] text-muted-foreground">{ui("التقييم")}</p>
                       </div>
                       <div className="rounded-md bg-purple-50 p-2 dark:bg-purple-950/30">
                         <p className="text-lg font-bold text-purple-700 dark:text-purple-400">
                           {employeeTasks.length}
                         </p>
-                        <p className="text-[10px] text-muted-foreground">المهام</p>
+                        <p className="text-[10px] text-muted-foreground">{ui("المهام")}</p>
                       </div>
                     </div>
                     <Button
@@ -1303,15 +1262,12 @@ function TeamFollowUpPage() {
                         })
                       }
                     >
-                      <Eye className="ml-2 h-4 w-4" /> عرض التفاصيل
-                    </Button>
+                      <Eye className="ml-2 h-4 w-4" />{ui(" عرض التفاصيل")}</Button>
                   </div>
                 );
               })}
               {!teamVisibleEmployees.length && (
-                <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground lg:col-span-2 xl:col-span-3">
-                  لا يوجد موظفون مسندون لهذا القسم حاليًا.
-                </div>
+                <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground lg:col-span-2 xl:col-span-3">{ui("لا يوجد موظفون مسندون لهذا القسم حاليًا.")}</div>
               )}
             </CardContent>
           </Card>
@@ -1328,33 +1284,33 @@ function TeamFollowUpPage() {
       >
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>تفاصيل الموظف — {detailsMember?.employee.full_name}</DialogTitle>
+            <DialogTitle>{ui("تفاصيل الموظف — ")}{detailsMember?.employee.full_name}</DialogTitle>
             <DialogDescription>
               {detailsMember?.employee.employee_no} · {detailsMember?.departmentName} ·{" "}
-              {detailsMember?.siteName ?? "غير محدد"}
+              {detailsMember?.siteName ?? ui("غير محدد")}
             </DialogDescription>
           </DialogHeader>
           {detailsMember && (
             <div className="space-y-5 pt-2">
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="rounded-lg border p-3">
-                  <p className="text-xs text-muted-foreground">البريد الإلكتروني</p>
+                  <p className="text-xs text-muted-foreground">{ui("البريد الإلكتروني")}</p>
                   <p className="font-medium">
-                    {detailsMember.profile?.email ?? detailsMember.employee.email ?? "غير متوفر"}
+                    {detailsMember.profile?.email ?? detailsMember.employee.email ?? ui("غير متوفر")}
                   </p>
                 </div>
                 <div className="rounded-lg border p-3">
-                  <p className="text-xs text-muted-foreground">المنصب</p>
-                  <p className="font-medium">{detailsMember.employee.position ?? "غير محدد"}</p>
+                  <p className="text-xs text-muted-foreground">{ui("المنصب")}</p>
+                  <p className="font-medium">{detailsMember.employee.position ?? ui("غير محدد")}</p>
                 </div>
                 <div className="rounded-lg border p-3">
-                  <p className="text-xs text-muted-foreground">أيام الحضور</p>
+                  <p className="text-xs text-muted-foreground">{ui("أيام الحضور")}</p>
                   <p className="font-medium">{detailsMember.daysPresent}</p>
                 </div>
                 <div className="rounded-lg border p-3">
-                  <p className="text-xs text-muted-foreground">التقييم الشهري</p>
+                  <p className="text-xs text-muted-foreground">{ui("التقييم الشهري")}</p>
                   <p className="font-medium">
-                    {detailsMember.evaluation?.score ?? "لا يوجد تقييم"}
+                    {detailsMember.evaluation?.score ?? ui("لا يوجد تقييم")}
                   </p>
                 </div>
               </div>
@@ -1362,24 +1318,24 @@ function TeamFollowUpPage() {
               <div className="grid gap-3 md:grid-cols-3">
                 <div className="rounded-lg bg-muted/50 p-3 text-center">
                   <p className="text-2xl font-bold">{detailsMember.total}</p>
-                  <p className="text-xs text-muted-foreground">إجمالي المهام</p>
+                  <p className="text-xs text-muted-foreground">{ui("إجمالي المهام")}</p>
                 </div>
                 <div className="rounded-lg bg-emerald-50 p-3 text-center dark:bg-emerald-950/30">
                   <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">
                     {detailsMember.completed}
                   </p>
-                  <p className="text-xs text-muted-foreground">منجزة</p>
+                  <p className="text-xs text-muted-foreground">{ui("منجزة")}</p>
                 </div>
                 <div className="rounded-lg bg-amber-50 p-3 text-center dark:bg-amber-950/30">
                   <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">
                     {detailsMember.minutes}
                   </p>
-                  <p className="text-xs text-muted-foreground">دقائق</p>
+                  <p className="text-xs text-muted-foreground">{ui("دقائق")}</p>
                 </div>
               </div>
 
               <div className="rounded-lg border p-3">
-                <p className="mb-2 font-medium">مهام الموظف</p>
+                <p className="mb-2 font-medium">{ui("مهام الموظف")}</p>
                 {detailsMember.tasks.length ? (
                   <div className="space-y-2">
                     {detailsMember.tasks.slice(0, 6).map((task) => (
@@ -1387,17 +1343,16 @@ function TeamFollowUpPage() {
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-medium">{task.title}</span>
                           <Badge variant={task.status === "completed" ? "default" : "secondary"}>
-                            {task.status === "completed" ? "منجزة" : "قيد التنفيذ"}
+                            {task.status === "completed" ? ui("منجزة") : ui("قيد التنفيذ")}
                           </Badge>
                         </div>
                         <p className="mt-1 text-muted-foreground">
-                          {task.task_date} · {task.duration_minutes} دقيقة
-                        </p>
+                          {task.task_date} · {task.duration_minutes}{ui(" دقيقة")}</p>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground">لا توجد مهام مسجلة لهذا الموظف.</p>
+                  <p className="text-sm text-muted-foreground">{ui("لا توجد مهام مسجلة لهذا الموظف.")}</p>
                 )}
               </div>
             </div>
@@ -1433,7 +1388,7 @@ function Stat({
           <Icon className="w-5 h-5 text-white" />
         </div>
         <div>
-          <p className="text-sm text-muted-foreground">{label}</p>
+          <p className="text-sm text-muted-foreground">{ui(label)}</p>
           <p className="text-2xl font-bold">{value}</p>
         </div>
       </CardContent>

@@ -1,3 +1,4 @@
+import { ui } from "@/lib/ui-language";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
@@ -13,7 +14,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 
 export const Route = createFileRoute("/_authenticated/profile")({
-  head: () => ({ meta: [{ title: "الملف الشخصي" }] }),
+  head: () => ({ meta: [{ title: ui("الملف الشخصي") }] }),
   component: ProfilePage,
 });
 
@@ -119,14 +120,14 @@ function ProfilePage() {
       return authError && authChanges.email ? authError.message : null;
     },
     onSuccess: (emailErrorMessage) => {
-      toast.success("تم حفظ بيانات الملف الشخصي");
+      toast.success(ui("تم حفظ بيانات الملف الشخصي"));
       if (emailErrorMessage) {
-        toast.warning(`تم حفظ الاسم، لكن تعذر تحديث البريد الإلكتروني: ${emailErrorMessage}`);
+        toast.warning((ui("تم حفظ الاسم، لكن تعذر تحديث البريد الإلكتروني: ") + (emailErrorMessage)));
       }
     },
     onError: (error: unknown) => {
       const message = formatErrorMessage(error, "تعذر حفظ الملف الشخصي");
-      toast.error(message);
+      toast.error(ui(message));
     },
   });
 
@@ -136,8 +137,7 @@ function ProfilePage() {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
         <div className="flex items-center gap-2 text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> جارٍ تحميل الملف الشخصي...
-        </div>
+          <Loader2 className="h-4 w-4 animate-spin" />{ui(" جارٍ تحميل الملف الشخصي...")}</div>
       </div>
     );
   }
@@ -146,8 +146,8 @@ function ProfilePage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold">الملف الشخصي</h1>
-          <p className="mt-1 text-muted-foreground">عرض وتحديث بيانات الحساب العام الخاص بك</p>
+          <h1 className="text-3xl font-bold">{ui("الملف الشخصي")}</h1>
+          <p className="mt-1 text-muted-foreground">{ui("عرض وتحديث بيانات الحساب العام الخاص بك")}</p>
         </div>
         <div className="hidden sm:flex items-center gap-2 rounded-full border bg-card px-3 py-2 text-sm">
           <UserCircle2 className="h-4 w-4 text-primary" />
@@ -158,16 +158,16 @@ function ProfilePage() {
       <div className="grid gap-6 lg:grid-cols-[1.3fr_0.9fr]">
         <Card>
           <CardHeader>
-            <CardTitle>بيانات الحساب</CardTitle>
+            <CardTitle>{ui("بيانات الحساب")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="profile-full-name">الاسم الكامل</Label>
+              <Label htmlFor="profile-full-name">{ui("الاسم الكامل")}</Label>
               <Input id="profile-full-name" value={fullName} onChange={(e) => setFullName(e.target.value)} />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="profile-email">البريد الإلكتروني</Label>
+              <Label htmlFor="profile-email">{ui("البريد الإلكتروني")}</Label>
               <Input id="profile-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
 
@@ -180,52 +180,47 @@ function ProfilePage() {
             </div>
 
             <Button className="w-full" onClick={() => profileMutation.mutate()} disabled={profileMutation.isPending}>
-              {profileMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <UserCircle2 className="h-4 w-4 ml-2" />}
-              حفظ التغييرات
-            </Button>
+              {profileMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <UserCircle2 className="h-4 w-4 ml-2" />}{ui("حفظ التغييرات")}</Button>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>معلومات الحساب</CardTitle>
+            <CardTitle>{ui("معلومات الحساب")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="rounded-lg border bg-muted/20 p-3">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Mail className="h-4 w-4" /> البريد الإلكتروني
-              </div>
+                <Mail className="h-4 w-4" />{ui(" البريد الإلكتروني")}</div>
               <p className="mt-2 font-medium">{user.email ?? "—"}</p>
             </div>
 
             <div className="rounded-lg border bg-muted/20 p-3">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <BriefcaseBusiness className="h-4 w-4" /> الموظف المرتبط
-              </div>
+                <BriefcaseBusiness className="h-4 w-4" />{ui(" الموظف المرتبط")}</div>
               {linkedEmployeeQuery.isLoading ? (
-                <p className="mt-2 text-muted-foreground">جارٍ التحميل...</p>
+                <p className="mt-2 text-muted-foreground">{ui("جارٍ التحميل...")}</p>
               ) : linkedEmployeeQuery.data ? (
                 <div className="mt-2 space-y-1">
                   <p className="font-medium">{linkedEmployeeQuery.data.full_name}</p>
                   <p className="text-sm text-muted-foreground">{linkedEmployeeQuery.data.employee_no}</p>
                   <p className="text-sm text-muted-foreground">
-                    {linkedEmployeeQuery.data.position ?? "بدون منصب"}
+                    {linkedEmployeeQuery.data.position ?? ui("بدون منصب")}
                     {linkedEmployeeQuery.data.departments?.name ? ` · ${linkedEmployeeQuery.data.departments.name}` : ""}
                   </p>
                 </div>
               ) : (
-                <p className="mt-2 text-muted-foreground">لا يوجد موظف مرتبط بحسابك.</p>
+                <p className="mt-2 text-muted-foreground">{ui("لا يوجد موظف مرتبط بحسابك.")}</p>
               )}
             </div>
 
             <div className="rounded-lg border bg-muted/20 p-3">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <ShieldCheck className="h-4 w-4" /> الصلاحيات
-              </div>
+                <ShieldCheck className="h-4 w-4" />{ui(" الصلاحيات")}</div>
               <div className="mt-2 flex flex-wrap gap-2">
                 {roles.length ? roles.map((role) => (
                   <Badge key={role} variant="outline">{role}</Badge>
-                )) : <Badge variant="secondary">لا توجد صلاحيات</Badge>}
+                )) : <Badge variant="secondary">{ui("لا توجد صلاحيات")}</Badge>}
               </div>
             </div>
           </CardContent>

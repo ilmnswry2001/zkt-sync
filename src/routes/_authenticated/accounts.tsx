@@ -1,3 +1,4 @@
+import { direction, ui } from "@/lib/ui-language";
 import { useEffect, useState, type FormEvent } from "react";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -65,7 +66,7 @@ import {
 import { formatErrorMessage } from "@/lib/error-message";
 
 export const Route = createFileRoute("/_authenticated/accounts")({
-  head: () => ({ meta: [{ title: "الحسابات والصلاحيات" }] }),
+  head: () => ({ meta: [{ title: ui("الحسابات والصلاحيات") }] }),
   beforeLoad: async () => {
     const { data } = await supabase.auth.getUser();
     if (!data.user) throw redirect({ to: "/auth" });
@@ -118,44 +119,41 @@ function AccountsPage() {
   const close = () => setAction(undefined);
   const refresh = async () => {
     const result = await directory.refetch();
-    if (result.isSuccess) toast.success("تم تحديث دليل الحسابات");
+    if (result.isSuccess) toast.success(ui("تم تحديث دليل الحسابات"));
   };
 
   return (
-    <div dir="rtl" className="mx-auto max-w-7xl space-y-5">
+    <div dir={direction()} className="mx-auto max-w-7xl space-y-5">
       <header className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border bg-card p-5 sm:p-6">
         <div className="flex items-start gap-3">
           <div className="rounded-xl bg-primary/10 p-3 text-primary">
             <UserRoundCog className="size-6" aria-hidden="true" />
           </div>
           <div>
-            <h1 className="text-xl font-bold sm:text-2xl">الحسابات والصلاحيات</h1>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              إدارة الحسابات والأدوار ونطاق الوصول إلى الأقسام وصفحات النظام.
-            </p>
+            <h1 className="text-xl font-bold sm:text-2xl">{ui("الحسابات والصلاحيات")}</h1>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">{ui("إدارة الحسابات والأدوار ونطاق الوصول إلى الأقسام وصفحات النظام.")}</p>
           </div>
         </div>
         <Button onClick={() => setAction({ kind: "create" })} disabled={directory.isError}>
-          <Plus className="size-4" /> إنشاء حساب
-        </Button>
+          <Plus className="size-4" />{ui(" إنشاء حساب")}</Button>
       </header>
 
       <div className="grid gap-3 sm:grid-cols-3">
         <MetricCard
-          title="إجمالي الحسابات"
+          title={ui("إجمالي الحسابات")}
           value={data ? numberFormat.format(data.total) : "—"}
           icon={Users}
           loading={directory.isPending}
         />
         <MetricCard
-          title="مديرو النظام"
+          title={ui("مديرو النظام")}
           value={data ? numberFormat.format(data.admins) : "—"}
           icon={ShieldCheck}
           tone="success"
           loading={directory.isPending}
         />
         <MetricCard
-          title="حسابات بدون أدوار"
+          title={ui("حسابات بدون أدوار")}
           value={data ? numberFormat.format(data.unassigned) : "—"}
           icon={ShieldOff}
           tone="warning"
@@ -166,12 +164,12 @@ function AccountsPage() {
       <Card>
         <CardHeader className="space-y-4">
           <div className="flex items-center justify-between gap-3">
-            <CardTitle className="text-base sm:text-lg">دليل الحسابات</CardTitle>
+            <CardTitle className="text-base sm:text-lg">{ui("دليل الحسابات")}</CardTitle>
             <Button
               size="icon"
               variant="outline"
-              aria-label="تحديث دليل الحسابات"
-              title="تحديث دليل الحسابات"
+              aria-label={ui("تحديث دليل الحسابات")}
+              title={ui("تحديث دليل الحسابات")}
               disabled={directory.isFetching}
               onClick={() => void refresh()}
             >
@@ -180,7 +178,7 @@ function AccountsPage() {
           </div>
           <div className="grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
             <div className="space-y-2">
-              <Label htmlFor="account-search">البحث عن حساب</Label>
+              <Label htmlFor="account-search">{ui("البحث عن حساب")}</Label>
               <div className="relative">
                 <Search
                   className="absolute start-3 top-3 size-4 text-muted-foreground"
@@ -190,7 +188,7 @@ function AccountsPage() {
                   id="account-search"
                   className="ps-9"
                   maxLength={160}
-                  placeholder="اكتب الاسم أو البريد الإلكتروني"
+                  placeholder={ui("اكتب الاسم أو البريد الإلكتروني")}
                   value={search}
                   onChange={(event) => {
                     setSearch(event.target.value);
@@ -200,7 +198,7 @@ function AccountsPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="account-role-filter">تصفية حسب الدور</Label>
+              <Label htmlFor="account-role-filter">{ui("تصفية حسب الدور")}</Label>
               <select
                 id="account-role-filter"
                 className={selectClass}
@@ -210,8 +208,8 @@ function AccountsPage() {
                   setPage(0);
                 }}
               >
-                <option value="">جميع الأدوار</option>
-                <option value="unassigned">بدون دور</option>
+                <option value="">{ui("جميع الأدوار")}</option>
+                <option value="unassigned">{ui("بدون دور")}</option>
                 {roleKeys.map((key) => (
                   <option key={key} value={key}>
                     {accountRoles[key][0]}
@@ -225,27 +223,23 @@ function AccountsPage() {
           {directory.isError ? (
             <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-5">
               <p role="alert" className="text-sm text-destructive">
-                {formatErrorMessage(directory.error, "تعذر تحميل دليل الحسابات")}
+                {ui(formatErrorMessage(directory.error, "تعذر تحميل دليل الحسابات"))}
               </p>
               <Button
                 variant="outline"
                 size="sm"
                 className="mt-3"
                 onClick={() => void directory.refetch()}
-              >
-                إعادة المحاولة
-              </Button>
+              >{ui("إعادة المحاولة")}</Button>
             </div>
           ) : waiting ? (
             <p
               role="status"
               className="rounded-xl border p-8 text-center text-sm text-muted-foreground"
-            >
-              جارٍ تحميل الحسابات…
-            </p>
+            >{ui("جارٍ تحميل الحسابات…")}</p>
           ) : !data?.accounts.length ? (
             <div className="space-y-3 rounded-xl border border-dashed p-8 text-center">
-              <p className="text-sm text-muted-foreground">لا توجد حسابات مطابقة للبحث والتصفية.</p>
+              <p className="text-sm text-muted-foreground">{ui("لا توجد حسابات مطابقة للبحث والتصفية.")}</p>
               {(search || role) && (
                 <Button
                   variant="outline"
@@ -256,9 +250,7 @@ function AccountsPage() {
                     setRole("");
                     setPage(0);
                   }}
-                >
-                  مسح عوامل التصفية
-                </Button>
+                >{ui("مسح عوامل التصفية")}</Button>
               )}
             </div>
           ) : (
@@ -267,10 +259,10 @@ function AccountsPage() {
                 aria-hidden="true"
                 className="hidden gap-3 bg-muted/55 px-4 py-3 text-xs font-medium text-muted-foreground lg:grid lg:grid-cols-[minmax(0,2fr)_minmax(0,2fr)_minmax(7rem,1fr)_9rem]"
               >
-                <span>الحساب</span>
-                <span>الأدوار</span>
-                <span>تاريخ الإنشاء</span>
-                <span>الإجراءات</span>
+                <span>{ui("الحساب")}</span>
+                <span>{ui("الأدوار")}</span>
+                <span>{ui("تاريخ الإنشاء")}</span>
+                <span>{ui("الإجراءات")}</span>
               </div>
               <ul className="divide-y">
                 {data.accounts.map((account) => {
@@ -292,7 +284,7 @@ function AccountsPage() {
                             <p className="break-words text-sm font-semibold">
                               {accountName(account)}
                             </p>
-                            {ownAccount && <Badge variant="outline">حسابك</Badge>}
+                            {ownAccount && <Badge variant="outline">{ui("حسابك")}</Badge>}
                           </div>
                           {account.email && (
                             <p
@@ -316,7 +308,7 @@ function AccountsPage() {
                             </Badge>
                           ))
                         ) : (
-                          <Badge variant="outline">بدون دور</Badge>
+                          <Badge variant="outline">{ui("بدون دور")}</Badge>
                         )}
                       </div>
                       <time dateTime={account.created_at} className="text-xs text-muted-foreground">
@@ -327,15 +319,13 @@ function AccountsPage() {
                           size="sm"
                           variant="outline"
                           onClick={() => setAction({ kind: "edit", account })}
-                          aria-label={`تعديل وصول ${accountName(account)}`}
-                        >
-                          تعديل
-                        </Button>
+                          aria-label={(ui("تعديل وصول ") + (accountName(account)))}
+                        >{ui("تعديل")}</Button>
                         <Button
                           size="icon"
                           variant="ghost"
-                          aria-label={`تغيير كلمة مرور ${accountName(account)}`}
-                          title="تغيير كلمة المرور"
+                          aria-label={(ui("تغيير كلمة مرور ") + (accountName(account)))}
+                          title={ui("تغيير كلمة المرور")}
                           onClick={() => setAction({ kind: "password", account })}
                         >
                           <KeyRound className="size-4" />
@@ -345,8 +335,8 @@ function AccountsPage() {
                             size="icon"
                             variant="ghost"
                             className="text-destructive"
-                            aria-label={`حذف ${accountName(account)}`}
-                            title="حذف الحساب"
+                            aria-label={(ui("حذف ") + (accountName(account)))}
+                            title={ui("حذف الحساب")}
                             onClick={() => setAction({ kind: "delete", account })}
                           >
                             <Trash2 className="size-4" />
@@ -360,14 +350,13 @@ function AccountsPage() {
               <div className="flex flex-wrap items-center justify-between gap-3 border-t bg-muted/30 p-3">
                 <p className="text-sm text-muted-foreground">
                   {numberFormat.format(page * pageSize + 1)}–
-                  {numberFormat.format(page * pageSize + data.accounts.length)} من{" "}
-                  {numberFormat.format(data.filteredCount)} حساب
-                </p>
+                  {numberFormat.format(page * pageSize + data.accounts.length)}{ui(" من")}{" "}
+                  {numberFormat.format(data.filteredCount)}{ui(" حساب")}</p>
                 <div className="flex items-center gap-2">
                   <Button
                     size="icon"
                     variant="outline"
-                    aria-label="الصفحة السابقة"
+                    aria-label={ui("الصفحة السابقة")}
                     disabled={page === 0}
                     onClick={() => setPage(page - 1)}
                   >
@@ -379,7 +368,7 @@ function AccountsPage() {
                   <Button
                     size="icon"
                     variant="outline"
-                    aria-label="الصفحة التالية"
+                    aria-label={ui("الصفحة التالية")}
                     disabled={page + 1 >= pages}
                     onClick={() => setPage(page + 1)}
                   >
@@ -433,17 +422,15 @@ function EditAccount({
     );
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent dir="rtl">
+      <DialogContent dir={direction()}>
         <DialogHeader className="ps-5 text-start sm:text-start">
-          <DialogTitle>تعديل حساب {accountName(account)}</DialogTitle>
+          <DialogTitle>{ui("تعديل حساب ")}{accountName(account)}</DialogTitle>
           <DialogDescription>
-            {details.isError ? "تعذر قراءة إعدادات الحساب." : "جارٍ تحميل إعدادات الحساب…"}
+            {details.isError ? ui("تعذر قراءة إعدادات الحساب.") : ui("جارٍ تحميل إعدادات الحساب…")}
           </DialogDescription>
         </DialogHeader>
         {details.isError && (
-          <Button variant="outline" onClick={() => void details.refetch()}>
-            إعادة المحاولة
-          </Button>
+          <Button variant="outline" onClick={() => void details.refetch()}>{ui("إعادة المحاولة")}</Button>
         )}
       </DialogContent>
     </Dialog>
@@ -509,7 +496,7 @@ function AccountEditor({
       if (ownAccount)
         window.dispatchEvent(new CustomEvent("profile-name-updated", { detail: draft.fullName }));
       toast.success(
-        original ? "تم حفظ بيانات الحساب وصلاحياته" : "تم إنشاء الحساب وتعيين صلاحياته",
+        original ? ui("تم حفظ بيانات الحساب وصلاحياته") : ui("تم إنشاء الحساب وتعيين صلاحياته"),
       );
       onClose();
     },
@@ -553,36 +540,30 @@ function AccountEditor({
     <>
       <Dialog open onOpenChange={(open) => !open && close()}>
         <DialogContent
-          dir="rtl"
+          dir={direction()}
           className="flex max-h-[94dvh] max-w-[calc(100%-1rem)] flex-col gap-0 overflow-hidden rounded-xl p-0 sm:max-w-2xl"
         >
           <DialogHeader className="border-b px-6 py-5 ps-12 text-start sm:text-start">
-            <DialogTitle>{original ? "تعديل الحساب والصلاحيات" : "إنشاء حساب جديد"}</DialogTitle>
+            <DialogTitle>{original ? ui("تعديل الحساب والصلاحيات") : ui("إنشاء حساب جديد")}</DialogTitle>
             <DialogDescription className="break-all">
               {original
                 ? original.email || original.fullName
-                : "أدخل بيانات الحساب واختر صلاحياته قبل الحفظ."}
+                : ui("أدخل بيانات الحساب واختر صلاحياته قبل الحفظ.")}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" noValidate>
             <div className="min-h-0 space-y-3 overflow-y-auto p-4 sm:p-6">
               <fieldset disabled={save.isPending}>
-                <Tabs dir="rtl" value={tab} onValueChange={setTab}>
+                <Tabs dir={direction()} value={tab} onValueChange={setTab}>
                   <TabsList className="mb-4 grid h-auto w-full grid-cols-3">
-                    <TabsTrigger className="whitespace-normal" value="roles">
-                      الحساب والأدوار
-                    </TabsTrigger>
-                    <TabsTrigger className="whitespace-normal" value="scope">
-                      الأقسام والصفحات
-                    </TabsTrigger>
-                    <TabsTrigger className="whitespace-normal" value="plan">
-                      خطط العمل
-                    </TabsTrigger>
+                    <TabsTrigger className="whitespace-normal" value="roles">{ui("الحساب والأدوار")}</TabsTrigger>
+                    <TabsTrigger className="whitespace-normal" value="scope">{ui("الأقسام والصفحات")}</TabsTrigger>
+                    <TabsTrigger className="whitespace-normal" value="plan">{ui("خطط العمل")}</TabsTrigger>
                   </TabsList>
                   <TabsContent value="roles" className="space-y-5">
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="flex flex-col gap-3 sm:col-span-2">
-                        <Label htmlFor="account-name">الاسم الكامل</Label>
+                        <Label htmlFor="account-name">{ui("الاسم الكامل")}</Label>
                         <Input
                           id="account-name"
                           value={access.fullName}
@@ -595,7 +576,7 @@ function AccountEditor({
                       {!original && (
                         <>
                           <div className="flex flex-col gap-3">
-                            <Label htmlFor="account-email">البريد الإلكتروني</Label>
+                            <Label htmlFor="account-email">{ui("البريد الإلكتروني")}</Label>
                             <Input
                               dir="ltr"
                               type="email"
@@ -607,7 +588,7 @@ function AccountEditor({
                             />
                           </div>
                           <div className="flex flex-col gap-3">
-                            <Label htmlFor="account-password">كلمة المرور الأولية</Label>
+                            <Label htmlFor="account-password">{ui("كلمة المرور الأولية")}</Label>
                             <Input
                               dir="ltr"
                               id="account-password"
@@ -616,7 +597,7 @@ function AccountEditor({
                               value={password}
                               onChange={(event) => setPassword(event.target.value)}
                               autoComplete="new-password"
-                              placeholder="٨ أحرف على الأقل"
+                              placeholder={ui("٨ أحرف على الأقل")}
                             />
                           </div>
                         </>
@@ -624,10 +605,9 @@ function AccountEditor({
                     </div>
                     <div className="space-y-3">
                       <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-semibold">الأدوار المسندة</p>
+                        <p className="text-sm font-semibold">{ui("الأدوار المسندة")}</p>
                         <Badge variant="secondary">
-                          {numberFormat.format(access.roles.length)} دور
-                        </Badge>
+                          {numberFormat.format(access.roles.length)}{ui(" دور")}</Badge>
                       </div>
                       <div className="grid gap-2 sm:grid-cols-2">
                         {roleKeys.map((key) => {
@@ -668,9 +648,7 @@ function AccountEditor({
                         })}
                       </div>
                       {ownAccount && (
-                        <p className="text-xs text-muted-foreground">
-                          دور مدير النظام مثبت لحسابك الحالي.
-                        </p>
+                        <p className="text-xs text-muted-foreground">{ui("دور مدير النظام مثبت لحسابك الحالي.")}</p>
                       )}
                     </div>
                   </TabsContent>
@@ -708,15 +686,13 @@ function AccountEditor({
               )}
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs text-muted-foreground">
-                  {changed ? "تغييرات غير محفوظة" : ""}
+                  {changed ? ui("تغييرات غير محفوظة") : ""}
                 </p>
                 <div className="flex gap-2">
-                  <Button type="button" variant="outline" disabled={save.isPending} onClick={close}>
-                    إلغاء
-                  </Button>
+                  <Button type="button" variant="outline" disabled={save.isPending} onClick={close}>{ui("إلغاء")}</Button>
                   <Button type="submit" disabled={save.isPending || (!!original && !changed)}>
                     {save.isPending && <Loader2 className="size-4 animate-spin" />}
-                    {original ? "حفظ التغييرات" : "إنشاء الحساب"}
+                    {original ? ui("حفظ التغييرات") : ui("إنشاء الحساب")}
                   </Button>
                 </div>
               </div>
@@ -725,18 +701,14 @@ function AccountEditor({
         </DialogContent>
       </Dialog>
       <AlertDialog open={confirmDiscard} onOpenChange={setConfirmDiscard}>
-        <AlertDialogContent dir="rtl">
+        <AlertDialogContent dir={direction()}>
           <AlertDialogHeader className="text-start sm:text-start">
-            <AlertDialogTitle>تجاهل التغييرات؟</AlertDialogTitle>
-            <AlertDialogDescription>
-              ستُغلق نافذة الحساب وتُفقد التغييرات غير المحفوظة.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{ui("تجاهل التغييرات؟")}</AlertDialogTitle>
+            <AlertDialogDescription>{ui("ستُغلق نافذة الحساب وتُفقد التغييرات غير المحفوظة.")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>متابعة التعديل</AlertDialogCancel>
-            <Button variant="destructive" onClick={onClose}>
-              تجاهل التغييرات
-            </Button>
+            <AlertDialogCancel>{ui("متابعة التعديل")}</AlertDialogCancel>
+            <Button variant="destructive" onClick={onClose}>{ui("تجاهل التغييرات")}</Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -751,16 +723,16 @@ function PasswordDialog({ account, onClose }: { account: DirectoryAccount; onClo
   const update = useMutation({
     mutationFn: () => updateAccountPassword({ data: { userId: account.id, password } }),
     onSuccess: () => {
-      toast.success("تم تغيير كلمة المرور");
+      toast.success(ui("تم تغيير كلمة المرور"));
       onClose();
     },
     onError: (failure) => setError(formatErrorMessage(failure, "تعذر تغيير كلمة المرور")),
   });
   return (
     <Dialog open onOpenChange={(open) => !open && !update.isPending && onClose()}>
-      <DialogContent dir="rtl" className="max-h-[90dvh] overflow-y-auto">
+      <DialogContent dir={direction()} className="max-h-[90dvh] overflow-y-auto">
         <DialogHeader className="ps-5 text-start sm:text-start">
-          <DialogTitle>تغيير كلمة المرور</DialogTitle>
+          <DialogTitle>{ui("تغيير كلمة المرور")}</DialogTitle>
           <DialogDescription>{accountName(account)}</DialogDescription>
         </DialogHeader>
         <form
@@ -781,7 +753,7 @@ function PasswordDialog({ account, onClose }: { account: DirectoryAccount; onClo
           }}
         >
           <div className="space-y-2">
-            <Label htmlFor="new-password">كلمة المرور الجديدة</Label>
+            <Label htmlFor="new-password">{ui("كلمة المرور الجديدة")}</Label>
             <Input
               dir="ltr"
               id="new-password"
@@ -794,7 +766,7 @@ function PasswordDialog({ account, onClose }: { account: DirectoryAccount; onClo
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="confirm-password">تأكيد كلمة المرور</Label>
+            <Label htmlFor="confirm-password">{ui("تأكيد كلمة المرور")}</Label>
             <Input
               dir="ltr"
               id="confirm-password"
@@ -812,7 +784,7 @@ function PasswordDialog({ account, onClose }: { account: DirectoryAccount; onClo
             </p>
           )}
           <Button disabled={update.isPending || !password || !confirmation}>
-            {update.isPending ? "جارٍ الحفظ…" : "حفظ كلمة المرور"}
+            {update.isPending ? ui("جارٍ الحفظ…") : ui("حفظ كلمة المرور")}
           </Button>
         </form>
       </DialogContent>
@@ -826,33 +798,30 @@ function DeleteDialog({ account, onClose }: { account: DirectoryAccount; onClose
     mutationFn: () => deleteAccount({ data: { userId: account.id } }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["accounts", "directory"] });
-      toast.success("تم حذف الحساب");
+      toast.success(ui("تم حذف الحساب"));
       onClose();
     },
   });
   return (
     <AlertDialog open onOpenChange={(open) => !open && !removal.isPending && onClose()}>
-      <AlertDialogContent dir="rtl">
+      <AlertDialogContent dir={direction()}>
         <AlertDialogHeader className="text-start sm:text-start">
-          <AlertDialogTitle>حذف حساب {accountName(account)}؟</AlertDialogTitle>
-          <AlertDialogDescription>
-            هذا حذف نهائي للحساب وصلاحياته. يمنع النظام الحذف إذا كان الحساب مرتبطاً بسجلات تاريخية
-            محمية.
-          </AlertDialogDescription>
+          <AlertDialogTitle>{ui("حذف حساب ")}{accountName(account)}؟</AlertDialogTitle>
+          <AlertDialogDescription>{ui("هذا حذف نهائي للحساب وصلاحياته. يمنع النظام الحذف إذا كان الحساب مرتبطاً بسجلات تاريخية محمية.")}</AlertDialogDescription>
         </AlertDialogHeader>
         {removal.isError && (
           <p role="alert" className="text-sm text-destructive">
-            {formatErrorMessage(removal.error, "تعذر حذف الحساب")}
+            {ui(formatErrorMessage(removal.error, "تعذر حذف الحساب"))}
           </p>
         )}
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={removal.isPending}>إلغاء</AlertDialogCancel>
+          <AlertDialogCancel disabled={removal.isPending}>{ui("إلغاء")}</AlertDialogCancel>
           <Button
             variant="destructive"
             disabled={removal.isPending}
             onClick={() => removal.mutate()}
           >
-            {removal.isPending ? "جارٍ الحذف…" : "حذف الحساب"}
+            {removal.isPending ? ui("جارٍ الحذف…") : ui("حذف الحساب")}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

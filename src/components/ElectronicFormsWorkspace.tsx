@@ -1,3 +1,4 @@
+import { direction, ui } from "@/lib/ui-language";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -122,9 +123,9 @@ export function ElectronicFormsWorkspace({
       await fn();
       await refresh();
       if (close) closeDialog();
-      toast.success("تم الحفظ");
+      toast.success(ui("تم الحفظ"));
     } catch (e) {
-      toast.error((e as Error).message || "تعذر الحفظ");
+      toast.error(ui((e as Error).message) || ui("تعذر الحفظ"));
     } finally {
       setBusy(false);
     }
@@ -203,34 +204,32 @@ export function ElectronicFormsWorkspace({
       setSelected([]);
     }, false);
   }
-  if (q.isPending) return <p className="p-6">جارٍ تحميل النماذج…</p>;
+  if (q.isPending) return <p className="p-6">{ui("جارٍ تحميل النماذج…")}</p>;
   if (q.error)
-    return <Button onClick={() => q.refetch()}>تعذر تحميل النماذج · إعادة المحاولة</Button>;
-  if (submissionId && !submission) return <p className="p-6">الاستمارة غير متاحة.</p>;
-  if (inbox && !isAdmin) return <p className="p-6">صندوق المراجعة مخصص لمدير النظام.</p>;
+    return <Button onClick={() => q.refetch()}>{ui("تعذر تحميل النماذج · إعادة المحاولة")}</Button>;
+  if (submissionId && !submission) return <p className="p-6">{ui("الاستمارة غير متاحة.")}</p>;
+  if (inbox && !isAdmin) return <p className="p-6">{ui("صندوق المراجعة مخصص لمدير النظام.")}</p>;
   return (
-    <main dir="rtl" className="space-y-5 p-4 md:p-6">
+    <main dir={direction()} className="space-y-5 p-4 md:p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">{inbox ? "صندوق مراجعة النماذج" : "مركز النماذج"}</h1>
+        <h1 className="text-2xl font-bold">{inbox ? ui("صندوق مراجعة النماذج") : ui("مركز النماذج")}</h1>
         <div className="flex flex-wrap gap-2">
           {isAdmin && (
             <Button asChild variant="outline">
               <Link to={inbox ? "/forms" : "/forms/inbox"}>
-                {inbox ? "القوالب" : "صندوق المراجعة"}
+                {inbox ? ui("القوالب") : ui("صندوق المراجعة")}
               </Link>
             </Button>
           )}
           {isHR && (
             <Button asChild variant="outline">
-              <Link to="/form-center">النماذج السابقة</Link>
+              <Link to="/form-center">{ui("النماذج السابقة")}</Link>
             </Button>
           )}
           {!inbox && isAdmin && (
             <>
-              <Button onClick={() => open("template")}>قالب جديد</Button>
-              <Button variant="outline" onClick={() => open("brand")}>
-                هوية الطباعة
-              </Button>
+              <Button onClick={() => open("template")}>{ui("قالب جديد")}</Button>
+              <Button variant="outline" onClick={() => open("brand")}>{ui("هوية الطباعة")}</Button>
             </>
           )}
         </div>
@@ -241,54 +240,46 @@ export function ElectronicFormsWorkspace({
             <Card key={t.id} className="space-y-3 p-4">
               <h2 className="text-lg font-bold">{t.title_ar}</h2>
               <p>
-                <bdi>{t.code}</bdi> · الإصدار {t.version}
+                <bdi>{t.code}</bdi>{ui(" · الإصدار ")}{t.version}
                 {isAdmin && (
                   <>
                     {" "}
-                    · {links.filter((l) => l.template_id === t.id).length} روابط ·{" "}
+                    · {links.filter((l) => l.template_id === t.id).length}{ui(" روابط ·")}{" "}
                     {
                       rows.filter((r) => r.template_id === t.id && r.status === "pending_review")
                         .length
-                    }{" "}
-                    قيد المراجعة
-                  </>
+                    }{" "}{ui("قيد المراجعة")}</>
                 )}
               </p>
               <div className="flex flex-wrap gap-2">
-                <Button onClick={() => open("fill", t)}>تعبئة استمارة</Button>
+                <Button onClick={() => open("fill", t)}>{ui("تعبئة استمارة")}</Button>
                 <Button
                   variant="outline"
                   onClick={() => printForms([{ ...t, data: {}, branding }])}
-                >
-                  طباعة فارغة
-                </Button>
+                >{ui("طباعة فارغة")}</Button>
                 {isAdmin && (
                   <>
-                    <Button variant="outline" onClick={() => open("link", t)}>
-                      الروابط
-                    </Button>
-                    <Button variant="outline" onClick={() => open("template", t)}>
-                      تعديل القالب
-                    </Button>
+                    <Button variant="outline" onClick={() => open("link", t)}>{ui("الروابط")}</Button>
+                    <Button variant="outline" onClick={() => open("template", t)}>{ui("تعديل القالب")}</Button>
                   </>
                 )}
               </div>
             </Card>
           ))}
-          {!templates.length && <p>لا توجد قوالب.</p>}
+          {!templates.length && <p>{ui("لا توجد قوالب.")}</p>}
         </div>
       )}
       {(inbox || !isAdmin) && (
         <Card className="space-y-3 p-4">
-          <h2>{isAdmin ? "الاستمارات المرسلة" : "استماراتي"}</h2>
+          <h2>{isAdmin ? ui("الاستمارات المرسلة") : ui("استماراتي")}</h2>
           <div className="grid gap-2 sm:grid-cols-3">
             <Input
-              placeholder="بحث في الرقم أو أي حقل"
+              placeholder={ui("بحث في الرقم أو أي حقل")}
               value={filter.text}
               onChange={(e) => setFilter({ ...filter, text: e.target.value })}
             />
             <Input
-              aria-label="تاريخ الإرسال"
+              aria-label={ui("تاريخ الإرسال")}
               type="date"
               value={filter.date}
               onChange={(e) => setFilter({ ...filter, date: e.target.value })}
@@ -322,13 +313,10 @@ export function ElectronicFormsWorkspace({
                 onClick={() =>
                   setSelected(chosen.length === filtered.length ? [] : filtered.map((r) => r.id))
                 }
-              >
-                تحديد الكل / إلغاء
-              </Button>
+              >{ui("تحديد الكل / إلغاء")}</Button>
               {["approved", "rejected"].map((s) => (
                 <Button key={s} disabled={!chosen.length || busy} onClick={() => decision(s)}>
-                  {s === "approved" ? "اعتماد" : "رفض"} المحدد
-                </Button>
+                  {s === "approved" ? ui("اعتماد") : ui("رفض")}{ui(" المحدد")}</Button>
               ))}
               <Button disabled={!chosen.length} onClick={() => printForms(chosen.map(document))}>
                 PDF
@@ -394,9 +382,7 @@ export function ElectronicFormsWorkspace({
                     <td>{statuses[r.status]}</td>
                     <td>
                       <Button variant="outline" asChild>
-                        <Link to="/forms/submissions/$id" params={{ id: r.id }}>
-                          فتح
-                        </Link>
+                        <Link to="/forms/submissions/$id" params={{ id: r.id }}>{ui("فتح")}</Link>
                       </Button>
                     </td>
                   </tr>
@@ -404,7 +390,7 @@ export function ElectronicFormsWorkspace({
               </tbody>
             </table>
           </div>
-          {!filtered.length && <p>لا توجد استمارات مطابقة.</p>}
+          {!filtered.length && <p>{ui("لا توجد استمارات مطابقة.")}</p>}
         </Card>
       )}
       <Dialog
@@ -413,7 +399,7 @@ export function ElectronicFormsWorkspace({
           if (!v && !busy) closeDialog();
         }}
       >
-        <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
+        <DialogContent dir={direction()} className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
           <DialogTitle>
             {
               {
@@ -462,9 +448,7 @@ export function ElectronicFormsWorkspace({
                   </label>
                 ))}
               </div>
-              <label>
-                شعار الشركة
-                <Input
+              <label>{ui("شعار الشركة")}<Input
                   type="file"
                   accept="image/png,image/jpeg,image/webp"
                   onChange={async (e) => {
@@ -474,7 +458,7 @@ export function ElectronicFormsWorkspace({
                       !["image/png", "image/jpeg", "image/webp"].includes(f.type) ||
                       f.size > 250000
                     )
-                      return toast.error("اختر صورة بحجم أقل من 250 كيلوبايت");
+                      return toast.error(ui("اختر صورة بحجم أقل من 250 كيلوبايت"));
                     const reader = new FileReader();
                     reader.onload = () =>
                       setBrand((v) => ({ ...v, logo_url: String(reader.result) }));
@@ -483,9 +467,7 @@ export function ElectronicFormsWorkspace({
                 />
               </label>
               {brand.logo_url && (
-                <Button variant="outline" onClick={() => setBrand({ ...brand, logo_url: null })}>
-                  إزالة الشعار
-                </Button>
+                <Button variant="outline" onClick={() => setBrand({ ...brand, logo_url: null })}>{ui("إزالة الشعار")}</Button>
               )}
               <Button
                 disabled={busy}
@@ -494,29 +476,21 @@ export function ElectronicFormsWorkspace({
                     await check(db.from("site_settings").update(brand).eq("id", true));
                   })
                 }
-              >
-                حفظ الهوية
-              </Button>
+              >{ui("حفظ الهوية")}</Button>
             </>
           )}
           {mode === "link" && tpl && (
             <>
-              <label>
-                اسم الرابط
-                <Input value={label} onChange={(e) => setLabel(e.target.value)} />
+              <label>{ui("اسم الرابط")}<Input value={label} onChange={(e) => setLabel(e.target.value)} />
               </label>
-              <label>
-                الحد الأقصى للإرسال
-                <Input
+              <label>{ui("الحد الأقصى للإرسال")}<Input
                   type="number"
                   min={1}
                   value={max}
                   onChange={(e) => setLimit(e.target.value)}
                 />
               </label>
-              <label>
-                انتهاء الصلاحية
-                <Input
+              <label>{ui("انتهاء الصلاحية")}<Input
                   type="datetime-local"
                   value={expires}
                   onChange={(e) => setExpiry(e.target.value)}
@@ -527,11 +501,9 @@ export function ElectronicFormsWorkspace({
                   type="checkbox"
                   checked={allow}
                   onChange={(e) => setAllowPrint(e.target.checked)}
-                />{" "}
-                السماح بالطباعة بعد الإرسال
-              </label>
+                />{" "}{ui("السماح بالطباعة بعد الإرسال")}</label>
               <details>
-                <summary>قيم مسبقة وقفل الحقول</summary>
+                <summary>{ui("قيم مسبقة وقفل الحقول")}</summary>
                 <ElectronicFormFields schema={tpl.schema} data={data} change={setData} />
                 {tpl.schema.sections
                   .flatMap((s) =>
@@ -549,8 +521,7 @@ export function ElectronicFormsWorkspace({
                             e.target.checked ? [...locks, f.key] : locks.filter((k) => k !== f.key),
                           )
                         }
-                      />{" "}
-                      قفل {f.label_ar}
+                      />{" "}{ui("قفل ")}{f.label_ar}
                     </label>
                   ))}
               </details>
@@ -573,18 +544,16 @@ export function ElectronicFormsWorkspace({
                     );
                   }, false)
                 }
-              >
-                إنشاء رابط
-              </Button>
+              >{ui("إنشاء رابط")}</Button>
               {links
                 .filter((l) => l.template_id === tpl.id)
                 .map((l) => {
                   const url = location.origin + "/f/" + l.token;
                   return (
                     <Card className="space-y-2 p-3" key={l.id}>
-                      <strong>{l.label || tpl.title_ar}</strong>
+                      <strong>{ui(l.label) || tpl.title_ar}</strong>
                       <p>
-                        {l.submissions_count} استمارات · {l.is_active ? "نشط" : "متوقف"}
+                        {l.submissions_count}{ui(" استمارات · ")}{l.is_active ? ui("نشط") : ui("متوقف")}
                       </p>
                       <QRCodeSVG value={url} size={96} />
                       <div className="flex flex-wrap gap-2">
@@ -593,12 +562,10 @@ export function ElectronicFormsWorkspace({
                           onClick={() =>
                             navigator.clipboard
                               .writeText(url)
-                              .then(() => toast.success("تم نسخ الرابط"))
-                              .catch(() => toast.error("تعذر نسخ الرابط"))
+                              .then(() => toast.success(ui("تم نسخ الرابط")))
+                              .catch(() => toast.error(ui("تعذر نسخ الرابط")))
                           }
-                        >
-                          نسخ الرابط
-                        </Button>
+                        >{ui("نسخ الرابط")}</Button>
                         <Button asChild variant="outline">
                           <a
                             target="_blank"
@@ -607,9 +574,7 @@ export function ElectronicFormsWorkspace({
                               "https://wa.me/?text=" +
                               encodeURIComponent("يرجى تعبئة " + tpl.title_ar + " " + url)
                             }
-                          >
-                            واتساب
-                          </a>
+                          >{ui("واتساب")}</a>
                         </Button>
                         <Button
                           disabled={busy}
@@ -625,7 +590,7 @@ export function ElectronicFormsWorkspace({
                             }, false)
                           }
                         >
-                          {l.is_active ? "تعطيل" : "تفعيل"}
+                          {l.is_active ? ui("تعطيل") : ui("تفعيل")}
                         </Button>
                       </div>
                     </Card>
@@ -640,9 +605,7 @@ export function ElectronicFormsWorkspace({
               )}
               {mode === "view" && isAdmin && (
                 <>
-                  <label>
-                    قرار المراجعة
-                    <select
+                  <label>{ui("قرار المراجعة")}<select
                       className={inputClass}
                       value={status}
                       onChange={(e) => setStatus(e.target.value)}
@@ -654,9 +617,7 @@ export function ElectronicFormsWorkspace({
                       ))}
                     </select>
                   </label>
-                  <label>
-                    ملاحظة المراجعة
-                    <Input value={note} onChange={(e) => setNote(e.target.value)} />
+                  <label>{ui("ملاحظة المراجعة")}<Input value={note} onChange={(e) => setNote(e.target.value)} />
                   </label>
                 </>
               )}
@@ -689,20 +650,16 @@ export function ElectronicFormsWorkspace({
                         );
                       })
                     }
-                  >
-                    حفظ الاستمارة
-                  </Button>
+                  >{ui("حفظ الاستمارة")}</Button>
                 )}
                 {row && (
                   <>
-                    <Button variant="outline" onClick={() => printForms([document(row)])}>
-                      طباعة / حفظ PDF
-                    </Button>
+                    <Button variant="outline" onClick={() => printForms([document(row)])}>{ui("طباعة / حفظ PDF")}</Button>
                     <Button
                       variant="outline"
                       onClick={() => {
                         const current = templates.find((t) => t.id === tpl.id);
-                        if (!current) return toast.error("القالب غير متاح");
+                        if (!current) return toast.error(ui("القالب غير متاح"));
                         open("fill", current);
                         setData(
                           Object.fromEntries(
@@ -712,9 +669,7 @@ export function ElectronicFormsWorkspace({
                           ),
                         );
                       }}
-                    >
-                      نسخ البيانات لاستمارة جديدة
-                    </Button>
+                    >{ui("نسخ البيانات لاستمارة جديدة")}</Button>
                   </>
                 )}
               </div>

@@ -1,3 +1,4 @@
+import { direction, ui } from "@/lib/ui-language";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -39,7 +40,7 @@ import {
 } from "@/lib/mobile-sync.functions";
 
 export const Route = createFileRoute("/_authenticated/mobile-sync")({
-  head: () => ({ meta: [{ title: "سحب البصمة بالهاتف | إدارة الحضور" }] }),
+  head: () => ({ meta: [{ title: ui("سحب البصمة بالهاتف | إدارة الحضور") }] }),
   component: MobileSync,
 });
 
@@ -59,31 +60,27 @@ function MobileSync() {
     refetchInterval: 30_000,
   });
 
-  if (permissionsLoading) return <p role="status">جارٍ التحقق من الصلاحيات…</p>;
-  if (!canUse) return <p role="alert">لا تملك صلاحية استخدام المزامنة الميدانية.</p>;
+  if (permissionsLoading) return <p role="status">{ui("جارٍ التحقق من الصلاحيات…")}</p>;
+  if (!canUse) return <p role="alert">{ui("لا تملك صلاحية استخدام المزامنة الميدانية.")}</p>;
 
   return (
-    <section dir="rtl" aria-label="سحب البصمة بالهاتف" className="space-y-5">
+    <section dir={direction()} aria-label={ui("سحب البصمة بالهاتف")} className="space-y-5">
       <div className="grid items-start gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Smartphone className="size-5" /> وكيل البصمة لأندرويد
-            </CardTitle>
+              <Smartphone className="size-5" />{ui(" وكيل البصمة لأندرويد")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <Button asChild>
               <a href={mobileApk} download>
-                <Download className="size-4" /> تحميل التطبيق <bdi>{mobileVersion}</bdi>
+                <Download className="size-4" />{ui(" تحميل التطبيق ")}<bdi>{mobileVersion}</bdi>
               </a>
             </Button>
             <ol className="list-decimal space-y-2 ps-5 text-sm leading-6 text-muted-foreground">
-              <li>نزّل ملف إعداد جميع الأجهزة من النظام واستورده في الوكيل.</li>
-              <li>اتصل بشبكة تستطيع الوصول منها إلى أجهزة البصمة.</li>
-              <li>
-                اسحب حركات الجهاز المحدد أو اضغط «سحب الحركات من كل الأجهزة». تُرفع الحركات عند توفر
-                الإنترنت.
-              </li>
+              <li>{ui("نزّل ملف إعداد جميع الأجهزة من النظام واستورده في الوكيل.")}</li>
+              <li>{ui("اتصل بشبكة تستطيع الوصول منها إلى أجهزة البصمة.")}</li>
+              <li>{ui("اسحب حركات الجهاز المحدد أو اضغط «سحب الحركات من كل الأجهزة». تُرفع الحركات عند توفر الإنترنت.")}</li>
             </ol>
           </CardContent>
         </Card>
@@ -91,30 +88,28 @@ function MobileSync() {
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>آخر 30 دفعة ميدانية</CardTitle>
+          <CardTitle>{ui("آخر 30 دفعة ميدانية")}</CardTitle>
         </CardHeader>
         <CardContent>
           {history.isPending ? (
-            <p role="status">جارٍ جلب السجل…</p>
+            <p role="status">{ui("جارٍ جلب السجل…")}</p>
           ) : history.isError ? (
             <div className="flex flex-wrap items-center gap-3">
-              <p role="alert">{formatErrorMessage(history.error, "تعذر تحميل سجل المزامنة")}</p>
-              <Button variant="outline" onClick={() => void history.refetch()}>
-                إعادة المحاولة
-              </Button>
+              <p role="alert">{ui(formatErrorMessage(history.error, "تعذر تحميل سجل المزامنة"))}</p>
+              <Button variant="outline" onClick={() => void history.refetch()}>{ui("إعادة المحاولة")}</Button>
             </div>
           ) : !history.data.length ? (
-            <p className="text-sm text-muted-foreground">لا توجد دفعات ميدانية مسجلة.</p>
+            <p className="text-sm text-muted-foreground">{ui("لا توجد دفعات ميدانية مسجلة.")}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>المشرف</TableHead>
-                  <TableHead>الجهاز</TableHead>
-                  <TableHead>وقت السحب</TableHead>
-                  <TableHead>الحركات المستلمة</TableHead>
-                  <TableHead>الحضور المضاف</TableHead>
-                  <TableHead>الحالة</TableHead>
+                  <TableHead>{ui("المشرف")}</TableHead>
+                  <TableHead>{ui("الجهاز")}</TableHead>
+                  <TableHead>{ui("وقت السحب")}</TableHead>
+                  <TableHead>{ui("الحركات المستلمة")}</TableHead>
+                  <TableHead>{ui("الحضور المضاف")}</TableHead>
+                  <TableHead>{ui("الحالة")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -131,7 +126,7 @@ function MobileSync() {
                       <Badge
                         variant={batch.mobile_status === "failed" ? "destructive" : "secondary"}
                       >
-                        {batch.mobile_status === "failed" ? "تعذرت المعالجة" : "تمت المعالجة"}
+                        {batch.mobile_status === "failed" ? ui("تعذرت المعالجة") : ui("تمت المعالجة")}
                       </Badge>
                     </TableCell>
                   </TableRow>
@@ -169,7 +164,7 @@ function AgentSettings() {
             ? { action, operator_email }
             : { action, device_id: device, operator_email },
       });
-      if (!result) return toast.success("أُلغي تصريح الوكيل للحساب والجهاز المحددين");
+      if (!result) return toast.success(ui("أُلغي تصريح الوكيل للحساب والجهاز المحددين"));
       const file = Array.isArray(result)
         ? mobileAgentBundle(result, window.location.origin)
         : mobileAgentFile(result, window.location.origin);
@@ -181,21 +176,20 @@ function AgentSettings() {
         : "zkteco-mobile-agent.json";
       download.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
-      if (Array.isArray(result)) toast.success(`تم تجهيز ملف إعداد ${result.length} جهاز`);
+      if (Array.isArray(result)) toast.success((ui("تم تجهيز ملف إعداد ") + (result.length) + ui(" جهاز")));
     },
-    onError: (error) => toast.error(formatErrorMessage(error, "تعذر تحديث إعداد الوكيل")),
+    onError: (error) => toast.error(ui(formatErrorMessage(error, "تعذر تحديث إعداد الوكيل"))),
   });
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <FileDown className="size-5" /> إعداد وكيل الهاتف
-        </CardTitle>
+          <FileDown className="size-5" />{ui(" إعداد وكيل الهاتف")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-col gap-3 leading-6">
-          <Label htmlFor="device-search">بحث باسم الجهاز</Label>
+          <Label htmlFor="device-search">{ui("بحث باسم الجهاز")}</Label>
           <Input
             id="device-search"
             value={search}
@@ -206,7 +200,7 @@ function AgentSettings() {
             }}
             disabled={configure.isPending}
           />
-          <Label htmlFor="mobile-device">جهاز البصمة</Label>
+          <Label htmlFor="mobile-device">{ui("جهاز البصمة")}</Label>
           <Select
             value={device}
             onValueChange={(value) => {
@@ -216,7 +210,7 @@ function AgentSettings() {
           >
             <SelectTrigger id="mobile-device">
               <SelectValue
-                placeholder={devices.isPending ? "جارٍ جلب الأجهزة…" : "اختر جهازًا نشطًا"}
+                placeholder={devices.isPending ? ui("جارٍ جلب الأجهزة…") : ui("اختر جهازًا نشطًا")}
               />
             </SelectTrigger>
             <SelectContent>
@@ -228,19 +222,14 @@ function AgentSettings() {
             </SelectContent>
           </Select>
           {devices.isError ? (
-            <p role="alert" className="text-sm text-destructive">
-              تعذر جلب الأجهزة.
-            </p>
+            <p role="alert" className="text-sm text-destructive">{ui("تعذر جلب الأجهزة.")}</p>
           ) : (
             devices.data?.length === 0 && (
-              <p className="text-sm text-muted-foreground">
-                لا توجد أجهزة مطابقة برقم تسلسلي وعنوان شبكة محلية.
-              </p>
+              <p className="text-sm text-muted-foreground">{ui("لا توجد أجهزة مطابقة برقم تسلسلي وعنوان شبكة محلية.")}</p>
             )
           )}
-          <Label htmlFor="operator-email">
-            بريد المشرف المسجّل{" "}
-            <span className="text-muted-foreground">(اتركه فارغًا للربط بحسابك)</span>
+          <Label htmlFor="operator-email">{ui("بريد المشرف المسجّل")}{" "}
+            <span className="text-muted-foreground">{ui("(اتركه فارغًا للربط بحسابك)")}</span>
           </Label>
           <Input
             id="operator-email"
@@ -256,27 +245,19 @@ function AgentSettings() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button disabled={configure.isPending} onClick={() => configure.mutate("provision_all")}>
-            <Download className="size-4" /> تنزيل ملف إعداد الوكيل لكل الأجهزة
-          </Button>
+            <Download className="size-4" />{ui(" تنزيل ملف إعداد الوكيل لكل الأجهزة")}</Button>
           <Button
             variant="outline"
             disabled={!device || configure.isPending}
             onClick={() => configure.mutate("provision")}
-          >
-            تنزيل ملف إعداد الوكيل
-          </Button>
+          >{ui("تنزيل ملف إعداد الوكيل")}</Button>
           <Button
             variant="outline"
             disabled={!device || configure.isPending}
             onClick={() => configure.mutate("revoke")}
-          >
-            إلغاء تصريح الوكيل لهذا الجهاز
-          </Button>
+          >{ui("إلغاء تصريح الوكيل لهذا الجهاز")}</Button>
         </div>
-        <p className="text-sm text-muted-foreground">
-          يشمل الملف المجمّع كل جهاز نشط له رقم تسلسلي وعنوان شبكة محلية صالح. سلّم الملف للمشرف
-          المعني فقط. التصاريح صالحة لمدة 30 يومًا.
-        </p>
+        <p className="text-sm text-muted-foreground">{ui("يشمل الملف المجمّع كل جهاز نشط له رقم تسلسلي وعنوان شبكة محلية صالح. سلّم الملف للمشرف المعني فقط. التصاريح صالحة لمدة 30 يومًا.")}</p>
       </CardContent>
     </Card>
   );

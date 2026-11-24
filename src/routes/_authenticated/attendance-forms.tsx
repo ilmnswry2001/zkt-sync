@@ -1,3 +1,4 @@
+import { direction, ui } from "@/lib/ui-language";
 import { useDirectorySearch } from "@/hooks/use-directory-search";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
@@ -33,7 +34,7 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/_authenticated/attendance-forms")({
   head: () => ({
     meta: [
-      { title: "الاستمارات الإلكترونية — موافقات الحضور والوقت الإضافي" },
+      { title: ui("الاستمارات الإلكترونية — موافقات الحضور والوقت الإضافي") },
       {
         name: "description",
         content:
@@ -99,7 +100,7 @@ function printForm(row: FormRow) {
       : `${row.check_in ?? "—"} → ${row.check_out ?? "—"}`;
   const popup = window.open("", "_blank", "width=900,height=800");
   if (!popup) {
-    toast.error("تعذر فتح نافذة الطباعة؛ اسمح بالنوافذ المنبثقة ثم حاول مرة أخرى");
+    toast.error(ui("تعذر فتح نافذة الطباعة؛ اسمح بالنوافذ المنبثقة ثم حاول مرة أخرى"));
     return;
   }
   popup.document.write(`<!doctype html><html dir="rtl"><head><meta charset="utf-8"/><title>استمارة رقم ${row.form_no}</title><style>body{font-family:Arial,sans-serif;color:#111;padding:40px;line-height:1.8}h1{text-align:center;margin-bottom:4px}h2{text-align:center;font-weight:normal;color:#555;margin-top:0}.meta{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:28px 0}.item{border:1px solid #ddd;padding:12px;border-radius:8px}.label{display:block;color:#666;font-size:12px}.reason{border:1px solid #ddd;border-radius:8px;padding:16px;min-height:90px}.signatures{display:grid;grid-template-columns:1fr 1fr 1fr;gap:30px;margin-top:70px;text-align:center}.line{border-top:1px solid #555;margin-top:45px}@media print{body{padding:0}}</style></head><body><h1>الاستمارة الإلكترونية</h1><h2>رقم الاستمارة: ${row.form_no}</h2><div class="meta"><div class="item"><span class="label">الموظف</span>${escapeHtml(`${row.employees?.employee_no ?? "—"} — ${row.employees?.full_name ?? "—"}`)}</div><div class="item"><span class="label">نوع الاستمارة</span>${escapeHtml(KIND_LABEL[row.kind])}</div><div class="item"><span class="label">تاريخ الاستحقاق</span>${escapeHtml(row.work_date)}</div><div class="item"><span class="label">القسم</span>${escapeHtml(row.department?.name ?? "—")}</div><div class="item"><span class="label">مرسلة إلى</span>${escapeHtml(row.target?.name ?? "—")}</div><div class="item"><span class="label">التفاصيل</span>${escapeHtml(details)}</div></div><h3>السبب والتفاصيل</h3><div class="reason">${escapeHtml(row.reason)}</div><div class="signatures"><div>مقدم الطلب<div class="line"></div></div><div>الاعتماد<div class="line"></div></div><div>التنفيذ<div class="line"></div></div></div><script>window.onload=()=>{window.print();}</script></body></html>`);
@@ -209,9 +210,9 @@ function FormsPage() {
       setOpen(false);
       setEmployeeId("");
       setEmployeeLabel("");
-      toast.success("تم إرسال الاستمارة إلى مسار الموافقة");
+      toast.success(ui("تم إرسال الاستمارة إلى مسار الموافقة"));
     },
-    onError: (e: any) => toast.error(formatErrorMessage(e) ?? "فشل إرسال الاستمارة"),
+    onError: (e: any) => toast.error(ui(formatErrorMessage(e)) ?? ui("فشل إرسال الاستمارة")),
   });
 
   const act = useMutation({
@@ -219,9 +220,9 @@ function FormsPage() {
       actFn({ data: payload }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["forms"] });
-      toast.success("تم تحديث الاستمارة");
+      toast.success(ui("تم تحديث الاستمارة"));
     },
-    onError: (e: any) => toast.error(formatErrorMessage(e) ?? "تعذر تنفيذ الإجراء"),
+    onError: (e: any) => toast.error(ui(formatErrorMessage(e)) ?? ui("تعذر تنفيذ الإجراء")),
   });
 
   const counts = useMemo(() => {
@@ -240,22 +241,17 @@ function FormsPage() {
       <div className="flex justify-between items-center gap-4 flex-wrap">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
-            <FileSignature className="w-7 h-7" /> الاستمارات الإلكترونية
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            استمارات الحضور والوقت الإضافي والإجازات — تمر على مدير القسم ثم مدير الشركة ثم قسم
-            التنفيذ، وبعد التنفيذ تُحتسب في التقرير الشهري.
-          </p>
+            <FileSignature className="w-7 h-7" />{ui(" الاستمارات الإلكترونية")}</h1>
+          <p className="text-muted-foreground mt-1">{ui("استمارات الحضور والوقت الإضافي والإجازات — تمر على مدير القسم ثم مدير الشركة ثم قسم التنفيذ، وبعد التنفيذ تُحتسب في التقرير الشهري.")}</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button>
-              <Plus className="w-4 h-4 ml-2" /> استمارة جديدة
-            </Button>
+              <Plus className="w-4 h-4 ml-2" />{ui(" استمارة جديدة")}</Button>
           </DialogTrigger>
-          <DialogContent dir="rtl" className="max-w-xl">
+          <DialogContent dir={direction()} className="max-w-xl">
             <DialogHeader>
-              <DialogTitle>استمارة إلكترونية جديدة</DialogTitle>
+              <DialogTitle>{ui("استمارة إلكترونية جديدة")}</DialogTitle>
             </DialogHeader>
             <form
               className="grid grid-cols-2 gap-3"
@@ -263,7 +259,7 @@ function FormsPage() {
                 e.preventDefault();
                 const f = new FormData(e.currentTarget);
                 if (!employeeId) {
-                  toast.error("اختر الموظف");
+                  toast.error(ui("اختر الموظف"));
                   return;
                 }
                 create.mutate({
@@ -281,12 +277,12 @@ function FormsPage() {
               }}
             >
               <div className="col-span-2">
-                <Label>بحث الموظف (رقم أو اسم)</Label>
-                <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ابحث بحرفين أو رقمين على الأقل..." />
+                <Label>{ui("بحث الموظف (رقم أو اسم)")}</Label>
+                <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={ui("ابحث بحرفين أو رقمين على الأقل...")} />
               </div>
               <div className="col-span-2">
-                <Label>الموظف</Label>
-                {employeeSearchFailed && <p role="alert">تعذر البحث عن الموظفين.</p>}
+                <Label>{ui("الموظف")}</Label>
+                {employeeSearchFailed && <p role="alert">{ui("تعذر البحث عن الموظفين.")}</p>}
                 <Select value={employeeId} onValueChange={(id) => {
                   const employee = employees.find((item) => item.id === id);
                   if (employee) {
@@ -295,7 +291,7 @@ function FormsPage() {
                   }
                 }}>
                   <SelectTrigger>
-                    <SelectValue placeholder="اختر الموظف من قاعدة البيانات">{employeeLabel || undefined}</SelectValue>
+                    <SelectValue placeholder={ui("اختر الموظف من قاعدة البيانات")}>{employeeLabel || undefined}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {employees.map((e) => (
@@ -307,32 +303,32 @@ function FormsPage() {
                 </Select>
               </div>
               <div>
-                <Label>نوع الاستمارة</Label>
+                <Label>{ui("نوع الاستمارة")}</Label>
                 <Select value={kind} onValueChange={(v) => setKind(v as typeof kind)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="attendance">إثبات حضور</SelectItem>
-                    <SelectItem value="overtime">وقت إضافي</SelectItem>
-                    <SelectItem value="leave">إجازة</SelectItem>
-                    <SelectItem value="early_exit">طلب خروج مبكر</SelectItem>
+                    <SelectItem value="attendance">{ui("إثبات حضور")}</SelectItem>
+                    <SelectItem value="overtime">{ui("وقت إضافي")}</SelectItem>
+                    <SelectItem value="leave">{ui("إجازة")}</SelectItem>
+                    <SelectItem value="early_exit">{ui("طلب خروج مبكر")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>التاريخ</Label>
+                <Label>{ui("التاريخ")}</Label>
                 <Input type="date" name="work_date" required />
               </div>
               {kind === "leave" && (
                 <div className="col-span-2">
-                  <Label>نوع الإجازة</Label>
+                  <Label>{ui("نوع الإجازة")}</Label>
                   <Select value={leaveTypeId || leaveTypes[0]?.id || ""} onValueChange={setLeaveTypeId}>
-                    <SelectTrigger><SelectValue placeholder="اختر نوع الإجازة" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={ui("اختر نوع الإجازة")} /></SelectTrigger>
                     <SelectContent>
                       {leaveTypes.map((type) => (
                         <SelectItem key={type.id} value={type.id}>
-                          {type.name} · {type.is_paid ? "مدفوعة" : "بدون راتب"}
+                          {type.name} · {type.is_paid ? ui("مدفوعة") : ui("بدون راتب")}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -340,10 +336,10 @@ function FormsPage() {
                 </div>
               )}
               <div className="col-span-2">
-                <Label>القسم المرسل إليه للموافقة</Label>
+                <Label>{ui("القسم المرسل إليه للموافقة")}</Label>
                 <Select name="target_department_id">
                   <SelectTrigger>
-                    <SelectValue placeholder="اختر القسم" />
+                    <SelectValue placeholder={ui("اختر القسم")} />
                   </SelectTrigger>
                   <SelectContent>
                     {departments.map((d) => (
@@ -356,32 +352,32 @@ function FormsPage() {
               </div>
               {kind === "overtime" ? (
                 <div>
-                  <Label>ساعات الوقت الإضافي</Label>
+                  <Label>{ui("ساعات الوقت الإضافي")}</Label>
                   <Input type="number" step="0.5" min="0" max="24" name="overtime_hours" defaultValue="1" />
                 </div>
               ) : kind === "early_exit" ? (
                 <div className="col-span-2">
-                  <Label>وقت الخروج المطلوب</Label>
+                  <Label>{ui("وقت الخروج المطلوب")}</Label>
                   <Input type="time" name="check_out" required />
                 </div>
               ) : (
                 <>
                   <div>
-                    <Label>وقت الدخول</Label>
+                    <Label>{ui("وقت الدخول")}</Label>
                     <Input type="time" name="check_in" />
                   </div>
                   <div>
-                    <Label>وقت الخروج</Label>
+                    <Label>{ui("وقت الخروج")}</Label>
                     <Input type="time" name="check_out" />
                   </div>
                 </>
               )}
               <div className="col-span-2">
-                <Label>السبب</Label>
-                <Textarea name="reason" required minLength={3} maxLength={1000} rows={3} placeholder="مثال: تعذر تسجيل بصمة الخروج بسبب عمل ميداني" />
+                <Label>{ui("السبب")}</Label>
+                <Textarea name="reason" required minLength={3} maxLength={1000} rows={3} placeholder={ui("مثال: تعذر تسجيل بصمة الخروج بسبب عمل ميداني")} />
               </div>
               <Button type="submit" className="col-span-2" disabled={create.isPending}>
-                {create.isPending ? "جارٍ الإرسال..." : "إرسال الاستمارة"}
+                {create.isPending ? ui("جارٍ الإرسال...") : ui("إرسال الاستمارة")}
               </Button>
             </form>
           </DialogContent>
@@ -389,17 +385,17 @@ function FormsPage() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-        <StatCard title="إجمالي الاستمارات" value={statistics.total} icon={ListChecks} tone="bg-primary" />
-        <StatCard title="معلّقة" value={statistics.pending} icon={Clock3} tone="bg-warning" />
-        <StatCard title="منفذة" value={statistics.executed} icon={Check} tone="bg-success" />
-        <StatCard title="مرفوضة" value={statistics.rejected} icon={X} tone="bg-destructive" />
-        <StatCard title="ساعات إضافية" value={statistics.overtime.toLocaleString("ar")} icon={FileSignature} tone="bg-accent-foreground" />
+        <StatCard title={ui("إجمالي الاستمارات")} value={statistics.total} icon={ListChecks} tone="bg-primary" />
+        <StatCard title={ui("معلّقة")} value={statistics.pending} icon={Clock3} tone="bg-warning" />
+        <StatCard title={ui("منفذة")} value={statistics.executed} icon={Check} tone="bg-success" />
+        <StatCard title={ui("مرفوضة")} value={statistics.rejected} icon={X} tone="bg-destructive" />
+        <StatCard title={ui("ساعات إضافية")} value={statistics.overtime.toLocaleString("ar")} icon={FileSignature} tone="bg-accent-foreground" />
       </div>
 
       <div className="flex gap-2 flex-wrap">
         {["all", "pending_manager", "pending_ceo", "pending_execution", "executed", "rejected"].map((s) => (
           <Button key={s} size="sm" variant={filter === s ? "default" : "outline"} onClick={() => setFilter(s)}>
-            {s === "all" ? "الكل" : STATUS_LABEL[s]}
+            {s === "all" ? ui("الكل") : STATUS_LABEL[s]}
             {s !== "all" && counts[s] ? ` (${counts[s]})` : ""}
           </Button>
         ))}
@@ -407,22 +403,22 @@ function FormsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>الاستمارات ({forms.length})</CardTitle>
+          <CardTitle>{ui("الاستمارات (")}{forms.length})</CardTitle>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>#</TableHead>
-                <TableHead>الموظف</TableHead>
-                <TableHead>القسم</TableHead>
-                <TableHead>مرسلة إلى</TableHead>
-                <TableHead>التاريخ</TableHead>
-                <TableHead>النوع</TableHead>
-                <TableHead>التفاصيل</TableHead>
-                <TableHead>السبب</TableHead>
-                <TableHead>الحالة</TableHead>
-                <TableHead>الإجراء</TableHead>
+                <TableHead>{ui("الموظف")}</TableHead>
+                <TableHead>{ui("القسم")}</TableHead>
+                <TableHead>{ui("مرسلة إلى")}</TableHead>
+                <TableHead>{ui("التاريخ")}</TableHead>
+                <TableHead>{ui("النوع")}</TableHead>
+                <TableHead>{ui("التفاصيل")}</TableHead>
+                <TableHead>{ui("السبب")}</TableHead>
+                <TableHead>{ui("الحالة")}</TableHead>
+                <TableHead>{ui("الإجراء")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -438,9 +434,9 @@ function FormsPage() {
                   <TableCell>{KIND_LABEL[row.kind]}</TableCell>
                   <TableCell className="text-xs whitespace-nowrap">
                     {row.kind === "overtime"
-                      ? `${row.overtime_hours} ساعة`
+                      ? ((row.overtime_hours) + ui(" ساعة"))
                       : row.kind === "early_exit"
-                        ? `خروج مطلوب ${row.check_out ?? "—"}`
+                        ? (ui("خروج مطلوب ") + (row.check_out ?? "—"))
                         : `${row.check_in ?? "—"} → ${row.check_out ?? "—"}`}
                   </TableCell>
                   <TableCell className="max-w-56 truncate text-xs" title={row.reason}>
@@ -454,10 +450,10 @@ function FormsPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      <Button size="icon" variant="ghost" title="استعراض الاستمارة" onClick={() => setSelectedForm(row)}>
+                      <Button size="icon" variant="ghost" title={ui("استعراض الاستمارة")} onClick={() => setSelectedForm(row)}>
                         <Eye className="w-4 h-4" />
                       </Button>
-                      <Button size="icon" variant="ghost" title="طباعة / تصدير PDF" onClick={() => printForm(row)}>
+                      <Button size="icon" variant="ghost" title={ui("طباعة / تصدير PDF")} onClick={() => printForm(row)}>
                         <Printer className="w-4 h-4" />
                       </Button>
                       {canAct(row) ? (
@@ -465,7 +461,7 @@ function FormsPage() {
                           <Button
                           size="icon"
                           variant="ghost"
-                          title={row.status === "pending_execution" ? "تنفيذ" : "موافقة"}
+                          title={row.status === "pending_execution" ? ui("تنفيذ") : ui("موافقة")}
                           onClick={() =>
                             act.mutate({
                               form_id: row.id,
@@ -482,9 +478,9 @@ function FormsPage() {
                           <Button
                           size="icon"
                           variant="ghost"
-                          title="رفض"
+                          title={ui("رفض")}
                           onClick={() => {
-                            const note = prompt("سبب الرفض؟") ?? "";
+                            const note = prompt(ui("سبب الرفض؟")) ?? "";
                             act.mutate({ form_id: row.id, action: "reject", note });
                           }}
                         >
@@ -498,9 +494,7 @@ function FormsPage() {
               ))}
               {!forms.length && (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
-                    لا توجد استمارات
-                  </TableCell>
+                  <TableCell colSpan={10} className="text-center text-muted-foreground py-8">{ui("لا توجد استمارات")}</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -509,22 +503,22 @@ function FormsPage() {
       </Card>
 
       <Dialog open={!!selectedForm} onOpenChange={(value) => !value && setSelectedForm(null)}>
-        <DialogContent dir="rtl" className="max-w-2xl">
-          <DialogHeader><DialogTitle>استعراض الاستمارة الإلكترونية</DialogTitle></DialogHeader>
+        <DialogContent dir={direction()} className="max-w-2xl">
+          <DialogHeader><DialogTitle>{ui("استعراض الاستمارة الإلكترونية")}</DialogTitle></DialogHeader>
           {selectedForm && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between border-b pb-3"><div><p className="text-sm text-muted-foreground">رقم الاستمارة</p><p className="text-2xl font-bold">#{selectedForm.form_no}</p></div><Badge variant={STATUS_VARIANT[selectedForm.status]}>{STATUS_LABEL[selectedForm.status]}</Badge></div>
+              <div className="flex items-center justify-between border-b pb-3"><div><p className="text-sm text-muted-foreground">{ui("رقم الاستمارة")}</p><p className="text-2xl font-bold">#{selectedForm.form_no}</p></div><Badge variant={STATUS_VARIANT[selectedForm.status]}>{STATUS_LABEL[selectedForm.status]}</Badge></div>
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><span className="text-muted-foreground">الموظف:</span> {selectedForm.employees?.employee_no} — {selectedForm.employees?.full_name}</div>
-                <div><span className="text-muted-foreground">النوع:</span> {KIND_LABEL[selectedForm.kind]}</div>
-                <div><span className="text-muted-foreground">التاريخ:</span> {selectedForm.work_date}</div>
-                <div><span className="text-muted-foreground">القسم:</span> {selectedForm.department?.name ?? "—"}</div>
-                <div><span className="text-muted-foreground">مرسلة إلى:</span> {selectedForm.target?.name ?? "—"}</div>
-                <div><span className="text-muted-foreground">التفاصيل:</span> {selectedForm.kind === "overtime" ? `${selectedForm.overtime_hours} ساعة` : selectedForm.kind === "early_exit" ? `وقت الخروج المطلوب ${selectedForm.check_out ?? "—"}` : `${selectedForm.check_in ?? "—"} → ${selectedForm.check_out ?? "—"}`}</div>
+                <div><span className="text-muted-foreground">{ui("الموظف:")}</span> {selectedForm.employees?.employee_no} — {selectedForm.employees?.full_name}</div>
+                <div><span className="text-muted-foreground">{ui("النوع:")}</span> {KIND_LABEL[selectedForm.kind]}</div>
+                <div><span className="text-muted-foreground">{ui("التاريخ:")}</span> {selectedForm.work_date}</div>
+                <div><span className="text-muted-foreground">{ui("القسم:")}</span> {selectedForm.department?.name ?? "—"}</div>
+                <div><span className="text-muted-foreground">{ui("مرسلة إلى:")}</span> {selectedForm.target?.name ?? "—"}</div>
+                <div><span className="text-muted-foreground">{ui("التفاصيل:")}</span> {selectedForm.kind === "overtime" ? ((selectedForm.overtime_hours) + ui(" ساعة")) : selectedForm.kind === "early_exit" ? (ui("وقت الخروج المطلوب ") + (selectedForm.check_out ?? "—")) : `${selectedForm.check_in ?? "—"} → ${selectedForm.check_out ?? "—"}`}</div>
               </div>
-              <div className="rounded-lg bg-muted/50 p-4"><p className="text-sm font-semibold mb-1">السبب والتفاصيل</p><p className="whitespace-pre-wrap">{selectedForm.reason}</p></div>
-              {selectedForm.rejection_reason && <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-destructive"><p className="text-sm font-semibold mb-1">سبب الرفض</p><p>{selectedForm.rejection_reason}</p></div>}
-              <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => printForm(selectedForm)}><Printer className="w-4 h-4 ml-2" /> طباعة / حفظ PDF</Button><Button onClick={() => setSelectedForm(null)}>إغلاق</Button></div>
+              <div className="rounded-lg bg-muted/50 p-4"><p className="text-sm font-semibold mb-1">{ui("السبب والتفاصيل")}</p><p className="whitespace-pre-wrap">{selectedForm.reason}</p></div>
+              {selectedForm.rejection_reason && <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-destructive"><p className="text-sm font-semibold mb-1">{ui("سبب الرفض")}</p><p>{selectedForm.rejection_reason}</p></div>}
+              <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => printForm(selectedForm)}><Printer className="w-4 h-4 ml-2" />{ui(" طباعة / حفظ PDF")}</Button><Button onClick={() => setSelectedForm(null)}>{ui("إغلاق")}</Button></div>
             </div>
           )}
         </DialogContent>
@@ -568,9 +562,9 @@ function FormRolesCard() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["form-roles"] });
-      toast.success("تم تحديث الصلاحيات");
+      toast.success(ui("تم تحديث الصلاحيات"));
     },
-    onError: (e: any) => toast.error(formatErrorMessage(e)),
+    onError: (e: any) => toast.error(ui(formatErrorMessage(e))),
   });
 
   const roles = [
@@ -582,15 +576,15 @@ function FormRolesCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>صلاحيات دورة الاستمارات</CardTitle>
+        <CardTitle>{ui("صلاحيات دورة الاستمارات")}</CardTitle>
       </CardHeader>
       <CardContent>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>المستخدم</TableHead>
+              <TableHead>{ui("المستخدم")}</TableHead>
               {roles.map((r) => (
-                <TableHead key={r.key}>{r.label}</TableHead>
+                <TableHead key={r.key}>{ui(r.label)}</TableHead>
               ))}
             </TableRow>
           </TableHeader>
@@ -607,7 +601,7 @@ function FormRolesCard() {
                         variant={existing ? "default" : "outline"}
                         onClick={() => toggle.mutate({ user_id: u.id, role: r.key, existing: existing?.id })}
                       >
-                        {existing ? "مفعّل" : "تعيين"}
+                        {existing ? ui("مفعّل") : ui("تعيين")}
                       </Button>
                     </TableCell>
                   );

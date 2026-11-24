@@ -1,3 +1,4 @@
+import { displayLocale, ui } from "@/lib/ui-language";
 import { PrivateStorageMedia } from "@/components/PrivateStorageMedia";
 import { cn } from "@/lib/utils";
 import { CarFront, Fuel, ShieldAlert } from "lucide-react";
@@ -16,7 +17,7 @@ function formatArabicDate(value: string | null) {
   if (!value) return null;
   const date = new Date(`${value}T12:00:00`);
   if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleDateString("ar-IQ", { day: "numeric", month: "long", year: "numeric" });
+  return date.toLocaleDateString(displayLocale(), { day: "numeric", month: "long", year: "numeric" });
 }
 
 function daysUntil(value: string | null) {
@@ -56,10 +57,10 @@ function CalloutChip({
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
           <Icon className="h-4 w-4" />
         </span>
-        <span className="text-[11px] font-semibold text-muted-foreground">{label}</span>
+        <span className="text-[11px] font-semibold text-muted-foreground">{ui(label)}</span>
       </div>
       <p className="mt-2 text-sm font-bold leading-snug">{value}</p>
-      {hint && <p className={cn("mt-1 text-[11px] font-medium", hintTone)}>{hint}</p>}
+      {hint && <p className={cn("mt-1 text-[11px] font-medium", hintTone)}>{ui(hint)}</p>}
     </div>
   );
 }
@@ -112,7 +113,7 @@ export function VehicleDiagram({ data }: { data: VehicleDiagramData }) {
         <div className="relative aspect-[1672/940]">
           <PrivateStorageMedia bucket="vehicle-images" reference={imageSrc}>{url => <img
             src={url}
-            alt="شكل المركبة"
+            alt={ui("شكل المركبة")}
             loading="lazy"
             className="absolute inset-0 h-full w-full object-contain"
             onError={(event) => {
@@ -142,15 +143,15 @@ export function VehicleDiagram({ data }: { data: VehicleDiagramData }) {
           {/* callout chips (desktop) */}
           <CalloutChip
             icon={CarFront}
-            label="رقم اللوحة"
+            label={ui("رقم اللوحة")}
             value={data.plate || "غير مسجل"}
-            hint={data.vehicleClass === "light" ? "مركبة خفيفة" : "مركبة ثقيلة"}
+            hint={data.vehicleClass === "light" ? ui("مركبة خفيفة") : ui("مركبة ثقيلة")}
             hintTone="text-muted-foreground"
             className="absolute bottom-[6%] left-[3%] z-10 hidden w-44 lg:block"
           />
           <CalloutChip
             icon={Fuel}
-            label="آخر تعبئة وقود"
+            label={ui("آخر تعبئة وقود")}
             value={formatArabicDate(data.lastFuelDate) ?? "غير مسجل"}
             hint={relativeDays(fuelDays)}
             hintTone={fuelTone}
@@ -158,9 +159,9 @@ export function VehicleDiagram({ data }: { data: VehicleDiagramData }) {
           />
           <CalloutChip
             icon={ShieldAlert}
-            label="انتهاء التصريح الأمني"
+            label={ui("انتهاء التصريح الأمني")}
             value={formatArabicDate(data.permitExpiry) ?? "غير مسجل"}
-            hint={permitDays === null ? null : permitDays < 0 ? `منتهي ${relativeDays(permitDays)}` : relativeDays(permitDays)}
+            hint={permitDays === null ? null : permitDays < 0 ? (ui("منتهي ") + (relativeDays(permitDays))) : relativeDays(permitDays)}
             hintTone={permitTone}
             className="absolute left-[3%] top-[6%] z-10 hidden w-44 lg:block"
           />

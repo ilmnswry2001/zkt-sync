@@ -1,3 +1,4 @@
+import { direction, displayLocale, ui } from "@/lib/ui-language";
 import { formatErrorMessage } from "@/lib/error-message";
 import { useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -70,7 +71,7 @@ function canAct(actor: MaterialRequestOptions["actor"], role: string) {
 }
 
 function formatDate(value: string | null | undefined) {
-  return value ? new Date(value).toLocaleDateString("ar-IQ") : "—";
+  return value ? new Date(value).toLocaleDateString(displayLocale()) : "—";
 }
 
 function RequestState({ status }: { status: string }) {
@@ -183,11 +184,11 @@ export function MaterialRequestWorkflow({ stage, requestType }: { stage: Stage; 
   const title = stage === "planning" ? "طلبات المواد والمعدات" : stage === "warehouse" ? "الطلبات الواردة" : "طلبات الشراء";
 
   return (
-    <section dir="rtl" className="space-y-4">
+    <section dir={direction()} className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold">{title}</h2>
-          <p className="text-sm text-muted-foreground">سجل موحد مع مراحل الطلب والتدقيق والاستلامات.</p>
+          <p className="text-sm text-muted-foreground">{ui("سجل موحد مع مراحل الطلب والتدقيق والاستلامات.")}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" onClick={exportReport}>
@@ -195,31 +196,30 @@ export function MaterialRequestWorkflow({ stage, requestType }: { stage: Stage; 
           </Button>
           {stage === "planning" && canCreate && (
             <Button size="sm" onClick={() => { setEditingRequest(null); setFormOpen(true); }}>
-              <Plus className="ml-2 h-4 w-4" /> طلب جديد
-            </Button>
+              <Plus className="ml-2 h-4 w-4" />{ui(" طلب جديد")}</Button>
           )}
         </div>
       </div>
 
       <div className="grid gap-2 sm:grid-cols-3">
-        <Count label="بانتظار التخطيط" value={counts.planning} active={stage === "planning"} />
-        <Count label="بانتظار المخازن والاستلام" value={counts.warehouse} active={stage === "warehouse"} />
-        <Count label="بانتظار المشتريات" value={counts.procurement} active={stage === "procurement"} />
+        <Count label={ui("بانتظار التخطيط")} value={counts.planning} active={stage === "planning"} />
+        <Count label={ui("بانتظار المخازن والاستلام")} value={counts.warehouse} active={stage === "warehouse"} />
+        <Count label={ui("بانتظار المشتريات")} value={counts.procurement} active={stage === "procurement"} />
       </div>
 
       {!requestType && (
-        <Tabs value={kind} onValueChange={(value) => setKind(value as RequestType)} dir="rtl">
+        <Tabs value={kind} onValueChange={(value) => setKind(value as RequestType)} dir={direction()}>
           <TabsList>
-            <TabsTrigger value="material">طلبات المواد</TabsTrigger>
-            <TabsTrigger value="equipment">طلبات المعدات</TabsTrigger>
+            <TabsTrigger value="material">{ui("طلبات المواد")}</TabsTrigger>
+            <TabsTrigger value="equipment">{ui("طلبات المعدات")}</TabsTrigger>
           </TabsList>
         </Tabs>
       )}
 
-      <Tabs value={activeView} onValueChange={setActiveView} dir="rtl">
+      <Tabs value={activeView} onValueChange={setActiveView} dir={direction()}>
         <TabsList>
-          <TabsTrigger value="work">الطلبات حسب المرحلة</TabsTrigger>
-          <TabsTrigger value="ledger">سجل الطلبات</TabsTrigger>
+          <TabsTrigger value="work">{ui("الطلبات حسب المرحلة")}</TabsTrigger>
+          <TabsTrigger value="ledger">{ui("سجل الطلبات")}</TabsTrigger>
         </TabsList>
         <TabsContent value="work" className="space-y-3">
           <RequestFilters
@@ -240,16 +240,16 @@ export function MaterialRequestWorkflow({ stage, requestType }: { stage: Stage; 
             options={options}
           />
           {stage === "planning" && (
-            <div className="flex flex-wrap gap-2" role="group" aria-label="نطاق طلبات التخطيط">
-              {canCreate && <Button size="sm" variant={planningScope === "mine" ? "default" : "outline"} onClick={() => setPlanningScope("mine")}>طلباتي</Button>}
-              {canPlan && <Button size="sm" variant={planningScope === "incoming" ? "default" : "outline"} onClick={() => setPlanningScope("incoming")}>الواردة للتخطيط</Button>}
-              {canPlan && <Button size="sm" variant={planningScope === "all" ? "default" : "outline"} onClick={() => setPlanningScope("all")}>كل الطلبات</Button>}
+            <div className="flex flex-wrap gap-2" role="group" aria-label={ui("نطاق طلبات التخطيط")}>
+              {canCreate && <Button size="sm" variant={planningScope === "mine" ? "default" : "outline"} onClick={() => setPlanningScope("mine")}>{ui("طلباتي")}</Button>}
+              {canPlan && <Button size="sm" variant={planningScope === "incoming" ? "default" : "outline"} onClick={() => setPlanningScope("incoming")}>{ui("الواردة للتخطيط")}</Button>}
+              {canPlan && <Button size="sm" variant={planningScope === "all" ? "default" : "outline"} onClick={() => setPlanningScope("all")}>{ui("كل الطلبات")}</Button>}
             </div>
           )}
           {requestQuery.error || optionsQuery.error ? (
             <MigrationNotice message={(requestQuery.error ?? optionsQuery.error as Error).message} />
           ) : requestQuery.isLoading || optionsQuery.isLoading ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">جارٍ تحميل الطلبات...</p>
+            <p className="py-6 text-center text-sm text-muted-foreground">{ui("جارٍ تحميل الطلبات...")}</p>
           ) : (
             <RequestList
               stage={stage}
@@ -287,7 +287,7 @@ export function MaterialRequestWorkflow({ stage, requestType }: { stage: Stage; 
           {requestQuery.error || optionsQuery.error ? (
             <MigrationNotice message={(requestQuery.error ?? optionsQuery.error as Error).message} />
           ) : requestQuery.isLoading || optionsQuery.isLoading ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">جارٍ تحميل سجل الطلبات...</p>
+            <p className="py-6 text-center text-sm text-muted-foreground">{ui("جارٍ تحميل سجل الطلبات...")}</p>
           ) : (
             <RequestList
               stage="ledger"
@@ -307,13 +307,13 @@ export function MaterialRequestWorkflow({ stage, requestType }: { stage: Stage; 
       </Tabs>
 
       <div className="flex flex-wrap gap-x-5 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
-        <span>متأخرة عن موعد الحاجة: <b className="text-foreground">{overdueCount}</b></span>
-        <span>تتضمن بنداً لم يصل: <b className="text-foreground">{missingCount}</b></span>
+        <span>{ui("متأخرة عن موعد الحاجة: ")}<b className="text-foreground">{overdueCount}</b></span>
+        <span>{ui("تتضمن بنداً لم يصل: ")}<b className="text-foreground">{missingCount}</b></span>
       </div>
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent dir="rtl" className="max-h-[92dvh] max-w-4xl overflow-y-auto">
-          <DialogHeader><DialogTitle>{editingRequest ? "تعديل الطلب" : "طلب مواد أو معدات جديد"}</DialogTitle></DialogHeader>
+        <DialogContent dir={direction()} className="max-h-[92dvh] max-w-4xl overflow-y-auto">
+          <DialogHeader><DialogTitle>{editingRequest ? ui("تعديل الطلب") : ui("طلب مواد أو معدات جديد")}</DialogTitle></DialogHeader>
           {options && (
             <RequestForm
               requestType={kind}
@@ -325,7 +325,7 @@ export function MaterialRequestWorkflow({ stage, requestType }: { stage: Stage; 
           )}
         </DialogContent>
       </Dialog>
-      {isLedger && <span className="sr-only">السجل يعرض {filteredRequests.length} من الطلبات المتاحة.</span>}
+      {isLedger && <span className="sr-only">{ui("السجل يعرض ")}{filteredRequests.length}{ui(" من الطلبات المتاحة.")}</span>}
     </section>
   );
 }
@@ -333,7 +333,7 @@ export function MaterialRequestWorkflow({ stage, requestType }: { stage: Stage; 
 function Count({ label, value, active }: { label: string; value: number; active: boolean }) {
   return (
     <div className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-2.5 ${active ? "border-primary/30 bg-primary/[0.06]" : "border-border/70 bg-card/70"}`}>
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <span className="text-xs font-medium text-muted-foreground">{ui(label)}</span>
       <strong className="text-lg tabular-nums">{value}</strong>
     </div>
   );
@@ -342,7 +342,7 @@ function Count({ label, value, active }: { label: string; value: number; active:
 function MigrationNotice({ message }: { message: string }) {
   return (
     <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
-      {message.includes("migration") ? message : `تعذر تحميل الطلبات: ${message}`}
+      {message.includes("migration") ? message : (ui("تعذر تحميل الطلبات: ") + (message))}
     </div>
   );
 }
@@ -366,36 +366,36 @@ function RequestFilters({
     <div className="space-y-2">
       <div className="relative">
         <Search className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
-        <Input className="h-11 rounded-xl border-border/70 bg-card/80 pr-10 shadow-sm" value={search} onChange={(event) => onSearch(event.target.value)} placeholder="ابحث برقم الطلب أو المادة أو الموقع" aria-label="بحث في طلبات المواد والمعدات" />
+        <Input className="h-11 rounded-xl border-border/70 bg-card/80 pr-10 shadow-sm" value={search} onChange={(event) => onSearch(event.target.value)} placeholder={ui("ابحث برقم الطلب أو المادة أو الموقع")} aria-label={ui("بحث في طلبات المواد والمعدات")} />
       </div>
       <details className="group rounded-xl border border-border/70 bg-card/55">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2.5 text-sm [&::-webkit-details-marker]:hidden">
-          <span className="flex items-center gap-2 font-medium"><SlidersHorizontal className="h-4 w-4 text-muted-foreground" /> التصفية المتقدمة{activeFilters > 0 && <Badge variant="secondary" className="h-5 min-w-5 justify-center px-1.5">{activeFilters}</Badge>}</span>
+          <span className="flex items-center gap-2 font-medium"><SlidersHorizontal className="h-4 w-4 text-muted-foreground" />{ui(" التصفية المتقدمة")}{activeFilters > 0 && <Badge variant="secondary" className="h-5 min-w-5 justify-center px-1.5">{activeFilters}</Badge>}</span>
           <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
         </summary>
         <div className="grid gap-2 border-t border-border/60 p-3 sm:grid-cols-2 lg:grid-cols-3">
-          <select className="h-10 min-w-0 rounded-lg border bg-background px-3 text-sm" value={status} onChange={(event) => onStatus(event.target.value)} aria-label="تصفية الحالة">
-            <option value="all">كل الحالات</option>
-            {Object.entries(STATUS_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+          <select className="h-10 min-w-0 rounded-lg border bg-background px-3 text-sm" value={status} onChange={(event) => onStatus(event.target.value)} aria-label={ui("تصفية الحالة")}>
+            <option value="all">{ui("كل الحالات")}</option>
+            {Object.entries(STATUS_LABELS).map(([key, label]) => <option key={key} value={key}>{ui(label)}</option>)}
           </select>
-          <select className="h-10 min-w-0 rounded-lg border bg-background px-3 text-sm" value={responsible} onChange={(event) => onResponsible(event.target.value)} aria-label="تصفية القسم المسؤول حالياً">
-            <option value="all">كل الأقسام المسؤولة</option>
-            <option value="planning">التخطيط</option>
-            <option value="warehouse">المخازن</option>
-            <option value="procurement">المشتريات</option>
-            <option value="applicant">مقدم الطلب</option>
-            <option value="done">مكتمل أو مغلق</option>
+          <select className="h-10 min-w-0 rounded-lg border bg-background px-3 text-sm" value={responsible} onChange={(event) => onResponsible(event.target.value)} aria-label={ui("تصفية القسم المسؤول حالياً")}>
+            <option value="all">{ui("كل الأقسام المسؤولة")}</option>
+            <option value="planning">{ui("التخطيط")}</option>
+            <option value="warehouse">{ui("المخازن")}</option>
+            <option value="procurement">{ui("المشتريات")}</option>
+            <option value="applicant">{ui("مقدم الطلب")}</option>
+            <option value="done">{ui("مكتمل أو مغلق")}</option>
           </select>
-          <select className="h-10 min-w-0 rounded-lg border bg-background px-3 text-sm" value={department} onChange={(event) => onDepartment(event.target.value)} aria-label="تصفية القسم">
-            <option value="all">كل الأقسام</option>
+          <select className="h-10 min-w-0 rounded-lg border bg-background px-3 text-sm" value={department} onChange={(event) => onDepartment(event.target.value)} aria-label={ui("تصفية القسم")}>
+            <option value="all">{ui("كل الأقسام")}</option>
             {(options?.departments ?? []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
-          <select className="h-10 min-w-0 rounded-lg border bg-background px-3 text-sm" value={site} onChange={(event) => onSite(event.target.value)} aria-label="تصفية الموقع">
-            <option value="all">كل المواقع</option>
+          <select className="h-10 min-w-0 rounded-lg border bg-background px-3 text-sm" value={site} onChange={(event) => onSite(event.target.value)} aria-label={ui("تصفية الموقع")}>
+            <option value="all">{ui("كل المواقع")}</option>
             {(options?.sites ?? []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
-          <Input type="date" aria-label="من تاريخ" value={fromDate} onChange={(event) => onFromDate(event.target.value)} />
-          <Input type="date" aria-label="إلى تاريخ" value={toDate} onChange={(event) => onToDate(event.target.value)} />
+          <Input type="date" aria-label={ui("من تاريخ")} value={fromDate} onChange={(event) => onFromDate(event.target.value)} />
+          <Input type="date" aria-label={ui("إلى تاريخ")} value={toDate} onChange={(event) => onToDate(event.target.value)} />
         </div>
       </details>
     </div>
@@ -423,8 +423,8 @@ function RequestForm({ requestType, existing, options, onCancel, onSaved }: {
   const canSelectDepartment = actor.company_manager || actor.roles.includes("admin");
 
   const save = async (submit: boolean) => {
-    if (!siteId || !departmentId) return toast.error("اختر الموقع والقسم");
-    if (submit && !lines.some((line) => line.item_name.trim() && Number(line.quantity) > 0)) return toast.error("أضف بنداً واحداً على الأقل بكمية صحيحة");
+    if (!siteId || !departmentId) return toast.error(ui("اختر الموقع والقسم"));
+    if (submit && !lines.some((line) => line.item_name.trim() && Number(line.quantity) > 0)) return toast.error(ui("أضف بنداً واحداً على الأقل بكمية صحيحة"));
     const items = lines.filter((line) => line.item_name.trim()).map((line) => ({
       ...(line.id ? { id: line.id } : {}),
       item_name: line.item_name.trim(),
@@ -432,7 +432,7 @@ function RequestForm({ requestType, existing, options, onCancel, onSaved }: {
       quantity: Number(line.quantity),
       specifications: line.specifications.trim(),
     }));
-    if (items.some((line) => !line.unit || !(line.quantity > 0))) return toast.error("تحقق من اسم البند والوحدة والكمية الأكبر من صفر");
+    if (items.some((line) => !line.unit || !(line.quantity > 0))) return toast.error(ui("تحقق من اسم البند والوحدة والكمية الأكبر من صفر"));
     setBusy(true);
     try {
       if (existing) {
@@ -440,14 +440,14 @@ function RequestForm({ requestType, existing, options, onCancel, onSaved }: {
       } else {
         const result = await createMaterialRequest({ data: { request_type: requestType, site_id: siteId, department_id: departmentId, reason, need_by_date: needByDate || null, items, submit } });
         const record = result as { request_number?: string };
-        toast.success(submit ? `تم إرسال الطلب ${record.request_number ?? ""} إلى التخطيط` : `حُفظت المسودة ${record.request_number ?? ""}`);
+        toast.success(submit ? (ui("تم إرسال الطلب ") + (record.request_number ?? "") + ui(" إلى التخطيط")) : (ui("حُفظت المسودة ") + (record.request_number ?? "")));
         onSaved();
         return;
       }
-      toast.success(submit ? "تم إرسال الطلب إلى التخطيط" : "تم حفظ التعديلات");
+      toast.success(submit ? ui("تم إرسال الطلب إلى التخطيط") : ui("تم حفظ التعديلات"));
       onSaved();
     } catch (error) {
-      toast.error(formatErrorMessage(error, "تعذر حفظ الطلب"));
+      toast.error(ui(formatErrorMessage(error, "تعذر حفظ الطلب")));
     } finally {
       setBusy(false);
     }
@@ -457,36 +457,36 @@ function RequestForm({ requestType, existing, options, onCancel, onSaved }: {
     <div className="space-y-4">
       {existing && <p className="text-sm font-semibold">{existing.request_number} · {STATUS_LABELS[existing.status]}</p>}
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="الموقع الطالب"><select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={siteId} onChange={(event) => setSiteId(event.target.value)}><option value="">اختر الموقع</option>{options.sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select></Field>
-        <Field label="القسم"><select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={departmentId} onChange={(event) => setDepartmentId(event.target.value)} disabled={!canSelectDepartment || editableDepartments.length === 1}><option value="">اختر القسم</option>{editableDepartments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select></Field>
-        <Field label="تاريخ الحاجة (اختياري)"><Input type="date" value={needByDate} onChange={(event) => setNeedByDate(event.target.value)} /></Field>
-        <Field label="سبب الطلب أو الملاحظات"><Input value={reason} onChange={(event) => setReason(event.target.value)} maxLength={2000} /></Field>
+        <Field label={ui("الموقع الطالب")}><select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={siteId} onChange={(event) => setSiteId(event.target.value)}><option value="">{ui("اختر الموقع")}</option>{options.sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select></Field>
+        <Field label={ui("القسم")}><select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={departmentId} onChange={(event) => setDepartmentId(event.target.value)} disabled={!canSelectDepartment || editableDepartments.length === 1}><option value="">{ui("اختر القسم")}</option>{editableDepartments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select></Field>
+        <Field label={ui("تاريخ الحاجة (اختياري)")}><Input type="date" value={needByDate} onChange={(event) => setNeedByDate(event.target.value)} /></Field>
+        <Field label={ui("سبب الطلب أو الملاحظات")}><Input value={reason} onChange={(event) => setReason(event.target.value)} maxLength={2000} /></Field>
       </div>
       <datalist id={datalistId}>{options.items.filter((item) => item.kind === (requestType === "equipment" ? "tool" : "material")).map((item) => <option key={item.id} value={item.name} />)}</datalist>
       <datalist id={`request-units-${requestType}`}>{UNITS.map((unit) => <option key={unit} value={unit} />)}</datalist>
       <div className="space-y-2">
-        <div className="flex items-center justify-between"><h3 className="font-semibold">بنود الطلب</h3><Button type="button" variant="outline" size="sm" onClick={() => setLines((current) => [...current, { item_name: "", unit: "قطعة", quantity: "", specifications: "" }])}><Plus className="ml-1 h-4 w-4" /> إضافة بند</Button></div>
+        <div className="flex items-center justify-between"><h3 className="font-semibold">{ui("بنود الطلب")}</h3><Button type="button" variant="outline" size="sm" onClick={() => setLines((current) => [...current, { item_name: "", unit: "قطعة", quantity: "", specifications: "" }])}><Plus className="ml-1 h-4 w-4" />{ui(" إضافة بند")}</Button></div>
         {lines.map((line, index) => (
           <div key={line.id ?? index} className="grid gap-2 rounded-md border p-3 sm:grid-cols-[1.3fr_0.7fr_0.6fr_1.2fr_auto]">
-            <Field label="اسم المادة أو المعدة"><Input list={datalistId} value={line.item_name} onChange={(event) => setLines((current) => current.map((item, row) => row === index ? { ...item, item_name: event.target.value } : item))} /></Field>
-            <Field label="الوحدة"><Input list={`request-units-${requestType}`} value={line.unit} onChange={(event) => setLines((current) => current.map((item, row) => row === index ? { ...item, unit: event.target.value } : item))} /></Field>
-            <Field label="الكمية"><Input type="number" min="0.001" step="0.001" value={line.quantity} onChange={(event) => setLines((current) => current.map((item, row) => row === index ? { ...item, quantity: event.target.value } : item))} /></Field>
-            <Field label="المواصفات أو الملاحظات"><Input value={line.specifications} onChange={(event) => setLines((current) => current.map((item, row) => row === index ? { ...item, specifications: event.target.value } : item))} /></Field>
-            <Button type="button" variant="ghost" size="icon" className="self-end" aria-label="حذف البند" disabled={lines.length === 1} onClick={() => setLines((current) => current.filter((_, row) => row !== index))}><X className="h-4 w-4" /></Button>
+            <Field label={ui("اسم المادة أو المعدة")}><Input list={datalistId} value={line.item_name} onChange={(event) => setLines((current) => current.map((item, row) => row === index ? { ...item, item_name: event.target.value } : item))} /></Field>
+            <Field label={ui("الوحدة")}><Input list={`request-units-${requestType}`} value={line.unit} onChange={(event) => setLines((current) => current.map((item, row) => row === index ? { ...item, unit: event.target.value } : item))} /></Field>
+            <Field label={ui("الكمية")}><Input type="number" min="0.001" step="0.001" value={line.quantity} onChange={(event) => setLines((current) => current.map((item, row) => row === index ? { ...item, quantity: event.target.value } : item))} /></Field>
+            <Field label={ui("المواصفات أو الملاحظات")}><Input value={line.specifications} onChange={(event) => setLines((current) => current.map((item, row) => row === index ? { ...item, specifications: event.target.value } : item))} /></Field>
+            <Button type="button" variant="ghost" size="icon" className="self-end" aria-label={ui("حذف البند")} disabled={lines.length === 1} onClick={() => setLines((current) => current.filter((_, row) => row !== index))}><X className="h-4 w-4" /></Button>
           </div>
         ))}
       </div>
       <div className="flex flex-wrap justify-end gap-2 border-t pt-3">
-        <Button type="button" variant="outline" onClick={onCancel}>إلغاء</Button>
-        <Button type="button" variant="secondary" disabled={busy} onClick={() => void save(false)}>حفظ كمسودة</Button>
-        <Button type="button" disabled={busy || !lines.some((line) => line.item_name.trim() && Number(line.quantity) > 0)} onClick={() => void save(true)}><Send className="ml-2 h-4 w-4" /> إرسال إلى التخطيط</Button>
+        <Button type="button" variant="outline" onClick={onCancel}>{ui("إلغاء")}</Button>
+        <Button type="button" variant="secondary" disabled={busy} onClick={() => void save(false)}>{ui("حفظ كمسودة")}</Button>
+        <Button type="button" disabled={busy || !lines.some((line) => line.item_name.trim() && Number(line.quantity) > 0)} onClick={() => void save(true)}><Send className="ml-2 h-4 w-4" />{ui(" إرسال إلى التخطيط")}</Button>
       </div>
     </div>
   );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="min-w-0 space-y-1"><Label className="text-xs">{label}</Label>{children}</div>;
+  return <div className="min-w-0 space-y-1"><Label className="text-xs">{ui(label)}</Label>{children}</div>;
 }
 
 type PurchaseBatch = {
@@ -553,16 +553,16 @@ function RequestList({ stage, requests, options, actor, canCreate, canPlan, canW
               <CardTitle className="flex flex-wrap items-center gap-2 text-[15px]">
                 <span dir="ltr" className="font-mono tracking-wide">{request.request_number}</span>
                 <RequestState status={request.status} />
-                <Badge variant="outline" className="rounded-full">{request.request_type === "equipment" ? "معدات" : "مواد"}</Badge>
-                {request.need_by_date && request.need_by_date < todayInBaghdad() && !["received", "closed", "rejected", "cancelled"].includes(request.status) && <Badge variant="destructive" className="rounded-full">متأخر</Badge>}
+                <Badge variant="outline" className="rounded-full">{request.request_type === "equipment" ? ui("معدات") : ui("مواد")}</Badge>
+                {request.need_by_date && request.need_by_date < todayInBaghdad() && !["received", "closed", "rejected", "cancelled"].includes(request.status) && <Badge variant="destructive" className="rounded-full">{ui("متأخر")}</Badge>}
               </CardTitle>
               <p className="mt-2 truncate text-xs text-muted-foreground">
-                {request.created_by_name || "مقدم الطلب"} <span className="mx-1 text-border">•</span> {request.department_name} <span className="mx-1 text-border">•</span> {request.site_name}
+                {request.created_by_name || ui("مقدم الطلب")} <span className="mx-1 text-border">•</span> {request.department_name} <span className="mx-1 text-border">•</span> {request.site_name}
               </p>
             </div>
             <div className="flex items-center gap-2 self-start sm:self-center">
               {canCreate && actor?.user_id === request.created_by && ["draft", "returned"].includes(request.status) && (
-                <Button size="sm" variant="outline" onClick={() => onEdit(request)}>تعديل</Button>
+                <Button size="sm" variant="outline" onClick={() => onEdit(request)}>{ui("تعديل")}</Button>
               )}
               {canCreate && actor?.user_id === request.created_by && request.status === "pending_planning" && (
                 <CancelRequest request={request} onDone={onRefresh} />
@@ -578,20 +578,18 @@ function RequestList({ stage, requests, options, actor, canCreate, canPlan, canW
           <details className="group/request border-t border-border/60">
             <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm transition-colors hover:bg-muted/35 sm:px-5 [&::-webkit-details-marker]:hidden">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
-                <span><b className="text-foreground">{request.items.length}</b> بنود</span>
-                <span><b className="text-foreground tabular-nums">{request.items.reduce((sum, item) => sum + Number(item.original_qty), 0)}</b> وحدة مطلوبة</span>
-                <span>{formatDate(request.created_at)}{request.need_by_date ? ` · الحاجة ${formatDate(request.need_by_date)}` : ""}</span>
+                <span><b className="text-foreground">{request.items.length}</b>{ui(" بنود")}</span>
+                <span><b className="text-foreground tabular-nums">{request.items.reduce((sum, item) => sum + Number(item.original_qty), 0)}</b>{ui(" وحدة مطلوبة")}</span>
+                <span>{formatDate(request.created_at)}{request.need_by_date ? (ui(" · الحاجة ") + (formatDate(request.need_by_date))) : ""}</span>
               </div>
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-primary">
-                التفاصيل والإجراءات
-                <ChevronDown className="h-4 w-4 transition-transform group-open/request:rotate-180" />
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-primary">{ui("التفاصيل والإجراءات")}<ChevronDown className="h-4 w-4 transition-transform group-open/request:rotate-180" />
               </span>
             </summary>
           <CardContent className="space-y-4 border-t border-border/50 bg-muted/[0.12] px-4 pb-4 pt-4 sm:px-5">
             <div className="grid gap-2 sm:grid-cols-3">
-              <MiniStat label="مطلوب أصلاً" value={request.items.reduce((sum, item) => sum + Number(item.original_qty), 0)} />
-              <MiniStat label="مصروف من المخزن" value={request.items.reduce((sum, item) => sum + Number(item.issue_qty), 0)} />
-              <MiniStat label="مستلم فعلياً" value={request.items.reduce((sum, item) => sum + Number(item.received_qty), 0)} />
+              <MiniStat label={ui("مطلوب أصلاً")} value={request.items.reduce((sum, item) => sum + Number(item.original_qty), 0)} />
+              <MiniStat label={ui("مصروف من المخزن")} value={request.items.reduce((sum, item) => sum + Number(item.issue_qty), 0)} />
+              <MiniStat label={ui("مستلم فعلياً")} value={request.items.reduce((sum, item) => sum + Number(item.received_qty), 0)} />
             </div>
             <div className="space-y-2">
               {request.items.map((item) => (
@@ -630,7 +628,7 @@ function RequestList({ stage, requests, options, actor, canCreate, canPlan, canW
 }
 
 function MiniStat({ label, value }: { label: string; value: number }) {
-  return <div className="flex justify-between gap-2 border-b py-1.5 text-xs"><span className="text-muted-foreground">{label}</span><b className="tabular-nums">{value}</b></div>;
+  return <div className="flex justify-between gap-2 border-b py-1.5 text-xs"><span className="text-muted-foreground">{ui(label)}</span><b className="tabular-nums">{value}</b></div>;
 }
 
 function RequestLine({ request, item, receipts }: { request: MaterialRequest; item: MaterialRequestItem; receipts: RequestReceipt[] }) {
@@ -642,39 +640,39 @@ function RequestLine({ request, item, receipts }: { request: MaterialRequest; it
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2 font-medium">
           <span>{item.item_name}</span>
-          {notArrived && <Badge variant="destructive">لم يصل</Badge>}
-          {item.status === "excluded" && <Badge variant="outline">مستبعد</Badge>}
+          {notArrived && <Badge variant="destructive">{ui("لم يصل")}</Badge>}
+          {item.status === "excluded" && <Badge variant="outline">{ui("مستبعد")}</Badge>}
         </div>
-        <p className="mt-1 text-xs text-muted-foreground">{item.specifications || "بدون مواصفات"} · {item.unit}</p>
-        {item.allocation_reason && <p className="mt-1 text-xs text-amber-700">سبب الكمية غير المغطاة: {item.allocation_reason}</p>}
-        {item.not_purchased_reason && <p className="mt-1 text-xs text-destructive">سبب عدم الشراء/الاستبعاد: {item.not_purchased_reason}</p>}
+        <p className="mt-1 text-xs text-muted-foreground">{item.specifications || ui("بدون مواصفات")} · {item.unit}</p>
+        {item.allocation_reason && <p className="mt-1 text-xs text-amber-700">{ui("سبب الكمية غير المغطاة: ")}{item.allocation_reason}</p>}
+        {item.not_purchased_reason && <p className="mt-1 text-xs text-destructive">{ui("سبب عدم الشراء/الاستبعاد: ")}{item.not_purchased_reason}</p>}
       </div>
-      <QuantityValue label="الأصلي" value={item.original_qty} />
-      <QuantityValue label="المعتمد" value={item.planning_approved_qty ?? 0} />
-      <QuantityValue label="المصروف" value={item.issue_qty} />
-      <QuantityValue label="المشترى" value={item.purchased_qty} />
-      <QuantityValue label="المستلم / المتبقي" value={`${item.received_qty} / ${remaining}`} />
-      {request.status === "closed" && notArrived && <span className="text-xs font-medium text-destructive">تاريخ تسجيل عدم الوصول محفوظ في سجل الاستلام.</span>}
+      <QuantityValue label={ui("الأصلي")} value={item.original_qty} />
+      <QuantityValue label={ui("المعتمد")} value={item.planning_approved_qty ?? 0} />
+      <QuantityValue label={ui("المصروف")} value={item.issue_qty} />
+      <QuantityValue label={ui("المشترى")} value={item.purchased_qty} />
+      <QuantityValue label={ui("المستلم / المتبقي")} value={`${item.received_qty} / ${remaining}`} />
+      {request.status === "closed" && notArrived && <span className="text-xs font-medium text-destructive">{ui("تاريخ تسجيل عدم الوصول محفوظ في سجل الاستلام.")}</span>}
     </div>
   );
 }
 
 function QuantityValue({ label, value }: { label: string; value: number | string }) {
-  return <div className="text-xs"><span className="block text-muted-foreground">{label}</span><b className="tabular-nums">{value}</b></div>;
+  return <div className="text-xs"><span className="block text-muted-foreground">{ui(label)}</span><b className="tabular-nums">{value}</b></div>;
 }
 
 function AuditTimeline({ events }: { events: MaterialRequest["events"] }) {
   if (!events.length) return null;
   return (
     <details className="rounded-md border px-3 py-2">
-      <summary className="cursor-pointer text-sm font-semibold">سجل التدقيق والخط الزمني ({events.length})</summary>
+      <summary className="cursor-pointer text-sm font-semibold">{ui("سجل التدقيق والخط الزمني (")}{events.length})</summary>
       <ol className="mt-3 space-y-2 border-r pr-4">
         {events.map((event) => (
           <li key={event.id} className="relative text-xs before:absolute before:-right-[1.35rem] before:top-1 before:h-2 before:w-2 before:rounded-full before:bg-primary">
             <p className="font-medium">{actionLabel(event.action)}</p>
-            <p className="mt-0.5 text-muted-foreground">{event.actor_name || event.actor_id} · {new Date(event.created_at).toLocaleString("ar-IQ")}</p>
+            <p className="mt-0.5 text-muted-foreground">{event.actor_name || event.actor_id} · {new Date(event.created_at).toLocaleString(displayLocale())}</p>
             {event.note && <p className="mt-1">{event.note}</p>}
-            {Boolean(event.old_value || event.new_value) && <details className="mt-1"><summary className="cursor-pointer text-muted-foreground">القيم السابقة والجديدة</summary><pre className="mt-1 max-h-36 overflow-auto whitespace-pre-wrap rounded bg-muted p-2">{JSON.stringify({ old: event.old_value, new: event.new_value }, null, 2)}</pre></details>}
+            {Boolean(event.old_value || event.new_value) && <details className="mt-1"><summary className="cursor-pointer text-muted-foreground">{ui("القيم السابقة والجديدة")}</summary><pre className="mt-1 max-h-36 overflow-auto whitespace-pre-wrap rounded bg-muted p-2">{JSON.stringify({ old: event.old_value, new: event.new_value }, null, 2)}</pre></details>}
           </li>
         ))}
       </ol>
@@ -707,26 +705,26 @@ function PlanningReview({ request, onDone }: { request: MaterialRequest; onDone:
         request_id: request.id, action, note,
         items: request.items.map((item) => ({ id: item.id, approved_qty: Number(quantities[item.id]), note: notes[item.id] ?? "" })),
       } });
-      toast.success(action === "approve" ? "تم اعتماد الطلب وإرساله للمخازن" : action === "return" ? "أعيد الطلب لمقدمه" : "تم رفض الطلب");
+      toast.success(action === "approve" ? ui("تم اعتماد الطلب وإرساله للمخازن") : action === "return" ? ui("أعيد الطلب لمقدمه") : ui("تم رفض الطلب"));
       onDone();
-    } catch (error) { toast.error(formatErrorMessage(error, "تعذر تنفيذ مراجعة التخطيط")); }
+    } catch (error) { toast.error(ui(formatErrorMessage(error, "تعذر تنفيذ مراجعة التخطيط"))); }
     finally { setBusy(false); }
   };
   return (
     <div className="space-y-3 rounded-md border border-primary/25 bg-primary/5 p-3">
-      <h3 className="font-semibold">مراجعة التخطيط</h3>
+      <h3 className="font-semibold">{ui("مراجعة التخطيط")}</h3>
       {request.items.map((item) => (
         <div key={item.id} className="grid gap-2 sm:grid-cols-[1fr_9rem_1fr]">
-          <p className="self-center text-sm">{item.item_name} · مطلوب {item.requested_qty} {item.unit}</p>
-          <Field label="الكمية المعتمدة"><Input type="number" min="0" max={item.requested_qty} step="0.001" value={quantities[item.id] ?? ""} onChange={(event) => setQuantities((current) => ({ ...current, [item.id]: event.target.value }))} /></Field>
-          <Field label="ملاحظة التخطيط عند التخفيض"><Input value={notes[item.id] ?? ""} onChange={(event) => setNotes((current) => ({ ...current, [item.id]: event.target.value }))} /></Field>
+          <p className="self-center text-sm">{item.item_name}{ui(" · مطلوب ")}{item.requested_qty} {item.unit}</p>
+          <Field label={ui("الكمية المعتمدة")}><Input type="number" min="0" max={item.requested_qty} step="0.001" value={quantities[item.id] ?? ""} onChange={(event) => setQuantities((current) => ({ ...current, [item.id]: event.target.value }))} /></Field>
+          <Field label={ui("ملاحظة التخطيط عند التخفيض")}><Input value={notes[item.id] ?? ""} onChange={(event) => setNotes((current) => ({ ...current, [item.id]: event.target.value }))} /></Field>
         </div>
       ))}
-      <Field label="ملاحظة الإعادة أو سبب الرفض"><Input value={note} onChange={(event) => setNote(event.target.value)} /></Field>
+      <Field label={ui("ملاحظة الإعادة أو سبب الرفض")}><Input value={note} onChange={(event) => setNote(event.target.value)} /></Field>
       <div className="flex flex-wrap gap-2">
-        <Button disabled={busy} onClick={() => void act("approve")}>اعتماد وإرسال للمخازن</Button>
-        <Button disabled={busy || note.trim().length < 3} variant="outline" onClick={() => void act("return")}>إعادة لمقدم الطلب</Button>
-        <Button disabled={busy || note.trim().length < 3} variant="destructive" onClick={() => void act("reject")}>رفض الطلب</Button>
+        <Button disabled={busy} onClick={() => void act("approve")}>{ui("اعتماد وإرسال للمخازن")}</Button>
+        <Button disabled={busy || note.trim().length < 3} variant="outline" onClick={() => void act("return")}>{ui("إعادة لمقدم الطلب")}</Button>
+        <Button disabled={busy || note.trim().length < 3} variant="destructive" onClick={() => void act("reject")}>{ui("رفض الطلب")}</Button>
       </div>
     </div>
   );
@@ -759,42 +757,42 @@ function WarehouseReview({ request, options, onDone }: { request: MaterialReques
         return { id: line.id, warehouse_item_id: allocation.warehouse_item_id || null, warehouse_id: allocation.warehouse_id || null, is_new_item: allocation.is_new_item, issue_qty: issue, purchase_qty: purchase, reason: allocation.reason };
       });
       await reviewMaterialRequestWarehouse({ data: { request_id: request.id, items } });
-      toast.success("تم تأكيد المراجعة وتسجيل الصرف المخزني");
+      toast.success(ui("تم تأكيد المراجعة وتسجيل الصرف المخزني"));
       onDone();
-    } catch (error) { toast.error(formatErrorMessage(error, "تعذر تأكيد مراجعة المخازن")); }
+    } catch (error) { toast.error(ui(formatErrorMessage(error, "تعذر تأكيد مراجعة المخازن"))); }
     finally { setBusy(false); }
   };
   return (
     <div className="space-y-3 rounded-md border border-primary/25 bg-primary/5 p-3">
-      <h3 className="font-semibold">مراجعة المخازن قبل الشراء</h3>
+      <h3 className="font-semibold">{ui("مراجعة المخازن قبل الشراء")}</h3>
       {request.items.map((line) => {
         const allocation = allocations[line.id];
         const selected = stockItems.find((item) => item.id === allocation?.warehouse_item_id);
         const available = selected ? getAvailable(options, allocation.warehouse_id, selected.id) : 0;
         return (
           <div key={line.id} className="grid gap-2 rounded-md border bg-background p-3 sm:grid-cols-2 lg:grid-cols-6">
-            <div className="self-end text-sm font-semibold">{line.item_name}<p className="text-xs font-normal text-muted-foreground">أصلي {line.original_qty} · معتمد {line.planning_approved_qty} {line.unit}</p></div>
-            <Field label="ربط بكتالوج المخزون"><select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={allocation?.warehouse_item_id ?? ""} onChange={(event) => {
+            <div className="self-end text-sm font-semibold">{line.item_name}<p className="text-xs font-normal text-muted-foreground">{ui("أصلي ")}{line.original_qty}{ui(" · معتمد ")}{line.planning_approved_qty} {line.unit}</p></div>
+            <Field label={ui("ربط بكتالوج المخزون")}><select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={allocation?.warehouse_item_id ?? ""} onChange={(event) => {
               const itemId = event.target.value;
               const warehouseId = allocation?.warehouse_id || mainWarehouse?.id || "";
               const stockItem = stockItems.find((item) => item.id === itemId);
               const quantity = stockItem ? getAvailable(options, warehouseId, stockItem.id) : 0;
               const next = defaultStockAllocation(Number(line.planning_approved_qty ?? 0), quantity);
               setAllocations((current) => ({ ...current, [line.id]: { warehouse_item_id: itemId, warehouse_id: warehouseId, issue_qty: String(next.issue), purchase_qty: String(next.purchase), reason: "", is_new_item: !itemId } }));
-            }}><option value="">مادة جديدة / غير موجودة</option>{stockItems.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.unit}</option>)}</select></Field>
-            <Field label="مخزن الصرف"><select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={allocation?.warehouse_id ?? ""} onChange={(event) => {
+            }}><option value="">{ui("مادة جديدة / غير موجودة")}</option>{stockItems.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.unit}</option>)}</select></Field>
+            <Field label={ui("مخزن الصرف")}><select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={allocation?.warehouse_id ?? ""} onChange={(event) => {
               const warehouseId = event.target.value;
               const quantity = selected ? getAvailable(options, warehouseId, selected.id) : 0;
               const next = defaultStockAllocation(Number(line.planning_approved_qty ?? 0), quantity);
               setAllocations((current) => ({ ...current, [line.id]: { ...current[line.id], warehouse_id: warehouseId, issue_qty: String(next.issue), purchase_qty: String(next.purchase) } }));
-            }}><option value="">اختر المخزن</option>{options.warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}{warehouse.is_main ? " · رئيسي" : ""}</option>)}</select><p className="text-xs text-muted-foreground">المتوفر: {available} {line.unit}</p></Field>
-            <Field label="سيُصرف من المخزون"><Input type="number" min="0" step="0.001" value={allocation?.issue_qty ?? "0"} onChange={(event) => updateAllocation(line, "issue_qty", event.target.value)} /></Field>
-            <Field label="الكمية المطلوب شراؤها"><Input type="number" min="0" step="0.001" value={allocation?.purchase_qty ?? "0"} onChange={(event) => updateAllocation(line, "purchase_qty", event.target.value)} /></Field>
-            <Field label="سبب النقص إن وجد"><Input value={allocation?.reason ?? ""} onChange={(event) => updateAllocation(line, "reason", event.target.value)} /></Field>
+            }}><option value="">{ui("اختر المخزن")}</option>{options.warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}{warehouse.is_main ? ui(" · رئيسي") : ""}</option>)}</select><p className="text-xs text-muted-foreground">{ui("المتوفر: ")}{available} {line.unit}</p></Field>
+            <Field label={ui("سيُصرف من المخزون")}><Input type="number" min="0" step="0.001" value={allocation?.issue_qty ?? "0"} onChange={(event) => updateAllocation(line, "issue_qty", event.target.value)} /></Field>
+            <Field label={ui("الكمية المطلوب شراؤها")}><Input type="number" min="0" step="0.001" value={allocation?.purchase_qty ?? "0"} onChange={(event) => updateAllocation(line, "purchase_qty", event.target.value)} /></Field>
+            <Field label={ui("سبب النقص إن وجد")}><Input value={allocation?.reason ?? ""} onChange={(event) => updateAllocation(line, "reason", event.target.value)} /></Field>
           </div>
         );
       })}
-      <Button disabled={busy} onClick={() => void submit()}>تأكيد المراجعة</Button>
+      <Button disabled={busy} onClick={() => void submit()}>{ui("تأكيد المراجعة")}</Button>
     </div>
   );
 }
@@ -813,9 +811,9 @@ function ProcurementPanel({ request, onDone }: { request: MaterialRequest; onDon
   const [notPurchased, setNotPurchased] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const pendingItems = request.items.filter((item) => item.purchase_qty > item.purchased_qty && !item.not_purchased_reason);
-  if (!pendingItems.length) return <p className="rounded-md border p-3 text-sm text-muted-foreground">لا توجد كميات شراء متبقية غير محسومة.</p>;
+  if (!pendingItems.length) return <p className="rounded-md border p-3 text-sm text-muted-foreground">{ui("لا توجد كميات شراء متبقية غير محسومة.")}</p>;
   const saveBatch = async () => {
-    if (!supplier.trim()) return toast.error("أدخل اسم المورد");
+    if (!supplier.trim()) return toast.error(ui("أدخل اسم المورد"));
     setBusy(true);
     try {
       const items = pendingItems.map((item) => {
@@ -834,29 +832,29 @@ function ProcurementPanel({ request, onDone }: { request: MaterialRequest; onDon
         items,
       } });
       const record = result as { id?: string };
-      toast.success("تم تسجيل دفعة الشراء دون تغيير المخزون");
+      toast.success(ui("تم تسجيل دفعة الشراء دون تغيير المخزون"));
       onDone();
-      if (record.id) toast.info("أرسل الدفعة إلى المخزن عند اكتمال مستندات الشراء.");
-    } catch (error) { toast.error(formatErrorMessage(error, "تعذر تسجيل الشراء")); }
+      if (record.id) toast.info(ui("أرسل الدفعة إلى المخزن عند اكتمال مستندات الشراء."));
+    } catch (error) { toast.error(ui(formatErrorMessage(error, "تعذر تسجيل الشراء"))); }
     finally { setBusy(false); }
   };
   return (
     <div className="space-y-3 rounded-md border border-primary/25 bg-primary/5 p-3">
-      <h3 className="font-semibold">تسجيل دفعة شراء</h3>
+      <h3 className="font-semibold">{ui("تسجيل دفعة شراء")}</h3>
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        <Field label="المورد"><Input value={supplier} onChange={(event) => setSupplier(event.target.value)} /></Field>
-        <Field label="رقم أمر الشراء / المستند"><Input value={documentNumber} onChange={(event) => setDocumentNumber(event.target.value)} /></Field>
-        <Field label="التاريخ"><Input type="date" value={purchaseDate} onChange={(event) => setPurchaseDate(event.target.value)} /></Field>
-        <Field label="ملاحظات"><Input value={notes} onChange={(event) => setNotes(event.target.value)} /></Field>
+        <Field label={ui("المورد")}><Input value={supplier} onChange={(event) => setSupplier(event.target.value)} /></Field>
+        <Field label={ui("رقم أمر الشراء / المستند")}><Input value={documentNumber} onChange={(event) => setDocumentNumber(event.target.value)} /></Field>
+        <Field label={ui("التاريخ")}><Input type="date" value={purchaseDate} onChange={(event) => setPurchaseDate(event.target.value)} /></Field>
+        <Field label={ui("ملاحظات")}><Input value={notes} onChange={(event) => setNotes(event.target.value)} /></Field>
       </div>
       {pendingItems.map((item) => (
         <div key={item.id} className="grid gap-2 border-t pt-2 sm:grid-cols-[1fr_10rem_1fr]">
-          <div className="self-end text-sm">{item.item_name}<p className="text-xs text-muted-foreground">المطلوب شراؤه {item.purchase_qty} · تم شراء {item.purchased_qty} · المتبقي {item.purchase_qty - item.purchased_qty}</p></div>
-          <Field label="الكمية في هذه الدفعة"><Input type="number" min="0" max={item.purchase_qty - item.purchased_qty} step="0.001" value={quantities[item.id] ?? "0"} onChange={(event) => setQuantities((current) => ({ ...current, [item.id]: event.target.value }))} /></Field>
-          <Field label="سبب عدم الشراء (اتركه فارغاً للدفعة اللاحقة)"><Input value={notPurchased[item.id] ?? ""} onChange={(event) => setNotPurchased((current) => ({ ...current, [item.id]: event.target.value }))} /></Field>
+          <div className="self-end text-sm">{item.item_name}<p className="text-xs text-muted-foreground">{ui("المطلوب شراؤه ")}{item.purchase_qty}{ui(" · تم شراء ")}{item.purchased_qty}{ui(" · المتبقي ")}{item.purchase_qty - item.purchased_qty}</p></div>
+          <Field label={ui("الكمية في هذه الدفعة")}><Input type="number" min="0" max={item.purchase_qty - item.purchased_qty} step="0.001" value={quantities[item.id] ?? "0"} onChange={(event) => setQuantities((current) => ({ ...current, [item.id]: event.target.value }))} /></Field>
+          <Field label={ui("سبب عدم الشراء (اتركه فارغاً للدفعة اللاحقة)")}><Input value={notPurchased[item.id] ?? ""} onChange={(event) => setNotPurchased((current) => ({ ...current, [item.id]: event.target.value }))} /></Field>
         </div>
       ))}
-      <Button disabled={busy} onClick={() => void saveBatch()}><Plus className="ml-2 h-4 w-4" /> حفظ دفعة الشراء</Button>
+      <Button disabled={busy} onClick={() => void saveBatch()}><Plus className="ml-2 h-4 w-4" />{ui(" حفظ دفعة الشراء")}</Button>
     </div>
   );
 }
@@ -872,7 +870,7 @@ function ReceiptPanels({ request, options, onDone }: { request: MaterialRequest;
   if (!readyBatches.length) return null;
   return (
     <div className="space-y-3">
-      <h3 className="font-semibold">دفعات بانتظار الاستلام الفعلي</h3>
+      <h3 className="font-semibold">{ui("دفعات بانتظار الاستلام الفعلي")}</h3>
       {readyBatches.map((batch) => (
         <ReceiptForm key={batch.id} request={request} batch={batch} receipts={receipts} options={options} onDone={onDone} />
       ))}
@@ -921,7 +919,7 @@ function ReceiptForm({ request, batch, receipts, options, onDone }: {
   const setLine = (id: string, field: string, value: string | boolean) =>
     setLines((current) => ({ ...current, [id]: { ...current[id], [field]: value } }));
   const receive = async () => {
-    if (!warehouseId) return toast.error("حدد المخزن الرئيسي الذي سيستقبل الكمية");
+    if (!warehouseId) return toast.error(ui("حدد المخزن الرئيسي الذي سيستقبل الكمية"));
     setBusy(true);
     try {
       const payload = receiptItems.map((batchItem) => {
@@ -952,18 +950,18 @@ function ReceiptForm({ request, batch, receipts, options, onDone }: {
       } });
       window.sessionStorage.removeItem(`material-request-receipt:${batch.id}`);
       idempotencyKey.current = "";
-      toast.success("تم تسجيل الاستلام الفعلي وتحديث المخزون بالكميات المستلمة فقط");
+      toast.success(ui("تم تسجيل الاستلام الفعلي وتحديث المخزون بالكميات المستلمة فقط"));
       onDone();
-    } catch (error) { toast.error(formatErrorMessage(error, "تعذر تأكيد الاستلام")); }
+    } catch (error) { toast.error(ui(formatErrorMessage(error, "تعذر تأكيد الاستلام"))); }
     finally { setBusy(false); }
   };
   return (
     <div className="space-y-3 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div><p className="font-semibold">{batch.supplier} · {batch.document_number || "دون رقم مستند"}</p><p className="text-xs text-muted-foreground">تاريخ الشراء {formatDate(batch.purchase_date)}</p></div>
-        <Field label="المخزن الرئيسي"><select className="h-10 rounded-md border bg-background px-2 text-sm" value={warehouseId} onChange={(event) => setWarehouseId(event.target.value)}><option value="">اختر المخزن</option>{mainWarehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}</select></Field>
+        <div><p className="font-semibold">{batch.supplier} · {batch.document_number || ui("دون رقم مستند")}</p><p className="text-xs text-muted-foreground">{ui("تاريخ الشراء ")}{formatDate(batch.purchase_date)}</p></div>
+        <Field label={ui("المخزن الرئيسي")}><select className="h-10 rounded-md border bg-background px-2 text-sm" value={warehouseId} onChange={(event) => setWarehouseId(event.target.value)}><option value="">{ui("اختر المخزن")}</option>{mainWarehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}</select></Field>
       </div>
-      {!mainWarehouses.length && <p role="alert" className="text-sm text-destructive">لا يوجد مخزن رئيسي نشط؛ عيّن مخزناً رئيسياً قبل تأكيد الاستلام.</p>}
+      {!mainWarehouses.length && <p role="alert" className="text-sm text-destructive">{ui("لا يوجد مخزن رئيسي نشط؛ عيّن مخزناً رئيسياً قبل تأكيد الاستلام.")}</p>}
       {receiptItems.map((batchItem) => {
         const requestItem = request.items.find((item) => item.id === batchItem.request_item_id)!;
         const line = lines[batchItem.id];
@@ -976,22 +974,22 @@ function ReceiptForm({ request, batch, receipts, options, onDone }: {
         const remaining = Math.max(0, Number(batchItem.purchased_qty) - receipts.flatMap((receipt) => receipt.items).filter((entry) => entry.batch_item_id === batchItem.id).reduce((sum, entry) => sum + Number(entry.received_qty), 0));
         return (
           <div key={batchItem.id} className={`grid gap-2 rounded-md border p-3 sm:grid-cols-2 lg:grid-cols-5 ${line.did_not_arrive ? "border-destructive bg-destructive/5" : "bg-background"}`}>
-            <div className="self-end text-sm font-semibold">{requestItem.item_name}<p className="text-xs font-normal text-muted-foreground">مطلوب أصلاً {requestItem.original_qty} · مشترى {batchItem.purchased_qty} · سبق استلامه {batchItem.purchased_qty - remaining} · متبقي {remaining}</p></div>
-            <Field label="المستلم فعلياً"><Input type="number" min="0" max={remaining} step="0.001" value={line.did_not_arrive ? "0" : line.received_qty} disabled={line.did_not_arrive} onChange={(event) => setLine(batchItem.id, "received_qty", event.target.value)} /></Field>
-            <label className="flex min-h-10 items-center gap-2 self-end text-sm"><input type="checkbox" checked={line.did_not_arrive} onChange={(event) => setLine(batchItem.id, "did_not_arrive", event.target.checked)} /> لم يصل</label>
-            <Field label="الصنف المخزني"><select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={line.warehouse_item_id} onChange={(event) => { setLine(batchItem.id, "warehouse_item_id", event.target.value); if (event.target.value) setLine(batchItem.id, "new_item_name", ""); }}><option value="">إنشاء صنف عند الاستلام</option>{typeItems.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.unit}</option>)}</select></Field>
-            <Field label="الاسم عند إنشاء صنف جديد"><Input value={line.new_item_name} disabled={!!line.warehouse_item_id} onChange={(event) => setLine(batchItem.id, "new_item_name", event.target.value)} /></Field>
-            {!line.warehouse_item_id && duplicateName && <p className="text-xs font-semibold text-amber-700 lg:col-span-5">يوجد اسم مطابق في الكتالوج؛ اختر الصنف الموجود لتجنب التكرار.</p>}
-            <Field label="الوحدة عند الإنشاء"><Input value={line.new_item_unit} disabled={!!line.warehouse_item_id} onChange={(event) => setLine(batchItem.id, "new_item_unit", event.target.value)} /></Field>
-            <Field label="ملاحظات الرقم التسلسلي"><Input value={line.serial_notes} onChange={(event) => setLine(batchItem.id, "serial_notes", event.target.value)} /></Field>
-            <Field label="سبب عدم الوصول أو النقص"><Input value={line.shortage_reason} onChange={(event) => setLine(batchItem.id, "shortage_reason", event.target.value)} /></Field>
-            <Field label="سبب الاستبعاد المعتمد"><Input value={line.exclusion_reason} onChange={(event) => setLine(batchItem.id, "exclusion_reason", event.target.value)} /></Field>
-            <Field label="المعتمد"><select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={line.approved_by} onChange={(event) => setLine(batchItem.id, "approved_by", event.target.value)}><option value="">اختر المعتمد</option>{approvers.map((approver) => <option key={approver.id} value={approver.id}>{approver.name}</option>)}</select></Field>
+            <div className="self-end text-sm font-semibold">{requestItem.item_name}<p className="text-xs font-normal text-muted-foreground">{ui("مطلوب أصلاً ")}{requestItem.original_qty}{ui(" · مشترى ")}{batchItem.purchased_qty}{ui(" · سبق استلامه ")}{batchItem.purchased_qty - remaining}{ui(" · متبقي ")}{remaining}</p></div>
+            <Field label={ui("المستلم فعلياً")}><Input type="number" min="0" max={remaining} step="0.001" value={line.did_not_arrive ? "0" : line.received_qty} disabled={line.did_not_arrive} onChange={(event) => setLine(batchItem.id, "received_qty", event.target.value)} /></Field>
+            <label className="flex min-h-10 items-center gap-2 self-end text-sm"><input type="checkbox" checked={line.did_not_arrive} onChange={(event) => setLine(batchItem.id, "did_not_arrive", event.target.checked)} />{ui(" لم يصل")}</label>
+            <Field label={ui("الصنف المخزني")}><select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={line.warehouse_item_id} onChange={(event) => { setLine(batchItem.id, "warehouse_item_id", event.target.value); if (event.target.value) setLine(batchItem.id, "new_item_name", ""); }}><option value="">{ui("إنشاء صنف عند الاستلام")}</option>{typeItems.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.unit}</option>)}</select></Field>
+            <Field label={ui("الاسم عند إنشاء صنف جديد")}><Input value={line.new_item_name} disabled={!!line.warehouse_item_id} onChange={(event) => setLine(batchItem.id, "new_item_name", event.target.value)} /></Field>
+            {!line.warehouse_item_id && duplicateName && <p className="text-xs font-semibold text-amber-700 lg:col-span-5">{ui("يوجد اسم مطابق في الكتالوج؛ اختر الصنف الموجود لتجنب التكرار.")}</p>}
+            <Field label={ui("الوحدة عند الإنشاء")}><Input value={line.new_item_unit} disabled={!!line.warehouse_item_id} onChange={(event) => setLine(batchItem.id, "new_item_unit", event.target.value)} /></Field>
+            <Field label={ui("ملاحظات الرقم التسلسلي")}><Input value={line.serial_notes} onChange={(event) => setLine(batchItem.id, "serial_notes", event.target.value)} /></Field>
+            <Field label={ui("سبب عدم الوصول أو النقص")}><Input value={line.shortage_reason} onChange={(event) => setLine(batchItem.id, "shortage_reason", event.target.value)} /></Field>
+            <Field label={ui("سبب الاستبعاد المعتمد")}><Input value={line.exclusion_reason} onChange={(event) => setLine(batchItem.id, "exclusion_reason", event.target.value)} /></Field>
+            <Field label={ui("المعتمد")}><select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={line.approved_by} onChange={(event) => setLine(batchItem.id, "approved_by", event.target.value)}><option value="">{ui("اختر المعتمد")}</option>{approvers.map((approver) => <option key={approver.id} value={approver.id}>{approver.name}</option>)}</select></Field>
           </div>
         );
       })}
-      <Field label="ملاحظات الاستلام"><Input value={notes} onChange={(event) => setNotes(event.target.value)} /></Field>
-      <Button disabled={busy || !mainWarehouses.length} onClick={() => void receive()}>تأكيد الاستلام الفعلي</Button>
+      <Field label={ui("ملاحظات الاستلام")}><Input value={notes} onChange={(event) => setNotes(event.target.value)} /></Field>
+      <Button disabled={busy || !mainWarehouses.length} onClick={() => void receive()}>{ui("تأكيد الاستلام الفعلي")}</Button>
     </div>
   );
 }
@@ -999,10 +997,10 @@ function ReceiptForm({ request, batch, receipts, options, onDone }: {
 function BatchHistory({ batches, canSend, onDone }: { batches: PurchaseBatch[]; canSend: boolean; onDone: () => void }) {
   return (
     <details className="rounded-md border px-3 py-2">
-      <summary className="cursor-pointer text-sm font-semibold">دفعات الشراء ({batches.length})</summary>
+      <summary className="cursor-pointer text-sm font-semibold">{ui("دفعات الشراء (")}{batches.length})</summary>
       <div className="mt-3 space-y-2">
         {batches.map((batch) => <div key={batch.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/30 p-3 text-sm">
-          <div><b>{batch.supplier}</b> · {batch.document_number || "دون رقم مستند"} · {formatDate(batch.purchase_date)}<p className="text-xs text-muted-foreground">{batch.status === "sent_to_warehouse" ? "أرسلت للاستلام" : "مسودة شراء"}</p></div>
+          <div><b>{batch.supplier}</b> · {batch.document_number || ui("دون رقم مستند")} · {formatDate(batch.purchase_date)}<p className="text-xs text-muted-foreground">{batch.status === "sent_to_warehouse" ? ui("أرسلت للاستلام") : ui("مسودة شراء")}</p></div>
           {canSend && batch.status === "draft" && <SendBatchAction batch={batch} onDone={onDone} />}
         </div>)}
       </div>
@@ -1014,11 +1012,11 @@ function SendBatchAction({ batch, onDone }: { batch: PurchaseBatch; onDone: () =
   const [busy, setBusy] = useState(false);
   const send = async () => {
     setBusy(true);
-    try { await sendMaterialPurchaseBatch({ data: { batch_id: batch.id } }); toast.success("أرسلت الدفعة إلى المخزن للاستلام"); onDone(); }
-    catch (error) { toast.error(formatErrorMessage(error, "تعذر إرسال الدفعة")); }
+    try { await sendMaterialPurchaseBatch({ data: { batch_id: batch.id } }); toast.success(ui("أرسلت الدفعة إلى المخزن للاستلام")); onDone(); }
+    catch (error) { toast.error(ui(formatErrorMessage(error, "تعذر إرسال الدفعة"))); }
     finally { setBusy(false); }
   };
-  return <Button size="sm" disabled={busy} onClick={() => void send()}><Send className="ml-2 h-4 w-4" /> إرسال للاستلام</Button>;
+  return <Button size="sm" disabled={busy} onClick={() => void send()}><Send className="ml-2 h-4 w-4" />{ui(" إرسال للاستلام")}</Button>;
 }
 
 function ReceiptHistory({
@@ -1042,10 +1040,10 @@ function ReceiptHistory({
         : line.exclusion_reason
           ? `مستبعد: ${line.exclusion_reason}`
           : `تم الاستلام${line.shortage_reason ? ` · سبب النقص: ${line.shortage_reason}` : ""}`;
-      return `<tr><td>${escapeHtml(requestItem?.item_name ?? "صنف غير معروف")}</td><td>${escapeHtml(requestItem?.unit ?? "—")}</td><td>${Number(batchItem?.purchased_qty ?? 0).toLocaleString("ar-IQ")}</td><td>${Number(line.received_qty).toLocaleString("ar-IQ")}</td><td>${escapeHtml(status)}</td><td>${escapeHtml(line.serial_notes ?? "—")}</td></tr>`;
+      return `<tr><td>${escapeHtml(requestItem?.item_name ?? "صنف غير معروف")}</td><td>${escapeHtml(requestItem?.unit ?? "—")}</td><td>${Number(batchItem?.purchased_qty ?? 0).toLocaleString(displayLocale())}</td><td>${Number(line.received_qty).toLocaleString(displayLocale())}</td><td>${escapeHtml(status)}</td><td>${escapeHtml(line.serial_notes ?? "—")}</td></tr>`;
     }).join("");
     const warehouse = warehouses.find((item) => item.id === receipt.warehouse_id)?.name ?? "المخزن";
-    const html = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>وصل استلام ${escapeHtml(request.request_number)}</title><style>@page{size:A4;margin:14mm}*{box-sizing:border-box}body{font-family:Arial,Tahoma,sans-serif;color:#162c39;margin:0;line-height:1.6}.header{border-bottom:3px solid #087d78;padding:0 0 14px;display:flex;justify-content:space-between;align-items:center}.header h1{font-size:23px;color:#087d78;margin:0}.header p{margin:3px 0 0;color:#647782;font-size:12px}.ref{border:1px solid #c6d8dc;border-radius:8px;padding:8px 12px;font-weight:bold}.meta{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:18px 0}.box{border:1px solid #d5e1e4;border-radius:8px;padding:9px 11px}.box span{display:block;color:#6b7c84;font-size:10px}.box b{display:block;margin-top:3px;font-size:13px}table{width:100%;border-collapse:collapse;font-size:11px}th{background:#e8f3f2;color:#145a5a}th,td{padding:9px 7px;border:1px solid #cbd8dc;text-align:right}tr:nth-child(even){background:#f7fafb}.note{margin-top:14px;padding:10px;border-right:3px solid #087d78;background:#f2f8f8}.signatures{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-top:48px}.signatures div{border-top:1px solid #74858c;padding-top:8px;text-align:center;font-size:11px;color:#52636a}</style></head><body><header class="header"><div><h1>وصل استلام مخزني</h1><p>سجل استلام طلب شراء ومطابقة الكميات</p></div><div class="ref">رقم الوصل: ${escapeHtml(receipt.id)}</div></header><section class="meta"><div class="box"><span>رقم الطلب</span><b>${escapeHtml(request.request_number)}</b></div><div class="box"><span>المخزن المستلم</span><b>${escapeHtml(warehouse)}</b></div><div class="box"><span>المجهز / المورد</span><b>${escapeHtml(batch?.supplier ?? "—")}</b></div><div class="box"><span>رقم مستند الشراء</span><b>${escapeHtml(batch?.document_number || "—")}</b></div><div class="box"><span>تاريخ ووقت الاستلام</span><b>${escapeHtml(new Date(receipt.received_at).toLocaleString("ar-IQ"))}</b></div><div class="box"><span>معرّف مستلم المخزن</span><b dir="ltr">${escapeHtml(receipt.received_by)}</b></div></section><table><thead><tr><th>الصنف</th><th>الوحدة</th><th>المشتراة</th><th>المستلمة فعلياً</th><th>الحالة</th><th>الرقم التسلسلي / ملاحظات</th></tr></thead><tbody>${itemRows}</tbody></table>${receipt.notes ? `<div class="note"><b>ملاحظات الاستلام:</b> ${escapeHtml(receipt.notes)}</div>` : ""}<footer class="signatures"><div>أمين المخزن</div><div>ممثل المشتريات</div><div>المستلم / المستفيد</div></footer></body></html>`;
+    const html = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>وصل استلام ${escapeHtml(request.request_number)}</title><style>@page{size:A4;margin:14mm}*{box-sizing:border-box}body{font-family:Arial,Tahoma,sans-serif;color:#162c39;margin:0;line-height:1.6}.header{border-bottom:3px solid #087d78;padding:0 0 14px;display:flex;justify-content:space-between;align-items:center}.header h1{font-size:23px;color:#087d78;margin:0}.header p{margin:3px 0 0;color:#647782;font-size:12px}.ref{border:1px solid #c6d8dc;border-radius:8px;padding:8px 12px;font-weight:bold}.meta{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:18px 0}.box{border:1px solid #d5e1e4;border-radius:8px;padding:9px 11px}.box span{display:block;color:#6b7c84;font-size:10px}.box b{display:block;margin-top:3px;font-size:13px}table{width:100%;border-collapse:collapse;font-size:11px}th{background:#e8f3f2;color:#145a5a}th,td{padding:9px 7px;border:1px solid #cbd8dc;text-align:right}tr:nth-child(even){background:#f7fafb}.note{margin-top:14px;padding:10px;border-right:3px solid #087d78;background:#f2f8f8}.signatures{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-top:48px}.signatures div{border-top:1px solid #74858c;padding-top:8px;text-align:center;font-size:11px;color:#52636a}</style></head><body><header class="header"><div><h1>وصل استلام مخزني</h1><p>سجل استلام طلب شراء ومطابقة الكميات</p></div><div class="ref">رقم الوصل: ${escapeHtml(receipt.id)}</div></header><section class="meta"><div class="box"><span>رقم الطلب</span><b>${escapeHtml(request.request_number)}</b></div><div class="box"><span>المخزن المستلم</span><b>${escapeHtml(warehouse)}</b></div><div class="box"><span>المجهز / المورد</span><b>${escapeHtml(batch?.supplier ?? "—")}</b></div><div class="box"><span>رقم مستند الشراء</span><b>${escapeHtml(batch?.document_number || "—")}</b></div><div class="box"><span>تاريخ ووقت الاستلام</span><b>${escapeHtml(new Date(receipt.received_at).toLocaleString(displayLocale()))}</b></div><div class="box"><span>معرّف مستلم المخزن</span><b dir="ltr">${escapeHtml(receipt.received_by)}</b></div></section><table><thead><tr><th>الصنف</th><th>الوحدة</th><th>المشتراة</th><th>المستلمة فعلياً</th><th>الحالة</th><th>الرقم التسلسلي / ملاحظات</th></tr></thead><tbody>${itemRows}</tbody></table>${receipt.notes ? `<div class="note"><b>ملاحظات الاستلام:</b> ${escapeHtml(receipt.notes)}</div>` : ""}<footer class="signatures"><div>أمين المخزن</div><div>ممثل المشتريات</div><div>المستلم / المستفيد</div></footer></body></html>`;
     const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -1055,16 +1053,15 @@ function ReceiptHistory({
   };
   return (
     <details className="rounded-md border px-3 py-2">
-      <summary className="cursor-pointer text-sm font-semibold">سجل الاستلامات ({receipts.length})</summary>
+      <summary className="cursor-pointer text-sm font-semibold">{ui("سجل الاستلامات (")}{receipts.length})</summary>
       <div className="mt-3 space-y-2">
         {receipts.map((receipt) => <div key={receipt.id} className="rounded-md border p-3 text-xs">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="font-semibold">استلام {receipt.id} · {new Date(receipt.received_at).toLocaleString("ar-IQ")}</p>
+            <p className="font-semibold">{ui("استلام ")}{receipt.id} · {new Date(receipt.received_at).toLocaleString(displayLocale())}</p>
             <Button type="button" size="sm" variant="outline" onClick={() => downloadReceipt(receipt)}>
-              <FileDown className="ml-2 h-4 w-4" /> تنزيل وصل الاستلام
-            </Button>
+              <FileDown className="ml-2 h-4 w-4" />{ui(" تنزيل وصل الاستلام")}</Button>
           </div>
-          {receipt.items.map((line) => <p key={line.id} className={line.did_not_arrive ? "mt-1 font-semibold text-destructive" : "mt-1"}>{line.did_not_arrive ? "لم يصل" : `استلم ${line.received_qty}`} {line.exclusion_reason ? `· مستبعد: ${line.exclusion_reason}` : ""} {line.serial_notes ? `· الرقم التسلسلي: ${line.serial_notes}` : ""}</p>)}
+          {receipt.items.map((line) => <p key={line.id} className={line.did_not_arrive ? "mt-1 font-semibold text-destructive" : "mt-1"}>{line.did_not_arrive ? ui("لم يصل") : (ui("استلم ") + (line.received_qty))} {line.exclusion_reason ? (ui("· مستبعد: ") + (line.exclusion_reason)) : ""} {line.serial_notes ? (ui("· الرقم التسلسلي: ") + (line.serial_notes)) : ""}</p>)}
         </div>)}
       </div>
     </details>
@@ -1077,35 +1074,35 @@ function CloseRequest({ request, onDone }: { request: MaterialRequest; onDone: (
   const [busy, setBusy] = useState(false);
   const submit = async () => {
     setBusy(true);
-    try { await closeMaterialRequest({ data: { request_id: request.id, reason } }); toast.success("تم إغلاق الطلب وحفظ سجل النقص"); setOpen(false); onDone(); }
-    catch (error) { toast.error(formatErrorMessage(error, "تعذر إغلاق الطلب")); }
+    try { await closeMaterialRequest({ data: { request_id: request.id, reason } }); toast.success(ui("تم إغلاق الطلب وحفظ سجل النقص")); setOpen(false); onDone(); }
+    catch (error) { toast.error(ui(formatErrorMessage(error, "تعذر إغلاق الطلب"))); }
     finally { setBusy(false); }
   };
-  return <><Button size="sm" variant="outline" onClick={() => setOpen(true)}>إغلاق</Button><Dialog open={open} onOpenChange={setOpen}><DialogContent dir="rtl"><DialogHeader><DialogTitle>إغلاق {request.request_number}</DialogTitle></DialogHeader><Field label="سبب الإغلاق"><Input value={reason} onChange={(event) => setReason(event.target.value)} /></Field><Button disabled={busy || reason.trim().length < 3} onClick={() => void submit()}>تأكيد الإغلاق</Button></DialogContent></Dialog></>;
+  return <><Button size="sm" variant="outline" onClick={() => setOpen(true)}>{ui("إغلاق")}</Button><Dialog open={open} onOpenChange={setOpen}><DialogContent dir={direction()}><DialogHeader><DialogTitle>{ui("إغلاق ")}{request.request_number}</DialogTitle></DialogHeader><Field label={ui("سبب الإغلاق")}><Input value={reason} onChange={(event) => setReason(event.target.value)} /></Field><Button disabled={busy || reason.trim().length < 3} onClick={() => void submit()}>{ui("تأكيد الإغلاق")}</Button></DialogContent></Dialog></>;
 }
 
 function ReopenRequest({ request, onDone }: { request: MaterialRequest; onDone: () => void }) {
   const [busy, setBusy] = useState(false);
   const submit = async () => {
-    const reason = window.prompt("سبب إعادة فتح الطلب:")?.trim() ?? "";
+    const reason = window.prompt(ui("سبب إعادة فتح الطلب:"))?.trim() ?? "";
     if (reason.length < 3) return;
     setBusy(true);
-    try { await reopenMaterialRequest({ data: { request_id: request.id, reason } }); toast.success("أعيد فتح الطلب وسُجل السبب"); onDone(); }
-    catch (error) { toast.error(formatErrorMessage(error, "تعذر إعادة فتح الطلب")); }
+    try { await reopenMaterialRequest({ data: { request_id: request.id, reason } }); toast.success(ui("أعيد فتح الطلب وسُجل السبب")); onDone(); }
+    catch (error) { toast.error(ui(formatErrorMessage(error, "تعذر إعادة فتح الطلب"))); }
     finally { setBusy(false); }
   };
-  return <Button size="sm" variant="outline" disabled={busy} onClick={() => void submit()}>إعادة فتح</Button>;
+  return <Button size="sm" variant="outline" disabled={busy} onClick={() => void submit()}>{ui("إعادة فتح")}</Button>;
 }
 
 function CancelRequest({ request, onDone }: { request: MaterialRequest; onDone: () => void }) {
   const [busy, setBusy] = useState(false);
   const submit = async () => {
     setBusy(true);
-    try { await cancelMaterialRequest({ data: { request_id: request.id } }); toast.success("تم إلغاء الطلب"); onDone(); }
-    catch (error) { toast.error(formatErrorMessage(error, "تعذر إلغاء الطلب")); }
+    try { await cancelMaterialRequest({ data: { request_id: request.id } }); toast.success(ui("تم إلغاء الطلب")); onDone(); }
+    catch (error) { toast.error(ui(formatErrorMessage(error, "تعذر إلغاء الطلب"))); }
     finally { setBusy(false); }
   };
-  return <Button size="sm" variant="outline" disabled={busy} onClick={() => void submit()}>إلغاء</Button>;
+  return <Button size="sm" variant="outline" disabled={busy} onClick={() => void submit()}>{ui("إلغاء")}</Button>;
 }
 
 function EmptyRequests({ text }: { text: string }) {

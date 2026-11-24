@@ -1,3 +1,4 @@
+import { direction, language, ui } from "@/lib/ui-language";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
@@ -30,15 +31,15 @@ function PublicForm() {
     retry: 1,
   });
   return (
-    <main dir="rtl" lang="ar" className="mx-auto max-w-[640px] p-4">
+    <main dir={direction()} lang={language()} className="mx-auto max-w-[640px] p-4">
       {q.isPending ? (
-        "جارٍ تحميل الاستمارة…"
+        ui("جارٍ تحميل الاستمارة…")
       ) : q.error ? (
-        <Button onClick={() => q.refetch()}>تعذر الاتصال · إعادة المحاولة</Button>
+        <Button onClick={() => q.refetch()}>{ui("تعذر الاتصال · إعادة المحاولة")}</Button>
       ) : q.data ? (
         <Fill key={token} token={token} form={q.data} />
       ) : (
-        "الرابط غير متاح، ربما انتهت صلاحيته أو اكتمل عدد الاستمارات."
+        ui("الرابط غير متاح، ربما انتهت صلاحيته أو اكتمل عدد الاستمارات.")
       )}
     </main>
   );
@@ -117,12 +118,10 @@ function Fill({ token, form }: { token: string; form: Public }) {
       </header>
       {ref ? (
         <section>
-          <h2>شكراً، تم إرسال الاستمارة للمراجعة</h2>
+          <h2>{ui("شكراً، تم إرسال الاستمارة للمراجعة")}</h2>
           <p dir="ltr">{ref}</p>
           {form.allow_print && (
-            <Button onClick={() => printForms([{ ...form, data, reference_code: ref }])}>
-              طباعة / حفظ PDF
-            </Button>
+            <Button onClick={() => printForms([{ ...form, data, reference_code: ref }])}>{ui("طباعة / حفظ PDF")}</Button>
           )}
         </section>
       ) : (
@@ -182,7 +181,7 @@ function Fill({ token, form }: { token: string; form: Public }) {
           <div className="sticky bottom-0 mt-4 border-t bg-background py-3">
             {error && <p role="alert">{error}</p>}
             <Button disabled={busy} className="min-h-12 w-full">
-              {busy ? "جارٍ الإرسال…" : "إرسال الاستمارة"}
+              {busy ? ui("جارٍ الإرسال…") : ui("إرسال الاستمارة")}
             </Button>
           </div>
         </form>

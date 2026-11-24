@@ -1,3 +1,4 @@
+import { direction, ui } from "@/lib/ui-language";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { certificationDb as db, loadCenter } from "@/lib/certification-center";
@@ -65,7 +66,7 @@ const statusLabel: Record<string, string> = {
 export const Route = createFileRoute("/_authenticated/certifications")({
   head: () => ({
     meta: [
-      { title: "الشهادات والدورات — مركز التدريب والتأهيل" },
+      { title: ui("الشهادات والدورات — مركز التدريب والتأهيل") },
       {
         name: "description",
         content: "إدارة الشهادات والدورات التدريبية وطلبات الاعتماد.",
@@ -176,9 +177,9 @@ function CertificationsPage() {
       if (error) throw Error(error.message);
       after?.();
       await center.refetch();
-      toast.success("تم الحفظ");
+      toast.success(ui("تم الحفظ"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "تعذر الحفظ");
+      toast.error(e instanceof Error ? ui(e.message) : ui("تعذر الحفظ"));
     } finally {
       setBusy(false);
     }
@@ -186,7 +187,7 @@ function CertificationsPage() {
   function handleCreateRequest(e: FormEvent) {
     e.preventDefault();
     if (!selectedEmployee || !selectedCourse || !approver)
-      return toast.error("اختر الموظف والدورة وجهة الاعتماد");
+      return toast.error(ui("اختر الموظف والدورة وجهة الاعتماد"));
     void save(
       () =>
         db
@@ -241,24 +242,21 @@ function CertificationsPage() {
   }
   if (center.error)
     return (
-      <Card dir="rtl" className="p-6">
-        تعذر تحميل مركز الشهادات · {center.error.message}{" "}
-        <Button onClick={() => center.refetch()}>إعادة المحاولة</Button>
+      <Card dir={direction()} className="p-6">{ui("تعذر تحميل مركز الشهادات · ")}{center.error.message}{" "}
+        <Button onClick={() => center.refetch()}>{ui("إعادة المحاولة")}</Button>
       </Card>
     );
   if (!center.data)
     return (
-      <p dir="rtl" className="p-6">
-        جارٍ تحميل مركز الشهادات…
-      </p>
+      <p dir={direction()} className="p-6">{ui("جارٍ تحميل مركز الشهادات…")}</p>
     );
 
   return (
-    <div className="space-y-6 p-4 md:p-6" dir="rtl">
+    <div className="space-y-6 p-4 md:p-6" dir={direction()}>
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="text-sm text-muted-foreground">إدارة الموارد البشرية والتأهيل</p>
-          <h1 className="text-3xl font-bold">الشهادات والدورات</h1>
+          <p className="text-sm text-muted-foreground">{ui("إدارة الموارد البشرية والتأهيل")}</p>
+          <h1 className="text-3xl font-bold">{ui("الشهادات والدورات")}</h1>
         </div>
       </div>
 
@@ -267,57 +265,49 @@ function CertificationsPage() {
           <TabsTrigger
             className="rounded-none border data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
             value="overview"
-          >
-            سجل الشهادات
-          </TabsTrigger>
+          >{ui("سجل الشهادات")}</TabsTrigger>
           <TabsTrigger
             className="rounded-none border data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
             value="request"
-          >
-            طلب دورة
-          </TabsTrigger>
+          >{ui("طلب دورة")}</TabsTrigger>
           <TabsTrigger
             className="rounded-none border data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
             value="approvals"
-          >
-            الطلبات المحالة
-          </TabsTrigger>
+          >{ui("الطلبات المحالة")}</TabsTrigger>
           <TabsTrigger
             className="rounded-none border data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
             value="settings"
-          >
-            الإعدادات
-          </TabsTrigger>
+          >{ui("الإعدادات")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
           <div className="grid gap-3 md:grid-cols-5">
             <StatCard
-              title="إجمالي الشهادات"
+              title={ui("إجمالي الشهادات")}
               value={certificationStats.total}
               icon={Award}
               tone="bg-primary"
             />
             <StatCard
-              title="السارية"
+              title={ui("السارية")}
               value={certificationStats.active}
               icon={CheckCircle2}
               tone="bg-emerald-600"
             />
             <StatCard
-              title="المنتهية"
+              title={ui("المنتهية")}
               value={certificationStats.expired}
               icon={ShieldCheck}
               tone="bg-rose-600"
             />
             <StatCard
-              title="قريبة من الانتهاء"
+              title={ui("قريبة من الانتهاء")}
               value={certificationStats.expiringSoon}
               icon={Clock3}
               tone="bg-amber-500"
             />
             <StatCard
-              title="الدورات الجارية"
+              title={ui("الدورات الجارية")}
               value={certificationStats.inProgress}
               icon={GraduationCap}
               tone="bg-indigo-600"
@@ -327,31 +317,30 @@ function CertificationsPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Funnel className="h-4 w-4" /> المرشحات
-              </CardTitle>
+                <Funnel className="h-4 w-4" />{ui(" المرشحات")}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-5">
               <div className="space-y-2 md:col-span-2">
-                <Label>بحث</Label>
+                <Label>{ui("بحث")}</Label>
                 <div className="relative">
                   <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="اسم الموظف أو الرقم"
+                    placeholder={ui("اسم الموظف أو الرقم")}
                     className="pr-10"
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label>القسم</Label>
+                <Label>{ui("القسم")}</Label>
                 <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
                   <SelectTrigger>
-                    <SelectValue placeholder="الكل" />
+                    <SelectValue placeholder={ui("الكل")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">الكل</SelectItem>
+                    <SelectItem value="all">{ui("الكل")}</SelectItem>
                     {Array.from(new Set(certifications.map((c) => c.department))).map((d) => (
                       <SelectItem key={d} value={d}>
                         {d}
@@ -362,13 +351,13 @@ function CertificationsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>التخصص</Label>
+                <Label>{ui("التخصص")}</Label>
                 <Select value={specialtyFilter} onValueChange={setSpecialtyFilter}>
                   <SelectTrigger>
-                    <SelectValue placeholder="الكل" />
+                    <SelectValue placeholder={ui("الكل")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">الكل</SelectItem>
+                    <SelectItem value="all">{ui("الكل")}</SelectItem>
                     {Array.from(new Set(certifications.map((c) => c.specialty))).map((d) => (
                       <SelectItem key={d} value={d}>
                         {d}
@@ -379,16 +368,16 @@ function CertificationsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>الحالة</Label>
+                <Label>{ui("الحالة")}</Label>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
                   <SelectTrigger>
-                    <SelectValue placeholder="الكل" />
+                    <SelectValue placeholder={ui("الكل")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">الكل</SelectItem>
-                    <SelectItem value="active">سارية</SelectItem>
-                    <SelectItem value="expiring_soon">قريبة من الانتهاء</SelectItem>
-                    <SelectItem value="expired">منتهية</SelectItem>
+                    <SelectItem value="all">{ui("الكل")}</SelectItem>
+                    <SelectItem value="active">{ui("سارية")}</SelectItem>
+                    <SelectItem value="expiring_soon">{ui("قريبة من الانتهاء")}</SelectItem>
+                    <SelectItem value="expired">{ui("منتهية")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -397,20 +386,20 @@ function CertificationsPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>جدول الشهادات</CardTitle>
+              <CardTitle>{ui("جدول الشهادات")}</CardTitle>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>الموظف</TableHead>
-                    <TableHead>الرقم</TableHead>
-                    <TableHead>نوع الدورة</TableHead>
-                    <TableHead>تاريخ الإصدار</TableHead>
-                    <TableHead>تاريخ الانتهاء</TableHead>
-                    <TableHead>الأيام المتبقية</TableHead>
-                    <TableHead>الحالة</TableHead>
-                    <TableHead>المرفق</TableHead>
+                    <TableHead>{ui("الموظف")}</TableHead>
+                    <TableHead>{ui("الرقم")}</TableHead>
+                    <TableHead>{ui("نوع الدورة")}</TableHead>
+                    <TableHead>{ui("تاريخ الإصدار")}</TableHead>
+                    <TableHead>{ui("تاريخ الانتهاء")}</TableHead>
+                    <TableHead>{ui("الأيام المتبقية")}</TableHead>
+                    <TableHead>{ui("الحالة")}</TableHead>
+                    <TableHead>{ui("المرفق")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -430,8 +419,8 @@ function CertificationsPage() {
                         {row.days_remaining === null
                           ? "—"
                           : row.days_remaining > 0
-                            ? `${row.days_remaining} يوم`
-                            : `${Math.abs(row.days_remaining)} يوم متأخرة`}
+                            ? ((row.days_remaining) + ui(" يوم"))
+                            : ((Math.abs(row.days_remaining)) + ui(" يوم متأخرة"))}
                       </TableCell>
                       <TableCell>
                         <Badge className={statusTone[row.status]}>{statusLabel[row.status]}</Badge>
@@ -446,17 +435,13 @@ function CertificationsPage() {
                           onClick={() =>
                             window.open(row.attachment_url ?? "", "_blank", "noopener,noreferrer")
                           }
-                        >
-                          معاينة
-                        </Button>
+                        >{ui("معاينة")}</Button>
                       </TableCell>
                     </TableRow>
                   ))}
                   {!filteredCertifications.length && (
                     <TableRow>
-                      <TableCell colSpan={8} className="h-20 text-center text-muted-foreground">
-                        لا توجد شهادات مطابقة للفلتر الحالي.
-                      </TableCell>
+                      <TableCell colSpan={8} className="h-20 text-center text-muted-foreground">{ui("لا توجد شهادات مطابقة للفلتر الحالي.")}</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -469,16 +454,15 @@ function CertificationsPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <GraduationCap className="h-4 w-4" /> طلب دورة تدريبية
-              </CardTitle>
+                <GraduationCap className="h-4 w-4" />{ui(" طلب دورة تدريبية")}</CardTitle>
             </CardHeader>
             <CardContent>
               <form className="space-y-4" onSubmit={handleCreateRequest}>
                 <div className="space-y-2">
-                  <Label>الموظف</Label>
+                  <Label>{ui("الموظف")}</Label>
                   <Input
-                    aria-label="بحث الموظفين"
-                    placeholder="ابحث بالاسم أو الرقم الوظيفي"
+                    aria-label={ui("بحث الموظفين")}
+                    placeholder={ui("ابحث بالاسم أو الرقم الوظيفي")}
                     value={term}
                     onChange={(e) => {
                       setTerm(e.target.value);
@@ -489,11 +473,11 @@ function CertificationsPage() {
                   {!selectedEmployee && term && (
                     <div className="max-h-52 overflow-auto">
                       {people.isFetching
-                        ? "جارٍ البحث…"
+                        ? ui("جارٍ البحث…")
                         : people.error
-                          ? "تعذر البحث"
+                          ? ui("تعذر البحث")
                           : !people.data?.length
-                            ? "لا توجد نتائج"
+                            ? ui("لا توجد نتائج")
                             : people.data.map((p) => {
                                 const label = [
                                   p.full_name,
@@ -514,7 +498,7 @@ function CertificationsPage() {
                                       setTerm("");
                                     }}
                                   >
-                                    {label}
+                                    {ui(label)}
                                   </Button>
                                 );
                               })}
@@ -524,10 +508,10 @@ function CertificationsPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>نوع الدورة</Label>
+                  <Label>{ui("نوع الدورة")}</Label>
                   <Select value={selectedCourse} onValueChange={setSelectedCourse}>
                     <SelectTrigger>
-                      <SelectValue placeholder="اختر الدورة" />
+                      <SelectValue placeholder={ui("اختر الدورة")} />
                     </SelectTrigger>
                     <SelectContent>
                       {courses
@@ -542,7 +526,7 @@ function CertificationsPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>نوع الطلب</Label>
+                  <Label>{ui("نوع الطلب")}</Label>
                   <Select
                     value={requestType}
                     onValueChange={(value) => setRequestType(value as "new" | "renewal")}
@@ -551,14 +535,14 @@ function CertificationsPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="new">جديد</SelectItem>
-                      <SelectItem value="renewal">تجديد</SelectItem>
+                      <SelectItem value="new">{ui("جديد")}</SelectItem>
+                      <SelectItem value="renewal">{ui("تجديد")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>جهة الاعتماد</Label>
+                  <Label>{ui("جهة الاعتماد")}</Label>
                   <Select value={approver} onValueChange={setApprover}>
                     <SelectTrigger>
                       <SelectValue />
@@ -574,12 +558,12 @@ function CertificationsPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>ملاحظات الطلب</Label>
+                  <Label>{ui("ملاحظات الطلب")}</Label>
                   <Textarea
                     value={requestNote}
                     onChange={(e) => setRequestNote(e.target.value)}
                     rows={4}
-                    placeholder="أدخل تفاصيل الطلب أو سبب التحديث"
+                    placeholder={ui("أدخل تفاصيل الطلب أو سبب التحديث")}
                   />
                 </div>
 
@@ -588,31 +572,29 @@ function CertificationsPage() {
                   className="w-full"
                   type="submit"
                 >
-                  <BellRing className="ml-2 h-4 w-4" />
-                  إرسال الطلب
-                </Button>
+                  <BellRing className="ml-2 h-4 w-4" />{ui("إرسال الطلب")}</Button>
               </form>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>ملخص المراجعة السريعة</CardTitle>
+              <CardTitle>{ui("ملخص المراجعة السريعة")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-muted-foreground">
               <div className="rounded-xl bg-muted/30 p-3">
-                <p className="font-semibold text-foreground">معلومات الطلب</p>
-                <p className="mt-2">العضو: {employeeLabel}</p>
-                <p>الدورة: {courses.find((course) => course.id === selectedCourse)?.name_ar}</p>
-                <p>نوع الطلب: {requestType === "new" ? "جديد" : "تجديد"}</p>
-                <p>جهة الاعتماد: {departments.find((d) => d.id === approver)?.name}</p>
+                <p className="font-semibold text-foreground">{ui("معلومات الطلب")}</p>
+                <p className="mt-2">{ui("العضو: ")}{employeeLabel}</p>
+                <p>{ui("الدورة: ")}{courses.find((course) => course.id === selectedCourse)?.name_ar}</p>
+                <p>{ui("نوع الطلب: ")}{requestType === "new" ? ui("جديد") : ui("تجديد")}</p>
+                <p>{ui("جهة الاعتماد: ")}{departments.find((d) => d.id === approver)?.name}</p>
               </div>
               <div className="rounded-xl border border-dashed p-3">
-                <p className="font-medium text-foreground">التدفق المتاح</p>
+                <p className="font-medium text-foreground">{ui("التدفق المتاح")}</p>
                 <ul className="mt-2 list-inside list-disc space-y-1">
-                  <li>إرسال الطلب إلى الجهة المختصة بحالة pending_approval.</li>
-                  <li>تفعيل الموافقة من قبل مدير القسم أو مسؤول التدريب.</li>
-                  <li>تحديث السجل بعد إكمال الدورة وتسجيل الشهادة.</li>
+                  <li>{ui("إرسال الطلب إلى الجهة المختصة بحالة pending_approval.")}</li>
+                  <li>{ui("تفعيل الموافقة من قبل مدير القسم أو مسؤول التدريب.")}</li>
+                  <li>{ui("تحديث السجل بعد إكمال الدورة وتسجيل الشهادة.")}</li>
                 </ul>
               </div>
             </CardContent>
@@ -623,11 +605,10 @@ function CertificationsPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <FileCheck2 className="h-4 w-4" /> الطلبات المحالة وقيد التدريب
-              </CardTitle>
+                <FileCheck2 className="h-4 w-4" />{ui(" الطلبات المحالة وقيد التدريب")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {!requests.length && <p>لا توجد طلبات دورات.</p>}
+              {!requests.length && <p>{ui("لا توجد طلبات دورات.")}</p>}
               {requests.map((request) => (
                 <div key={request.id} className="rounded-xl border p-4">
                   <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -637,7 +618,7 @@ function CertificationsPage() {
                       </p>
                       <p className="text-sm text-muted-foreground">
                         {request.course_type} ·{" "}
-                        {request.request_type === "new" ? "طلب جديد" : "تجديد"}
+                        {request.request_type === "new" ? ui("طلب جديد") : ui("تجديد")}
                       </p>
                     </div>
                     <Badge
@@ -649,10 +630,9 @@ function CertificationsPage() {
                       {statusLabel[request.status] ?? request.status}
                     </Badge>
                   </div>
-                  <p className="mt-3 text-sm text-muted-foreground">
-                    جهة الاعتماد: {request.approver}
+                  <p className="mt-3 text-sm text-muted-foreground">{ui("جهة الاعتماد: ")}{request.approver}
                   </p>
-                  <p className="mt-1 text-sm text-muted-foreground">ملاحظات: {request.notes}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{ui("ملاحظات: ")}{request.notes}</p>
 
                   {request.status === "pending_approval" &&
                     (canManage ||
@@ -663,18 +643,14 @@ function CertificationsPage() {
                           onClick={() =>
                             handleDecision(request.id, "approve", "تمت الموافقة من جهة الاعتماد")
                           }
-                        >
-                          موافقة
-                        </Button>
+                        >{ui("موافقة")}</Button>
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() =>
                             handleDecision(request.id, "reject", "تم الرفض لعدم استيفاء الشروط")
                           }
-                        >
-                          رفض
-                        </Button>
+                        >{ui("رفض")}</Button>
                       </div>
                     )}
 
@@ -693,9 +669,7 @@ function CertificationsPage() {
                         });
                       }}
                     >
-                      <TicketCheck className="ml-2 h-4 w-4" />
-                      ترحيل الشهادة
-                    </Button>
+                      <TicketCheck className="ml-2 h-4 w-4" />{ui("ترحيل الشهادة")}</Button>
                   )}
                 </div>
               ))}
@@ -705,13 +679,13 @@ function CertificationsPage() {
           {selectedRequest && (
             <Card>
               <CardHeader>
-                <CardTitle>إكمال الطلب المختار</CardTitle>
+                <CardTitle>{ui("إكمال الطلب المختار")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <form className="space-y-4" onSubmit={handleCompletion}>
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label>رقم الشهادة</Label>
+                      <Label>{ui("رقم الشهادة")}</Label>
                       <Input
                         value={completion.certificateNo}
                         onChange={(e) =>
@@ -721,7 +695,7 @@ function CertificationsPage() {
                     </div>
                     <div className="space-y-2">
                       <Label>
-                        {selectedRequest.request_type === "new" ? "تاريخ الإصدار" : "تاريخ التجديد"}
+                        {selectedRequest.request_type === "new" ? ui("تاريخ الإصدار") : ui("تاريخ التجديد")}
                       </Label>
                       <Input
                         required
@@ -741,7 +715,7 @@ function CertificationsPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>تاريخ الانتهاء</Label>
+                      <Label>{ui("تاريخ الانتهاء")}</Label>
                       <Input
                         required
                         type="date"
@@ -752,7 +726,7 @@ function CertificationsPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>رابط المرفق</Label>
+                      <Label>{ui("رابط المرفق")}</Label>
                       <Input
                         value={completion.attachmentUrl}
                         onChange={(e) =>
@@ -762,9 +736,7 @@ function CertificationsPage() {
                     </div>
                   </div>
                   <Button disabled={busy} type="submit" className="w-full">
-                    <CheckCircle2 className="ml-2 h-4 w-4" />
-                    حفظ وإنهاء الطلب
-                  </Button>
+                    <CheckCircle2 className="ml-2 h-4 w-4" />{ui("حفظ وإنهاء الطلب")}</Button>
                 </form>
               </CardContent>
             </Card>
@@ -774,7 +746,7 @@ function CertificationsPage() {
         <TabsContent value="settings" className="grid gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle>أنواع الدورات وفترات الصلاحية</CardTitle>
+              <CardTitle>{ui("أنواع الدورات وفترات الصلاحية")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {canManage && (
@@ -796,24 +768,22 @@ function CertificationsPage() {
                     );
                   }}
                 >
-                  <Input name="name_ar" placeholder="اسم الدورة بالعربية" required />
-                  <Input name="code" placeholder="رمز الدورة" required />
-                  <label>
-                    الصلاحية بالأشهر
-                    <Input type="number" name="default_validity_months" min="1" required />
+                  <Input name="name_ar" placeholder={ui("اسم الدورة بالعربية")} required />
+                  <Input name="code" placeholder={ui("رمز الدورة")} required />
+                  <label>{ui("الصلاحية بالأشهر")}<Input type="number" name="default_validity_months" min="1" required />
                   </label>
-                  <select required name="department_id" aria-label="القسم">
-                    <option value="">اختر القسم</option>
+                  <select required name="department_id" aria-label={ui("القسم")}>
+                    <option value="">{ui("اختر القسم")}</option>
                     {departments.map((d) => (
                       <option key={d.id} value={d.id}>
                         {d.name}
                       </option>
                     ))}
                   </select>
-                  <Button disabled={busy}>إضافة نوع دورة</Button>
+                  <Button disabled={busy}>{ui("إضافة نوع دورة")}</Button>
                 </form>
               )}
-              {!courses.length && <p>لا توجد أنواع دورات مسجلة.</p>}
+              {!courses.length && <p>{ui("لا توجد أنواع دورات مسجلة.")}</p>}
               {courses.map((course) => (
                 <div
                   key={course.id}
@@ -821,16 +791,14 @@ function CertificationsPage() {
                 >
                   <div>
                     <p className="font-semibold">{course.name_ar}</p>
-                    <p className="text-sm text-muted-foreground">
-                      الرمز: {course.code} · {course.default_validity_months} شهر
-                    </p>
+                    <p className="text-sm text-muted-foreground">{ui("الرمز: ")}{course.code} · {course.default_validity_months}{ui(" شهر")}</p>
                   </div>
                   <Badge
                     className={
                       course.is_active ? "bg-emerald-600 text-white" : "bg-slate-500 text-white"
                     }
                   >
-                    {course.is_active ? "نشط" : "غير نشط"}
+                    {course.is_active ? ui("نشط") : ui("غير نشط")}
                   </Badge>
                   {canManage && (
                     <form
@@ -852,7 +820,7 @@ function CertificationsPage() {
                       }}
                     >
                       <Input
-                        aria-label="مدة الصلاحية بالأشهر"
+                        aria-label={ui("مدة الصلاحية بالأشهر")}
                         type="number"
                         name="months"
                         min="1"
@@ -860,10 +828,8 @@ function CertificationsPage() {
                         defaultValue={course.default_validity_months}
                       />
                       <label>
-                        <input name="active" type="checkbox" defaultChecked={course.is_active} />
-                        نشط
-                      </label>
-                      <Button disabled={busy}>حفظ</Button>
+                        <input name="active" type="checkbox" defaultChecked={course.is_active} />{ui("نشط")}</label>
+                      <Button disabled={busy}>{ui("حفظ")}</Button>
                     </form>
                   )}
                 </div>
@@ -873,20 +839,20 @@ function CertificationsPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>الصلاحيات الإدارية</CardTitle>
+              <CardTitle>{ui("الصلاحيات الإدارية")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-muted-foreground">
               <div className="rounded-xl bg-muted/30 p-3">
-                <p className="font-semibold text-foreground">موظف/موظفة</p>
-                <p className="mt-2">يستطيع عرض شهاداته ونماذجه فقط.</p>
+                <p className="font-semibold text-foreground">{ui("موظف/موظفة")}</p>
+                <p className="mt-2">{ui("يستطيع عرض شهاداته ونماذجه فقط.")}</p>
               </div>
               <div className="rounded-xl bg-muted/30 p-3">
-                <p className="font-semibold text-foreground">رؤساء الأقسام</p>
-                <p className="mt-2">يُسمح لهم اعتماد الطلبات المحالة لقسمهم.</p>
+                <p className="font-semibold text-foreground">{ui("رؤساء الأقسام")}</p>
+                <p className="mt-2">{ui("يُسمح لهم اعتماد الطلبات المحالة لقسمهم.")}</p>
               </div>
               <div className="rounded-xl bg-muted/30 p-3">
-                <p className="font-semibold text-foreground">مسؤولو HR</p>
-                <p className="mt-2">إدارة الدورات، المواعيد، المرفقات، واعتماد النماذج الرقمية.</p>
+                <p className="font-semibold text-foreground">{ui("مسؤولو HR")}</p>
+                <p className="mt-2">{ui("إدارة الدورات، المواعيد، المرفقات، واعتماد النماذج الرقمية.")}</p>
               </div>
             </CardContent>
           </Card>

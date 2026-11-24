@@ -1,3 +1,4 @@
+import { direction, displayLocale, ui } from "@/lib/ui-language";
 import { normalizeWageTitle } from "@/lib/employee-pay-type";
 import { useProjectExecution } from "@/lib/use-project-execution";
 import {
@@ -37,7 +38,7 @@ import { toast } from "sonner";
 import { todayInBaghdad } from "@/lib/date-time";
 
 export const Route = createFileRoute("/_authenticated/projects")({
-  head: () => ({ meta: [{ title: "تكلفة المشاريع" }] }),
+  head: () => ({ meta: [{ title: ui("تكلفة المشاريع") }] }),
   beforeLoad: async () => {
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) throw redirect({ to: "/auth" });
@@ -330,27 +331,26 @@ function ProjectsPage() {
   const dailyCostVariance = comparableDailyCost - plannedDailyCost;
   const variancePercent = projectCostVariancePercent(comparableDailyCost, plannedDailyCost);
   const percentLabel = (value: number | null) => value === null ? "" :
-    ` · ${value.toLocaleString("ar-IQ", { maximumFractionDigits: 1, signDisplay: "exceptZero" })}%`;
+    ` · ${value.toLocaleString(displayLocale(), { maximumFractionDigits: 1, signDisplay: "exceptZero" })}%`;
   const sitesWithFinalPlan = projectCards.filter((card) => card.plan).length;
 
   const refresh = async () => {
     const results = await Promise.all([query.refetch(), execution.refetch()]);
-    if (results.every((result) => !result.error)) toast.success("تم تحديث لوحة المشاريع");
+    if (results.every((result) => !result.error)) toast.success(ui("تم تحديث لوحة المشاريع"));
   };
 
   if (query.isPending)
     return (
-      <p className="p-8 text-muted-foreground">جارٍ ربط البصمات بالتكليفات والخطط والتكاليف...</p>
+      <p className="p-8 text-muted-foreground">{ui("جارٍ ربط البصمات بالتكليفات والخطط والتكاليف...")}</p>
     );
   if (query.isError)
     return (
       <Card>
         <CardContent className="space-y-4 p-6">
-          <p className="text-destructive">
-            تعذر تحميل بيانات التنفيذ؛ لا يمكن عرض تكلفة موثوقة.{" "}
+          <p className="text-destructive">{ui("تعذر تحميل بيانات التنفيذ؛ لا يمكن عرض تكلفة موثوقة.")}{" "}
             {String(query.error?.message ?? "")}
           </p>
-          <Button onClick={refresh}>إعادة المحاولة</Button>
+          <Button onClick={refresh}>{ui("إعادة المحاولة")}</Button>
         </CardContent>
       </Card>
     );
@@ -358,31 +358,26 @@ function ProjectsPage() {
     <div className="space-y-6">
       <header className="operations-banner flex flex-wrap items-center justify-between gap-5 rounded-2xl border bg-card p-6">
         <div>
-          <p className="mb-2 text-xs text-muted-foreground">التخطيط / التنفيذ / مراكز التكلفة</p>
-          <h1 className="text-3xl font-bold">المشاريع والتكلفة الفعلية</h1>
-          <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground">
-            تُحمّل أجور الحاضرين على موقع العمل حسب جرد الورش المحفوظ أو الحضور المتحقق بالبصمة.
-            تقارير الموقع مرجع للمقارنة ولا تُجمع مرة ثانية مع الأفراد.
-          </p>
+          <p className="mb-2 text-xs text-muted-foreground">{ui("التخطيط / التنفيذ / مراكز التكلفة")}</p>
+          <h1 className="text-3xl font-bold">{ui("المشاريع والتكلفة الفعلية")}</h1>
+          <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground">{ui("تُحمّل أجور الحاضرين على موقع العمل حسب جرد الورش المحفوظ أو الحضور المتحقق بالبصمة. تقارير الموقع مرجع للمقارنة ولا تُجمع مرة ثانية مع الأفراد.")}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline">
-            <Link to="/planning">الخطط المعتمدة</Link>
+            <Link to="/planning">{ui("الخطط المعتمدة")}</Link>
           </Button>
           <Button asChild variant="outline">
-            <Link to="/attendance">الورش وتوزيع الكادر</Link>
+            <Link to="/attendance">{ui("الورش وتوزيع الكادر")}</Link>
           </Button>
           <Button onClick={refresh} disabled={query.isFetching || execution.isFetching}>
-            <RefreshCw className="h-4 w-4" />
-            تحديث البيانات
-          </Button>
+            <RefreshCw className="h-4 w-4" />{ui("تحديث البيانات")}</Button>
         </div>
       </header>
 
       <Card>
         <CardContent className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2">
           <div>
-            <Label htmlFor="projects-report-date">تاريخ التقرير اليومي</Label>
+            <Label htmlFor="projects-report-date">{ui("تاريخ التقرير اليومي")}</Label>
             <Input
               id="projects-report-date"
               className="mt-1"
@@ -393,25 +388,21 @@ function ProjectsPage() {
             />
           </div>
           <div>
-            <Label htmlFor="projects-filter">المشروع / الموقع</Label>
+            <Label htmlFor="projects-filter">{ui("المشروع / الموقع")}</Label>
             <WorkshopSitePicker
-              label="المشروع / الموقع"
+              label={ui("المشروع / الموقع")}
               sites={data.projects}
               emptyLabel="كل المشاريع"
               value={selectedProjectId === "all" ? "" : selectedProjectId}
               onChange={(id) => setSelectedProjectId(id || "all")}
             />
-            <p className="mt-2 text-xs text-muted-foreground">
-              عدم اختيار موقع يعرض جميع المشاريع.
-            </p>
+            <p className="mt-2 text-xs text-muted-foreground">{ui("عدم اختيار موقع يعرض جميع المشاريع.")}</p>
           </div>
         </CardContent>
       </Card>
 
       {selectedProjectId === "all" ? (
-        <p className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">
-          اختر مشروعاً لعرض موازنة العقد والتكلفة المالية والمواد المصروفة.
-        </p>
+        <p className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">{ui("اختر مشروعاً لعرض موازنة العقد والتكلفة المالية والمواد المصروفة.")}</p>
       ) : (
         visibleProjects[0] && (
           <ProjectFinancialsPanel
@@ -431,52 +422,46 @@ function ProjectsPage() {
       />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard
-          title="إجمالي المشاريع"
+          title={ui("إجمالي المشاريع")}
           value={projectCards.length}
           icon={MapPinned}
           tone="bg-primary"
         />
         <StatCard
-          title="تقارير مرفوعة"
+          title={ui("تقارير مرفوعة")}
           value={reportedCount}
           icon={CheckCircle2}
           tone="bg-emerald-600"
         />
         <StatCard
-          title="لم ترفع تقريراً"
+          title={ui("لم ترفع تقريراً")}
           value={missingCount}
           icon={TriangleAlert}
           tone="bg-amber-600"
         />
-        <StatCard title="الحاضرون المسندون" value={workerTotal} icon={Users} tone="bg-indigo-600" />
+        <StatCard title={ui("الحاضرون المسندون")} value={workerTotal} icon={Users} tone="bg-indigo-600" />
       </div>
-      <p className="rounded-lg border border-warning/30 bg-warning/5 p-4 text-xs leading-6">
-        التكلفة المعتمدة تُحسب من العاملين في التقرير الميداني وفق أجور التخصصات بالدينار العراقي.
-        المواقع بانتظار الاعتماد تعرض تقديراً أولياً عند توفر بيانات الحضور.
-      </p>
-      {execution.isError && <p role="alert" className="text-sm text-destructive">تعذر تحميل التقدير المباشر للحضور. التقارير المعتمدة متاحة.</p>}
+      <p className="rounded-lg border border-warning/30 bg-warning/5 p-4 text-xs leading-6">{ui("التكلفة المعتمدة تُحسب من العاملين في التقرير الميداني وفق أجور التخصصات بالدينار العراقي. المواقع بانتظار الاعتماد تعرض تقديراً أولياً عند توفر بيانات الحضور.")}</p>
+      {execution.isError && <p role="alert" className="text-sm text-destructive">{ui("تعذر تحميل التقدير المباشر للحضور. التقارير المعتمدة متاحة.")}</p>}
       <Card className="border-primary/20">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
-            <WalletCards className="h-5 w-5 text-primary" /> مقارنة التكلفة المخططة والمنفذة —{" "}
+            <WalletCards className="h-5 w-5 text-primary" />{ui(" مقارنة التكلفة المخططة والمنفذة —")}{" "}
             {reportDate}
           </CardTitle>
-          <p className="text-xs text-muted-foreground">
-            تقارن أحدث خطة معتمدة لا تتجاوز التاريخ المحدد بالتقارير المعتمدة من البصمة (
-            {comparableProjects.length}). تتوفر خطة نهائية لـ {sitesWithFinalPlan} من أصل{" "}
-            {projectCards.length} مشاريع.
-          </p>
+          <p className="text-xs text-muted-foreground">{ui("تقارن أحدث خطة معتمدة لا تتجاوز التاريخ المحدد بالتقارير المعتمدة من البصمة (")}{comparableProjects.length}{ui("). تتوفر خطة نهائية لـ ")}{sitesWithFinalPlan}{ui(" من أصل")}{" "}
+            {projectCards.length}{ui(" مشاريع.")}</p>
         </CardHeader>
         <CardContent className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-3">
           <StatCard
-            title="التكلفة المخططة للعمالة"
-            value={`${plannedDailyCost.toLocaleString("ar-IQ")} د.ع`}
+            title={ui("التكلفة المخططة للعمالة")}
+            value={`${plannedDailyCost.toLocaleString(displayLocale())} د.ع`}
             icon={ClipboardList}
             tone="bg-sky-700"
           />
           <StatCard
-            title="الفعلية في المشاريع المقارنة"
-            value={`${comparableDailyCost.toLocaleString("ar-IQ")} د.ع`}
+            title={ui("الفعلية في المشاريع المقارنة")}
+            value={`${comparableDailyCost.toLocaleString(displayLocale())} د.ع`}
             icon={WalletCards}
             tone="bg-rose-600"
           />
@@ -484,13 +469,13 @@ function ProjectsPage() {
             title={
               comparableProjects.length
                 ? dailyCostVariance > 0
-                  ? "تجاوز عن الخطة"
-                  : dailyCostVariance < 0 ? "أقل من الخطة" : "مطابق للخطة"
-                : "لا توجد مقارنة متاحة"
+                  ? ui("تجاوز عن الخطة")
+                  : dailyCostVariance < 0 ? ui("أقل من الخطة") : ui("مطابق للخطة")
+                : ui("لا توجد مقارنة متاحة")
             }
             value={
               comparableProjects.length
-                ? `${Math.abs(dailyCostVariance).toLocaleString("ar-IQ")} د.ع${percentLabel(variancePercent)}`
+                ? `${Math.abs(dailyCostVariance).toLocaleString(displayLocale())} د.ع${percentLabel(variancePercent)}`
                 : "—"
             }
             icon={dailyCostVariance > 0 ? TriangleAlert : CheckCircle2}
@@ -500,13 +485,13 @@ function ProjectsPage() {
       </Card>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <StatCard
-          title="إجمالي الآليات والمركبات"
+          title={ui("إجمالي الآليات والمركبات")}
           value={equipmentTotal}
           icon={Truck}
           tone="bg-slate-700"
         />
         <StatCard
-          title="نسبة رفع التقارير"
+          title={ui("نسبة رفع التقارير")}
           value={`${projectCards.length ? Math.round((reportedCount / projectCards.length) * 100) : 0}%`}
           icon={ClipboardList}
           tone="bg-teal-600"
@@ -514,15 +499,12 @@ function ProjectsPage() {
       </div>
       {missingWageCount > 0 && (
         <Card className="border-amber-400/50 bg-amber-50/50 dark:bg-amber-950/20">
-          <CardContent className="p-4 text-sm text-amber-900 dark:text-amber-200">
-            توجد {missingWageCount} تخصصات بلا أجر مسجل؛ احتُسبت تكلفتها بالسعر الافتراضي عند توفره.
-            حدّث قيمتها من قسم الأجور لتحسين دقة المقارنة.
-          </CardContent>
+          <CardContent className="p-4 text-sm text-amber-900 dark:text-amber-200">{ui("توجد ")}{missingWageCount}{ui(" تخصصات بلا أجر مسجل؛ احتُسبت تكلفتها بالسعر الافتراضي عند توفره. حدّث قيمتها من قسم الأجور لتحسين دقة المقارنة.")}</CardContent>
         </Card>
       )}
 
       <section
-        aria-label="مراكز التكلفة وتنفيذ المشاريع"
+        aria-label={ui("مراكز التكلفة وتنفيذ المشاريع")}
         className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
       >
         {projectCards.map((card) => {
@@ -531,36 +513,34 @@ function ProjectsPage() {
             <Card key={card.project.id} className="min-w-0 overflow-hidden">
               <CardHeader className="border-b pb-4">
                 <p className="font-mono text-xs text-primary" dir="ltr">
-                  {card.project.ctr_code || "CTR غير محدد"}
+                  {card.project.ctr_code || ui("CTR غير محدد")}
                 </p>
                 <CardTitle className="pt-2 text-lg leading-7">{card.project.name}</CardTitle>
                 <div className="flex flex-wrap gap-2 pt-2">
-                  <Badge variant="outline">{card.biometricApproved ? "معتمد من البصمة" : "بانتظار اعتماد البصمة"}</Badge>
-                  <Badge variant="secondary">
-                    تقرير الموقع: {card.report ? card.reportedWorkerTotal : "غير مرفوع"}
+                  <Badge variant="outline">{card.biometricApproved ? ui("معتمد من البصمة") : ui("بانتظار اعتماد البصمة")}</Badge>
+                  <Badge variant="secondary">{ui("تقرير الموقع: ")}{card.report ? card.reportedWorkerTotal : ui("غير مرفوع")}
                   </Badge>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4 pt-4">
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <p className="text-xs text-muted-foreground">الخطة المعتمدة</p>
+                    <p className="text-xs text-muted-foreground">{ui("الخطة المعتمدة")}</p>
                     <p className="mt-2 font-semibold">
                       {card.plan
-                        ? `${card.plannedDailyCost.toLocaleString("ar-IQ")} د.ع`
-                        : "لا توجد خطة سارية"}
+                        ? `${card.plannedDailyCost.toLocaleString(displayLocale())} د.ع`
+                        : ui("لا توجد خطة سارية")}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">{card.biometricApproved ? "تكلفة العمالة الفعلية" : "تكلفة العمالة التقديرية"}</p>
+                    <p className="text-xs text-muted-foreground">{card.biometricApproved ? ui("تكلفة العمالة الفعلية") : ui("تكلفة العمالة التقديرية")}</p>
                     <p className="mt-2 font-bold text-primary">
-                      {card.actualAvailable ? `${card.siteDailyCost.toLocaleString("ar-IQ")} د.ع` : "—"}
+                      {card.actualAvailable ? `${card.siteDailyCost.toLocaleString(displayLocale())} د.ع` : "—"}
                     </p>
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3 text-xs">
-                  <span className="text-muted-foreground">
-                    المطلوب: {card.plan ? card.plannedWorkerTotal : "—"} · الحضور المسند:{" "}
+                  <span className="text-muted-foreground">{ui("المطلوب: ")}{card.plan ? card.plannedWorkerTotal : "—"}{ui(" · الحضور المسند:")}{" "}
                     {card.actualWorkerTotal}
                   </span>
                   {card.plan && card.biometricApproved && (
@@ -573,15 +553,13 @@ function ProjectsPage() {
                             : "text-muted-foreground"
                       }
                     >
-                      {variance > 0 ? "زيادة" : variance < 0 ? "فرق أقل من الخطة" : "مطابق للخطة"}:{" "}
-                      {Math.abs(variance).toLocaleString("ar-IQ")} د.ع{percentLabel(projectCostVariancePercent(card.siteDailyCost, card.plannedDailyCost))}
+                      {variance > 0 ? ui("زيادة") : variance < 0 ? ui("فرق أقل من الخطة") : ui("مطابق للخطة")}:{" "}
+                      {Math.abs(variance).toLocaleString(displayLocale())}{ui(" د.ع")}{percentLabel(projectCostVariancePercent(card.siteDailyCost, card.plannedDailyCost))}
                     </span>
                   )}
                 </div>
                 {card.specialtyCosts.some((item) => item.usedDefault) && (
-                  <p className="text-xs text-warning">
-                    يشمل أجوراً افتراضية؛ راجع جدول الأجور قبل الاعتماد المالي.
-                  </p>
+                  <p className="text-xs text-warning">{ui("يشمل أجوراً افتراضية؛ راجع جدول الأجور قبل الاعتماد المالي.")}</p>
                 )}
                 <Button
                   variant="outline"
@@ -592,44 +570,36 @@ function ProjectsPage() {
                       .getElementById("project-execution-ledger")
                       ?.scrollIntoView({ behavior: "smooth" });
                   }}
-                >
-                  تصفية وتدقيق أفراد CTR
-                </Button>
+                >{ui("تصفية وتدقيق أفراد CTR")}</Button>
               </CardContent>
             </Card>
           );
         })}
       </section>
       <details className="space-y-4 rounded-xl border p-3">
-        <summary className="cursor-pointer p-2 text-sm font-semibold">
-          تفاصيل مقارنة التخصصات والآليات بين المشاريع
-        </summary>
+        <summary className="cursor-pointer p-2 text-sm font-semibold">{ui("تفاصيل مقارنة التخصصات والآليات بين المشاريع")}</summary>
         <Card>
           <CardHeader>
-            <CardTitle>التكلفة والتشغيل حسب المشروع — {reportDate}</CardTitle>
+            <CardTitle>{ui("التكلفة والتشغيل حسب المشروع — ")}{reportDate}</CardTitle>
           </CardHeader>
           <CardContent>
             {query.isLoading ? (
-              <p className="py-8 text-center text-muted-foreground">
-                جارٍ تحميل تقارير المشاريع...
-              </p>
+              <p className="py-8 text-center text-muted-foreground">{ui("جارٍ تحميل تقارير المشاريع...")}</p>
             ) : projectCards.length ? (
-              <div dir="rtl" className="space-y-6">
+              <div dir={direction()} className="space-y-6">
                 <div>
-                  <h3 className="mb-3 text-base font-semibold">مقارنة التكلفة حسب المشروع</h3>
+                  <h3 className="mb-3 text-base font-semibold">{ui("مقارنة التكلفة حسب المشروع")}</h3>
                   <div className="overflow-x-auto rounded-xl border">
                     <table className="min-w-[980px] w-full text-sm">
                       <thead className="bg-muted/60">
                         <tr className="border-b text-right">
-                          <th className="px-4 py-3 font-semibold">المشروع</th>
-                          <th className="px-4 py-3 text-center font-semibold">الخطة النهائية</th>
-                          <th className="px-4 py-3 text-center font-semibold">العمالة المخططة</th>
-                          <th className="px-4 py-3 text-center font-semibold">العمالة الفعلية</th>
-                          <th className="px-4 py-3 text-center font-semibold">تغطية التخصصات</th>
-                          <th className="px-4 py-3 text-center font-semibold">الفرق</th>
-                          <th className="px-4 py-3 text-center font-semibold">
-                            الحضور المسند والتكلفة
-                          </th>
+                          <th className="px-4 py-3 font-semibold">{ui("المشروع")}</th>
+                          <th className="px-4 py-3 text-center font-semibold">{ui("الخطة النهائية")}</th>
+                          <th className="px-4 py-3 text-center font-semibold">{ui("العمالة المخططة")}</th>
+                          <th className="px-4 py-3 text-center font-semibold">{ui("العمالة الفعلية")}</th>
+                          <th className="px-4 py-3 text-center font-semibold">{ui("تغطية التخصصات")}</th>
+                          <th className="px-4 py-3 text-center font-semibold">{ui("الفرق")}</th>
+                          <th className="px-4 py-3 text-center font-semibold">{ui("الحضور المسند والتكلفة")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -648,9 +618,9 @@ function ProjectsPage() {
                               </th>
                               <td className="px-4 py-3 text-center">
                                 {card.plan ? (
-                                  <Badge className="bg-emerald-600">نهائية</Badge>
+                                  <Badge className="bg-emerald-600">{ui("نهائية")}</Badge>
                                 ) : (
-                                  <Badge variant="outline">غير متوفرة</Badge>
+                                  <Badge variant="outline">{ui("غير متوفرة")}</Badge>
                                 )}
                               </td>
                               <td className="px-4 py-3 text-center tabular-nums">
@@ -658,8 +628,7 @@ function ProjectsPage() {
                                   <>
                                     <b>{card.plannedWorkerTotal}</b>
                                     <span className="block text-xs text-muted-foreground">
-                                      {card.plannedDailyCost.toLocaleString("ar-IQ")} د.ع/يوم
-                                    </span>
+                                      {card.plannedDailyCost.toLocaleString(displayLocale())}{ui(" د.ع/يوم")}</span>
                                   </>
                                 ) : (
                                   "—"
@@ -670,15 +639,14 @@ function ProjectsPage() {
                                   <>
                                     <b>{card.actualWorkerTotal}</b>
                                     <span className="block text-xs text-muted-foreground">
-                                      {card.biometricApproved ? "معتمد من البصمة: " : "تقدير أولي · التقرير: "}
-                                      {card.report ? card.reportedWorkerTotal : "غير مرفوع"}
+                                      {card.biometricApproved ? ui("معتمد من البصمة: ") : ui("تقدير أولي · التقرير: ")}
+                                      {card.report ? card.reportedWorkerTotal : ui("غير مرفوع")}
                                     </span>
                                     <span className="block text-xs text-muted-foreground">
-                                      {card.siteDailyCost.toLocaleString("ar-IQ")} د.ع/يوم
-                                    </span>
+                                      {card.siteDailyCost.toLocaleString(displayLocale())}{ui(" د.ع/يوم")}</span>
                                   </>
                                 ) : (
-                                  <span className="text-muted-foreground">لا يوجد حضور مسجل</span>
+                                  <span className="text-muted-foreground">{ui("لا يوجد حضور مسجل")}</span>
                                 )}
                               </td>
                               <td className="px-4 py-3 text-center">
@@ -711,14 +679,14 @@ function ProjectsPage() {
                                 className={`px-4 py-3 text-center font-semibold tabular-nums ${variance > 0 ? "text-destructive" : "text-emerald-700 dark:text-emerald-300"}`}
                               >
                                 {card.plan && card.biometricApproved
-                                  ? `${variance.toLocaleString("ar-IQ", { signDisplay: "exceptZero" })} د.ع${percentLabel(projectCostVariancePercent(card.siteDailyCost, card.plannedDailyCost))}`
+                                  ? `${variance.toLocaleString(displayLocale(), { signDisplay: "exceptZero" })} د.ع${percentLabel(projectCostVariancePercent(card.siteDailyCost, card.plannedDailyCost))}`
                                   : "—"}
                               </td>
                               <td className="px-4 py-3 text-center">
                                 {card.report ? (
-                                  <Badge>مرفوع</Badge>
+                                  <Badge>{ui("مرفوع")}</Badge>
                                 ) : (
-                                  <Badge variant="destructive">لم يرفع</Badge>
+                                  <Badge variant="destructive">{ui("لم يرفع")}</Badge>
                                 )}
                               </td>
                             </tr>
@@ -732,9 +700,7 @@ function ProjectsPage() {
                   <table className="min-w-[760px] w-full text-sm">
                     <thead className="bg-muted/60">
                       <tr className="border-b text-right">
-                        <th className="sticky right-0 z-10 min-w-[190px] bg-muted/90 px-4 py-3 text-right font-semibold">
-                          التخصص / الموقع
-                        </th>
+                        <th className="sticky right-0 z-10 min-w-[190px] bg-muted/90 px-4 py-3 text-right font-semibold">{ui("التخصص / الموقع")}</th>
                         {projectCards.map((card) => (
                           <th
                             key={card.project.id}
@@ -746,18 +712,14 @@ function ProjectsPage() {
                             </div>
                             <div className="mt-2">
                               {card.report ? (
-                                <Badge className="text-[10px]">تم الرفع</Badge>
+                                <Badge className="text-[10px]">{ui("تم الرفع")}</Badge>
                               ) : (
-                                <Badge variant="destructive" className="text-[10px]">
-                                  لم يرفع
-                                </Badge>
+                                <Badge variant="destructive" className="text-[10px]">{ui("لم يرفع")}</Badge>
                               )}
                             </div>
                           </th>
                         ))}
-                        <th className="min-w-[130px] px-4 py-3 text-center font-semibold">
-                          إجمالي التخصص
-                        </th>
+                        <th className="min-w-[130px] px-4 py-3 text-center font-semibold">{ui("إجمالي التخصص")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -788,10 +750,10 @@ function ProjectsPage() {
                                       }
                                     >
                                       {item.hasRate
-                                        ? `${item.cost.toLocaleString()} د.ع`
+                                        ? ((item.cost.toLocaleString()) + ui(" د.ع"))
                                         : item.usedDefault
-                                          ? `${item.cost.toLocaleString()} د.ع (افتراضي)`
-                                          : "لا يوجد أجر"}
+                                          ? ((item.cost.toLocaleString()) + ui(" د.ع (افتراضي)"))
+                                          : ui("لا يوجد أجر")}
                                     </div>
                                   </>
                                 ) : (
@@ -812,9 +774,7 @@ function ProjectsPage() {
                         </tr>
                       ))}
                       <tr className="border-t-2 bg-indigo-50/60 font-bold dark:bg-indigo-950/20">
-                        <th className="sticky right-0 z-10 bg-indigo-50/90 px-4 py-3 text-right dark:bg-indigo-950/40">
-                          إجمالي العاملين
-                        </th>
+                        <th className="sticky right-0 z-10 bg-indigo-50/90 px-4 py-3 text-right dark:bg-indigo-950/40">{ui("إجمالي العاملين")}</th>
                         {projectCards.map((card) => (
                           <td
                             key={card.project.id}
@@ -828,20 +788,16 @@ function ProjectsPage() {
                         </td>
                       </tr>
                       <tr className="bg-rose-50/60 font-bold dark:bg-rose-950/20">
-                        <th className="sticky right-0 z-10 bg-rose-50/90 px-4 py-3 text-right dark:bg-rose-950/40">
-                          تكلفة العاملين اليومية
-                        </th>
+                        <th className="sticky right-0 z-10 bg-rose-50/90 px-4 py-3 text-right dark:bg-rose-950/40">{ui("تكلفة العاملين اليومية")}</th>
                         {projectCards.map((card) => (
                           <td
                             key={card.project.id}
                             className="px-4 py-3 text-center text-rose-700 dark:text-rose-300"
                           >
-                            {card.siteDailyCost.toLocaleString()} د.ع
-                          </td>
+                            {card.siteDailyCost.toLocaleString()}{ui(" د.ع")}</td>
                         ))}
                         <td className="px-4 py-3 text-center text-rose-700 dark:text-rose-300">
-                          {companyDailyCost.toLocaleString()} د.ع
-                        </td>
+                          {companyDailyCost.toLocaleString()}{ui(" د.ع")}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -849,15 +805,12 @@ function ProjectsPage() {
 
                 <div>
                   <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold">
-                    <Truck className="h-5 w-5" /> الآليات والمركبات
-                  </h3>
+                    <Truck className="h-5 w-5" />{ui(" الآليات والمركبات")}</h3>
                   <div className="overflow-x-auto rounded-xl border">
                     <table className="min-w-[700px] w-full text-sm">
                       <thead className="bg-muted/60">
                         <tr className="border-b">
-                          <th className="sticky right-0 z-10 min-w-[190px] bg-muted/90 px-4 py-3 text-right font-semibold">
-                            الآلية / الموقع
-                          </th>
+                          <th className="sticky right-0 z-10 min-w-[190px] bg-muted/90 px-4 py-3 text-right font-semibold">{ui("الآلية / الموقع")}</th>
                           {projectCards.map((card) => (
                             <th
                               key={card.project.id}
@@ -866,9 +819,7 @@ function ProjectsPage() {
                               {card.project.name}
                             </th>
                           ))}
-                          <th className="min-w-[120px] px-4 py-3 text-center font-semibold">
-                            الإجمالي
-                          </th>
+                          <th className="min-w-[120px] px-4 py-3 text-center font-semibold">{ui("الإجمالي")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -909,9 +860,7 @@ function ProjectsPage() {
                           </tr>
                         ))}
                         <tr className="border-t-2 bg-slate-50/70 font-bold dark:bg-slate-900/40">
-                          <th className="sticky right-0 z-10 bg-slate-50/90 px-4 py-3 text-right dark:bg-slate-900/60">
-                            إجمالي الآليات
-                          </th>
+                          <th className="sticky right-0 z-10 bg-slate-50/90 px-4 py-3 text-right dark:bg-slate-900/60">{ui("إجمالي الآليات")}</th>
                           {projectCards.map((card) => (
                             <td key={card.project.id} className="px-4 py-3 text-center">
                               {card.equipmentTotal}
@@ -925,9 +874,7 @@ function ProjectsPage() {
                 </div>
               </div>
             ) : (
-              <p className="py-8 text-center text-muted-foreground">
-                لا توجد مشاريع أو مواقع متاحة.
-              </p>
+              <p className="py-8 text-center text-muted-foreground">{ui("لا توجد مشاريع أو مواقع متاحة.")}</p>
             )}
           </CardContent>
         </Card>

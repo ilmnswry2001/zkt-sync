@@ -1,3 +1,4 @@
+import { direction, displayLocale, ui } from "@/lib/ui-language";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -53,7 +54,7 @@ import {
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/leaves")({
-  head: () => ({ meta: [{ title: "إدارة الإجازات" }] }),
+  head: () => ({ meta: [{ title: ui("إدارة الإجازات") }] }),
   component: LeavesPage,
 });
 
@@ -163,18 +164,18 @@ const FILTERS = [
 const WEEKDAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 
 const fmtDate = (value: string) =>
-  new Date(`${value}T12:00:00`).toLocaleDateString("ar-IQ", {
+  new Date(`${value}T12:00:00`).toLocaleDateString(displayLocale(), {
     dateStyle: "medium",
     timeZone: "Asia/Baghdad",
   });
 const fmtStamp = (value: string) =>
-  new Date(value).toLocaleString("ar-IQ", {
+  new Date(value).toLocaleString(displayLocale(), {
     dateStyle: "medium",
     timeStyle: "short",
     timeZone: "Asia/Baghdad",
   });
 const fmtNumber = (value: number | null | undefined) =>
-  value == null ? "غير محدود" : Number(value).toLocaleString("ar-IQ", { maximumFractionDigits: 2 });
+  value == null ? "غير محدود" : Number(value).toLocaleString(displayLocale(), { maximumFractionDigits: 2 });
 const dateOverlapYear = (row: LeaveRow, year: number) =>
   row.work_date <= `${year}-12-31` && (row.leave_end_date ?? row.work_date) >= `${year}-01-01`;
 
@@ -515,9 +516,9 @@ function LeavesPage() {
       setRequestOpen(false);
       setReason("");
       setEmployeeId("");
-      toast.success("أُرسل طلب الإجازة إلى مسار الاعتماد");
+      toast.success(ui("أُرسل طلب الإجازة إلى مسار الاعتماد"));
     },
-    onError: (error: Error) => toast.error(formatErrorMessage(error, "تعذر إرسال طلب الإجازة")),
+    onError: (error: Error) => toast.error(ui(formatErrorMessage(error, "تعذر إرسال طلب الإجازة"))),
   });
   const actionMutation = useMutation({
     mutationFn: (payload: {
@@ -533,9 +534,9 @@ function LeavesPage() {
         setSelectedForm(null);
         setWithdrawingForm(null);
       }
-      toast.success("تم تحديث الطلب وسجل الإجراء");
+      toast.success(ui("تم تحديث الطلب وسجل الإجراء"));
     },
-    onError: (error: Error) => toast.error(formatErrorMessage(error, "تعذر تنفيذ الإجراء")),
+    onError: (error: Error) => toast.error(ui(formatErrorMessage(error, "تعذر تنفيذ الإجراء"))),
   });
 
   const openNewPolicy = () => {
@@ -564,11 +565,11 @@ function LeavesPage() {
     const name = policyName.trim();
     const allowance = policyAllowance.trim() === "" ? null : Number(policyAllowance);
     const carryoverCap = Number(policyCarryoverCap);
-    if (name.length < 2) return toast.error("اكتب اسماً واضحاً لنوع الإجازة");
+    if (name.length < 2) return toast.error(ui("اكتب اسماً واضحاً لنوع الإجازة"));
     if (allowance != null && (!Number.isInteger(allowance) || allowance < 0 || allowance > 365))
-      return toast.error("أدخل سقفاً صحيحاً من 0 إلى 365 يوماً أو اتركه فارغاً دون سقف");
+      return toast.error(ui("أدخل سقفاً صحيحاً من 0 إلى 365 يوماً أو اتركه فارغاً دون سقف"));
     if (!Number.isInteger(carryoverCap) || carryoverCap < 0 || carryoverCap > 365)
-      return toast.error("أدخل سقف ترحيل صحيحاً من 0 إلى 365 يوماً");
+      return toast.error(ui("أدخل سقف ترحيل صحيحاً من 0 إلى 365 يوماً"));
     const payload = {
       name,
       is_paid: policyPaid,
@@ -584,10 +585,10 @@ function LeavesPage() {
           code: `custom_${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`,
           sort_order: 100,
         });
-    if (result.error) return toast.error(`تعذر حفظ السياسة: ${formatErrorMessage(result.error)}`);
+    if (result.error) return toast.error((ui("تعذر حفظ السياسة: ") + (formatErrorMessage(result.error))));
     await qc.invalidateQueries({ queryKey: ["leaves"] });
     setPolicyOpen(false);
-    toast.success(editingPolicy ? "تم تحديث سياسة الإجازة" : "أُضيف نوع الإجازة");
+    toast.success(editingPolicy ? ui("تم تحديث سياسة الإجازة") : ui("أُضيف نوع الإجازة"));
   };
 
   const saveAdjustment = async () => {
@@ -595,8 +596,8 @@ function LeavesPage() {
     const amount = Number(adjustmentAmount);
     const note = adjustmentReason.trim();
     if (!Number.isInteger(amount) || amount === 0 || Math.abs(amount) > 365)
-      return toast.error("أدخل حركة رصيد صحيحة بين -365 و365 ولا تساوي صفراً");
-    if (note.length < 3) return toast.error("سبب تعديل الرصيد مطلوب للتدقيق");
+      return toast.error(ui("أدخل حركة رصيد صحيحة بين -365 و365 ولا تساوي صفراً"));
+    if (note.length < 3) return toast.error(ui("سبب تعديل الرصيد مطلوب للتدقيق"));
     const { error } = await (supabase as any).from("leave_balance_transactions").insert({
       employee_id: adjustmentRow.employee_id,
       leave_type_id: adjustmentRow.leave_type_id,
@@ -604,12 +605,12 @@ function LeavesPage() {
       amount,
       reason: note,
     });
-    if (error) return toast.error(`تعذر تسجيل الحركة: ${formatErrorMessage(error)}`);
+    if (error) return toast.error((ui("تعذر تسجيل الحركة: ") + (formatErrorMessage(error))));
     await qc.invalidateQueries({ queryKey: ["leaves"] });
     setAdjustmentRow(null);
     setAdjustmentAmount("");
     setAdjustmentReason("");
-    toast.success("سُجل تعديل الرصيد في دفتر الحركات");
+    toast.success(ui("سُجل تعديل الرصيد في دفتر الحركات"));
   };
 
   const getAction = (row: LeaveRow) => {
@@ -685,28 +686,26 @@ function LeavesPage() {
 
   if (!canView && !powersQuery.isLoading && !selfEmployeeQuery.isLoading) {
     return (
-      <div dir="rtl" className="rounded-2xl border bg-card p-8 text-center text-muted-foreground">
-        لا تملك صلاحية الوصول إلى إدارة الإجازات.
-      </div>
+      <div dir={direction()} className="rounded-2xl border bg-card p-8 text-center text-muted-foreground">{ui("لا تملك صلاحية الوصول إلى إدارة الإجازات.")}</div>
     );
   }
 
   return (
-    <div dir="rtl" className="space-y-6 pb-10">
+    <div dir={direction()} className="space-y-6 pb-10">
       <section className="overflow-hidden rounded-3xl bg-gradient-to-l from-slate-950 via-slate-900 to-teal-950 p-6 text-white shadow-xl md:p-8">
         <div className="flex flex-wrap items-center justify-between gap-5">
           <div>
             <div className="mb-3 flex items-center gap-2 text-sm text-teal-200">
               <ShieldCheck className="h-4 w-4" />{" "}
               {isSelfService
-                ? "خدمة الموظف الذاتية · الطلب والرصيد"
-                : "الموارد البشرية · دورة كاملة قابلة للتدقيق"}
+                ? ui("خدمة الموظف الذاتية · الطلب والرصيد")
+                : ui("الموارد البشرية · دورة كاملة قابلة للتدقيق")}
             </div>
-            <h1 className="text-3xl font-black tracking-tight md:text-4xl">إدارة الإجازات</h1>
+            <h1 className="text-3xl font-black tracking-tight md:text-4xl">{ui("إدارة الإجازات")}</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
               {isSelfService
-                ? "قدّم طلبك، وتابع مراحل الاعتماد ورصيدك السنوي وسجل إجازاتك من مكان واحد."
-                : "الطلبات والموافقات والأرصدة والسياسات في مساحة واحدة، مرتبطة بجداول الدوام وكشف الحضور والراتب."}
+                ? ui("قدّم طلبك، وتابع مراحل الاعتماد ورصيدك السنوي وسجل إجازاتك من مكان واحد.")
+                : ui("الطلبات والموافقات والأرصدة والسياسات في مساحة واحدة، مرتبطة بجداول الدوام وكشف الحضور والراتب.")}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -735,16 +734,14 @@ function LeavesPage() {
                 }}
                 className="bg-teal-400 font-bold text-slate-950 hover:bg-teal-300"
               >
-                <Plus className="ml-2 h-4 w-4" /> طلب إجازة
-              </Button>
+                <Plus className="ml-2 h-4 w-4" />{ui(" طلب إجازة")}</Button>
             )}
           </div>
         </div>
       </section>
 
       {(formsQuery.error || balanceQuery.error || calendarQuery.error || typesQuery.error) && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-          تعذر تحميل بعض بيانات الإجازات:{" "}
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{ui("تعذر تحميل بعض بيانات الإجازات:")}{" "}
           {String(
             formsQuery.error?.message ??
               balanceQuery.error?.message ??
@@ -756,43 +753,35 @@ function LeavesPage() {
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
         <Kpi
-          label={`الطلبات في ${year}`}
+          label={(ui("الطلبات في ") + (year))}
           value={stats.requests}
           icon={CalendarCheck2}
           tone="teal"
         />
-        <Kpi label="بانتظار إجراء" value={stats.pending} icon={Clock3} tone="amber" />
-        <Kpi label="طلبات منفذة" value={stats.executed} icon={Check} tone="green" />
-        <Kpi label="أيام مدفوعة مستهلكة" value={stats.paidDays} icon={Wallet} tone="blue" />
+        <Kpi label={ui("بانتظار إجراء")} value={stats.pending} icon={Clock3} tone="amber" />
+        <Kpi label={ui("طلبات منفذة")} value={stats.executed} icon={Check} tone="green" />
+        <Kpi label={ui("أيام مدفوعة مستهلكة")} value={stats.paidDays} icon={Wallet} tone="blue" />
         <Kpi
-          label="أرصدة تحتاج مراجعة"
+          label={ui("أرصدة تحتاج مراجعة")}
           value={stats.atRisk}
           icon={AlertTriangle}
           tone={stats.atRisk ? "red" : "slate"}
         />
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} dir="rtl">
+      <Tabs value={activeTab} onValueChange={setActiveTab} dir={direction()}>
         <TabsList
           className={`grid h-auto w-full grid-cols-2 gap-1 rounded-2xl bg-muted p-1 md:w-fit ${canManage ? "md:grid-cols-4" : "md:grid-cols-3"}`}
         >
           <TabsTrigger className="min-h-10 rounded-xl" value="overview">
-            <CalendarDays className="ml-2 h-4 w-4" />
-            نظرة عامة
-          </TabsTrigger>
+            <CalendarDays className="ml-2 h-4 w-4" />{ui("نظرة عامة")}</TabsTrigger>
           <TabsTrigger className="min-h-10 rounded-xl" value="requests">
-            <FileClock className="ml-2 h-4 w-4" />
-            الطلبات والموافقات
-          </TabsTrigger>
+            <FileClock className="ml-2 h-4 w-4" />{ui("الطلبات والموافقات")}</TabsTrigger>
           <TabsTrigger className="min-h-10 rounded-xl" value="balances">
-            <Wallet className="ml-2 h-4 w-4" />
-            الأرصدة
-          </TabsTrigger>
+            <Wallet className="ml-2 h-4 w-4" />{ui("الأرصدة")}</TabsTrigger>
           {canManage && (
             <TabsTrigger className="min-h-10 rounded-xl" value="policies">
-              <Settings2 className="ml-2 h-4 w-4" />
-              السياسات والأنواع
-            </TabsTrigger>
+              <Settings2 className="ml-2 h-4 w-4" />{ui("السياسات والأنواع")}</TabsTrigger>
           )}
         </TabsList>
 
@@ -802,18 +791,14 @@ function LeavesPage() {
               <CardHeader className="flex flex-row items-center justify-between gap-2 border-b bg-muted/20">
                 <div>
                   <CardTitle className="flex items-center gap-2">
-                    <CalendarDays className="h-5 w-5 text-primary" />
-                    تقويم الإجازات
-                  </CardTitle>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    الأيام محسوبة وفق سياسة النوع وجداول دوام الموظفين.
-                  </p>
+                    <CalendarDays className="h-5 w-5 text-primary" />{ui("تقويم الإجازات")}</CardTitle>
+                  <p className="mt-1 text-xs text-muted-foreground">{ui("الأيام محسوبة وفق سياسة النوع وجداول دوام الموظفين.")}</p>
                 </div>
                 <div className="flex items-center gap-1">
                   <Button
                     size="icon"
                     variant="outline"
-                    aria-label="الشهر السابق"
+                    aria-label={ui("الشهر السابق")}
                     onClick={() =>
                       setCalendarMonth((current) => {
                         const date = new Date(current.year, current.month - 2, 1);
@@ -825,14 +810,14 @@ function LeavesPage() {
                   </Button>
                   <span className="min-w-32 text-center text-sm font-bold">
                     {new Date(calendarMonth.year, calendarMonth.month - 1, 1).toLocaleDateString(
-                      "ar-IQ",
+                      displayLocale(),
                       { month: "long", year: "numeric" },
                     )}
                   </span>
                   <Button
                     size="icon"
                     variant="outline"
-                    aria-label="الشهر التالي"
+                    aria-label={ui("الشهر التالي")}
                     onClick={() =>
                       setCalendarMonth((current) => {
                         const date = new Date(current.year, current.month, 1);
@@ -854,10 +839,10 @@ function LeavesPage() {
                   }
                 />
                 <div className="mt-4 flex flex-wrap gap-3 text-xs text-muted-foreground">
-                  <Legend color="bg-amber-400" label="بانتظار الموافقة" />
-                  <Legend color="bg-sky-500" label="بانتظار التنفيذ" />
-                  <Legend color="bg-emerald-500" label="منفذة" />
-                  <Legend color="bg-violet-500" label="غير مدفوعة" />
+                  <Legend color="bg-amber-400" label={ui("بانتظار الموافقة")} />
+                  <Legend color="bg-sky-500" label={ui("بانتظار التنفيذ")} />
+                  <Legend color="bg-emerald-500" label={ui("منفذة")} />
+                  <Legend color="bg-violet-500" label={ui("غير مدفوعة")} />
                 </div>
               </CardContent>
             </Card>
@@ -865,12 +850,12 @@ function LeavesPage() {
               <CardHeader className="border-b bg-muted/20">
                 <CardTitle className="flex items-center gap-2">
                   <Clock3 className="h-5 w-5 text-amber-600" />
-                  {isSelfService ? "حالة طلباتك" : "قائمة الإجراءات"}
+                  {isSelfService ? ui("حالة طلباتك") : ui("قائمة الإجراءات")}
                 </CardTitle>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {isSelfService
-                    ? "تابع حالة طلباتك ومراحل اعتمادها."
-                    : "طلبات السنة التي تحتاج مراجعة في مرحلة الاعتماد المتاحة لك."}
+                    ? ui("تابع حالة طلباتك ومراحل اعتمادها.")
+                    : ui("طلبات السنة التي تحتاج مراجعة في مرحلة الاعتماد المتاحة لك.")}
                 </p>
               </CardHeader>
               <CardContent className="space-y-3 p-4">
@@ -888,12 +873,12 @@ function LeavesPage() {
                       >
                         <span className="block truncate font-bold">
                           {isSelfService
-                            ? `طلب #${row.form_no}`
-                            : (row.employees?.full_name ?? "موظف")}
+                            ? (ui("طلب #") + (row.form_no))
+                            : (row.employees?.full_name ?? ui("موظف"))}
                         </span>
                         <span className="mt-1 block text-xs text-muted-foreground">
-                          {row.work_date} · {row.leave_days} يوم ·{" "}
-                          {row.leave_types?.name ?? "سنوية"}
+                          {row.work_date} · {row.leave_days}{ui(" يوم ·")}{" "}
+                          {row.leave_types?.name ?? ui("سنوية")}
                         </span>
                         <Badge
                           className={`mt-2 border ${STATUS_STYLE[row.status] ?? ""}`}
@@ -909,9 +894,7 @@ function LeavesPage() {
                             actionMutation.mutate({ form_id: row.id, action: "approve" })
                           }
                           disabled={actionMutation.isPending}
-                        >
-                          اعتماد
-                        </Button>
+                        >{ui("اعتماد")}</Button>
                       )}
                       {!isSelfService && getAction(row) === "execute" && (
                         <Button
@@ -920,9 +903,7 @@ function LeavesPage() {
                             actionMutation.mutate({ form_id: row.id, action: "execute" })
                           }
                           disabled={actionMutation.isPending}
-                        >
-                          تنفيذ
-                        </Button>
+                        >{ui("تنفيذ")}</Button>
                       )}
                     </div>
                   ))}
@@ -944,15 +925,13 @@ function LeavesPage() {
                     setActiveTab("requests");
                     setRequestFilter("all");
                   }}
-                >
-                  عرض جميع الطلبات
-                </Button>
+                >{ui("عرض جميع الطلبات")}</Button>
               </CardContent>
             </Card>
           </div>
           <Card className="rounded-2xl border-0 shadow-sm ring-1 ring-border/70">
             <CardHeader className="border-b bg-muted/20">
-              <CardTitle>ملخص أنواع الإجازات</CardTitle>
+              <CardTitle>{ui("ملخص أنواع الإجازات")}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
               {types
@@ -973,15 +952,11 @@ function LeavesPage() {
                     <div key={type.id} className="rounded-xl border bg-background p-4">
                       <div className="flex items-center justify-between gap-2">
                         <p className="font-bold">{type.name}</p>
-                        <Badge variant="outline">{type.is_paid ? "مدفوعة" : "غير مدفوعة"}</Badge>
+                        <Badge variant="outline">{type.is_paid ? ui("مدفوعة") : ui("غير مدفوعة")}</Badge>
                       </div>
-                      <p className="mt-3 text-sm text-muted-foreground">
-                        مستهلك {fmtNumber(used)} يوم · محجوز {fmtNumber(reserved)} يوم
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        السقف {fmtNumber(type.annual_allowance_days)} يوم سنوياً · ترحيل حتى{" "}
-                        {fmtNumber(type.carryover_cap_days)} يوم
-                      </p>
+                      <p className="mt-3 text-sm text-muted-foreground">{ui("مستهلك ")}{fmtNumber(used)}{ui(" يوم · محجوز ")}{fmtNumber(reserved)}{ui(" يوم")}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{ui("السقف ")}{fmtNumber(type.annual_allowance_days)}{ui(" يوم سنوياً · ترحيل حتى")}{" "}
+                        {fmtNumber(type.carryover_cap_days)}{ui(" يوم")}</p>
                     </div>
                   );
                 })}
@@ -1000,7 +975,7 @@ function LeavesPage() {
                 className="pr-9"
                 value={requestSearch}
                 onChange={(event) => setRequestSearch(event.target.value)}
-                placeholder="ابحث بالموظف أو رقم الطلب أو السبب"
+                placeholder={ui("ابحث بالموظف أو رقم الطلب أو السبب")}
               />
             </div>
             <Select value={requestFilter} onValueChange={setRequestFilter}>
@@ -1011,9 +986,9 @@ function LeavesPage() {
                 {FILTERS.map((value) => (
                   <SelectItem key={value} value={value}>
                     {value === "all"
-                      ? "كل الحالات"
+                      ? ui("كل الحالات")
                       : value === "rejected"
-                        ? "مرفوضة أو مسحوبة"
+                        ? ui("مرفوضة أو مسحوبة")
                         : STATUS_LABEL[value]}
                   </SelectItem>
                 ))}
@@ -1022,10 +997,10 @@ function LeavesPage() {
             {departments.length > 0 && (
               <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
                 <SelectTrigger className="w-48">
-                  <SelectValue placeholder="القسم" />
+                  <SelectValue placeholder={ui("القسم")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">كل الأقسام</SelectItem>
+                  <SelectItem value="all">{ui("كل الأقسام")}</SelectItem>
                   {departments.map(([id, name]) => (
                     <SelectItem key={id} value={id}>
                       {name}
@@ -1035,16 +1010,13 @@ function LeavesPage() {
               </Select>
             )}
             <Button variant="outline" onClick={exportRequests}>
-              <Download className="ml-2 h-4 w-4" />
-              تصدير Excel
-            </Button>
+              <Download className="ml-2 h-4 w-4" />{ui("تصدير Excel")}</Button>
           </div>
           <Card className="overflow-hidden rounded-2xl border-0 shadow-sm ring-1 ring-border/70">
             <CardHeader className="border-b bg-muted/20">
-              <CardTitle>
-                طلبات {year}{" "}
+              <CardTitle>{ui("طلبات ")}{year}{" "}
                 <span className="text-sm font-normal text-muted-foreground">
-                  ({visibleRequests.length} من {yearRows.length})
+                  ({visibleRequests.length}{ui(" من ")}{yearRows.length})
                 </span>
               </CardTitle>
             </CardHeader>
@@ -1053,12 +1025,12 @@ function LeavesPage() {
                 <table className="w-full min-w-[900px] text-sm">
                   <thead>
                     <tr className="border-b bg-muted/30 text-right text-xs text-muted-foreground">
-                      <th className="p-3">الطلب والموظف</th>
-                      <th className="p-3">النوع</th>
-                      <th className="p-3">الفترة</th>
-                      <th className="p-3">أيام الرصيد</th>
-                      <th className="p-3">الحالة</th>
-                      <th className="p-3">الإجراء</th>
+                      <th className="p-3">{ui("الطلب والموظف")}</th>
+                      <th className="p-3">{ui("النوع")}</th>
+                      <th className="p-3">{ui("الفترة")}</th>
+                      <th className="p-3">{ui("أيام الرصيد")}</th>
+                      <th className="p-3">{ui("الحالة")}</th>
+                      <th className="p-3">{ui("الإجراء")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1071,16 +1043,16 @@ function LeavesPage() {
                             </span>
                             <span className="text-xs text-muted-foreground">
                               #{row.form_no} · {row.employees?.employee_no ?? "—"} ·{" "}
-                              {row.department?.name ?? "دون قسم"}
+                              {row.department?.name ?? ui("دون قسم")}
                             </span>
                           </button>
                         </td>
                         <td className="p-3">
                           <span className="block font-medium">
-                            {row.leave_types?.name ?? "إجازة سنوية"}
+                            {row.leave_types?.name ?? ui("إجازة سنوية")}
                           </span>
                           <span className="text-xs text-muted-foreground">
-                            {row.leave_types?.is_paid === false ? "غير مدفوعة" : "مدفوعة"}
+                            {row.leave_types?.is_paid === false ? ui("غير مدفوعة") : ui("مدفوعة")}
                           </span>
                         </td>
                         <td className="p-3 whitespace-nowrap">
@@ -1111,7 +1083,7 @@ function LeavesPage() {
                             <Button
                               size="icon"
                               variant="ghost"
-                              aria-label="تفاصيل الطلب"
+                              aria-label={ui("تفاصيل الطلب")}
                               onClick={() => setSelectedForm(row)}
                             >
                               <Eye className="h-4 w-4" />
@@ -1124,9 +1096,7 @@ function LeavesPage() {
                                 }
                                 disabled={actionMutation.isPending}
                               >
-                                <Check className="ml-1 h-3 w-3" />
-                                اعتماد
-                              </Button>
+                                <Check className="ml-1 h-3 w-3" />{ui("اعتماد")}</Button>
                             )}
                             {getAction(row) === "execute" && (
                               <Button
@@ -1135,9 +1105,7 @@ function LeavesPage() {
                                   actionMutation.mutate({ form_id: row.id, action: "execute" })
                                 }
                                 disabled={actionMutation.isPending}
-                              >
-                                تنفيذ
-                              </Button>
+                              >{ui("تنفيذ")}</Button>
                             )}
                             {rejectAllowed(row) && (
                               <Button
@@ -1146,9 +1114,7 @@ function LeavesPage() {
                                 className="text-destructive"
                                 onClick={() => setRejectingForm(row)}
                               >
-                                <X className="ml-1 h-3 w-3" />
-                                رفض
-                              </Button>
+                                <X className="ml-1 h-3 w-3" />{ui("رفض")}</Button>
                             )}
                           </div>
                         </td>
@@ -1156,8 +1122,7 @@ function LeavesPage() {
                     ))}
                     {!visibleRequests.length && (
                       <tr>
-                        <td colSpan={6} className="p-12 text-center text-muted-foreground">
-                          لا توجد طلبات مطابقة للفلاتر في {year}.
+                        <td colSpan={6} className="p-12 text-center text-muted-foreground">{ui("لا توجد طلبات مطابقة للفلاتر في ")}{year}.
                         </td>
                       </tr>
                     )}
@@ -1176,15 +1141,15 @@ function LeavesPage() {
                 className="pr-9"
                 value={balanceSearch}
                 onChange={(event) => setBalanceSearch(event.target.value)}
-                placeholder="ابحث عن الموظف أو القسم"
+                placeholder={ui("ابحث عن الموظف أو القسم")}
               />
             </div>
             <Select value={balanceTypeFilter} onValueChange={setBalanceTypeFilter}>
               <SelectTrigger className="w-52">
-                <SelectValue placeholder="نوع الإجازة" />
+                <SelectValue placeholder={ui("نوع الإجازة")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">كل أنواع الإجازات</SelectItem>
+                <SelectItem value="all">{ui("كل أنواع الإجازات")}</SelectItem>
                 {types.map((type) => (
                   <SelectItem key={type.id} value={type.id}>
                     {type.name}
@@ -1193,31 +1158,27 @@ function LeavesPage() {
               </SelectContent>
             </Select>
             <Button variant="outline" onClick={exportBalances}>
-              <Download className="ml-2 h-4 w-4" />
-              تصدير Excel
-            </Button>
+              <Download className="ml-2 h-4 w-4" />{ui("تصدير Excel")}</Button>
           </div>
           <Card className="overflow-hidden rounded-2xl border-0 shadow-sm ring-1 ring-border/70">
             <CardHeader className="border-b bg-muted/20">
-              <CardTitle>أرصدة الموظفين · {year}</CardTitle>
-              <p className="text-xs text-muted-foreground">
-                المستهلك والمنفذ والمحجوز للطلبات المعلقة والتسويات اليدوية تظهر كلٌ على حدة.
-              </p>
+              <CardTitle>{ui("أرصدة الموظفين · ")}{year}</CardTitle>
+              <p className="text-xs text-muted-foreground">{ui("المستهلك والمنفذ والمحجوز للطلبات المعلقة والتسويات اليدوية تظهر كلٌ على حدة.")}</p>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[1120px] text-sm">
                   <thead>
                     <tr className="border-b bg-muted/30 text-right text-xs text-muted-foreground">
-                      <th className="p-3">الموظف</th>
-                      <th className="p-3">نوع الإجازة</th>
-                      <th className="p-3">الرصيد الأساسي</th>
-                      <th className="p-3">الترحيل من العام السابق</th>
-                      <th className="p-3">المستهلك</th>
-                      <th className="p-3">محجوز</th>
-                      <th className="p-3">التسويات</th>
-                      <th className="p-3">المتبقي</th>
-                      <th className="p-3">إدارة</th>
+                      <th className="p-3">{ui("الموظف")}</th>
+                      <th className="p-3">{ui("نوع الإجازة")}</th>
+                      <th className="p-3">{ui("الرصيد الأساسي")}</th>
+                      <th className="p-3">{ui("الترحيل من العام السابق")}</th>
+                      <th className="p-3">{ui("المستهلك")}</th>
+                      <th className="p-3">{ui("محجوز")}</th>
+                      <th className="p-3">{ui("التسويات")}</th>
+                      <th className="p-3">{ui("المتبقي")}</th>
+                      <th className="p-3">{ui("إدارة")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1229,13 +1190,13 @@ function LeavesPage() {
                         <td className="p-3">
                           <span className="block font-bold">{row.full_name}</span>
                           <span className="text-xs text-muted-foreground">
-                            {row.employee_no} · {row.department_name ?? "دون قسم"}
+                            {row.employee_no} · {row.department_name ?? ui("دون قسم")}
                           </span>
                         </td>
                         <td className="p-3">
                           <span className="block">{row.leave_type_name}</span>
                           <Badge variant="outline" className="mt-1">
-                            {row.is_paid ? "مدفوعة" : "غير مدفوعة"}
+                            {row.is_paid ? ui("مدفوعة") : ui("غير مدفوعة")}
                           </Badge>
                         </td>
                         <td className="p-3">
@@ -1265,15 +1226,13 @@ function LeavesPage() {
                                 variant="outline"
                                 onClick={() => setAdjustmentRow(row)}
                               >
-                                <Plus className="ml-1 h-3 w-3" />
-                                تسوية
-                              </Button>
+                                <Plus className="ml-1 h-3 w-3" />{ui("تسوية")}</Button>
                             )}
                             {canManage && (
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                aria-label="سجل الرصيد"
+                                aria-label={ui("سجل الرصيد")}
                                 onClick={() => setHistoryRow(row)}
                               >
                                 <FileClock className="h-4 w-4" />
@@ -1285,9 +1244,7 @@ function LeavesPage() {
                     ))}
                     {!visibleBalances.length && (
                       <tr>
-                        <td colSpan={9} className="p-12 text-center text-muted-foreground">
-                          لا توجد أرصدة مطابقة.
-                        </td>
+                        <td colSpan={9} className="p-12 text-center text-muted-foreground">{ui("لا توجد أرصدة مطابقة.")}</td>
                       </tr>
                     )}
                   </tbody>
@@ -1301,16 +1258,11 @@ function LeavesPage() {
           <TabsContent value="policies" className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-card p-4">
               <div>
-                <h2 className="font-bold">سياسات وأنواع الإجازات</h2>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  اضبط الرصيد السنوي والترحيل وحالة الدفع وطريقة احتساب أيام الراحة وفق سياسة
-                  المنشأة.
-                </p>
+                <h2 className="font-bold">{ui("سياسات وأنواع الإجازات")}</h2>
+                <p className="mt-1 text-xs text-muted-foreground">{ui("اضبط الرصيد السنوي والترحيل وحالة الدفع وطريقة احتساب أيام الراحة وفق سياسة المنشأة.")}</p>
               </div>
               <Button onClick={openNewPolicy}>
-                <Plus className="ml-2 h-4 w-4" />
-                نوع جديد
-              </Button>
+                <Plus className="ml-2 h-4 w-4" />{ui("نوع جديد")}</Button>
             </div>
             <div className="grid gap-3 lg:grid-cols-2">
               {types.map((type) => (
@@ -1321,32 +1273,26 @@ function LeavesPage() {
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="text-lg font-black">{type.name}</h3>
                           <Badge variant={type.is_active ? "default" : "secondary"}>
-                            {type.is_active ? "فعالة" : "متوقفة"}
+                            {type.is_active ? ui("فعالة") : ui("متوقفة")}
                           </Badge>
-                          <Badge variant="outline">{type.is_paid ? "مدفوعة" : "غير مدفوعة"}</Badge>
+                          <Badge variant="outline">{type.is_paid ? ui("مدفوعة") : ui("غير مدفوعة")}</Badge>
                         </div>
-                        <p className="mt-3 text-sm text-muted-foreground">
-                          السقف السنوي:{" "}
+                        <p className="mt-3 text-sm text-muted-foreground">{ui("السقف السنوي:")}{" "}
                           <strong className="text-foreground">
-                            {fmtNumber(type.annual_allowance_days)} يوم
-                          </strong>
+                            {fmtNumber(type.annual_allowance_days)}{ui(" يوم")}</strong>
                         </p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          حد الترحيل:{" "}
+                        <p className="mt-1 text-sm text-muted-foreground">{ui("حد الترحيل:")}{" "}
                           <strong className="text-foreground">
-                            {fmtNumber(type.carryover_cap_days)} يوم
-                          </strong>
+                            {fmtNumber(type.carryover_cap_days)}{ui(" يوم")}</strong>
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">
                           {type.count_non_working_days
-                            ? "تُحتسب كل أيام التقويم"
-                            : "تُحتسب أيام دوام الموظف حسب جدول الورديات"}
+                            ? ui("تُحتسب كل أيام التقويم")
+                            : ui("تُحتسب أيام دوام الموظف حسب جدول الورديات")}
                         </p>
                       </div>
                       <Button variant="outline" onClick={() => openEditPolicy(type)}>
-                        <Settings2 className="ml-2 h-4 w-4" />
-                        تعديل
-                      </Button>
+                        <Settings2 className="ml-2 h-4 w-4" />{ui("تعديل")}</Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -1357,31 +1303,27 @@ function LeavesPage() {
       </Tabs>
 
       <Dialog open={requestOpen} onOpenChange={setRequestOpen}>
-        <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent dir={direction()} className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <CalendarCheck2 className="h-5 w-5 text-primary" />
-              تقديم طلب إجازة
-            </DialogTitle>
-            <DialogDescription>
-              يُحجز الرصيد عند إرسال الطلب ثم يخصم عند التنفيذ، ويُعاد تلقائياً عند الرفض.
-            </DialogDescription>
+              <CalendarCheck2 className="h-5 w-5 text-primary" />{ui("تقديم طلب إجازة")}</DialogTitle>
+            <DialogDescription>{ui("يُحجز الرصيد عند إرسال الطلب ثم يخصم عند التنفيذ، ويُعاد تلقائياً عند الرفض.")}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
               {isSelfService ? (
                 <>
-                  <Label>الموظف</Label>
+                  <Label>{ui("الموظف")}</Label>
                   <div className="mt-1 rounded-lg border bg-muted/30 px-3 py-2 text-sm font-medium">
                     {selfEmployeeQuery.data?.employee_no} — {selfEmployeeQuery.data?.full_name}
                   </div>
                 </>
               ) : (
                 <>
-                  <Label>الموظف</Label>
+                  <Label>{ui("الموظف")}</Label>
                   <Select value={employeeId} onValueChange={setEmployeeId}>
                     <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="اختر الموظف" />
+                      <SelectValue placeholder={ui("اختر الموظف")} />
                     </SelectTrigger>
                     <SelectContent>
                       {employees.map((employee) => (
@@ -1395,27 +1337,27 @@ function LeavesPage() {
               )}
             </div>
             <div className="sm:col-span-2">
-              <Label>نوع الإجازة</Label>
+              <Label>{ui("نوع الإجازة")}</Label>
               <Select value={leaveTypeId} onValueChange={setLeaveTypeId}>
                 <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="اختر نوع الإجازة" />
+                  <SelectValue placeholder={ui("اختر نوع الإجازة")} />
                 </SelectTrigger>
                 <SelectContent>
                   {activeTypes.map((type) => (
                     <SelectItem key={type.id} value={type.id}>
-                      {type.name} · {type.is_paid ? "مدفوعة" : "بدون راتب"}
+                      {type.name} · {type.is_paid ? ui("مدفوعة") : ui("بدون راتب")}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               <p className="mt-1 text-xs text-muted-foreground">
                 {activeTypes.find((type) => type.id === leaveTypeId)?.count_non_working_days
-                  ? "تُحسب أيام التقويم كاملة."
-                  : "تُحسب أيام الدوام وفق جدول الموظف."}
+                  ? ui("تُحسب أيام التقويم كاملة.")
+                  : ui("تُحسب أيام الدوام وفق جدول الموظف.")}
               </p>
             </div>
             <div>
-              <Label>من تاريخ</Label>
+              <Label>{ui("من تاريخ")}</Label>
               <Input
                 className="mt-1"
                 type="date"
@@ -1427,7 +1369,7 @@ function LeavesPage() {
               />
             </div>
             <div>
-              <Label>إلى تاريخ</Label>
+              <Label>{ui("إلى تاريخ")}</Label>
               <Input
                 className="mt-1"
                 type="date"
@@ -1439,10 +1381,8 @@ function LeavesPage() {
             <div className="sm:col-span-2 rounded-xl border bg-muted/20 p-3">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-sm font-bold">أيام الرصيد المحتسبة</p>
-                  <p className="text-xs text-muted-foreground">
-                    المعاينة تتبع جدول الدوام والسياسة المختارة.
-                  </p>
+                  <p className="text-sm font-bold">{ui("أيام الرصيد المحتسبة")}</p>
+                  <p className="text-xs text-muted-foreground">{ui("المعاينة تتبع جدول الدوام والسياسة المختارة.")}</p>
                 </div>
                 <span className="min-w-16 text-center text-2xl font-black text-primary">
                   {previewQuery.isLoading ? "…" : fmtNumber(previewQuery.data)}
@@ -1450,22 +1390,20 @@ function LeavesPage() {
               </div>
             </div>
             <div className="sm:col-span-2">
-              <Label>سبب الإجازة وملاحظات المدير</Label>
+              <Label>{ui("سبب الإجازة وملاحظات المدير")}</Label>
               <Textarea
                 className="mt-1"
                 value={reason}
                 onChange={(event) => setReason(event.target.value)}
                 maxLength={1000}
                 rows={4}
-                placeholder="اكتب سبب الطلب أو المعلومات التي يحتاجها المعتمدون"
+                placeholder={ui("اكتب سبب الطلب أو المعلومات التي يحتاجها المعتمدون")}
               />
               <p className="mt-1 text-left text-xs text-muted-foreground">{reason.length}/1000</p>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRequestOpen(false)}>
-              إلغاء
-            </Button>
+            <Button variant="outline" onClick={() => setRequestOpen(false)}>{ui("إلغاء")}</Button>
             <Button
               onClick={() => createMutation.mutate()}
               disabled={
@@ -1478,63 +1416,59 @@ function LeavesPage() {
             >
               <Loader2
                 className={`ml-2 h-4 w-4 animate-spin ${createMutation.isPending ? "" : "hidden"}`}
-              />
-              إرسال للموافقة
-            </Button>
+              />{ui("إرسال للموافقة")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={Boolean(selectedForm)} onOpenChange={(open) => !open && setSelectedForm(null)}>
-        <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent dir={direction()} className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           {selectedForm && (
             <>
               <DialogHeader>
                 <div className="flex flex-wrap items-center gap-2">
-                  <DialogTitle>تفاصيل طلب الإجازة #{selectedForm.form_no}</DialogTitle>
+                  <DialogTitle>{ui("تفاصيل طلب الإجازة #")}{selectedForm.form_no}</DialogTitle>
                   <Badge variant="outline" className={STATUS_STYLE[selectedForm.status]}>
                     {getStatusLabel(selectedForm)}
                   </Badge>
                 </div>
                 <DialogDescription>
                   {selectedForm.employees?.employee_no} — {selectedForm.employees?.full_name} ·{" "}
-                  {selectedForm.department?.name ?? "دون قسم"}
+                  {selectedForm.department?.name ?? ui("دون قسم")}
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Detail
-                  label="نوع الإجازة"
+                  label={ui("نوع الإجازة")}
                   value={`${selectedForm.leave_types?.name ?? "سنوية"} · ${selectedForm.leave_types?.is_paid === false ? "غير مدفوعة" : "مدفوعة"}`}
                 />
                 <Detail
-                  label="الفترة"
+                  label={ui("الفترة")}
                   value={`${fmtDate(selectedForm.work_date)} — ${fmtDate(selectedForm.leave_end_date ?? selectedForm.work_date)}`}
                 />
                 <Detail
-                  label="الأيام المحتسبة"
+                  label={ui("الأيام المحتسبة")}
                   value={`${fmtNumber(selectedForm.leave_days)} يوم`}
                 />
-                <Detail label="تاريخ الطلب" value={fmtStamp(selectedForm.created_at)} />
+                <Detail label={ui("تاريخ الطلب")} value={fmtStamp(selectedForm.created_at)} />
               </div>
               <div className="rounded-xl border p-4">
-                <p className="mb-2 text-xs font-bold text-muted-foreground">سبب الطلب</p>
+                <p className="mb-2 text-xs font-bold text-muted-foreground">{ui("سبب الطلب")}</p>
                 <p className="whitespace-pre-wrap text-sm leading-6">{selectedForm.reason}</p>
               </div>
               {selectedForm.rejection_reason && (
                 <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
                   <strong>
                     {selectedForm.rejection_reason === WITHDRAWN_REASON
-                      ? "سبب السحب:"
-                      : "سبب الرفض:"}
+                      ? ui("سبب السحب:")
+                      : ui("سبب الرفض:")}
                   </strong>{" "}
                   {selectedForm.rejection_reason}
                 </div>
               )}
               <div>
                 <h3 className="mb-3 flex items-center gap-2 font-bold">
-                  <FileClock className="h-4 w-4" />
-                  سجل الاعتمادات والإجراءات
-                </h3>
+                  <FileClock className="h-4 w-4" />{ui("سجل الاعتمادات والإجراءات")}</h3>
                 <div className="space-y-2">
                   {(eventsQuery.data ?? []).map((event) => (
                     <div key={event.id} className="flex gap-3 rounded-lg border p-3">
@@ -1543,7 +1477,7 @@ function LeavesPage() {
                         <p className="text-sm font-semibold">
                           {eventLabel(event.action)}{" "}
                           <span className="font-normal text-muted-foreground">
-                            · {actorNamesQuery.data?.get(event.actor ?? "") ?? "مستخدم النظام"}
+                            · {actorNamesQuery.data?.get(event.actor ?? "") ?? ui("مستخدم النظام")}
                           </span>
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">
@@ -1554,9 +1488,7 @@ function LeavesPage() {
                     </div>
                   ))}
                   {!eventsQuery.data?.length && (
-                    <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                      لا يوجد سجل إجراءات إضافي لهذا الطلب.
-                    </p>
+                    <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">{ui("لا يوجد سجل إجراءات إضافي لهذا الطلب.")}</p>
                   )}
                 </div>
               </div>
@@ -1568,9 +1500,7 @@ function LeavesPage() {
                     }
                     disabled={actionMutation.isPending}
                   >
-                    <Check className="ml-2 h-4 w-4" />
-                    اعتماد
-                  </Button>
+                    <Check className="ml-2 h-4 w-4" />{ui("اعتماد")}</Button>
                 )}
                 {getAction(selectedForm) === "execute" && (
                   <Button
@@ -1578,9 +1508,7 @@ function LeavesPage() {
                       actionMutation.mutate({ form_id: selectedForm.id, action: "execute" })
                     }
                     disabled={actionMutation.isPending}
-                  >
-                    تنفيذ وربط بالحضور
-                  </Button>
+                  >{ui("تنفيذ وربط بالحضور")}</Button>
                 )}
                 {rejectAllowed(selectedForm) && (
                   <Button
@@ -1588,9 +1516,7 @@ function LeavesPage() {
                     className="text-destructive"
                     onClick={() => setRejectingForm(selectedForm)}
                   >
-                    <X className="ml-2 h-4 w-4" />
-                    رفض مع توضيح السبب
-                  </Button>
+                    <X className="ml-2 h-4 w-4" />{ui("رفض مع توضيح السبب")}</Button>
                 )}
                 {canWithdraw(selectedForm) && (
                   <Button
@@ -1598,9 +1524,7 @@ function LeavesPage() {
                     className="text-destructive"
                     onClick={() => setWithdrawingForm(selectedForm)}
                   >
-                    <X className="ml-2 h-4 w-4" />
-                    سحب الطلب
-                  </Button>
+                    <X className="ml-2 h-4 w-4" />{ui("سحب الطلب")}</Button>
                 )}
               </DialogFooter>
             </>
@@ -1612,17 +1536,13 @@ function LeavesPage() {
         open={Boolean(withdrawingForm)}
         onOpenChange={(open) => !open && setWithdrawingForm(null)}
       >
-        <DialogContent dir="rtl" className="sm:max-w-lg">
+        <DialogContent dir={direction()} className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>سحب طلب الإجازة؟</DialogTitle>
-            <DialogDescription>
-              سيُغلق الطلب ويُعاد حجز أيامه إلى رصيدك. سيبقى الطلب وسجل السحب محفوظين للمراجعة.
-            </DialogDescription>
+            <DialogTitle>{ui("سحب طلب الإجازة؟")}</DialogTitle>
+            <DialogDescription>{ui("سيُغلق الطلب ويُعاد حجز أيامه إلى رصيدك. سيبقى الطلب وسجل السحب محفوظين للمراجعة.")}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setWithdrawingForm(null)}>
-              رجوع
-            </Button>
+            <Button variant="outline" onClick={() => setWithdrawingForm(null)}>{ui("رجوع")}</Button>
             <Button
               variant="destructive"
               disabled={actionMutation.isPending}
@@ -1630,9 +1550,7 @@ function LeavesPage() {
                 withdrawingForm &&
                 actionMutation.mutate({ form_id: withdrawingForm.id, action: "withdraw" })
               }
-            >
-              تأكيد السحب
-            </Button>
+            >{ui("تأكيد السحب")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1641,26 +1559,24 @@ function LeavesPage() {
         open={Boolean(rejectingForm)}
         onOpenChange={(open) => !open && setRejectingForm(null)}
       >
-        <DialogContent dir="rtl" className="sm:max-w-lg">
+        <DialogContent dir={direction()} className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>رفض طلب الإجازة</DialogTitle>
-            <DialogDescription>سجّل سبب الرفض ليظهر لصاحب القرار في سجل الطلب.</DialogDescription>
+            <DialogTitle>{ui("رفض طلب الإجازة")}</DialogTitle>
+            <DialogDescription>{ui("سجّل سبب الرفض ليظهر لصاحب القرار في سجل الطلب.")}</DialogDescription>
           </DialogHeader>
           <div>
-            <Label>سبب الرفض</Label>
+            <Label>{ui("سبب الرفض")}</Label>
             <Textarea
               className="mt-1"
               value={rejectionReason}
               onChange={(event) => setRejectionReason(event.target.value)}
               rows={3}
               maxLength={500}
-              placeholder="اكتب سبباً واضحاً"
+              placeholder={ui("اكتب سبباً واضحاً")}
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRejectingForm(null)}>
-              رجوع
-            </Button>
+            <Button variant="outline" onClick={() => setRejectingForm(null)}>{ui("رجوع")}</Button>
             <Button
               variant="destructive"
               disabled={actionMutation.isPending || rejectionReason.trim().length < 3}
@@ -1672,34 +1588,30 @@ function LeavesPage() {
                   note: rejectionReason.trim(),
                 })
               }
-            >
-              تأكيد الرفض
-            </Button>
+            >{ui("تأكيد الرفض")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={policyOpen} onOpenChange={setPolicyOpen}>
-        <DialogContent dir="rtl" className="sm:max-w-xl">
+        <DialogContent dir={direction()} className="sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>{editingPolicy ? "تعديل سياسة الإجازة" : "إضافة نوع إجازة"}</DialogTitle>
-            <DialogDescription>
-              تؤثر حالة الدفع على احتساب الراتب، ويُطبّق السقف لكل موظف ولكل سنة.
-            </DialogDescription>
+            <DialogTitle>{editingPolicy ? ui("تعديل سياسة الإجازة") : ui("إضافة نوع إجازة")}</DialogTitle>
+            <DialogDescription>{ui("تؤثر حالة الدفع على احتساب الراتب، ويُطبّق السقف لكل موظف ولكل سنة.")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>اسم النوع</Label>
+              <Label>{ui("اسم النوع")}</Label>
               <Input
                 className="mt-1"
                 value={policyName}
                 onChange={(event) => setPolicyName(event.target.value)}
                 maxLength={80}
-                placeholder="مثال: إجازة اضطرارية"
+                placeholder={ui("مثال: إجازة اضطرارية")}
               />
             </div>
             <div>
-              <Label>السقف السنوي بالأيام</Label>
+              <Label>{ui("السقف السنوي بالأيام")}</Label>
               <Input
                 className="mt-1"
                 type="number"
@@ -1708,14 +1620,12 @@ function LeavesPage() {
                 step="1"
                 value={policyAllowance}
                 onChange={(event) => setPolicyAllowance(event.target.value)}
-                placeholder="اتركه فارغاً إذا لم تحدد سقفاً"
+                placeholder={ui("اتركه فارغاً إذا لم تحدد سقفاً")}
               />
-              <p className="mt-1 text-xs text-muted-foreground">
-                التسويات الإدارية الموثقة تُضاف إلى هذا السقف عند حساب المتاح.
-              </p>
+              <p className="mt-1 text-xs text-muted-foreground">{ui("التسويات الإدارية الموثقة تُضاف إلى هذا السقف عند حساب المتاح.")}</p>
             </div>
             <div>
-              <Label>حد ترحيل الرصيد من السنة السابقة بالأيام</Label>
+              <Label>{ui("حد ترحيل الرصيد من السنة السابقة بالأيام")}</Label>
               <Input
                 className="mt-1"
                 type="number"
@@ -1725,45 +1635,35 @@ function LeavesPage() {
                 value={policyCarryoverCap}
                 onChange={(event) => setPolicyCarryoverCap(event.target.value)}
               />
-              <p className="mt-1 text-xs text-muted-foreground">
-                يُحسب من المتبقي الفعلي بعد إجازات وتسويات السنة السابقة. الصفر يعطّل الترحيل.
-              </p>
+              <p className="mt-1 text-xs text-muted-foreground">{ui("يُحسب من المتبقي الفعلي بعد إجازات وتسويات السنة السابقة. الصفر يعطّل الترحيل.")}</p>
             </div>
             <div className="flex items-center justify-between rounded-xl border p-3">
               <div>
-                <Label>إجازة مدفوعة</Label>
-                <p className="text-xs text-muted-foreground">
-                  تُضاف أيامها إلى الأيام المدفوعة في مسير الرواتب.
-                </p>
+                <Label>{ui("إجازة مدفوعة")}</Label>
+                <p className="text-xs text-muted-foreground">{ui("تُضاف أيامها إلى الأيام المدفوعة في مسير الرواتب.")}</p>
               </div>
               <Switch checked={policyPaid} onCheckedChange={setPolicyPaid} />
             </div>
             <div className="flex items-center justify-between rounded-xl border p-3">
               <div>
-                <Label>احتساب أيام الراحة</Label>
-                <p className="text-xs text-muted-foreground">
-                  عند التعطيل تُحسب أيام الدوام فقط حسب جدول الموظف.
-                </p>
+                <Label>{ui("احتساب أيام الراحة")}</Label>
+                <p className="text-xs text-muted-foreground">{ui("عند التعطيل تُحسب أيام الدوام فقط حسب جدول الموظف.")}</p>
               </div>
               <Switch checked={policyCountsRestDays} onCheckedChange={setPolicyCountsRestDays} />
             </div>
             {editingPolicy && (
               <div className="flex items-center justify-between rounded-xl border p-3">
                 <div>
-                  <Label>السماح بطلبات جديدة</Label>
-                  <p className="text-xs text-muted-foreground">
-                    إيقاف النوع لا يحذف الطلبات أو الأرصدة السابقة.
-                  </p>
+                  <Label>{ui("السماح بطلبات جديدة")}</Label>
+                  <p className="text-xs text-muted-foreground">{ui("إيقاف النوع لا يحذف الطلبات أو الأرصدة السابقة.")}</p>
                 </div>
                 <Switch checked={policyActive} onCheckedChange={setPolicyActive} />
               </div>
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPolicyOpen(false)}>
-              إلغاء
-            </Button>
-            <Button onClick={() => void savePolicy()}>حفظ السياسة</Button>
+            <Button variant="outline" onClick={() => setPolicyOpen(false)}>{ui("إلغاء")}</Button>
+            <Button onClick={() => void savePolicy()}>{ui("حفظ السياسة")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1772,16 +1672,16 @@ function LeavesPage() {
         open={Boolean(adjustmentRow)}
         onOpenChange={(open) => !open && setAdjustmentRow(null)}
       >
-        <DialogContent dir="rtl" className="sm:max-w-lg">
+        <DialogContent dir={direction()} className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>تسوية رصيد إجازة</DialogTitle>
+            <DialogTitle>{ui("تسوية رصيد إجازة")}</DialogTitle>
             <DialogDescription>
               {adjustmentRow?.full_name} · {adjustmentRow?.leave_type_name} · {year}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div>
-              <Label>قيمة الحركة بالأيام</Label>
+              <Label>{ui("قيمة الحركة بالأيام")}</Label>
               <Input
                 className="mt-1"
                 type="number"
@@ -1790,37 +1690,33 @@ function LeavesPage() {
                 max="365"
                 value={adjustmentAmount}
                 onChange={(event) => setAdjustmentAmount(event.target.value)}
-                placeholder="مثال: 2 أو -1"
+                placeholder={ui("مثال: 2 أو -1")}
               />
-              <p className="mt-1 text-xs text-muted-foreground">
-                القيمة الموجبة تضيف أياماً، والسالبة تخصمها. الحركة لا يمكن حذفها بعد حفظها.
-              </p>
+              <p className="mt-1 text-xs text-muted-foreground">{ui("القيمة الموجبة تضيف أياماً، والسالبة تخصمها. الحركة لا يمكن حذفها بعد حفظها.")}</p>
             </div>
             <div>
-              <Label>السبب والمستند المرجعي</Label>
+              <Label>{ui("السبب والمستند المرجعي")}</Label>
               <Textarea
                 className="mt-1"
                 value={adjustmentReason}
                 onChange={(event) => setAdjustmentReason(event.target.value)}
                 rows={3}
                 maxLength={500}
-                placeholder="اكتب سبب التسوية"
+                placeholder={ui("اكتب سبب التسوية")}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAdjustmentRow(null)}>
-              إلغاء
-            </Button>
-            <Button onClick={() => void saveAdjustment()}>تسجيل الحركة</Button>
+            <Button variant="outline" onClick={() => setAdjustmentRow(null)}>{ui("إلغاء")}</Button>
+            <Button onClick={() => void saveAdjustment()}>{ui("تسجيل الحركة")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={Boolean(historyRow)} onOpenChange={(open) => !open && setHistoryRow(null)}>
-        <DialogContent dir="rtl" className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
+        <DialogContent dir={direction()} className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>دفتر حركات الرصيد</DialogTitle>
+            <DialogTitle>{ui("دفتر حركات الرصيد")}</DialogTitle>
             <DialogDescription>
               {historyRow?.full_name} · {historyRow?.leave_type_name}
             </DialogDescription>
@@ -1838,12 +1734,11 @@ function LeavesPage() {
                 </div>
                 <strong className={entry.amount > 0 ? "text-emerald-700" : "text-red-600"}>
                   {entry.amount > 0 ? "+" : ""}
-                  {fmtNumber(entry.amount)} يوم
-                </strong>
+                  {fmtNumber(entry.amount)}{ui(" يوم")}</strong>
               </div>
             ))}
             {balanceHistoryQuery.isLoading && (
-              <p className="p-4 text-center text-muted-foreground">جارٍ تحميل سجل الحركات…</p>
+              <p className="p-4 text-center text-muted-foreground">{ui("جارٍ تحميل سجل الحركات…")}</p>
             )}
             {!balanceHistoryQuery.isLoading && !balanceHistoryQuery.data?.length && (
               <EmptyState text="لا توجد تسويات مسجلة لهذا الموظف ونوع الإجازة." />
@@ -1883,8 +1778,8 @@ function Kpi({
           <Icon className="h-5 w-5" />
         </span>
         <div className="min-w-0">
-          <p className="truncate text-xs text-muted-foreground">{label}</p>
-          <p className="mt-1 text-2xl font-black tabular-nums">{value.toLocaleString("ar-IQ")}</p>
+          <p className="truncate text-xs text-muted-foreground">{ui(label)}</p>
+          <p className="mt-1 text-2xl font-black tabular-nums">{value.toLocaleString(displayLocale())}</p>
         </div>
       </CardContent>
     </Card>
@@ -1957,8 +1852,7 @@ function LeaveCalendar({
               ))}
               {list.length > 2 && (
                 <span className="block text-[9px] text-muted-foreground">
-                  +{list.length - 2} أخرى
-                </span>
+                  +{list.length - 2}{ui(" أخرى")}</span>
               )}
             </div>
           </div>
@@ -1972,14 +1866,14 @@ function Legend({ color, label }: { color: string; label: string }) {
   return (
     <span className="inline-flex items-center gap-1.5">
       <span className={`h-2.5 w-2.5 rounded-full ${color}`} />
-      {label}
+      {ui(label)}
     </span>
   );
 }
 function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border bg-muted/15 p-3">
-      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-xs text-muted-foreground">{ui(label)}</p>
       <p className="mt-1 text-sm font-semibold">{value}</p>
     </div>
   );

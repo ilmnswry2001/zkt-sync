@@ -1,3 +1,4 @@
+import { direction, ui } from "@/lib/ui-language";
 import { useState, type FormEvent } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -92,7 +93,7 @@ export function EmployeeDocumentForm({
   const chooseFile = (candidate?: File) => {
     if (!candidate) return;
     if (!isEmployeeDocumentAttachment(candidate)) {
-      toast.error("اختر ملف PDF أو صورة JPEG أو PNG أو WebP بحجم لا يتجاوز 15 ميغابايت");
+      toast.error(ui("اختر ملف PDF أو صورة JPEG أو PNG أو WebP بحجم لا يتجاوز 15 ميغابايت"));
       return;
     }
     setFile(candidate);
@@ -139,11 +140,11 @@ export function EmployeeDocumentForm({
           throw uploadError;
         }
       }
-      toast.success("تم إدراج المستند في الأرشيف");
+      toast.success(ui("تم إدراج المستند في الأرشيف"));
       await onChanged();
       onSaved();
     } catch (error) {
-      toast.error(formatErrorMessage(error, "تعذر حفظ المستند"));
+      toast.error(ui(formatErrorMessage(error, "تعذر حفظ المستند")));
     } finally {
       setBusy(false);
     }
@@ -155,13 +156,13 @@ export function EmployeeDocumentForm({
         if (!open && !busy) onClose();
       }}
     >
-      <DialogContent dir="rtl" className="max-h-[90dvh] max-w-2xl overflow-y-auto">
+      <DialogContent dir={direction()} className="max-h-[90dvh] max-w-2xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>إضافة كتاب لهذا الموظف</DialogTitle>
+          <DialogTitle>{ui("إضافة كتاب لهذا الموظف")}</DialogTitle>
           <DialogDescription>
             {batchPosition
-              ? `ملف ${batchPosition} من الدفعة · سجّل بيانات المستند لحفظه.`
-              : "سجّل بيانات الكتاب وأرفق نسخة منه عند توفرها."}
+              ? (ui("ملف ") + (batchPosition) + ui(" من الدفعة · سجّل بيانات المستند لحفظه."))
+              : ui("سجّل بيانات الكتاب وأرفق نسخة منه عند توفرها.")}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={(event) => void submit(event)}>
@@ -170,7 +171,7 @@ export function EmployeeDocumentForm({
               {employee.full_name} · {employee.employee_no}
             </p>
             <div className={fieldClass}>
-              <Label htmlFor="archive-type">نوع المستند</Label>
+              <Label htmlFor="archive-type">{ui("نوع المستند")}</Label>
               <select
                 id="archive-type"
                 value={type}
@@ -179,17 +180,17 @@ export function EmployeeDocumentForm({
               >
                 {employeeDocumentTypes.map((key) => (
                   <option key={key} value={key}>
-                    {documentTypeLabels[key]}
+                    {ui(documentTypeLabels[key])}
                   </option>
                 ))}
               </select>
             </div>
             <div className={fieldClass}>
-              <Label htmlFor="archive-number">رقم الكتاب</Label>
+              <Label htmlFor="archive-number">{ui("رقم الكتاب")}</Label>
               <Input id="archive-number" name="number" maxLength={120} required />
             </div>
             <div className={fieldClass}>
-              <Label htmlFor="archive-date">تاريخ الصدور</Label>
+              <Label htmlFor="archive-date">{ui("تاريخ الصدور")}</Label>
               <Input
                 id="archive-date"
                 name="date"
@@ -199,11 +200,11 @@ export function EmployeeDocumentForm({
               />
             </div>
             <div className={fieldClass}>
-              <Label htmlFor="archive-effective">تاريخ السريان</Label>
+              <Label htmlFor="archive-effective">{ui("تاريخ السريان")}</Label>
               <Input id="archive-effective" name="effective" type="date" />
             </div>
             <div className={`${fieldClass} sm:col-span-2`}>
-              <Label htmlFor="archive-title">الموضوع</Label>
+              <Label htmlFor="archive-title">{ui("الموضوع")}</Label>
               <Input
                 id="archive-title"
                 name="title"
@@ -213,12 +214,12 @@ export function EmployeeDocumentForm({
               />
             </div>
             <div className={fieldClass}>
-              <Label htmlFor="archive-authority">الجهة المصدرة</Label>
+              <Label htmlFor="archive-authority">{ui("الجهة المصدرة")}</Label>
               <Input id="archive-authority" name="authority" maxLength={160} />
             </div>
             {type === "wage_increase" && (
               <div className={fieldClass}>
-                <Label htmlFor="archive-amount">مبلغ الزيادة (د.ع)</Label>
+                <Label htmlFor="archive-amount">{ui("مبلغ الزيادة (د.ع)")}</Label>
                 <Input
                   id="archive-amount"
                   name="amount"
@@ -230,7 +231,7 @@ export function EmployeeDocumentForm({
               </div>
             )}
             <div className={`${fieldClass} sm:col-span-2`}>
-              <Label htmlFor="archive-notes">الملحوظات</Label>
+              <Label htmlFor="archive-notes">{ui("الملحوظات")}</Label>
               <Textarea id="archive-notes" name="notes" maxLength={4000} rows={3} />
             </div>
             <div
@@ -241,7 +242,7 @@ export function EmployeeDocumentForm({
                 if (!busy) chooseFile(event.dataTransfer.files[0]);
               }}
             >
-              <Label htmlFor="archive-file">اسحب المرفق هنا أو اختر ملفاً</Label>
+              <Label htmlFor="archive-file">{ui("اسحب المرفق هنا أو اختر ملفاً")}</Label>
               <Input
                 id="archive-file"
                 type="file"
@@ -251,31 +252,25 @@ export function EmployeeDocumentForm({
                   event.target.value = "";
                 }}
               />
-              <p className="text-sm text-muted-foreground">
-                PDF أو JPEG أو PNG أو WebP. الحد 15 ميغابايت.
-              </p>
+              <p className="text-sm text-muted-foreground">{ui("PDF أو JPEG أو PNG أو WebP. الحد 15 ميغابايت.")}</p>
               {file && (
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="break-all text-sm">{file.name}</span>
-                  <Button type="button" size="sm" variant="ghost" onClick={() => setFile(null)}>
-                    إزالة المرفق
-                  </Button>
+                  <Button type="button" size="sm" variant="ghost" onClick={() => setFile(null)}>{ui("إزالة المرفق")}</Button>
                 </div>
               )}
             </div>
           </fieldset>
           {uploadPercent !== null && (
             <div className="mt-4 space-y-2" role="status">
-              <p className="text-sm">رفع المرفق · {uploadPercent}%</p>
-              <Progress value={uploadPercent} aria-label="تقدم رفع المرفق" />
+              <p className="text-sm">{ui("رفع المرفق · ")}{uploadPercent}%</p>
+              <Progress value={uploadPercent} aria-label={ui("تقدم رفع المرفق")} />
             </div>
           )}
           <DialogFooter className="mt-5 gap-2">
-            <Button variant="outline" type="button" disabled={busy} onClick={onClose}>
-              إلغاء
-            </Button>
+            <Button variant="outline" type="button" disabled={busy} onClick={onClose}>{ui("إلغاء")}</Button>
             <Button type="submit" disabled={busy}>
-              {busy ? "جارٍ الحفظ…" : "حفظ المستند"}
+              {busy ? ui("جارٍ الحفظ…") : ui("حفظ المستند")}
             </Button>
           </DialogFooter>
         </form>

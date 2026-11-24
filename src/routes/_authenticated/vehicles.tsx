@@ -1,3 +1,4 @@
+import { direction, displayLocale, ui } from "@/lib/ui-language";
 import { VehiclePassengerUtilization } from "@/components/VehiclePassengerUtilization";
 import { PrivateStorageMedia } from "@/components/PrivateStorageMedia";
 import { formatErrorMessage } from "@/lib/error-message";
@@ -57,7 +58,7 @@ import {
 } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/_authenticated/vehicles")({
-  head: () => ({ meta: [{ title: "المركبات" }] }),
+  head: () => ({ meta: [{ title: ui("المركبات") }] }),
   beforeLoad: async () => {
     const { data } = await supabase.auth.getUser();
     if (!data.user) throw redirect({ to: "/auth" });
@@ -270,13 +271,13 @@ function formatArabicDate(value: string | null) {
   if (!value) return "غير مسجل";
   const date = new Date(`${value}T12:00:00`);
   if (Number.isNaN(date.getTime())) return "غير مسجل";
-  return date.toLocaleDateString("ar-IQ", { day: "numeric", month: "long", year: "numeric" });
+  return date.toLocaleDateString(displayLocale(), { day: "numeric", month: "long", year: "numeric" });
 }
 
 function ReportStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-border/60 bg-background/50 p-3">
-      <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
+      <p className="text-[11px] font-medium text-muted-foreground">{ui(label)}</p>
       <p className="mt-1 text-sm font-bold tabular-nums">{value}</p>
     </div>
   );
@@ -299,7 +300,7 @@ function VehicleMonthlyReport({
   wage: number;
   fuel: MonthlyFuelStats;
 }) {
-  const monthLabel = new Date(`${month}-01T12:00:00`).toLocaleDateString("ar-IQ", {
+  const monthLabel = new Date(`${month}-01T12:00:00`).toLocaleDateString(displayLocale(), {
     month: "long",
     year: "numeric",
   });
@@ -307,66 +308,61 @@ function VehicleMonthlyReport({
     <section className="space-y-4">
       <div className="flex items-center gap-2">
         <CalendarRange className="h-4 w-4 text-primary" />
-        <h3 className="text-sm font-bold">تقرير شهر {monthLabel}</h3>
+        <h3 className="text-sm font-bold">{ui("تقرير شهر ")}{monthLabel}</h3>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="glass-card rounded-3xl p-5">
           <div className="flex items-center gap-2 text-sm font-bold">
-            <UserRound className="h-4 w-4 text-primary" /> السائق الحالي
-          </div>
+            <UserRound className="h-4 w-4 text-primary" />{ui(" السائق الحالي")}</div>
           {driver ? (
             <div className="mt-3 space-y-2 text-sm">
               <p className="text-base font-bold">{driver.full_name}</p>
-              <p className="text-muted-foreground">{driver.position || "بدون مسمى وظيفي"}</p>
+              <p className="text-muted-foreground">{driver.position || ui("بدون مسمى وظيفي")}</p>
               <p className="flex items-center gap-2">
                 <Phone className="h-3.5 w-3.5 text-muted-foreground" />
-                {driver.phone1 || "لا يوجد هاتف"}
+                {driver.phone1 || ui("لا يوجد هاتف")}
               </p>
               <p className="flex items-center gap-2">
                 <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
-                {driver.departments?.name || "بدون قسم"}
+                {driver.departments?.name || ui("بدون قسم")}
               </p>
             </div>
           ) : (
-            <p className="mt-3 text-sm text-muted-foreground">لم يُحدَّد سائق لهذه المركبة بعد.</p>
+            <p className="mt-3 text-sm text-muted-foreground">{ui("لم يُحدَّد سائق لهذه المركبة بعد.")}</p>
           )}
         </div>
 
         <div className="glass-card rounded-3xl p-5">
           <div className="flex items-center gap-2 text-sm font-bold">
-            <CalendarDays className="h-4 w-4 text-primary" /> أيام التشغيل والأجر
-          </div>
+            <CalendarDays className="h-4 w-4 text-primary" />{ui(" أيام التشغيل والأجر")}</div>
           <div className="mt-3 grid grid-cols-2 gap-3">
-            <ReportStat label="أيام التشغيل" value={`${operatingDays} يوم`} />
-            <ReportStat label="الأجر المستحق" value={`${Math.round(wage).toLocaleString()} د.ع`} />
+            <ReportStat label={ui("أيام التشغيل")} value={`${operatingDays} يوم`} />
+            <ReportStat label={ui("الأجر المستحق")} value={`${Math.round(wage).toLocaleString()} د.ع`} />
           </div>
           <p className="mt-3 text-xs text-muted-foreground">
             {operatingDates.length
-              ? `التواريخ: ${operatingDates.map((date) => Number(date.slice(8))).join("، ")}`
+              ? (ui("التواريخ: ") + (operatingDates.map((date) => Number(date.slice(8))).join("، ")))
               : operatingDays
-                ? "عدد الأيام محفوظ دون تواريخ."
-                : "لم تُسجَّل أيام تشغيل."}
+                ? ui("عدد الأيام محفوظ دون تواريخ.")
+                : ui("لم تُسجَّل أيام تشغيل.")}
           </p>
         </div>
 
         <div className="glass-card rounded-3xl p-5 lg:col-span-2">
           <div className="flex items-center gap-2 text-sm font-bold">
-            <Fuel className="h-4 w-4 text-primary" /> استهلاك الوقود
-          </div>
+            <Fuel className="h-4 w-4 text-primary" />{ui(" استهلاك الوقود")}</div>
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <ReportStat label="إجمالي اللترات" value={`${fuel.liters.toLocaleString()} لتر`} />
+            <ReportStat label={ui("إجمالي اللترات")} value={`${fuel.liters.toLocaleString()} لتر`} />
             <ReportStat
-              label="إجمالي الكلفة"
+              label={ui("إجمالي الكلفة")}
               value={`${Math.round(fuel.cost).toLocaleString()} د.ع`}
             />
-            <ReportStat label="عدد الوصولات" value={`${fuel.count}`} />
-            <ReportStat label="آخر تعبئة" value={formatArabicDate(fuel.lastDate)} />
+            <ReportStat label={ui("عدد الوصولات")} value={`${fuel.count}`} />
+            <ReportStat label={ui("آخر تعبئة")} value={formatArabicDate(fuel.lastDate)} />
           </div>
           <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-            <Gauge className="h-3.5 w-3.5" />
-            نوع الوقود: {vehicle.fuel_type === "diesel" ? "كاز (ديزل)" : "بنزين"} · العداد الحالي:{" "}
-            {Number(vehicle.current_odometer).toLocaleString()} كم
-          </p>
+            <Gauge className="h-3.5 w-3.5" />{ui("نوع الوقود: ")}{vehicle.fuel_type === "diesel" ? ui("كاز (ديزل)") : ui("بنزين")}{ui(" · العداد الحالي:")}{" "}
+            {Number(vehicle.current_odometer).toLocaleString()}{ui(" كم")}</p>
         </div>
       </div>
     </section>
@@ -451,11 +447,11 @@ function VehiclesPage() {
     },
     onSuccess: async () => {
       setActiveMachinery(null);
-      toast.success("تم حفظ حضور الآلية");
+      toast.success(ui("تم حفظ حضور الآلية"));
       await client.invalidateQueries({ queryKey: ["machinery-monthly-operations", month] });
       await client.invalidateQueries({ queryKey: ["monthly", "machinery-report", month] });
     },
-    onError: (error: Error) => toast.error(`تعذر حفظ حضور الآلية: ${formatErrorMessage(error)}`),
+    onError: (error: Error) => toast.error((ui("تعذر حفظ حضور الآلية: ") + (formatErrorMessage(error)))),
   });
   const machineryMaintenanceQuery = useQuery({
     queryKey: ["machinery-maintenance-statistics"],
@@ -509,11 +505,11 @@ function VehiclesPage() {
       return { imported: toInsert.length, skipped };
     },
     onSuccess: async ({ imported, skipped }) => {
-      toast.success(`تم استيراد ${imported} آلية${skipped ? `، وتجاوز ${skipped} سجل مكرر` : ""}`);
+      toast.success((ui("تم استيراد ") + (imported) + ui(" آلية") + (skipped ? `، وتجاوز ${skipped} سجل مكرر` : "")));
       setMachineryImport(null);
       await client.invalidateQueries({ queryKey: ["maintenance-machinery"] });
     },
-    onError: (error: Error) => toast.error(`تعذر استيراد الآليات: ${formatErrorMessage(error)}`),
+    onError: (error: Error) => toast.error((ui("تعذر استيراد الآليات: ") + (formatErrorMessage(error)))),
   });
   const handleMachineryFile = async (file: File) => {
     try {
@@ -535,7 +531,7 @@ function VehiclesPage() {
       setMachineryImport(rows);
       setInvalidMachineryRows(rawRows.length - rows.length);
     } catch (error) {
-      toast.error(`تعذر قراءة ملف Excel: ${formatErrorMessage(error)}`);
+      toast.error((ui("تعذر قراءة ملف Excel: ") + (formatErrorMessage(error))));
     }
   };
   const query = useQuery({
@@ -638,12 +634,12 @@ function VehiclesPage() {
       setVehicleNo("");
       setName("");
       setDailyRate("");
-      toast.success("تم تسجيل المركبة");
+      toast.success(ui("تم تسجيل المركبة"));
       await client.invalidateQueries({ queryKey: ["vehicles"] });
       await client.invalidateQueries({ queryKey: ["payroll"] });
       await client.invalidateQueries({ queryKey: ["monthly", "vehicle-report"] });
     },
-    onError: (error: Error) => toast.error(`تعذر تسجيل المركبة: ${formatErrorMessage(error)}`),
+    onError: (error: Error) => toast.error((ui("تعذر تسجيل المركبة: ") + (formatErrorMessage(error)))),
   });
   const monthDates = useMemo(
     () =>
@@ -680,12 +676,12 @@ function VehiclesPage() {
     },
     onSuccess: async () => {
       setActiveVehicle(null);
-      toast.success("تم حفظ أيام حضور المركبة");
+      toast.success(ui("تم حفظ أيام حضور المركبة"));
       await client.invalidateQueries({ queryKey: ["vehicles"] });
       await client.invalidateQueries({ queryKey: ["payroll"] });
       await client.invalidateQueries({ queryKey: ["monthly", "vehicle-report"] });
     },
-    onError: (error: Error) => toast.error(`تعذر حفظ التشغيل: ${formatErrorMessage(error)}`),
+    onError: (error: Error) => toast.error((ui("تعذر حفظ التشغيل: ") + (formatErrorMessage(error)))),
   });
   const deleteVehicle = useMutation({
     mutationFn: async (id: string) => {
@@ -693,11 +689,11 @@ function VehiclesPage() {
       if (error) throw error;
     },
     onSuccess: async () => {
-      toast.success("تم حذف المركبة وسجل تشغيلها");
+      toast.success(ui("تم حذف المركبة وسجل تشغيلها"));
       await client.invalidateQueries({ queryKey: ["vehicles"] });
       await client.invalidateQueries({ queryKey: ["payroll"] });
     },
-    onError: (error: Error) => toast.error(`تعذر حذف المركبة: ${formatErrorMessage(error)}`),
+    onError: (error: Error) => toast.error((ui("تعذر حذف المركبة: ") + (formatErrorMessage(error)))),
   });
   const machineryRows = machineryQuery.data?.rows ?? [];
   const machineryMaintenanceRows = machineryMaintenanceQuery.data ?? [];
@@ -723,44 +719,38 @@ function VehiclesPage() {
     0,
   );
   return (
-    <div dir="rtl" className="space-y-6">
-      <p className="text-sm font-medium text-muted-foreground">
-        سجل المركبات والآليات وتشغيلها الشهري
-      </p>
+    <div dir={direction()} className="space-y-6">
+      <p className="text-sm font-medium text-muted-foreground">{ui("سجل المركبات والآليات وتشغيلها الشهري")}</p>
       <Tabs defaultValue="utilization" className="space-y-6">
         <TabsList className="glass-card h-auto w-full flex-wrap justify-start gap-1 rounded-full p-1 sm:w-auto sm:justify-center">
-          <TabsTrigger value="utilization" className="rounded-full px-4 py-2">جدوى المركبات الخفيفة والكادر</TabsTrigger>
+          <TabsTrigger value="utilization" className="rounded-full px-4 py-2">{ui("جدوى المركبات الخفيفة والكادر")}</TabsTrigger>
           <TabsTrigger
             value="list"
             className="gap-2 rounded-full px-4 py-2 text-sm font-semibold text-muted-foreground data-[state=active]:bg-white/70 data-[state=active]:text-teal-800 data-[state=active]:shadow-sm dark:data-[state=active]:bg-white/10 dark:data-[state=active]:text-white"
           >
-            <ListChecks className="h-4 w-4" /> سجل المركبات
-          </TabsTrigger>
+            <ListChecks className="h-4 w-4" />{ui(" سجل المركبات")}</TabsTrigger>
           <TabsTrigger
             value="details"
             className="gap-2 rounded-full px-4 py-2 text-sm font-semibold text-muted-foreground data-[state=active]:bg-white/70 data-[state=active]:text-teal-800 data-[state=active]:shadow-sm dark:data-[state=active]:bg-white/10 dark:data-[state=active]:text-white"
           >
-            <CarFront className="h-4 w-4" /> تفاصيل المركبة
-          </TabsTrigger>
+            <CarFront className="h-4 w-4" />{ui(" تفاصيل المركبة")}</TabsTrigger>
           <TabsTrigger
             value="machinery"
             className="gap-2 rounded-full px-4 py-2 text-sm font-semibold text-muted-foreground data-[state=active]:bg-white/70 data-[state=active]:text-teal-800 data-[state=active]:shadow-sm dark:data-[state=active]:bg-white/10 dark:data-[state=active]:text-white"
           >
-            <Wrench className="h-4 w-4" /> الآليات
-          </TabsTrigger>
+            <Wrench className="h-4 w-4" />{ui(" الآليات")}</TabsTrigger>
         </TabsList>
         <TabsContent value="utilization"><VehiclePassengerUtilization /></TabsContent>
         <TabsContent value="list" className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Plus className="h-5 w-5" /> تسجيل مركبة جديدة
-              </CardTitle>
+                <Plus className="h-5 w-5" />{ui(" تسجيل مركبة جديدة")}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
                 <div className="space-y-2">
-                  <Label htmlFor="vehicle-no">رقم المركبة / اللوحة</Label>
+                  <Label htmlFor="vehicle-no">{ui("رقم المركبة / اللوحة")}</Label>
                   <Input
                     id="vehicle-no"
                     value={vehicleNo}
@@ -768,11 +758,11 @@ function VehiclesPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="vehicle-name">الاسم أو النوع</Label>
+                  <Label htmlFor="vehicle-name">{ui("الاسم أو النوع")}</Label>
                   <Input id="vehicle-name" value={name} onChange={(e) => setName(e.target.value)} />
                 </div>
                 <div className="space-y-2">
-                  <Label>الفئة</Label>
+                  <Label>{ui("الفئة")}</Label>
                   <Select
                     value={vehicleClass}
                     onValueChange={(value) => setVehicleClass(value as "light" | "heavy")}
@@ -781,13 +771,13 @@ function VehiclesPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="light">مركبة خفيفة</SelectItem>
-                      <SelectItem value="heavy">مركبة ثقيلة</SelectItem>
+                      <SelectItem value="light">{ui("مركبة خفيفة")}</SelectItem>
+                      <SelectItem value="heavy">{ui("مركبة ثقيلة")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="vehicle-rate">الأجر اليومي (د.ع)</Label>
+                  <Label htmlFor="vehicle-rate">{ui("الأجر اليومي (د.ع)")}</Label>
                   <Input
                     id="vehicle-rate"
                     type="number"
@@ -808,8 +798,7 @@ function VehiclesPage() {
                       Number(dailyRate) < 0
                     }
                   >
-                    <Plus className="ml-2 h-4 w-4" /> إضافة
-                  </Button>
+                    <Plus className="ml-2 h-4 w-4" />{ui(" إضافة")}</Button>
                 </div>
               </div>
             </CardContent>
@@ -817,38 +806,35 @@ function VehiclesPage() {
           <Card>
             <CardHeader className="flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
               <div>
-                <CardTitle>سجل المركبات</CardTitle>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  سجّل تواريخ عمل كل مركبة خلال الشهر، وسيُحسب عدد الأيام والمستحق تلقائياً.
-                </p>
+                <CardTitle>{ui("سجل المركبات")}</CardTitle>
+                <p className="mt-1 text-sm text-muted-foreground">{ui("سجّل تواريخ عمل كل مركبة خلال الشهر، وسيُحسب عدد الأيام والمستحق تلقائياً.")}</p>
               </div>
               <div className="flex items-center gap-3">
                 <Input
-                  aria-label="شهر التشغيل"
+                  aria-label={ui("شهر التشغيل")}
                   type="month"
                   value={month}
                   onChange={(event) => setMonth(event.target.value)}
                   className="w-44"
                 />
-                <Badge variant="secondary">{query.data?.vehicles.length ?? 0} مركبة</Badge>
+                <Badge variant="secondary">{query.data?.vehicles.length ?? 0}{ui(" مركبة")}</Badge>
               </div>
             </CardHeader>
             <CardContent className="overflow-x-auto p-0">
               {query.isError ? (
-                <p className="p-8 text-center text-destructive">
-                  تعذر تحميل المركبات: {(query.error as Error).message}
+                <p className="p-8 text-center text-destructive">{ui("تعذر تحميل المركبات: ")}{(query.error as Error).message}
                 </p>
               ) : query.isLoading ? (
-                <p className="p-8 text-center text-muted-foreground">جارٍ تحميل السجل…</p>
+                <p className="p-8 text-center text-muted-foreground">{ui("جارٍ تحميل السجل…")}</p>
               ) : (
                 <table className="w-full min-w-[850px] text-sm">
                   <thead>
                     <tr className="border-b bg-muted/40 text-right">
-                      <th className="p-3">المركبة</th>
-                      <th className="p-3">التصنيف</th>
-                      <th className="p-3">الأجر اليومي</th>
-                      <th className="p-3">أيام الحضور المسجلة</th>
-                      <th className="p-3">إجراء التسجيل</th>
+                      <th className="p-3">{ui("المركبة")}</th>
+                      <th className="p-3">{ui("التصنيف")}</th>
+                      <th className="p-3">{ui("الأجر اليومي")}</th>
+                      <th className="p-3">{ui("أيام الحضور المسجلة")}</th>
+                      <th className="p-3">{ui("إجراء التسجيل")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -869,29 +855,27 @@ function VehiclesPage() {
                                 className="mt-1 ml-1"
                               >
                                 {overdue
-                                  ? `صيانة متأخرة ${Math.abs(remaining).toLocaleString("ar-IQ")} كم`
-                                  : `الصيانة خلال ${remaining.toLocaleString("ar-IQ")} كم`}
+                                  ? `صيانة متأخرة ${Math.abs(remaining).toLocaleString(displayLocale())} كم`
+                                  : `الصيانة خلال ${remaining.toLocaleString(displayLocale())} كم`}
                               </Badge>
                             );
                           })}
                         </td>
                         <td className="p-3">
-                          {vehicle.vehicle_class === "light" ? "خفيفة" : "ثقيلة"}
+                          {vehicle.vehicle_class === "light" ? ui("خفيفة") : ui("ثقيلة")}
                         </td>
-                        <td className="p-3">{Number(vehicle.daily_rate).toLocaleString()} د.ع</td>
+                        <td className="p-3">{Number(vehicle.daily_rate).toLocaleString()}{ui(" د.ع")}</td>
                         <td className="p-3">
                           <span className="font-semibold tabular-nums">
                             {(dates[vehicle.id] ?? []).length || legacyDays[vehicle.id] || 0}
-                          </span>{" "}
-                          يوم
-                          <div className="mt-1 max-w-64 text-xs text-muted-foreground">
+                          </span>{" "}{ui("يوم")}<div className="mt-1 max-w-64 text-xs text-muted-foreground">
                             {(dates[vehicle.id] ?? []).length
                               ? (dates[vehicle.id] ?? [])
                                   .map((date) => Number(date.slice(8)))
                                   .join("، ")
                               : legacyDays[vehicle.id]
-                                ? "العدد السابق محفوظ دون تحديد التواريخ"
-                                : "لم تُسجّل تواريخ بعد"}
+                                ? ui("العدد السابق محفوظ دون تحديد التواريخ")
+                                : ui("لم تُسجّل تواريخ بعد")}
                           </div>
                         </td>
                         <td className="flex gap-2 p-3">
@@ -900,14 +884,13 @@ function VehiclesPage() {
                             variant="outline"
                             onClick={() => setActiveVehicle(vehicle)}
                           >
-                            <CalendarDays className="ml-2 h-4 w-4" /> تسجيل الحضور
-                          </Button>
+                            <CalendarDays className="ml-2 h-4 w-4" />{ui(" تسجيل الحضور")}</Button>
                           <Button
                             size="icon"
                             variant="ghost"
-                            aria-label="حذف المركبة"
+                            aria-label={ui("حذف المركبة")}
                             onClick={() => {
-                              if (confirm(`حذف المركبة ${vehicle.name} وسجل تشغيلها؟`))
+                              if (confirm((ui("حذف المركبة ") + (vehicle.name) + ui(" وسجل تشغيلها؟"))))
                                 deleteVehicle.mutate(vehicle.id);
                             }}
                           >
@@ -920,7 +903,7 @@ function VehiclesPage() {
                 </table>
               )}
               {query.data?.vehicles.length === 0 && (
-                <p className="p-8 text-center text-muted-foreground">لا توجد مركبات مسجلة بعد.</p>
+                <p className="p-8 text-center text-muted-foreground">{ui("لا توجد مركبات مسجلة بعد.")}</p>
               )}
             </CardContent>
           </Card>
@@ -938,16 +921,13 @@ function VehiclesPage() {
           <Card>
             <CardHeader className="flex-row items-center justify-between gap-3">
               <div>
-                <CardTitle>سجل الآليات</CardTitle>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  الهياب والكرين واللودر وغيرها، مع العدادات وساعات التشغيل.
-                </p>
+                <CardTitle>{ui("سجل الآليات")}</CardTitle>
+                <p className="mt-1 text-sm text-muted-foreground">{ui("الهياب والكرين واللودر وغيرها، مع العدادات وساعات التشغيل.")}</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" asChild>
                   <label className="cursor-pointer">
-                    <FileUp className="ml-2 h-4 w-4" /> استيراد Excel
-                    <input
+                    <FileUp className="ml-2 h-4 w-4" />{ui(" استيراد Excel")}<input
                       type="file"
                       accept=".xlsx,.xls"
                       className="hidden"
@@ -961,40 +941,38 @@ function VehiclesPage() {
                 </Button>
                 <Button asChild>
                   <a href="/maintenance">
-                    <Wrench className="ml-2 h-4 w-4" /> إدارة وصيانة الآليات
-                  </a>
+                    <Wrench className="ml-2 h-4 w-4" />{ui(" إدارة وصيانة الآليات")}</a>
                 </Button>
               </div>
             </CardHeader>
             <CardContent className="border-t p-4">
               <div className="mb-3 flex items-center gap-2 font-semibold">
-                <BarChart3 className="h-4 w-4 text-primary" /> إحصائيات الآليات
-              </div>
+                <BarChart3 className="h-4 w-4 text-primary" />{ui(" إحصائيات الآليات")}</div>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                 <div className="rounded-xl border bg-background/60 p-3">
-                  <p className="text-xs text-muted-foreground">إجمالي الآليات</p>
+                  <p className="text-xs text-muted-foreground">{ui("إجمالي الآليات")}</p>
                   <p className="mt-1 text-xl font-bold">
                     {machineryQuery.data?.total ?? machineryRows.length}
                   </p>
                 </div>
                 <div className="rounded-xl border bg-background/60 p-3">
-                  <p className="text-xs text-muted-foreground">نشطة ضمن المعروض</p>
+                  <p className="text-xs text-muted-foreground">{ui("نشطة ضمن المعروض")}</p>
                   <p className="mt-1 text-xl font-bold text-emerald-600">
                     {machineryRows.filter((row) => row.status === "active").length}
                   </p>
                 </div>
                 <div className="rounded-xl border bg-background/60 p-3">
-                  <p className="text-xs text-muted-foreground">قيد الصيانة ضمن المعروض</p>
+                  <p className="text-xs text-muted-foreground">{ui("قيد الصيانة ضمن المعروض")}</p>
                   <p className="mt-1 text-xl font-bold text-amber-600">
                     {machineryRows.filter((row) => row.status === "maintenance").length}
                   </p>
               </div>
                 <div className="rounded-xl border bg-background/60 p-3">
-                  <p className="text-xs text-muted-foreground">بيانات ناقصة ضمن المعروض</p>
+                  <p className="text-xs text-muted-foreground">{ui("بيانات ناقصة ضمن المعروض")}</p>
                   <p className="mt-1 text-xl font-bold text-rose-600">{incompleteMachineryCount}</p>
                 </div>
                 <div className="rounded-xl border bg-background/60 p-3">
-                  <p className="text-xs text-muted-foreground">صيانة هذا الشهر · التكلفة</p>
+                  <p className="text-xs text-muted-foreground">{ui("صيانة هذا الشهر · التكلفة")}</p>
                   <p className="mt-1 text-xl font-bold">
                     {monthMaintenanceRows.length} ·{" "}
                     {Math.round(
@@ -1002,36 +980,30 @@ function VehiclesPage() {
                         (sum, row) => sum + Number(row.total_cost ?? 0),
                         0,
                       ),
-                    ).toLocaleString("ar-IQ")}{" "}
-                    د.ع
-                  </p>
+                    ).toLocaleString(displayLocale())}{" "}{ui("د.ع")}</p>
                 </div>
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">
-                مجموع الإيجار اليومي للآليات المعروضة:{" "}
-                {Math.round(machineryDailyRent).toLocaleString("ar-IQ")} د.ع
-              </p>
+              <p className="mt-2 text-xs text-muted-foreground">{ui("مجموع الإيجار اليومي للآليات المعروضة:")}{" "}
+                {Math.round(machineryDailyRent).toLocaleString(displayLocale())}{ui(" د.ع")}</p>
             </CardContent>
             {machineryOperationsQuery.isError && (
-              <p role="alert" className="border-t bg-destructive/5 p-3 text-sm text-destructive">
-                تعذر تحميل حضور الآليات. طبّق ترحيل machinery_monthly_operations في قاعدة البيانات.
-              </p>
+              <p role="alert" className="border-t bg-destructive/5 p-3 text-sm text-destructive">{ui("تعذر تحميل حضور الآليات. طبّق ترحيل machinery_monthly_operations في قاعدة البيانات.")}</p>
             )}
             <CardContent className="overflow-x-auto p-0">
               {machineryQuery.isLoading ? (
-                <p className="p-8 text-center text-muted-foreground">جارٍ تحميل الآليات…</p>
+                <p className="p-8 text-center text-muted-foreground">{ui("جارٍ تحميل الآليات…")}</p>
               ) : (
                 <table className="w-full min-w-[1050px] text-sm">
                   <thead>
                     <tr className="border-b bg-muted/40 text-right">
-                      <th className="p-3">الآلية</th>
-                      <th className="p-3">الرقم / الكود</th>
-                      <th className="p-3">المالك</th>
-                      <th className="p-3">الحالة</th>
-                      <th className="p-3">البيانات</th>
-                      <th className="p-3">ساعات التشغيل</th>
-                      <th className="p-3">العداد</th>
-                      <th className="p-3">الإجراءات</th>
+                      <th className="p-3">{ui("الآلية")}</th>
+                      <th className="p-3">{ui("الرقم / الكود")}</th>
+                      <th className="p-3">{ui("المالك")}</th>
+                      <th className="p-3">{ui("الحالة")}</th>
+                      <th className="p-3">{ui("البيانات")}</th>
+                      <th className="p-3">{ui("ساعات التشغيل")}</th>
+                      <th className="p-3">{ui("العداد")}</th>
+                      <th className="p-3">{ui("الإجراءات")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1050,31 +1022,28 @@ function VehiclesPage() {
                             {machine.plate_no ? ` · ${machine.plate_no}` : ""}
                           </div>
                         </td>
-                        <td className="p-3">{machine.owner_name || "غير مسجل"}</td>
+                        <td className="p-3">{machine.owner_name || ui("غير مسجل")}</td>
                         <td className="p-3">
                           <Badge variant={machine.status === "active" ? "secondary" : "outline"}>
                             {machine.status === "active"
-                              ? "نشطة"
+                              ? ui("نشطة")
                               : machine.status === "maintenance"
-                                ? "قيد الصيانة"
-                                : "متوقفة"}
+                                ? ui("قيد الصيانة")
+                                : ui("متوقفة")}
                           </Badge>
                         </td>
                         <td className="p-3">
                           {!machine.name || !machine.asset_number || !machine.owner_name ? (
-                            <Badge variant="outline" className="border-amber-500/40 text-amber-700">
-                              بيانات أساسية ناقصة
-                            </Badge>
+                            <Badge variant="outline" className="border-amber-500/40 text-amber-700">{ui("بيانات أساسية ناقصة")}</Badge>
                           ) : (
-                            <Badge variant="secondary">مكتملة</Badge>
+                            <Badge variant="secondary">{ui("مكتملة")}</Badge>
                           )}
                         </td>
                         <td className="p-3 tabular-nums">
                           {Number(machine.current_hours ?? 0).toLocaleString()}
                         </td>
                         <td className="p-3 tabular-nums">
-                          {Number(machine.current_odometer ?? 0).toLocaleString()} كم
-                        </td>
+                          {Number(machine.current_odometer ?? 0).toLocaleString()}{ui(" كم")}</td>
                         <td className="p-3">
                           <div className="flex gap-1">
                             <Button
@@ -1086,13 +1055,12 @@ function VehiclesPage() {
                                 machineryOperationsQuery.isError
                               }
                             >
-                              <CalendarDays className="ml-1 h-4 w-4" /> حضور
-                            </Button>
+                              <CalendarDays className="ml-1 h-4 w-4" />{ui(" حضور")}</Button>
                             <Button
                               size="icon"
                               variant="ghost"
-                              aria-label={`عرض تفاصيل ${machine.name}`}
-                              title="عرض التفاصيل"
+                              aria-label={(ui("عرض تفاصيل ") + (machine.name))}
+                              title={ui("عرض التفاصيل")}
                               onClick={() => setMachineryDetails(machine)}
                             >
                               <Eye className="h-4 w-4" />
@@ -1105,17 +1073,14 @@ function VehiclesPage() {
                 </table>
               )}
               {!machineryQuery.isLoading && !machineryRows.length && (
-                <p className="p-8 text-center text-muted-foreground">
-                  أضف الآليات من كتالوج الصيانة.
-                </p>
+                <p className="p-8 text-center text-muted-foreground">{ui("أضف الآليات من كتالوج الصيانة.")}</p>
               )}
               {machineryRows.length < (machineryQuery.data?.total ?? 0) && (
                 <div className="border-t p-4 text-center">
                   <Button
                     variant="outline"
                     onClick={() => setMachineryLimit((limit) => limit + 20)}
-                  >
-                    عرض 20 آلية إضافية · المعروض {machineryRows.length} من{" "}
+                  >{ui("عرض 20 آلية إضافية · المعروض ")}{machineryRows.length}{ui(" من")}{" "}
                     {machineryQuery.data?.total}
                   </Button>
                 </div>
@@ -1130,33 +1095,28 @@ function VehiclesPage() {
           if (!open && !importMachinery.isPending) setMachineryImport(null);
         }}
       >
-        <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent dir={direction()} className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>معاينة استيراد الآليات</DialogTitle>
-            <DialogDescription>
-              سيتم استيراد بيانات الورقة الأولى وربط كل سجل بقسم الصيانة. السجلات الموجودة مسبقاً
-              برقم أو كود مطابق ستُتجاوز دون استبدال بياناتها.
-            </DialogDescription>
+            <DialogTitle>{ui("معاينة استيراد الآليات")}</DialogTitle>
+            <DialogDescription>{ui("سيتم استيراد بيانات الورقة الأولى وربط كل سجل بقسم الصيانة. السجلات الموجودة مسبقاً برقم أو كود مطابق ستُتجاوز دون استبدال بياناتها.")}</DialogDescription>
           </DialogHeader>
           {machineryImport && (
             <>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <div className="rounded-xl border p-3">
-                  <p className="text-xs text-muted-foreground">جاهزة للاستيراد</p>
+                  <p className="text-xs text-muted-foreground">{ui("جاهزة للاستيراد")}</p>
                   <p className="text-xl font-bold">{machineryImport.length}</p>
                 </div>
                 <div className="rounded-xl border p-3">
-                  <p className="text-xs text-muted-foreground">موجودة مسبقاً وستُتجاوز</p>
+                  <p className="text-xs text-muted-foreground">{ui("موجودة مسبقاً وستُتجاوز")}</p>
                   <p className="text-xl font-bold">{duplicateMachineryImportCount}</p>
                 </div>
                 <div className="rounded-xl border p-3">
-                  <p className="text-xs text-muted-foreground">
-                    صفوف لا تحتوي الرقم أو الكود أو النوع
-                  </p>
+                  <p className="text-xs text-muted-foreground">{ui("صفوف لا تحتوي الرقم أو الكود أو النوع")}</p>
                   <p className="text-xl font-bold">{invalidMachineryRows}</p>
                 </div>
                 <div className="rounded-xl border p-3">
-                  <p className="text-xs text-muted-foreground">مالك غير مسجل في الملف</p>
+                  <p className="text-xs text-muted-foreground">{ui("مالك غير مسجل في الملف")}</p>
                   <p className="text-xl font-bold">
                     {machineryImport.filter((row) => !meaningful(row.owner_name)).length}
                   </p>
@@ -1166,9 +1126,9 @@ function VehiclesPage() {
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-muted">
                     <tr>
-                      <th className="p-2 text-right">الرقم</th>
-                      <th className="p-2 text-right">الآلية</th>
-                      <th className="p-2 text-right">المالك</th>
+                      <th className="p-2 text-right">{ui("الرقم")}</th>
+                      <th className="p-2 text-right">{ui("الآلية")}</th>
+                      <th className="p-2 text-right">{ui("المالك")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1180,7 +1140,7 @@ function VehiclesPage() {
                           {meaningful(row.owner_name) ? (
                             row.owner_name
                           ) : (
-                            <span className="text-amber-600">غير مسجل</span>
+                            <span className="text-amber-600">{ui("غير مسجل")}</span>
                           )}
                         </td>
                       </tr>
@@ -1188,9 +1148,7 @@ function VehiclesPage() {
                   </tbody>
               </table>
                 {machineryImport.length > 10 && (
-                  <p className="p-2 text-center text-xs text-muted-foreground">
-                    معاينة 10 من {machineryImport.length} سجلاً
-                  </p>
+                  <p className="p-2 text-center text-xs text-muted-foreground">{ui("معاينة 10 من ")}{machineryImport.length}{ui(" سجلاً")}</p>
                 )}
             </div>
               <div className="flex justify-end gap-2">
@@ -1198,16 +1156,14 @@ function VehiclesPage() {
                   variant="outline"
                   onClick={() => setMachineryImport(null)}
                   disabled={importMachinery.isPending}
-                >
-                  إلغاء
-                </Button>
+                >{ui("إلغاء")}</Button>
                 <Button
                   onClick={() => importMachinery.mutate(machineryImport)}
                   disabled={importMachinery.isPending}
                 >
                   {importMachinery.isPending
-                    ? "جارٍ الاستيراد…"
-                    : `استيراد ${machineryImport.length} سجلاً`}
+                    ? ui("جارٍ الاستيراد…")
+                    : (ui("استيراد ") + (machineryImport.length) + ui(" سجلاً"))}
                 </Button>
               </div>
             </>
@@ -1220,18 +1176,17 @@ function VehiclesPage() {
           if (!open) setActiveVehicle(null);
         }}
       >
-        <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent dir={direction()} className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           {activeVehicle && (
             <>
             <DialogHeader>
-              <DialogTitle>تسجيل أيام حضور المركبة</DialogTitle>
+              <DialogTitle>{ui("تسجيل أيام حضور المركبة")}</DialogTitle>
                 <DialogDescription>
-                  {activeVehicle.name} · {activeVehicle.vehicle_no} · شهر {month}
+                  {activeVehicle.name} · {activeVehicle.vehicle_no}{ui(" · شهر ")}{month}
                 </DialogDescription>
             </DialogHeader>
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-muted/30 p-3">
-                <p className="text-sm">
-                  حدد الأيام التي عملت فيها المركبة. الأيام المحددة:{" "}
+                <p className="text-sm">{ui("حدد الأيام التي عملت فيها المركبة. الأيام المحددة:")}{" "}
                   <b>{(dates[activeVehicle.id] ?? []).length}</b>
                 </p>
               <div className="flex gap-2">
@@ -1241,29 +1196,22 @@ function VehiclesPage() {
                     onClick={() =>
                       setDates((state) => ({ ...state, [activeVehicle.id]: [...monthDates] }))
                     }
-                  >
-                    تحديد الشهر كله
-                  </Button>
+                  >{ui("تحديد الشهر كله")}</Button>
                   <Button
                     size="sm"
                     variant="ghost"
                     onClick={() => setDates((state) => ({ ...state, [activeVehicle.id]: [] }))}
-                  >
-                    مسح التحديد
-                  </Button>
+                  >{ui("مسح التحديد")}</Button>
               </div>
             </div>
               {!dates[activeVehicle.id]?.length && legacyDays[activeVehicle.id] > 0 && (
-                <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-                  السجل السابق يحفظ عدد {legacyDays[activeVehicle.id]} أيام دون تواريخ محددة. حدّد
-                  الأيام الفعلية الآن لحفظ التقرير التفصيلي.
-                </p>
+                <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">{ui("السجل السابق يحفظ عدد ")}{legacyDays[activeVehicle.id]}{ui(" أيام دون تواريخ محددة. حدّد الأيام الفعلية الآن لحفظ التقرير التفصيلي.")}</p>
               )}
-            <div className="grid grid-cols-4 gap-2 sm:grid-cols-7" aria-label="أيام الشهر">
+            <div className="grid grid-cols-4 gap-2 sm:grid-cols-7" aria-label={ui("أيام الشهر")}>
               {monthDates.map((date) => {
                 const selected = (dates[activeVehicle.id] ?? []).includes(date);
                 const dayNumber = Number(date.slice(8));
-                  const weekday = new Date(`${date}T12:00:00`).toLocaleDateString("ar-IQ", {
+                  const weekday = new Date(`${date}T12:00:00`).toLocaleDateString(displayLocale(), {
                     weekday: "short",
                   });
                   return (
@@ -1292,9 +1240,7 @@ function VehiclesPage() {
                 })}
               </div>
               <div className="flex justify-end gap-2 border-t pt-4">
-                <Button variant="outline" onClick={() => setActiveVehicle(null)}>
-                  إلغاء
-                </Button>
+                <Button variant="outline" onClick={() => setActiveVehicle(null)}>{ui("إلغاء")}</Button>
                 <Button
                   onClick={() =>
                     saveDays.mutate({
@@ -1305,7 +1251,7 @@ function VehiclesPage() {
                   disabled={saveDays.isPending}
                 >
                   <Save className="ml-2 h-4 w-4" />{" "}
-                  {saveDays.isPending ? "جارٍ الحفظ…" : "حفظ أيام الحضور"}
+                  {saveDays.isPending ? ui("جارٍ الحفظ…") : ui("حفظ أيام الحضور")}
                 </Button>
               </div>
             </>
@@ -1318,19 +1264,17 @@ function VehiclesPage() {
           if (!open) setActiveMachinery(null);
         }}
       >
-        <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent dir={direction()} className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           {activeMachinery && (
             <>
               <DialogHeader>
-                <DialogTitle>تسجيل حضور الآلية</DialogTitle>
+                <DialogTitle>{ui("تسجيل حضور الآلية")}</DialogTitle>
                 <DialogDescription>
-                  {activeMachinery.name} · {activeMachinery.asset_number || activeMachinery.code} ·
-                  شهر {month}
+                  {activeMachinery.name} · {activeMachinery.asset_number || activeMachinery.code}{ui(" · شهر ")}{month}
                 </DialogDescription>
               </DialogHeader>
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-muted/30 p-3">
-                <p className="text-sm">
-                  أيام التشغيل المحددة: <b>{(machineryDates[activeMachinery.id] ?? []).length}</b>
+                <p className="text-sm">{ui("أيام التشغيل المحددة: ")}<b>{(machineryDates[activeMachinery.id] ?? []).length}</b>
                 </p>
                 <div className="flex gap-2">
                   <Button
@@ -1342,25 +1286,21 @@ function VehiclesPage() {
                         [activeMachinery.id]: [...monthDates],
                       }))
                     }
-                  >
-                    تحديد كل الأيام
-                  </Button>
+                  >{ui("تحديد كل الأيام")}</Button>
                   <Button
                     size="sm"
                     variant="ghost"
                     onClick={() =>
                       setMachineryDates((state) => ({ ...state, [activeMachinery.id]: [] }))
                     }
-                  >
-                    مسح التحديد
-                  </Button>
+                  >{ui("مسح التحديد")}</Button>
                 </div>
               </div>
-              <div className="grid grid-cols-4 gap-2 sm:grid-cols-7" aria-label="أيام الشهر">
+              <div className="grid grid-cols-4 gap-2 sm:grid-cols-7" aria-label={ui("أيام الشهر")}>
                 {monthDates.map((date) => {
                   const selected = (machineryDates[activeMachinery.id] ?? []).includes(date);
                   const day = Number(date.slice(8));
-                  const dayName = new Date(`${date}T12:00:00`).toLocaleDateString("ar-IQ", {
+                  const dayName = new Date(`${date}T12:00:00`).toLocaleDateString(displayLocale(), {
                     weekday: "short",
                   });
                   return (
@@ -1389,9 +1329,7 @@ function VehiclesPage() {
               })}
             </div>
             <div className="flex justify-end gap-2 border-t pt-4">
-                <Button variant="outline" onClick={() => setActiveMachinery(null)}>
-                  إلغاء
-              </Button>
+                <Button variant="outline" onClick={() => setActiveMachinery(null)}>{ui("إلغاء")}</Button>
                 <Button
                   onClick={() =>
                     saveMachineryAttendance.mutate({
@@ -1402,7 +1340,7 @@ function VehiclesPage() {
                   disabled={saveMachineryAttendance.isPending}
                 >
                   <Save className="ml-2 h-4 w-4" />
-                  {saveMachineryAttendance.isPending ? "جارٍ الحفظ…" : "حفظ الحضور"}
+                  {saveMachineryAttendance.isPending ? ui("جارٍ الحفظ…") : ui("حفظ الحضور")}
                 </Button>
               </div>
             </>
@@ -1415,13 +1353,12 @@ function VehiclesPage() {
           if (!open) setMachineryDetails(null);
         }}
       >
-        <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+        <DialogContent dir={direction()} className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
           {machineryDetails && (
             <>
               <DialogHeader>
                 <DialogTitle>{machineryDetails.name}</DialogTitle>
-                <DialogDescription>
-                  التفاصيل الكاملة للآلية · {machineryDetails.asset_number || machineryDetails.code}
+                <DialogDescription>{ui("التفاصيل الكاملة للآلية · ")}{machineryDetails.asset_number || machineryDetails.code}
                 </DialogDescription>
               </DialogHeader>
               <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -1448,15 +1385,15 @@ function VehiclesPage() {
                     ["قراءة العداد", machineryDetails.current_odometer],
                     [
                       "الإيجار اليومي",
-                      `${Number(machineryDetails.daily_rent ?? 0).toLocaleString("ar-IQ")} د.ع`,
+                      `${Number(machineryDetails.daily_rent ?? 0).toLocaleString(displayLocale())} د.ع`,
                     ],
                     [
                       "كلفة السائق اليومية",
-                      `${Number(machineryDetails.driver_daily_cost ?? 0).toLocaleString("ar-IQ")} د.ع`,
+                      `${Number(machineryDetails.driver_daily_cost ?? 0).toLocaleString(displayLocale())} د.ع`,
                     ],
                     [
                       "كلفة الساعة الإضافية",
-                      `${Number(machineryDetails.extra_hourly_rate ?? 0).toLocaleString("ar-IQ")} د.ع`,
+                      `${Number(machineryDetails.extra_hourly_rate ?? 0).toLocaleString(displayLocale())} د.ع`,
                     ],
                     ["حالة المستندات", machineryDetails.document_status],
                     ["الأيام المتبقية للمستندات", machineryDetails.document_days_remaining],
@@ -1473,7 +1410,7 @@ function VehiclesPage() {
                   ] as Array<[string, string | number | boolean | null | undefined]>
                 ).map(([label, value]) => (
                   <div key={label} className="rounded-xl border bg-muted/20 p-3">
-                    <dt className="text-xs text-muted-foreground">{label}</dt>
+                    <dt className="text-xs text-muted-foreground">{ui(label)}</dt>
                     <dd className="mt-1 break-words text-sm font-medium">
                       {value == null || value === "" ? "—" : value}
                     </dd>
@@ -1570,11 +1507,11 @@ function VehicleDetailsTab({
       if (error) throw error;
     },
     onSuccess: async () => {
-      toast.success("تم اعتماد شكل المركبة");
+      toast.success(ui("تم اعتماد شكل المركبة"));
       await client.invalidateQueries({ queryKey: ["vehicles"] });
     },
     onError: (error: Error) =>
-      toast.error(`تعذر اعتماد الشكل: ${describeVehicleImageError(error)}`),
+      toast.error((ui("تعذر اعتماد الشكل: ") + (describeVehicleImageError(error)))),
   });
 
   const attachImage = async (file: File) => {
@@ -1589,9 +1526,9 @@ function VehicleDetailsTab({
         .eq("id", selected.id);
       if (error) throw error;
       await client.invalidateQueries({ queryKey: ["vehicles"] });
-      toast.success("تم إرفاق شكل المركبة");
+      toast.success(ui("تم إرفاق شكل المركبة"));
     } catch (error) {
-      toast.error(`تعذر إرفاق الصورة: ${describeVehicleImageError(error)}`);
+      toast.error((ui("تعذر إرفاق الصورة: ") + (describeVehicleImageError(error))));
     } finally {
       setAttaching(false);
       setAttachStatus(null);
@@ -1599,13 +1536,11 @@ function VehicleDetailsTab({
   };
 
   if (isLoading) {
-    return <p className="p-8 text-center text-muted-foreground">جارٍ تحميل تفاصيل المركبات…</p>;
+    return <p className="p-8 text-center text-muted-foreground">{ui("جارٍ تحميل تفاصيل المركبات…")}</p>;
   }
   if (!selected) {
     return (
-      <div className="glass-card rounded-3xl p-8 text-center text-muted-foreground">
-        لا توجد مركبات مسجلة بعد. أضف مركبة من تبويب «سجل المركبات» أولاً.
-      </div>
+      <div className="glass-card rounded-3xl p-8 text-center text-muted-foreground">{ui("لا توجد مركبات مسجلة بعد. أضف مركبة من تبويب «سجل المركبات» أولاً.")}</div>
     );
   }
 
@@ -1658,14 +1593,13 @@ function VehicleDetailsTab({
               </span>
               <div>
                 <h2 className="text-lg font-bold">{selected.name}</h2>
-                <p className="text-xs text-muted-foreground">
-                  لوحة {selected.vehicle_no} ·{" "}
-                  {selected.vehicle_class === "light" ? "مركبة خفيفة" : "مركبة ثقيلة"}
+                <p className="text-xs text-muted-foreground">{ui("لوحة ")}{selected.vehicle_no} ·{" "}
+                  {selected.vehicle_class === "light" ? ui("مركبة خفيفة") : ui("مركبة ثقيلة")}
                 </p>
               </div>
             </div>
             <Badge variant={selected.is_active ? "default" : "secondary"}>
-              {selected.is_active ? "نشطة" : "موقوفة"}
+              {selected.is_active ? ui("نشطة") : ui("موقوفة")}
             </Badge>
           </div>
           <VehicleDiagram
@@ -1684,11 +1618,8 @@ function VehicleDetailsTab({
             <CarFront className="h-8 w-8" />
           </span>
           <div>
-            <h3 className="text-base font-bold">أرفق شكل المركبة</h3>
-            <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-              لم تُرفق صورة لهذه المركبة بعد. أضف شكلها لعرض رقم اللوحة وآخر تعبئة وقود وتاريخ
-              انتهاء التصريح الأمني على الرسم.
-            </p>
+            <h3 className="text-base font-bold">{ui("أرفق شكل المركبة")}</h3>
+            <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">{ui("لم تُرفق صورة لهذه المركبة بعد. أضف شكلها لعرض رقم اللوحة وآخر تعبئة وقود وتاريخ انتهاء التصريح الأمني على الرسم.")}</p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-2">
             <label
@@ -1698,7 +1629,7 @@ function VehicleDetailsTab({
               )}
             >
               <Upload className="h-4 w-4" />
-              {attaching ? "جارٍ المعالجة…" : "إرفاق شكل المركبة"}
+              {attaching ? ui("جارٍ المعالجة…") : ui("إرفاق شكل المركبة")}
               <input
                 type="file"
                 accept="image/png,image/jpeg,image/webp"
@@ -1715,17 +1646,13 @@ function VehicleDetailsTab({
               variant="outline"
               onClick={() => attachDefault.mutate(selected.id)}
               disabled={attachDefault.isPending}
-            >
-              اعتماد الشكل الافتراضي
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setEditing(true)}>
-              تعديل التفاصيل
-            </Button>
+            >{ui("اعتماد الشكل الافتراضي")}</Button>
+            <Button type="button" variant="ghost" onClick={() => setEditing(true)}>{ui("تعديل التفاصيل")}</Button>
           </div>
           {attaching && (
             <p className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
               <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-              {attachStatus ?? "جارٍ معالجة الصورة…"}
+              {attachStatus ?? ui("جارٍ معالجة الصورة…")}
             </p>
           )}
         </div>
@@ -1742,8 +1669,7 @@ function VehicleDetailsTab({
       ) : hasImage ? (
         <div className="flex justify-end">
           <Button variant="outline" onClick={() => setEditing(true)}>
-            <PencilLine className="ml-2 h-4 w-4" /> تعديل التفاصيل
-          </Button>
+            <PencilLine className="ml-2 h-4 w-4" />{ui(" تعديل التفاصيل")}</Button>
         </div>
       ) : null}
 
@@ -1792,9 +1718,9 @@ function VehicleDetailForm({
       setUploadStatus("جارٍ رفع الصورة…");
       const url = await uploadVehicleImage(file, vehicle.id);
       setImageUrl(url);
-      toast.success("تم رفع صورة المركبة، اضغط «حفظ التفاصيل» لتثبيتها");
+      toast.success(ui("تم رفع صورة المركبة، اضغط «حفظ التفاصيل» لتثبيتها"));
     } catch (error) {
-      toast.error(`تعذر رفع الصورة: ${describeVehicleImageError(error)}`);
+      toast.error((ui("تعذر رفع الصورة: ") + (describeVehicleImageError(error))));
     } finally {
       setUploading(false);
       setUploadStatus(null);
@@ -1827,29 +1753,29 @@ function VehicleDetailForm({
       if (error) throw error;
     },
     onSuccess: async () => {
-      toast.success("تم حفظ تفاصيل المركبة");
+      toast.success(ui("تم حفظ تفاصيل المركبة"));
       await client.invalidateQueries({ queryKey: ["vehicles"] });
       await client.invalidateQueries({ queryKey: ["payroll"] });
       await client.invalidateQueries({ queryKey: ["monthly", "vehicle-report"] });
       onSaved();
     },
     onError: (error: Error) =>
-      toast.error(`تعذر حفظ التفاصيل: ${describeVehicleImageError(error)}`),
+      toast.error((ui("تعذر حفظ التفاصيل: ") + (describeVehicleImageError(error)))),
   });
 
   return (
     <div className="glass-card rounded-3xl p-4 sm:p-6">
       <div className="mb-4 flex items-center gap-2">
         <PencilLine className="h-4 w-4 text-primary" />
-        <h3 className="text-sm font-bold">تحرير تفاصيل المركبة</h3>
+        <h3 className="text-sm font-bold">{ui("تحرير تفاصيل المركبة")}</h3>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div className="space-y-2">
-          <Label htmlFor="d-name">الاسم / النوع</Label>
+          <Label htmlFor="d-name">{ui("الاسم / النوع")}</Label>
           <Input id="d-name" value={name} onChange={(event) => setName(event.target.value)} />
         </div>
         <div className="space-y-2">
-          <Label>الفئة</Label>
+          <Label>{ui("الفئة")}</Label>
           <Select
             value={vehicleClass}
             onValueChange={(value) => setVehicleClass(value as "light" | "heavy")}
@@ -1858,13 +1784,13 @@ function VehicleDetailForm({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="light">مركبة خفيفة</SelectItem>
-              <SelectItem value="heavy">مركبة ثقيلة</SelectItem>
+              <SelectItem value="light">{ui("مركبة خفيفة")}</SelectItem>
+              <SelectItem value="heavy">{ui("مركبة ثقيلة")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-2">
-          <Label>نوع الوقود</Label>
+          <Label>{ui("نوع الوقود")}</Label>
           <Select
             value={fuelType}
             onValueChange={(value) => setFuelType(value as "gasoline" | "diesel")}
@@ -1873,22 +1799,22 @@ function VehicleDetailForm({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="diesel">كاز (ديزل)</SelectItem>
-              <SelectItem value="gasoline">بنزين</SelectItem>
+              <SelectItem value="diesel">{ui("كاز (ديزل)")}</SelectItem>
+              <SelectItem value="gasoline">{ui("بنزين")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-2">
-          <Label>السائق الحالي</Label>
+          <Label>{ui("السائق الحالي")}</Label>
           <Select
             value={driverId || "none"}
             onValueChange={(value) => setDriverId(value === "none" ? "" : value)}
           >
             <SelectTrigger>
-              <SelectValue placeholder="اختر السائق" />
+              <SelectValue placeholder={ui("اختر السائق")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">بدون سائق</SelectItem>
+              <SelectItem value="none">{ui("بدون سائق")}</SelectItem>
               {drivers.map((driver) => (
                 <SelectItem key={driver.id} value={driver.id}>
                   {driver.full_name}
@@ -1899,7 +1825,7 @@ function VehicleDetailForm({
           </Select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="d-odo">عداد الكيلومترات الحالي</Label>
+          <Label htmlFor="d-odo">{ui("عداد الكيلومترات الحالي")}</Label>
           <Input
             id="d-odo"
             type="number"
@@ -1910,7 +1836,7 @@ function VehicleDetailForm({
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="d-rate">الأجر اليومي (د.ع)</Label>
+          <Label htmlFor="d-rate">{ui("الأجر اليومي (د.ع)")}</Label>
           <Input
             id="d-rate"
             type="number"
@@ -1920,7 +1846,7 @@ function VehicleDetailForm({
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="d-fuel">آخر تعبئة وقود</Label>
+          <Label htmlFor="d-fuel">{ui("آخر تعبئة وقود")}</Label>
           <Input
             id="d-fuel"
             type="date"
@@ -1929,7 +1855,7 @@ function VehicleDetailForm({
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="d-permit">انتهاء التصريح الأمني</Label>
+          <Label htmlFor="d-permit">{ui("انتهاء التصريح الأمني")}</Label>
           <Input
             id="d-permit"
             type="date"
@@ -1938,7 +1864,7 @@ function VehicleDetailForm({
           />
         </div>
         <div className="space-y-2 sm:col-span-2 lg:col-span-3">
-          <Label htmlFor="d-notes">ملاحظات</Label>
+          <Label htmlFor="d-notes">{ui("ملاحظات")}</Label>
           <Textarea
             id="d-notes"
             rows={3}
@@ -1947,7 +1873,7 @@ function VehicleDetailForm({
           />
         </div>
         <div className="space-y-2 sm:col-span-2 lg:col-span-3">
-          <Label>شكل المركبة</Label>
+          <Label>{ui("شكل المركبة")}</Label>
           <div className="flex flex-wrap items-center gap-2">
             <label
               className={cn(
@@ -1956,7 +1882,7 @@ function VehicleDetailForm({
               )}
             >
               <Upload className="h-4 w-4" />
-              {uploading ? "جارٍ المعالجة…" : imageUrl ? "استبدال الصورة" : "إرفاق شكل المركبة"}
+              {uploading ? ui("جارٍ المعالجة…") : imageUrl ? ui("استبدال الصورة") : ui("إرفاق شكل المركبة")}
               <input
                 type="file"
                 accept="image/png,image/jpeg,image/webp"
@@ -1974,47 +1900,39 @@ function VehicleDetailForm({
                 variant="outline"
                 size="sm"
                 onClick={() => setImageUrl(DEFAULT_VEHICLE_IMAGE)}
-              >
-                اعتماد الشكل الافتراضي
-              </Button>
+              >{ui("اعتماد الشكل الافتراضي")}</Button>
             )}
             {imageUrl && (
-              <Button type="button" variant="ghost" size="sm" onClick={() => setImageUrl("")}>
-                إزالة الصورة
-              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setImageUrl("")}>{ui("إزالة الصورة")}</Button>
             )}
-            <span className="text-xs text-muted-foreground">PNG أو JPG أو WebP — حتى 5MB</span>
+            <span className="text-xs text-muted-foreground">{ui("PNG أو JPG أو WebP — حتى 5MB")}</span>
           </div>
           {uploading && (
             <p className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
               <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-              {uploadStatus ?? "جارٍ معالجة الصورة…"}
+              {uploadStatus ?? ui("جارٍ معالجة الصورة…")}
             </p>
           )}
           {imageUrl ? (
             <PrivateStorageMedia bucket="vehicle-images" reference={imageUrl}>{url => <img
               src={url}
-              alt="معاينة شكل المركبة"
+              alt={ui("معاينة شكل المركبة")}
               className="mt-1 h-24 w-auto rounded-lg border bg-white object-contain p-1"
             />}</PrivateStorageMedia>
           ) : (
-            <div className="mt-1 flex h-24 w-44 items-center justify-center rounded-lg border border-dashed text-xs text-muted-foreground">
-              لم تُرفق صورة بعد
-            </div>
+            <div className="mt-1 flex h-24 w-44 items-center justify-center rounded-lg border border-dashed text-xs text-muted-foreground">{ui("لم تُرفق صورة بعد")}</div>
           )}
         </div>
       </div>
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-4">
         <label className="flex items-center gap-2 text-sm font-medium">
           <Switch checked={isActive} onCheckedChange={setIsActive} />
-          {isActive ? "المركبة نشطة" : "المركبة موقوفة"}
+          {isActive ? ui("المركبة نشطة") : ui("المركبة موقوفة")}
         </label>
         <div className="flex items-center gap-2">
-          <Button type="button" variant="ghost" onClick={onCancel}>
-            إلغاء
-          </Button>
+          <Button type="button" variant="ghost" onClick={onCancel}>{ui("إلغاء")}</Button>
           <Button onClick={() => save.mutate()} disabled={save.isPending}>
-            <Save className="ml-2 h-4 w-4" /> {save.isPending ? "جارٍ الحفظ…" : "حفظ التفاصيل"}
+            <Save className="ml-2 h-4 w-4" /> {save.isPending ? ui("جارٍ الحفظ…") : ui("حفظ التفاصيل")}
           </Button>
         </div>
       </div>

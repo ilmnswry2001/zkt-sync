@@ -1,3 +1,4 @@
+import { direction, displayLocale, ui } from "@/lib/ui-language";
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useProjectExecution } from "@/lib/use-project-execution";
@@ -50,26 +51,20 @@ export function ProjectExecutionPanel({
     <section
       id="project-execution-ledger"
       className="space-y-5 rounded-2xl border bg-card p-4 sm:p-6"
-      dir="rtl"
+      dir={direction()}
     >
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-bold">سجل التنفيذ المتحقق من البصمة</h2>
-          <p className="mt-2 max-w-3xl text-xs leading-6 text-muted-foreground">
-            شخص واحد ومركز تكلفة واحد في اليوم. الأولوية لتوزيع الكادر المحفوظ، ثم تكليف الورشة، ثم
-            الخطة المعتمدة. المقر الدائم لا يحدد وجهة التكلفة تلقائياً. يتحدث السجل كل 30 ثانية وعند
-            العودة للصفحة.
-          </p>
+          <h2 className="text-lg font-bold">{ui("سجل التنفيذ المتحقق من البصمة")}</h2>
+          <p className="mt-2 max-w-3xl text-xs leading-6 text-muted-foreground">{ui("شخص واحد ومركز تكلفة واحد في اليوم. الأولوية لتوزيع الكادر المحفوظ، ثم تكليف الورشة، ثم الخطة المعتمدة. المقر الدائم لا يحدد وجهة التكلفة تلقائياً. يتحدث السجل كل 30 ثانية وعند العودة للصفحة.")}</p>
         </div>
         <Button variant="outline" onClick={() => setExpanded(!expanded)}>
-          {expanded ? "إخفاء الأفراد" : "تدقيق الأفراد ومصادر الإسناد"}
+          {expanded ? ui("إخفاء الأفراد") : ui("تدقيق الأفراد ومصادر الإسناد")}
         </Button>
       </header>
       {!controlledDate && (
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="flex flex-col gap-3 text-sm">
-            تاريخ التنفيذ
-            <Input
+          <label className="flex flex-col gap-3 text-sm">{ui("تاريخ التنفيذ")}<Input
               type="date"
               max={todayInBaghdad()}
               value={date}
@@ -79,9 +74,9 @@ export function ProjectExecutionPanel({
             />
           </label>
           <div className="space-y-3">
-            <p className="text-sm">المشروع / CTR</p>
+            <p className="text-sm">{ui("المشروع / CTR")}</p>
             <WorkshopSitePicker
-              label="تصفية المشروع"
+              label={ui("تصفية المشروع")}
               sites={sites}
               value={site}
               onChange={(id) => {
@@ -97,35 +92,28 @@ export function ProjectExecutionPanel({
           role="alert"
           className="space-y-3 rounded-lg border border-destructive/30 p-4 text-sm text-destructive"
         >
-          <p>
-            تعذر قراءة سجل التنفيذ. تحقق من تطبيق ملف SQL الخاص بالتكامل. لا تُعتمد أرقام التكلفة
-            قبل نجاح القراءة.
-          </p>
-          <Button variant="outline" onClick={() => void execution.refetch()}>
-            إعادة المحاولة
-          </Button>
+          <p>{ui("تعذر قراءة سجل التنفيذ. تحقق من تطبيق ملف SQL الخاص بالتكامل. لا تُعتمد أرقام التكلفة قبل نجاح القراءة.")}</p>
+          <Button variant="outline" onClick={() => void execution.refetch()}>{ui("إعادة المحاولة")}</Button>
         </div>
       ) : execution.isPending ? (
-        <p className="text-sm text-muted-foreground">جارٍ مطابقة الحضور والتكليفات...</p>
+        <p className="text-sm text-muted-foreground">{ui("جارٍ مطابقة الحضور والتكليفات...")}</p>
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <MetricCard title="حضور ذو بصمة ضمن التصفية" value={scoped.length} tone="info" />
+            <MetricCard title={ui("حضور ذو بصمة ضمن التصفية")} value={scoped.length} tone="info" />
             <MetricCard
-              title="مسند إلى CTR ضمن التصفية"
+              title={ui("مسند إلى CTR ضمن التصفية")}
               value={scoped.filter((p) => p.site_id).length}
               tone="success"
             />
-            <MetricCard title="تعارض إسناد · جميع المواقع" value={conflicts} tone="destructive" />
-            <MetricCard title="بصمة دون إسناد · جميع المواقع" value={unallocated} tone="warning" />
+            <MetricCard title={ui("تعارض إسناد · جميع المواقع")} value={conflicts} tone="destructive" />
+            <MetricCard title={ui("بصمة دون إسناد · جميع المواقع")} value={unallocated} tone="warning" />
           </div>
           {(conflicts > 0 || unallocated > 0) && (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm">
-              <span>
-                الأفراد غير المسندين والمتعارضون مستبعدون من تكلفة المشاريع حتى تُراجع وجهتهم.
-              </span>
+              <span>{ui("الأفراد غير المسندين والمتعارضون مستبعدون من تكلفة المشاريع حتى تُراجع وجهتهم.")}</span>
               <Button asChild variant="outline" size="sm">
-                <Link to="/attendance">مراجعة توزيع الكادر</Link>
+                <Link to="/attendance">{ui("مراجعة توزيع الكادر")}</Link>
               </Button>
             </div>
           )}
@@ -133,8 +121,8 @@ export function ProjectExecutionPanel({
             <div className="space-y-4">
               <div className="grid gap-3 sm:grid-cols-2">
                 <Input
-                  aria-label="البحث في سجل التنفيذ"
-                  placeholder="ابحث بالاسم، الرقم أو التخصص"
+                  aria-label={ui("البحث في سجل التنفيذ")}
+                  placeholder={ui("ابحث بالاسم، الرقم أو التخصص")}
                   value={search}
                   onChange={(e) => {
                     setSearch(e.target.value);
@@ -142,7 +130,7 @@ export function ProjectExecutionPanel({
                   }}
                 />
                 <select
-                  aria-label="مصدر الإسناد"
+                  aria-label={ui("مصدر الإسناد")}
                   className="h-10 rounded-lg border bg-background px-3 text-sm"
                   value={status}
                   onChange={(e) => {
@@ -150,21 +138,21 @@ export function ProjectExecutionPanel({
                     setLimit(25);
                   }}
                 >
-                  <option value="all">جميع المصادر</option>
-                  <option value="individual">توزيع الكادر</option>
-                  <option value="workshop">تكليف الورشة</option>
-                  <option value="plan">الخطة المعتمدة</option>
-                  <option value="issues">غير مسند / متعارض</option>
+                  <option value="all">{ui("جميع المصادر")}</option>
+                  <option value="individual">{ui("توزيع الكادر")}</option>
+                  <option value="workshop">{ui("تكليف الورشة")}</option>
+                  <option value="plan">{ui("الخطة المعتمدة")}</option>
+                  <option value="issues">{ui("غير مسند / متعارض")}</option>
                 </select>
               </div>
               <div className="max-h-[28rem] overflow-auto rounded-lg border">
-                <table aria-label="تفاصيل الحضور وتوجيه التكلفة" className="w-full text-sm">
+                <table aria-label={ui("تفاصيل الحضور وتوجيه التكلفة")} className="w-full text-sm">
                   <thead>
                     <tr>
-                      <th>الموظف / التخصص</th>
-                      <th>المشروع وكود CTR</th>
-                      <th>مصدر الإسناد</th>
-                      <th>أول بصمة · بغداد</th>
+                      <th>{ui("الموظف / التخصص")}</th>
+                      <th>{ui("المشروع وكود CTR")}</th>
+                      <th>{ui("مصدر الإسناد")}</th>
+                      <th>{ui("أول بصمة · بغداد")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -181,15 +169,15 @@ export function ProjectExecutionPanel({
                           <td className="min-w-48 whitespace-normal">
                             {target
                               ? workshopSiteLabel(target)
-                              : "مستبعد من التكلفة لحين تحديد الوجهة"}
+                              : ui("مستبعد من التكلفة لحين تحديد الوجهة")}
                           </td>
                           <td>
                             <Badge variant={p.conflicting ? "destructive" : "outline"}>
-                              {labels[p.assignment_source] ?? p.assignment_source}
+                              {ui(labels[p.assignment_source]) ?? p.assignment_source}
                             </Badge>
                           </td>
                           <td className="whitespace-nowrap">
-                            {new Date(p.first_punch).toLocaleTimeString("ar-IQ", {
+                            {new Date(p.first_punch).toLocaleTimeString(displayLocale(), {
                               timeZone: "Asia/Baghdad",
                               hour: "2-digit",
                               minute: "2-digit",
@@ -201,30 +189,22 @@ export function ProjectExecutionPanel({
                   </tbody>
                 </table>
                 {!rows.length && (
-                  <p className="p-6 text-center text-sm text-muted-foreground">
-                    لا يوجد حضور مطابق للفلاتر.
-                  </p>
+                  <p className="p-6 text-center text-sm text-muted-foreground">{ui("لا يوجد حضور مطابق للفلاتر.")}</p>
                 )}
               </div>
               <div className="flex justify-between gap-3 text-xs text-muted-foreground">
-                <span>
-                  عرض {Math.min(limit, rows.length)} من {rows.length}
+                <span>{ui("عرض ")}{Math.min(limit, rows.length)}{ui(" من ")}{rows.length}
                 </span>
                 {limit < rows.length && (
-                  <Button size="sm" variant="outline" onClick={() => setLimit(limit + 25)}>
-                    عرض المزيد
-                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setLimit(limit + 25)}>{ui("عرض المزيد")}</Button>
                 )}
               </div>
             </div>
           )}
-          <p className="text-xs text-muted-foreground">
-            آخر قراءة:{" "}
-            {new Date(execution.dataUpdatedAt).toLocaleTimeString("ar-IQ", {
+          <p className="text-xs text-muted-foreground">{ui("آخر قراءة:")}{" "}
+            {new Date(execution.dataUpdatedAt).toLocaleTimeString(displayLocale(), {
               timeZone: "Asia/Baghdad",
-            })}{" "}
-            · البصمات المشبوهة وغير المطابقة لموظف مستبعدة.
-          </p>
+            })}{" "}{ui("· البصمات المشبوهة وغير المطابقة لموظف مستبعدة.")}</p>
         </>
       )}
     </section>

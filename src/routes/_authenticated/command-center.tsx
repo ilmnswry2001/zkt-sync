@@ -1,3 +1,4 @@
+import { direction, displayLocale, ui } from "@/lib/ui-language";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
@@ -47,16 +48,16 @@ const BADGES = {
 type BadgeType = keyof typeof BADGES;
 
 const baghdadDate = (date: Date) => dateKeyInTimeZone(date);
-const toArabicNumber = (value: number) => value.toLocaleString("ar-IQ");
-const formatIQD = (value: number) => `${Math.round(value).toLocaleString("ar-IQ")} د.ع`;
+const toArabicNumber = (value: number) => value.toLocaleString(displayLocale());
+const formatIQD = (value: number) => `${Math.round(value).toLocaleString(displayLocale())} د.ع`;
 const formatTime = (value: string) =>
-  new Date(value).toLocaleTimeString("ar-IQ", { hour: "2-digit", minute: "2-digit" });
+  new Date(value).toLocaleTimeString(displayLocale(), { hour: "2-digit", minute: "2-digit" });
 const getDayStart = (date: string) => new Date(`${date}T00:00:00+03:00`).toISOString();
 const addDays = (date: string, days: number) =>
   new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 
 export const Route = createFileRoute("/_authenticated/command-center")({
-  head: () => ({ meta: [{ title: "مركز العمليات الحي" }] }),
+  head: () => ({ meta: [{ title: ui("مركز العمليات الحي") }] }),
   beforeLoad: async () => {
     const { data: userData, error: authError } = await supabase.auth.getUser();
     if (authError || !userData.user) throw redirect({ to: "/auth" });
@@ -265,8 +266,8 @@ function CommandCenter() {
     onSuccess: async () => {
       toast.success(
         incentive.trim() && Number(incentive) > 0
-          ? "تم تسجيل الوسام وإضافة الحافز إلى سجل الراتب"
-          : "تم تسجيل الوسام",
+          ? ui("تم تسجيل الوسام وإضافة الحافز إلى سجل الراتب")
+          : ui("تم تسجيل الوسام"),
       );
       setAwardOpen(false);
       setTargetId("");
@@ -275,7 +276,7 @@ function CommandCenter() {
       await queryClient.invalidateQueries({ queryKey: ["command-center"] });
     },
     onError: (error) => {
-      toast.error(`تعذر إكمال منح الوسام أو الحافز: ${error.message}`);
+      toast.error((ui("تعذر إكمال منح الوسام أو الحافز: ") + (error.message)));
       void queryClient.invalidateQueries({ queryKey: ["command-center"] });
     },
   });
@@ -401,25 +402,25 @@ function CommandCenter() {
       else await document.documentElement.requestFullscreen();
     } catch (error) {
       toast.error(
-        `تعذر تغيير وضع الشاشة الكاملة: ${error instanceof Error ? error.message : "خطأ غير معروف"}`,
+        (ui("تعذر تغيير وضع الشاشة الكاملة: ") + (error instanceof Error ? error.message : "خطأ غير معروف")),
       );
     }
   };
 
   if (permissionsLoading || (canView && boardQuery.isLoading)) {
-    return <div dir="rtl" className="h-72 animate-pulse rounded-3xl bg-slate-900" />;
+    return <div dir={direction()} className="h-72 animate-pulse rounded-3xl bg-slate-900" />;
   }
   if (!canView) {
     return (
       <Card role="alert">
-        <CardContent className="p-8 text-center">غير مصرح بالوصول إلى مركز العمليات.</CardContent>
+        <CardContent className="p-8 text-center">{ui("غير مصرح بالوصول إلى مركز العمليات.")}</CardContent>
       </Card>
     );
   }
 
   return (
     <div
-      dir="rtl"
+      dir={direction()}
       className="dark command-ticker min-h-[calc(100vh-7rem)] space-y-5 rounded-3xl bg-[#07111d] p-4 text-slate-100 sm:p-6"
     >
       <style>{`@keyframes command-ticker { from { transform: translateX(0); } to { transform: translateX(50%); } } .command-ticker-track { animation: command-ticker 36s linear infinite; } .command-ticker-track:hover { animation-play-state: paused; }`}</style>
@@ -429,15 +430,10 @@ function CommandCenter() {
             <span className="relative flex h-2.5 w-2.5">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
               <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
-            </span>
-            النظام متصل · {autoRefresh ? "التحديث كل 30 ثانية" : "التحديث التلقائي متوقف"}
+            </span>{ui("النظام متصل · ")}{autoRefresh ? ui("التحديث كل 30 ثانية") : ui("التحديث التلقائي متوقف")}
           </div>
-          <h1 className="mt-1 text-2xl font-black tracking-tight sm:text-3xl">
-            مركز العمليات الحي
-          </h1>
-          <p className="mt-1 text-sm text-slate-400">
-            صورة تشغيلية مستندة إلى سجلات الحضور والجرد الفعلية
-          </p>
+          <h1 className="mt-1 text-2xl font-black tracking-tight sm:text-3xl">{ui("مركز العمليات الحي")}</h1>
+          <p className="mt-1 text-sm text-slate-400">{ui("صورة تشغيلية مستندة إلى سجلات الحضور والجرد الفعلية")}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -445,18 +441,15 @@ function CommandCenter() {
             className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
             onClick={() => setAutoRefresh((enabled) => !enabled)}
           >
-            <Activity className="ms-2 h-4 w-4" />
-            التحديث التلقائي {autoRefresh ? "مفعّل" : "متوقف"}
+            <Activity className="ms-2 h-4 w-4" />{ui("التحديث التلقائي ")}{autoRefresh ? ui("مفعّل") : ui("متوقف")}
           </Button>
           <Button
             variant="outline"
             className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
             onClick={() => void boardQuery.refetch()}
-            aria-label="تحديث البيانات الآن"
+            aria-label={ui("تحديث البيانات الآن")}
           >
-            <RefreshCw className={`ms-2 h-4 w-4 ${boardQuery.isFetching ? "animate-spin" : ""}`} />
-            تحديث الآن
-          </Button>
+            <RefreshCw className={`ms-2 h-4 w-4 ${boardQuery.isFetching ? "animate-spin" : ""}`} />{ui("تحديث الآن")}</Button>
           <Button
             variant="outline"
             className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
@@ -467,14 +460,14 @@ function CommandCenter() {
             }}
           >
             <Expand className="ms-2 h-4 w-4" />
-            {kiosk ? "إيقاف وضع الكشك" : "وضع الكشك الجداري"}
+            {kiosk ? ui("إيقاف وضع الكشك") : ui("وضع الكشك الجداري")}
           </Button>
           <Button
             className="bg-cyan-500 text-slate-950 hover:bg-cyan-400"
             onClick={() => void toggleFullscreen()}
           >
             {isFullscreen ? <X className="ms-2 h-4 w-4" /> : <Expand className="ms-2 h-4 w-4" />}
-            {isFullscreen ? "إنهاء التكبير" : "شاشة كاملة"}
+            {isFullscreen ? ui("إنهاء التكبير") : ui("شاشة كاملة")}
           </Button>
         </div>
       </header>
@@ -483,8 +476,7 @@ function CommandCenter() {
         <div
           role="alert"
           className="rounded-xl border border-rose-400/30 bg-rose-950/40 p-3 text-sm text-rose-200"
-        >
-          تعذر تحميل بيانات مركز العمليات: {boardQuery.error.message}
+        >{ui("تعذر تحميل بيانات مركز العمليات: ")}{boardQuery.error.message}
         </div>
       )}
 
@@ -492,12 +484,12 @@ function CommandCenter() {
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span>
-              {scene === 0 ? "المشهد ١: نبض العمليات" : "المشهد ٢: لوحة الشرف والتتويج"}
+              {scene === 0 ? ui("المشهد ١: نبض العمليات") : ui("المشهد ٢: لوحة الشرف والتتويج")}
             </span>
             <span>
               {Date.now() < pausedUntil
-                ? "متوقف مؤقتاً بسبب التفاعل"
-                : `الانتقال خلال ${toArabicNumber(SCENE_SECONDS - sceneTick)} ث`}
+                ? ui("متوقف مؤقتاً بسبب التفاعل")
+                : (ui("الانتقال خلال ") + (toArabicNumber(SCENE_SECONDS - sceneTick)) + ui(" ث"))}
             </span>
           </div>
           <Progress value={(sceneTick / SCENE_SECONDS) * 100} className="h-1 bg-slate-800" />
@@ -505,11 +497,11 @@ function CommandCenter() {
       )}
 
       <section
-        aria-label="مؤشرات العمليات"
+        aria-label={ui("مؤشرات العمليات")}
         className={`grid gap-3 sm:grid-cols-2 xl:grid-cols-4 ${kiosk && scene !== 0 ? "hidden" : ""}`}
       >
         <MetricCard
-          title="حضور الكادر الميداني اليوم"
+          title={ui("حضور الكادر الميداني اليوم")}
           value={`${toArabicNumber(presentToday.size)} / ${toArabicNumber(activeFieldIds.size)}`}
           detail={`${toArabicNumber(fieldAttendance)}٪ من الموظفين النشطين المخصصين للمواقع`}
           icon={Users}
@@ -517,7 +509,7 @@ function CommandCenter() {
           tone="cyan"
         />
         <MetricCard
-          title="جرد الورش المكتمل اليوم"
+          title={ui("جرد الورش المكتمل اليوم")}
           value={`${toArabicNumber(todayCompleted)} / ${toArabicNumber(workshops.length)}`}
           detail={`${toArabicNumber(todayReports.length)} تقرير جرد مسجل`}
           icon={Check}
@@ -525,7 +517,7 @@ function CommandCenter() {
           tone="emerald"
         />
         <MetricCard
-          title="حركات الحضور الذاتي بالوجه"
+          title={ui("حركات الحضور الذاتي بالوجه")}
           value={toArabicNumber(facialLogs.length)}
           detail={`نسبة التحقق من الحيوية: ${toArabicNumber(livenessRate)}٪`}
           icon={Fingerprint}
@@ -533,7 +525,7 @@ function CommandCenter() {
           tone="violet"
         />
         <MetricCard
-          title="معدل الانضباط اليوم"
+          title={ui("معدل الانضباط اليوم")}
           value={`${toArabicNumber(disciplineRate)}٪`}
           detail="مؤشر الحضور للكادر الميداني"
           icon={Activity}
@@ -549,19 +541,14 @@ function CommandCenter() {
         )}
 
       {crewQuery.isError ? (
-        <div role="alert" className="rounded-xl border border-rose-400/30 bg-rose-950/40 p-3 text-sm text-rose-200">
-          تعذر تحليل احتياج الكوادر: {crewQuery.error.message}
+        <div role="alert" className="rounded-xl border border-rose-400/30 bg-rose-950/40 p-3 text-sm text-rose-200">{ui("تعذر تحليل احتياج الكوادر: ")}{crewQuery.error.message}
         </div>
       ) : crewQuery.data?.requirements.length ? (
         <Card className="border-slate-800 bg-slate-900/75 text-slate-100">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
-              <Users className="h-5 w-5 text-cyan-300" />
-              احتياج الكوادر وإعادة التوزيع المقترحة
-            </CardTitle>
-            <p className="text-xs text-slate-400">
-              توصيات حسب سجلات الجرد والتخصص والموقع؛ تتطلب اعتماد المشرف قبل التنفيذ.
-            </p>
+              <Users className="h-5 w-5 text-cyan-300" />{ui("احتياج الكوادر وإعادة التوزيع المقترحة")}</CardTitle>
+            <p className="text-xs text-slate-400">{ui("توصيات حسب سجلات الجرد والتخصص والموقع؛ تتطلب اعتماد المشرف قبل التنفيذ.")}</p>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -571,7 +558,7 @@ function CommandCenter() {
                   <div key={`${item.workshopId}:${item.siteId}:${item.trade}`} className="rounded-lg border border-slate-800 bg-[#0b1725] p-3 text-sm">
                     <p className="font-semibold">{item.workshopName} · {item.trade}</p>
                     <p className={item.status === "shortage" ? "text-rose-300" : "text-amber-200"}>
-                      {item.status === "shortage" ? "نقص" : "فائض"}: {toArabicNumber(item.present)} / {toArabicNumber(item.required)}
+                      {item.status === "shortage" ? ui("نقص") : ui("فائض")}: {toArabicNumber(item.present)} / {toArabicNumber(item.required)}
                     </p>
                     <p className="text-xs text-slate-400">{item.siteName} · {toArabicNumber(item.percentage)}٪</p>
                   </div>
@@ -586,7 +573,7 @@ function CommandCenter() {
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-slate-400">لا توجد إعادة توزيع مقترحة ضمن الموقع والتخصص نفسيهما.</p>
+              <p className="text-sm text-slate-400">{ui("لا توجد إعادة توزيع مقترحة ضمن الموقع والتخصص نفسيهما.")}</p>
             )}
           </CardContent>
         </Card>
@@ -599,12 +586,9 @@ function CommandCenter() {
         >
           <CardHeader className="flex flex-row items-center justify-between gap-3">
             <CardTitle className="flex items-center gap-2 text-lg">
-              <Activity className="h-5 w-5 text-cyan-300" />
-              مصفوفة الورش الميدانية
-            </CardTitle>
+              <Activity className="h-5 w-5 text-cyan-300" />{ui("مصفوفة الورش الميدانية")}</CardTitle>
             <Badge className="border border-cyan-300/20 bg-cyan-400/10 text-cyan-200">
-              {toArabicNumber(workshops.length)} ورشة نشطة
-            </Badge>
+              {toArabicNumber(workshops.length)}{ui(" ورشة نشطة")}</Badge>
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-2">
             {workshops.length ? (
@@ -635,10 +619,10 @@ function CommandCenter() {
                         <h3 className="font-bold">{workshop.name}</h3>
                         <p className="mt-1 text-xs text-slate-400">
                           {report
-                            ? `آخر جرد ${formatTime(report.updated_at)}`
+                            ? (ui("آخر جرد ") + (formatTime(report.updated_at)))
                             : latestAttendance
-                              ? `آخر حضور ${formatTime(latestAttendance.verify_time)}`
-                              : "بانتظار أول حركة"}
+                              ? (ui("آخر حضور ") + (formatTime(latestAttendance.verify_time)))
+                              : ui("بانتظار أول حركة")}
                         </p>
                       </div>
                       <Badge
@@ -650,11 +634,11 @@ function CommandCenter() {
                               : "bg-slate-700 text-slate-300"
                         }
                       >
-                        {complete ? "مكتمل" : lines.length ? "جزئي" : "بانتظار الجرد"}
+                        {complete ? ui("مكتمل") : lines.length ? ui("جزئي") : ui("بانتظار الجرد")}
                       </Badge>
                     </div>
                     <div className="mt-4 flex items-center justify-between text-sm">
-                      <span className="text-slate-400">الحضور المسجل</span>
+                      <span className="text-slate-400">{ui("الحضور المسجل")}</span>
                       <span className="font-semibold tabular-nums">
                         {toArabicNumber(attended)} / {toArabicNumber(roster.length)}
                       </span>
@@ -666,18 +650,18 @@ function CommandCenter() {
                           key={label}
                           className="rounded-full bg-slate-800 px-2 py-1 text-[11px] text-slate-300"
                         >
-                          {toArabicNumber(count)} {label}
+                          {toArabicNumber(count)} {ui(label)}
                         </span>
                       ))}
                       {!roster.length && (
-                        <span className="text-xs text-slate-500">لا يوجد كادر مسجل للورشة</span>
+                        <span className="text-xs text-slate-500">{ui("لا يوجد كادر مسجل للورشة")}</span>
                       )}
                     </div>
                   </article>
                 );
               })
             ) : (
-              <p className="py-8 text-center text-sm text-slate-400">لا توجد ورش نشطة مسجلة.</p>
+              <p className="py-8 text-center text-sm text-slate-400">{ui("لا توجد ورش نشطة مسجلة.")}</p>
             )}
           </CardContent>
         </Card>
@@ -687,12 +671,8 @@ function CommandCenter() {
         >
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
-              <Trophy className="h-5 w-5 text-amber-300" />
-              منصة الشرف · آخر 7 أيام
-            </CardTitle>
-            <p className="text-xs text-slate-400">
-              الترتيب يجمع حضور تقارير الورش وتغطية الجرد الأسبوعية
-            </p>
+              <Trophy className="h-5 w-5 text-amber-300" />{ui("منصة الشرف · آخر 7 أيام")}</CardTitle>
+            <p className="text-xs text-slate-400">{ui("الترتيب يجمع حضور تقارير الورش وتغطية الجرد الأسبوعية")}</p>
           </CardHeader>
           <CardContent className="space-y-3">
             {podium.length ? (
@@ -708,14 +688,13 @@ function CommandCenter() {
                     key={workshop.id}
                     className={`flex items-center gap-3 rounded-xl border p-3 ${colors[index]}`}
                   >
-                    <span className="text-2xl" aria-label={`المركز ${index + 1}`}>
+                    <span className="text-2xl" aria-label={(ui("المركز ") + (index + 1))}>
                       {medals[index]}
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-bold">{workshop.name}</p>
-                      <p className="text-xs text-slate-400">
-                        الحضور {toArabicNumber(Math.round(workshop.attendanceRate * 100))}٪ · الجرد{" "}
-                        {toArabicNumber(Math.round(workshop.reportingCoverage * 100))}٪ · سرعة الرفع{" "}
+                      <p className="text-xs text-slate-400">{ui("الحضور ")}{toArabicNumber(Math.round(workshop.attendanceRate * 100))}{ui("٪ · الجرد")}{" "}
+                        {toArabicNumber(Math.round(workshop.reportingCoverage * 100))}{ui("٪ · سرعة الرفع")}{" "}
                         {toArabicNumber(Math.round(workshop.reportingSpeed * 100))}٪
                       </p>
                     </div>
@@ -726,9 +705,7 @@ function CommandCenter() {
                 );
               })
             ) : (
-              <p className="py-7 text-center text-sm text-slate-400">
-                تظهر المراكز بعد تسجيل تقارير جرد خلال الأسبوع.
-              </p>
+              <p className="py-7 text-center text-sm text-slate-400">{ui("تظهر المراكز بعد تسجيل تقارير جرد خلال الأسبوع.")}</p>
             )}
           </CardContent>
         </Card>
@@ -740,18 +717,14 @@ function CommandCenter() {
         <Card className="border-slate-800 bg-slate-900/75 text-slate-100">
           <CardHeader className="flex flex-row items-center justify-between gap-3">
             <CardTitle className="flex items-center gap-2 text-lg">
-              <Medal className="h-5 w-5 text-amber-300" />
-              أوسمة الأبطال الميدانيين
-            </CardTitle>
+              <Medal className="h-5 w-5 text-amber-300" />{ui("أوسمة الأبطال الميدانيين")}</CardTitle>
             {canAward && (
               <Button
                 size="sm"
                 className="bg-amber-400 text-slate-950 hover:bg-amber-300"
                 onClick={() => setAwardOpen(true)}
               >
-                <Award className="ms-2 h-4 w-4" />
-                منح وسام / حافز
-              </Button>
+                <Award className="ms-2 h-4 w-4" />{ui("منح وسام / حافز")}</Button>
             )}
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
@@ -770,10 +743,9 @@ function CommandCenter() {
                       />
                       <div className="min-w-0 flex-1">
                         <p className="font-bold">{badge.target_name}</p>
-                        <p className="mt-1 text-sm text-slate-300">{badgeInfo?.label ?? "وسام"}</p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          الفترة {badge.period_month} ·{" "}
-                          {new Date(badge.awarded_at).toLocaleDateString("ar-IQ")}
+                        <p className="mt-1 text-sm text-slate-300">{ui(badgeInfo?.label) ?? ui("وسام")}</p>
+                        <p className="mt-1 text-xs text-slate-500">{ui("الفترة ")}{badge.period_month} ·{" "}
+                          {new Date(badge.awarded_at).toLocaleDateString(displayLocale())}
                         </p>
                         {badge.notes && (
                           <p className="mt-2 text-xs text-slate-400">{badge.notes}</p>
@@ -786,7 +758,7 @@ function CommandCenter() {
                           {formatIQD(badge.incentive_iqd)}
                         </span>
                         {badge.salary_addition_id ? (
-                          <Badge className="bg-emerald-400/15 text-emerald-300">أضيف للراتب</Badge>
+                          <Badge className="bg-emerald-400/15 text-emerald-300">{ui("أضيف للراتب")}</Badge>
                         ) : canAward && badge.target_type === "employee" ? (
                           <Button
                             size="sm"
@@ -796,19 +768,17 @@ function CommandCenter() {
                               const { error } = await supabase.rpc("award_badge_incentive", {
                                 p_badge_id: badge.id,
                               });
-                              if (error) toast.error(`تعذر صرف الحافز: ${error.message}`);
+                              if (error) toast.error((ui("تعذر صرف الحافز: ") + (error.message)));
                               else {
-                                toast.success("تمت إضافة الحافز إلى سجل الراتب");
+                                toast.success(ui("تمت إضافة الحافز إلى سجل الراتب"));
                                 await queryClient.invalidateQueries({
                                   queryKey: ["command-center"],
                                 });
                               }
                             }}
-                          >
-                            صرف الحافز
-                          </Button>
+                          >{ui("صرف الحافز")}</Button>
                         ) : (
-                          <Badge className="bg-amber-400/15 text-amber-200">بانتظار الصرف</Badge>
+                          <Badge className="bg-amber-400/15 text-amber-200">{ui("بانتظار الصرف")}</Badge>
                         )}
                       </div>
                     )}
@@ -816,7 +786,7 @@ function CommandCenter() {
                 );
               })
             ) : (
-              <p className="py-7 text-center text-sm text-slate-400">لا توجد أوسمة مسجلة بعد.</p>
+              <p className="py-7 text-center text-sm text-slate-400">{ui("لا توجد أوسمة مسجلة بعد.")}</p>
             )}
           </CardContent>
         </Card>
@@ -824,9 +794,7 @@ function CommandCenter() {
         <Card className="border-slate-800 bg-slate-900/75 text-slate-100">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
-              <Clock3 className="h-5 w-5 text-cyan-300" />
-              سجل البث الميداني
-            </CardTitle>
+              <Clock3 className="h-5 w-5 text-cyan-300" />{ui("سجل البث الميداني")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {events.length ? (
@@ -843,9 +811,7 @@ function CommandCenter() {
                 </div>
               ))
             ) : (
-              <p className="py-7 text-center text-sm text-slate-400">
-                لا توجد حركات أو تقارير مسجلة اليوم.
-              </p>
+              <p className="py-7 text-center text-sm text-slate-400">{ui("لا توجد حركات أو تقارير مسجلة اليوم.")}</p>
             )}
           </CardContent>
         </Card>
@@ -864,21 +830,19 @@ function CommandCenter() {
             </span>
           ))}
           {!events.length && (
-            <span className="text-sm text-slate-400">
-              مركز العمليات جاهز لاستقبال التحديثات الميدانية.
-            </span>
+            <span className="text-sm text-slate-400">{ui("مركز العمليات جاهز لاستقبال التحديثات الميدانية.")}</span>
           )}
         </div>
       </div>
 
       <Dialog open={awardOpen} onOpenChange={setAwardOpen}>
-        <DialogContent dir="rtl" className="sm:max-w-lg">
+        <DialogContent dir={direction()} className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>منح وسام ميداني</DialogTitle>
+            <DialogTitle>{ui("منح وسام ميداني")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="command-center-target-type">نوع المستهدف</Label>
+              <Label htmlFor="command-center-target-type">{ui("نوع المستهدف")}</Label>
               <Select
                 value={targetType}
                 onValueChange={(value) => {
@@ -893,19 +857,19 @@ function CommandCenter() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="employee">موظف</SelectItem>
-                  <SelectItem value="workshop">ورشة</SelectItem>
+                  <SelectItem value="employee">{ui("موظف")}</SelectItem>
+                  <SelectItem value="workshop">{ui("ورشة")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="command-center-target">
-                {targetType === "employee" ? "الموظف" : "الورشة"}
+                {targetType === "employee" ? ui("الموظف") : ui("الورشة")}
               </Label>
               <Select value={targetId} onValueChange={setTargetId}>
                 <SelectTrigger id="command-center-target">
                   <SelectValue
-                    placeholder={targetType === "employee" ? "اختر موظفاً نشطاً" : "اختر ورشة نشطة"}
+                    placeholder={targetType === "employee" ? ui("اختر موظفاً نشطاً") : ui("اختر ورشة نشطة")}
                   />
                 </SelectTrigger>
                 <SelectContent>
@@ -926,7 +890,7 @@ function CommandCenter() {
             {targetType === "employee" && (
               <>
                 <div className="space-y-2">
-                  <Label htmlFor="command-center-badge">الوسام</Label>
+                  <Label htmlFor="command-center-badge">{ui("الوسام")}</Label>
                   <Select
                     value={badgeType}
                     onValueChange={(value) => setBadgeType(value as BadgeType)}
@@ -935,16 +899,14 @@ function CommandCenter() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="hse_guardian">نجم السلامة</SelectItem>
-                      <SelectItem value="punctuality_champion">بطل الانضباط</SelectItem>
-                      <SelectItem value="field_hero">أسد الميدان</SelectItem>
+                      <SelectItem value="hse_guardian">{ui("نجم السلامة")}</SelectItem>
+                      <SelectItem value="punctuality_champion">{ui("بطل الانضباط")}</SelectItem>
+                      <SelectItem value="field_hero">{ui("أسد الميدان")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="command-center-incentive">
-                    الحافز المالي (د.ع) · اتركه فارغاً لمنح الوسام فقط
-                  </Label>
+                  <Label htmlFor="command-center-incentive">{ui("الحافز المالي (د.ع) · اتركه فارغاً لمنح الوسام فقط")}</Label>
                   <Input
                     id="command-center-incentive"
                     type="number"
@@ -958,7 +920,7 @@ function CommandCenter() {
               </>
             )}
             <div className="space-y-2">
-              <Label htmlFor="command-center-notes">ملاحظات</Label>
+              <Label htmlFor="command-center-notes">{ui("ملاحظات")}</Label>
               <Input
                 id="command-center-notes"
                 value={notes}
@@ -971,7 +933,7 @@ function CommandCenter() {
               disabled={awardMutation.isPending || !targetId}
               onClick={() => awardMutation.mutate()}
             >
-              {awardMutation.isPending ? "جارٍ تسجيل الوسام..." : "تأكيد المنح"}
+              {awardMutation.isPending ? ui("جارٍ تسجيل الوسام...") : ui("تأكيد المنح")}
             </Button>
           </div>
         </DialogContent>

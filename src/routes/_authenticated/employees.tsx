@@ -1,3 +1,4 @@
+import { direction, displayLocale, ui } from "@/lib/ui-language";
 import { useDebouncedValue } from "@/hooks/use-directory-search";
 import { EmployeeDocumentsTab } from "@/components/EmployeeDocumentsTab";
 import { formatErrorMessage } from "@/lib/error-message";
@@ -37,7 +38,7 @@ import {
 } from "@/lib/excel-employees";
 
 export const Route = createFileRoute("/_authenticated/employees")({
-  head: () => ({ meta: [{ title: "الموظفون" }] }),
+  head: () => ({ meta: [{ title: ui("الموظفون") }] }),
   component: EmployeesPage,
 });
 
@@ -85,7 +86,7 @@ function EmployeesPage() {
   const invalidDateCount = Object.values(importPlan.invalidDates).reduce((total, count) => total + (count ?? 0), 0);
   const invalidDateDetails = Object.entries(importPlan.invalidDates)
     .filter(([, count]) => !!count)
-    .map(([field, count]) => `${EMPLOYEE_IMPORT_FIELDS.find((item) => item.key === field)?.label ?? field}: ${count?.toLocaleString("ar-IQ")}`)
+    .map(([field, count]) => `${EMPLOYEE_IMPORT_FIELDS.find((item) => item.key === field)?.label ?? field}: ${count?.toLocaleString(displayLocale())}`)
     .join("، ");
 
   async function handleExcel(file: File) {
@@ -100,7 +101,7 @@ function EmployeesPage() {
       setImportMsg(null);
     } catch (error) {
       setImportMsg(null);
-      toast.error(formatErrorMessage(error, "تعذرت قراءة ملف Excel"));
+      toast.error(ui(formatErrorMessage(error, "تعذرت قراءة ملف Excel")));
     }
   }
 
@@ -109,11 +110,11 @@ function EmployeesPage() {
     const { rows: parsed, skipped } = importPlan;
     const targets = Object.values(importPreview.mapping).filter(Boolean);
     const duplicateTargets = new Set(targets.filter((target, index) => targets.indexOf(target) !== index));
-    if (duplicateTargets.size) return toast.error("لا يمكن ربط أكثر من عمود مصدر بالحقل النظامي نفسه");
+    if (duplicateTargets.size) return toast.error(ui("لا يمكن ربط أكثر من عمود مصدر بالحقل النظامي نفسه"));
     if (!Object.values(importPreview.mapping).includes("employee_no") || !Object.values(importPreview.mapping).includes("full_name")) {
-      return toast.error("اربط عمود الرقم الوظيفي وعمود اسم الموظف قبل المتابعة");
+      return toast.error(ui("اربط عمود الرقم الوظيفي وعمود اسم الموظف قبل المتابعة"));
     }
-    if (!parsed.length) return toast.error("لا توجد صفوف صالحة؛ تحقق من مطابقة الرقم الوظيفي واسم الموظف");
+    if (!parsed.length) return toast.error(ui("لا توجد صفوف صالحة؛ تحقق من مطابقة الرقم الوظيفي واسم الموظف"));
 
     setImporting(true); setProgress(0); setImportMsg("جاري استيراد البيانات...");
     try {
@@ -131,10 +132,10 @@ function EmployeesPage() {
       setImportMsg(`تم استيراد ${done} موظف${skipped ? ` (تم تجاهل ${skipped} صف بدون رقم/اسم أو مكرر)` : ""}`);
       setImportDialogOpen(false);
       setImportPreview(null);
-      toast.success(`تم استيراد ${done} موظف`);
+      toast.success((ui("تم استيراد ") + (done) + ui(" موظف")));
     } catch (e: unknown) {
       setImportMsg(null);
-      toast.error(formatErrorMessage(e, "فشل الاستيراد"));
+      toast.error(ui(formatErrorMessage(e, "فشل الاستيراد")));
     } finally {
       setImporting(false);
     }
@@ -304,9 +305,9 @@ function EmployeesPage() {
       const wage = resolveOnboardingWage(parsed.position, preferredPayType, wages);
       setOnboarding({ ...parsed, preferredPayType, wagePosition: parsed.position, wageRateId: wage.wageRateId ?? "none", payType: wage.payType,
         salaryType: wage.payType === "daily" ? "أجر يومي" : "أجر شهري" });
-      toast.success("تمت تعبئة البيانات للمراجعة قبل الحفظ");
+      toast.success(ui("تمت تعبئة البيانات للمراجعة قبل الحفظ"));
     } catch (error) {
-      toast.error(formatErrorMessage(error, "تعذر قراءة رسالة الموظف"));
+      toast.error(ui(formatErrorMessage(error, "تعذر قراءة رسالة الموظف")));
     }
   };
 
@@ -426,20 +427,20 @@ function EmployeesPage() {
       qc.invalidateQueries({ queryKey: ["employees_count"] });
       qc.invalidateQueries({ queryKey: ["employee-self-attendance-site-access"] });
       closeEmployeeDialog();
-      toast.success(employeeNo ? `تم الحفظ · الرقم الوظيفي ${employeeNo}` : "تم الحفظ");
+      toast.success(employeeNo ? (ui("تم الحفظ · الرقم الوظيفي ") + (employeeNo)) : ui("تم الحفظ"));
     },
-    onError: (e: any) => toast.error(formatErrorMessage(e)),
+    onError: (e: any) => toast.error(ui(formatErrorMessage(e))),
   });
   const del = useMutation({
     mutationFn: async (employee: Emp) => {
       const { error } = await supabase.from("employees").delete().eq("id", employee.id).select("id").single();
       if (error) throw error;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); qc.invalidateQueries({ queryKey: ["employees_count"] }); toast.success("تم الحذف"); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); qc.invalidateQueries({ queryKey: ["employees_count"] }); toast.success(ui("تم الحذف")); },
     onError: (error: { code?: string; message: string }, employee) => {
       if (error.code === "23503") {
         setBlockedDeletion({ employee, payroll: error.message.includes("payroll_run_lines") });
-      } else toast.error(formatErrorMessage(error));
+      } else toast.error(ui(formatErrorMessage(error)));
     },
   });
   const updateStatus = useMutation({
@@ -452,9 +453,9 @@ function EmployeesPage() {
       qc.invalidateQueries({ queryKey: ["employee-profile"] });
       qc.invalidateQueries({ queryKey: ["employee-profile-search"] });
       setBlockedDeletion(null);
-      toast.success("تم تحديث حالة الموظف");
+      toast.success(ui("تم تحديث حالة الموظف"));
     },
-    onError: (error: unknown) => toast.error(formatErrorMessage(error)),
+    onError: (error: unknown) => toast.error(ui(formatErrorMessage(error))),
   });
 
   const filtered = directoryQuery.data?.pages.flatMap(page => page.rows) ?? [];
@@ -472,72 +473,63 @@ function EmployeesPage() {
       return data;
     },
     onSuccess: data => { setEditing(data as Emp); setOpen(true); },
-    onError: error => toast.error(formatErrorMessage(error)),
+    onError: error => toast.error(ui(formatErrorMessage(error))),
   });
 
   return (
     <div className="space-y-6">
       <Dialog open={!!blockedDeletion} onOpenChange={open => { if (!open && !updateStatus.isPending) setBlockedDeletion(null); }}>
-        <DialogContent dir="rtl">
-          <DialogHeader><DialogTitle>تعذّر حذف ملف الموظف</DialogTitle></DialogHeader>
+        <DialogContent dir={direction()}>
+          <DialogHeader><DialogTitle>{ui("تعذّر حذف ملف الموظف")}</DialogTitle></DialogHeader>
           {blockedDeletion && <>
-            <p className="font-medium">{blockedDeletion.employee.full_name} · الرقم الوظيفي {blockedDeletion.employee.employee_no}</p>
-            <p>{blockedDeletion.payroll ? "هذا الملف مرتبط بمسير رواتب محفوظ." : "هذا الملف مرتبط بسجلات أخرى في النظام."} إذا كان الملف مكرراً، يمكنك تعطيله مع الاحتفاظ بسجلاته.</p>
+            <p className="font-medium">{blockedDeletion.employee.full_name}{ui(" · الرقم الوظيفي ")}{blockedDeletion.employee.employee_no}</p>
+            <p>{blockedDeletion.payroll ? ui("هذا الملف مرتبط بمسير رواتب محفوظ.") : ui("هذا الملف مرتبط بسجلات أخرى في النظام.")}{ui(" إذا كان الملف مكرراً، يمكنك تعطيله مع الاحتفاظ بسجلاته.")}</p>
             <div className="flex flex-wrap gap-2">
               {blockedDeletion.employee.status === "active" && <Button disabled={updateStatus.isPending} onClick={() => updateStatus.mutate({employeeId:blockedDeletion.employee.id,status:"inactive"})}>
-                {updateStatus.isPending ? "جارٍ التعطيل…" : "تعطيل هذا الملف"}
+                {updateStatus.isPending ? ui("جارٍ التعطيل…") : ui("تعطيل هذا الملف")}
               </Button>}
-              <Button variant="outline" disabled={updateStatus.isPending} onClick={() => setBlockedDeletion(null)}>إغلاق</Button>
+              <Button variant="outline" disabled={updateStatus.isPending} onClick={() => setBlockedDeletion(null)}>{ui("إغلاق")}</Button>
             </div>
           </>}
         </DialogContent>
       </Dialog>
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
         <TabsList className="grid h-auto w-full grid-cols-1 gap-2 bg-transparent sm:w-fit sm:grid-cols-3">
-          <TabsTrigger value="directory" className="min-h-11 rounded-xl border">دليل الموظفين</TabsTrigger>
-          <TabsTrigger value="personal" className="min-h-11 rounded-xl border">التقرير الشخصي</TabsTrigger>
-          <TabsTrigger value="documents" className="min-h-11 whitespace-normal rounded-xl border">
-            المستندات والأوامر الإدارية
-          </TabsTrigger>
+          <TabsTrigger value="directory" className="min-h-11 rounded-xl border">{ui("دليل الموظفين")}</TabsTrigger>
+          <TabsTrigger value="personal" className="min-h-11 rounded-xl border">{ui("التقرير الشخصي")}</TabsTrigger>
+          <TabsTrigger value="documents" className="min-h-11 whitespace-normal rounded-xl border">{ui("المستندات والأوامر الإدارية")}</TabsTrigger>
         </TabsList>
         <TabsContent value="directory" className="mt-0 space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">الموظفون</h1>
-          <p className="text-muted-foreground mt-1">إجمالي: {totalCount} موظف</p>
+          <h1 className="text-3xl font-bold">{ui("الموظفون")}</h1>
+          <p className="text-muted-foreground mt-1">{ui("إجمالي: ")}{totalCount}{ui(" موظف")}</p>
         </div>
         <div className="flex items-center gap-2">
           <input id="emp-excel" type="file" accept=".xlsx,.xls" className="hidden"
             onChange={(e) => { const f = e.target.files?.[0]; e.currentTarget.value = ""; if (f) handleExcel(f); }} />
           <Button variant="outline" disabled={importing} onClick={() => document.getElementById("emp-excel")?.click()}>
-            {importing ? <Loader2 className="w-4 h-4 ml-2 animate-spin" /> : <Upload className="w-4 h-4 ml-2" />}
-            استيراد من Excel
-          </Button>
+            {importing ? <Loader2 className="w-4 h-4 ml-2 animate-spin" /> : <Upload className="w-4 h-4 ml-2" />}{ui("استيراد من Excel")}</Button>
           <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
-            <DialogContent dir="rtl" className="flex max-h-[92vh] max-w-5xl flex-col overflow-hidden">
+            <DialogContent dir={direction()} className="flex max-h-[92vh] max-w-5xl flex-col overflow-hidden">
               <DialogHeader>
-                <DialogTitle>مطابقة حقول ملف الموظفين</DialogTitle>
+                <DialogTitle>{ui("مطابقة حقول ملف الموظفين")}</DialogTitle>
                 <p className="text-sm text-muted-foreground">
-                  {importPreview?.fileName} · {importPreview?.sheetName} · {importPreview?.rows.length.toLocaleString("ar-IQ")} صفوف
-                </p>
+                  {importPreview?.fileName} · {importPreview?.sheetName} · {importPreview?.rows.length.toLocaleString(displayLocale())}{ui(" صفوف")}</p>
               </DialogHeader>
               {importPreview && (
                 <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-1">
-                  <div className="rounded-lg border bg-muted/40 p-3 text-sm">
-                    اربط الأعمدة التي تطابق حقول النظام. تُحفظ جميع أعمدة الملف وقيمها الأصلية في ملف الموظف حتى إن لم يكن لها حقل نظامي مباشر، والخلايا الفارغة لا تمسح بيانات موجودة.
-                    <div className="mt-1 text-muted-foreground">
-                      تمت مطابقة {Object.values(importPreview.mapping).filter(Boolean).length} عموداً مع الحقول النظامية، وستُحفظ بقية الأعمدة ضمن بيانات الملف ·
-                      {" "}صفوف صالحة {importPlan.rows.length.toLocaleString("ar-IQ")} · متجاهلة {importPlan.skipped.toLocaleString("ar-IQ")}
+                  <div className="rounded-lg border bg-muted/40 p-3 text-sm">{ui("اربط الأعمدة التي تطابق حقول النظام. تُحفظ جميع أعمدة الملف وقيمها الأصلية في ملف الموظف حتى إن لم يكن لها حقل نظامي مباشر، والخلايا الفارغة لا تمسح بيانات موجودة.")}<div className="mt-1 text-muted-foreground">{ui("تمت مطابقة ")}{Object.values(importPreview.mapping).filter(Boolean).length}{ui(" عموداً مع الحقول النظامية، وستُحفظ بقية الأعمدة ضمن بيانات الملف ·")}{" "}{ui("صفوف صالحة ")}{importPlan.rows.length.toLocaleString(displayLocale())}{ui(" · متجاهلة ")}{importPlan.skipped.toLocaleString(displayLocale())}
                     </div>
-                    {invalidDateCount > 0 && <p role="alert" className="mt-2 text-amber-700">تعذر تحويل {invalidDateCount.toLocaleString("ar-IQ")} قيمة إلى تاريخ ({invalidDateDetails})؛ لن تُستورد كتاريخ. الخلايا الفارغة أو غير الصالحة لا تمسح التاريخ الموجود.</p>}
-                    {departmentsToCreate.length > 0 && <p className="mt-2 text-amber-700">توجد {departmentsToCreate.length.toLocaleString("ar-IQ")} أسماء أقسام غير مطابقة للأقسام الحالية؛ سيُنشئها النظام تلقائياً عند الاستيراد.</p>}
+                    {invalidDateCount > 0 && <p role="alert" className="mt-2 text-amber-700">{ui("تعذر تحويل ")}{invalidDateCount.toLocaleString(displayLocale())}{ui(" قيمة إلى تاريخ (")}{invalidDateDetails}{ui(")؛ لن تُستورد كتاريخ. الخلايا الفارغة أو غير الصالحة لا تمسح التاريخ الموجود.")}</p>}
+                    {departmentsToCreate.length > 0 && <p className="mt-2 text-amber-700">{ui("توجد ")}{departmentsToCreate.length.toLocaleString(displayLocale())}{ui(" أسماء أقسام غير مطابقة للأقسام الحالية؛ سيُنشئها النظام تلقائياً عند الاستيراد.")}</p>}
                   </div>
                   <div className="space-y-2">
                     {importPreview.headers.map((header, index) => (
                       <div key={index} className="grid items-center gap-2 rounded-lg border p-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium" title={header}>{header || "عمود بلا عنوان"}</p>
-                          <p className="text-xs text-muted-foreground">عمود الملف</p>
+                          <p className="truncate text-sm font-medium" title={header}>{header || ui("عمود بلا عنوان")}</p>
+                          <p className="text-xs text-muted-foreground">{ui("عمود الملف")}</p>
                         </div>
                         <Select
                           value={importPreview.mapping[header] || "__ignore__"}
@@ -546,13 +538,13 @@ function EmployeesPage() {
                             mapping: { ...current.mapping, [header]: value === "__ignore__" ? "" : value as EmployeeImportMapping[string] },
                           } : current)}
                         >
-                          <SelectTrigger><SelectValue placeholder="تجاهل هذا العمود" /></SelectTrigger>
+                          <SelectTrigger><SelectValue placeholder={ui("تجاهل هذا العمود")} /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="__ignore__">تجاهل هذا العمود</SelectItem>
+                            <SelectItem value="__ignore__">{ui("تجاهل هذا العمود")}</SelectItem>
                             {EMPLOYEE_IMPORT_FIELDS.map((field) => {
                               const usedElsewhere = Object.entries(importPreview.mapping)
                                 .some(([source, target]) => source !== header && target === field.key);
-                              return <SelectItem key={field.key} value={field.key} disabled={usedElsewhere}>{field.label}</SelectItem>;
+                              return <SelectItem key={field.key} value={field.key} disabled={usedElsewhere}>{ui(field.label)}</SelectItem>;
                             })}
                           </SelectContent>
                         </Select>
@@ -560,10 +552,10 @@ function EmployeesPage() {
                     ))}
                   </div>
                   <div className="rounded-lg border p-3">
-                    <p className="mb-2 text-sm font-semibold">معاينة السجلات بعد المطابقة</p>
+                    <p className="mb-2 text-sm font-semibold">{ui("معاينة السجلات بعد المطابقة")}</p>
                     <div className="overflow-x-auto">
                       <Table>
-                        <TableHeader><TableRow><TableHead>الرقم الوظيفي</TableHead><TableHead>اسم الموظف</TableHead><TableHead>القسم</TableHead><TableHead>رقم جهاز البصمة</TableHead></TableRow></TableHeader>
+                        <TableHeader><TableRow><TableHead>{ui("الرقم الوظيفي")}</TableHead><TableHead>{ui("اسم الموظف")}</TableHead><TableHead>{ui("القسم")}</TableHead><TableHead>{ui("رقم جهاز البصمة")}</TableHead></TableRow></TableHeader>
                         <TableBody>
                           {importPlan.rows.slice(0, 5).map((row) => (
                             <TableRow key={row.employee_no}>
@@ -571,7 +563,7 @@ function EmployeesPage() {
                               <TableCell>{row.department || "—"}</TableCell><TableCell>{row.attendance_device_id || "—"}</TableCell>
                             </TableRow>
                           ))}
-                          {!importPlan.rows.length && <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground">اربط الرقم الوظيفي واسم الموظف لعرض المعاينة.</TableCell></TableRow>}
+                          {!importPlan.rows.length && <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground">{ui("اربط الرقم الوظيفي واسم الموظف لعرض المعاينة.")}</TableCell></TableRow>}
                         </TableBody>
                       </Table>
                     </div>
@@ -579,11 +571,9 @@ function EmployeesPage() {
                 </div>
               )}
               <div className="flex shrink-0 justify-end gap-2 border-t pt-3">
-                <Button type="button" variant="outline" onClick={() => setImportDialogOpen(false)} disabled={importing}>إلغاء</Button>
+                <Button type="button" variant="outline" onClick={() => setImportDialogOpen(false)} disabled={importing}>{ui("إلغاء")}</Button>
                 <Button type="button" onClick={confirmExcelImport} disabled={importing || !importPlan.rows.length}>
-                  {importing ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Upload className="ml-2 h-4 w-4" />}
-                  استيراد {importPlan.rows.length.toLocaleString("ar-IQ")} سجل
-                </Button>
+                  {importing ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Upload className="ml-2 h-4 w-4" />}{ui("استيراد ")}{importPlan.rows.length.toLocaleString(displayLocale())}{ui(" سجل")}</Button>
               </div>
             </DialogContent>
           </Dialog>
@@ -591,17 +581,17 @@ function EmployeesPage() {
           if (o) setOpen(true);
           else if (!save.isPending) closeEmployeeDialog();
         }}>
-          <DialogTrigger asChild><Button><Plus className="w-4 h-4 ml-2" /> موظف جديد</Button></DialogTrigger>
-          <DialogContent dir="rtl" className="flex max-h-[92vh] max-w-5xl flex-col overflow-hidden rounded-2xl border-0 p-0 shadow-2xl">
+          <DialogTrigger asChild><Button><Plus className="w-4 h-4 ml-2" />{ui(" موظف جديد")}</Button></DialogTrigger>
+          <DialogContent dir={direction()} className="flex max-h-[92vh] max-w-5xl flex-col overflow-hidden rounded-2xl border-0 p-0 shadow-2xl">
             <DialogHeader className="shrink-0 border-b bg-gradient-to-l from-teal-950 via-teal-800 to-cyan-700 px-6 py-5 text-white">
-              <DialogTitle className="text-xl text-white">{editing ? "تحديث بيانات الموظف" : "إضافة موظف جديد"}</DialogTitle>
-              <p className="text-sm text-teal-50/80">ابدأ بالبيانات الأساسية والتكليف؛ بقية التفاصيل اختيارية ويمكن إضافتها لاحقاً.</p>
+              <DialogTitle className="text-xl text-white">{editing ? ui("تحديث بيانات الموظف") : ui("إضافة موظف جديد")}</DialogTitle>
+              <p className="text-sm text-teal-50/80">{ui("ابدأ بالبيانات الأساسية والتكليف؛ بقية التفاصيل اختيارية ويمكن إضافتها لاحقاً.")}</p>
             </DialogHeader>
             <form onSubmit={(e) => {
               e.preventDefault();
               if (save.isPending) return;
               if (isAdmin && editing && (employeeSiteAccessQuery.isLoading || employeeSiteAccessQuery.isError)) {
-                toast.error("تعذر تحميل صلاحيات المواقع؛ أعد فتح ملف الموظف قبل الحفظ");
+                toast.error(ui("تعذر تحميل صلاحيات المواقع؛ أعد فتح ملف الموظف قبل الحفظ"));
                 return;
               }
               const f = new FormData(e.currentTarget);
@@ -653,17 +643,17 @@ function EmployeesPage() {
             }} className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
               {!editing && (
                 <section className="space-y-3 rounded-xl border bg-card p-4 shadow-sm">
-                  <Label htmlFor="employee-message" className="font-semibold">لصق رسالة الموظف</Label>
+                  <Label htmlFor="employee-message" className="font-semibold">{ui("لصق رسالة الموظف")}</Label>
                   <Textarea id="employee-message" value={employeeMessage} onChange={(event) => setEmployeeMessage(event.target.value)} maxLength={2000} rows={5}
-                    placeholder={"إضافة جديدة\nالاسم الكامل\nالمسمى الوظيفي\nأجر يومي أو شهري\nID-6\nAK D25"} />
-                  <Button type="button" variant="outline" disabled={!employeeMessage.trim() || wageQuery.isPending || save.isPending} onClick={applyEmployeeMessage}>تعبئة البيانات من الرسالة</Button>
+                    placeholder={ui("إضافة جديدة\nالاسم الكامل\nالمسمى الوظيفي\nأجر يومي أو شهري\nID-6\nAK D25")} />
+                  <Button type="button" variant="outline" disabled={!employeeMessage.trim() || wageQuery.isPending || save.isPending} onClick={applyEmployeeMessage}>{ui("تعبئة البيانات من الرسالة")}</Button>
                 </section>
               )}
               <section className="space-y-3 rounded-xl border bg-card p-4 shadow-sm">
-                <div><h3 className="font-semibold">البيانات الأساسية</h3><p className="text-xs text-muted-foreground">الحقول ذات النجمة مطلوبة لإتمام الحفظ.</p></div>
+                <div><h3 className="font-semibold">{ui("البيانات الأساسية")}</h3><p className="text-xs text-muted-foreground">{ui("الحقول ذات النجمة مطلوبة لإتمام الحفظ.")}</p></div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>
-                    <Label htmlFor="employee-no">الرقم الوظيفي{editing && " *"}</Label>
+                    <Label htmlFor="employee-no">{ui("الرقم الوظيفي")}{editing && " *"}</Label>
                     <Input
                       key={editing?.id ?? "new"}
                       id="employee-no"
@@ -671,16 +661,16 @@ function EmployeesPage() {
                       required={!!editing}
                       autoFocus={!!editing}
                       readOnly={!editing}
-                      placeholder="يُعيّن تلقائيًا عند الحفظ"
+                      placeholder={ui("يُعيّن تلقائيًا عند الحفظ")}
                       {...(editing
                         ? { defaultValue: editing.employee_no }
                         : { value: createdEmployee?.employee_no ?? "" })}
                     />
                   </div>
-                  <div><Label htmlFor="employee-attendance-pin">معرّف الموظف في جهاز البصمة</Label><Input id="employee-attendance-pin" name="attendance_device_id" {...(editing ? { defaultValue: ed?.attendance_device_id ?? "" } : { value: onboarding.pin, onChange: (event) => setOnboarding((previous) => ({ ...previous, pin: event.target.value })) })} /></div>
-                  <div><Label htmlFor="employee-attendance-device">رمز جهاز البصمة</Label><Input id="employee-attendance-device" name="attendance_device_code" maxLength={64} {...(editing ? { defaultValue: editing.employee_import_data?.[attendanceDeviceCodeField]?.toString() ?? "" } : { value: onboarding.deviceCode, onChange: (event) => setOnboarding((previous) => ({ ...previous, deviceCode: event.target.value })) })} /></div>
-                  <div className="md:col-span-2"><Label htmlFor="employee-full-name">الاسم الكامل *</Label><Input id="employee-full-name" name="full_name" required autoFocus={!editing} placeholder="الاسم كما في المستندات الرسمية" {...(editing ? { defaultValue: ed?.full_name ?? "" } : { value: onboarding.fullName, onChange: (event) => setOnboarding((previous) => ({ ...previous, fullName: event.target.value })) })} /></div>
-                  <div><Label htmlFor="employee-position">المسمى الوظيفي</Label><Input id="employee-position" name="position" {...(editing ? { defaultValue: ed?.position ?? "" } : {
+                  <div><Label htmlFor="employee-attendance-pin">{ui("معرّف الموظف في جهاز البصمة")}</Label><Input id="employee-attendance-pin" name="attendance_device_id" {...(editing ? { defaultValue: ed?.attendance_device_id ?? "" } : { value: onboarding.pin, onChange: (event) => setOnboarding((previous) => ({ ...previous, pin: event.target.value })) })} /></div>
+                  <div><Label htmlFor="employee-attendance-device">{ui("رمز جهاز البصمة")}</Label><Input id="employee-attendance-device" name="attendance_device_code" maxLength={64} {...(editing ? { defaultValue: editing.employee_import_data?.[attendanceDeviceCodeField]?.toString() ?? "" } : { value: onboarding.deviceCode, onChange: (event) => setOnboarding((previous) => ({ ...previous, deviceCode: event.target.value })) })} /></div>
+                  <div className="md:col-span-2"><Label htmlFor="employee-full-name">{ui("الاسم الكامل *")}</Label><Input id="employee-full-name" name="full_name" required autoFocus={!editing} placeholder={ui("الاسم كما في المستندات الرسمية")} {...(editing ? { defaultValue: ed?.full_name ?? "" } : { value: onboarding.fullName, onChange: (event) => setOnboarding((previous) => ({ ...previous, fullName: event.target.value })) })} /></div>
+                  <div><Label htmlFor="employee-position">{ui("المسمى الوظيفي")}</Label><Input id="employee-position" name="position" {...(editing ? { defaultValue: ed?.position ?? "" } : {
                     value: onboarding.position,
                     onChange: (event) => setOnboarding((previous) => ({ ...previous, position: event.target.value })),
                     onBlur: () => setOnboarding((previous) => {
@@ -690,68 +680,68 @@ function EmployeesPage() {
                     }),
                   })} /></div>
                   <div>
-                    <Label>القسم</Label>
+                    <Label>{ui("القسم")}</Label>
                     <Select name="department_id" defaultValue={ed?.department_id ?? "none"}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">— بدون —</SelectItem>
+                        <SelectItem value="none">{ui("— بدون —")}</SelectItem>
                         {depts.map((d: any) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label>الحالة</Label>
+                    <Label>{ui("الحالة")}</Label>
                     <Select name="status" defaultValue={ed?.status ?? "active"}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="active">نشط</SelectItem>
-                        <SelectItem value="inactive">معطل</SelectItem>
-                        <SelectItem value="terminated">منتهي</SelectItem>
+                        <SelectItem value="active">{ui("نشط")}</SelectItem>
+                        <SelectItem value="inactive">{ui("معطل")}</SelectItem>
+                        <SelectItem value="terminated">{ui("منتهي")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div><Label>NO EM ERP</Label><Input name="erp_no" defaultValue={ed?.erp_no ?? ""} /></div>
-                  <div><Label>رقم الهوية</Label><Input name="id_no" defaultValue={ed?.id_no ?? ""} /></div>
-                  <div><Label>المشروع</Label><Input name="project" defaultValue={ed?.project ?? ""} /></div>
+                  <div><Label>{ui("رقم الهوية")}</Label><Input name="id_no" defaultValue={ed?.id_no ?? ""} /></div>
+                  <div><Label>{ui("المشروع")}</Label><Input name="project" defaultValue={ed?.project ?? ""} /></div>
                 </div>
               </section>
 
               <section className="space-y-3 rounded-xl border border-teal-900/10 bg-teal-50/40 p-4 shadow-sm dark:bg-teal-950/10">
-                <div><h3 className="font-semibold">التكليف والأجر</h3><p className="text-xs text-muted-foreground">حدد القسم وموقع العمل ونوع الأجر لتسهيل توزيع الموظف واحتساب التكلفة.</p></div>
+                <div><h3 className="font-semibold">{ui("التكليف والأجر")}</h3><p className="text-xs text-muted-foreground">{ui("حدد القسم وموقع العمل ونوع الأجر لتسهيل توزيع الموظف واحتساب التكلفة.")}</p></div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>
-                    <Label>موقع العمل</Label>
+                    <Label>{ui("موقع العمل")}</Label>
                     <Select name="site_id" defaultValue={ed?.site_id ?? "none"}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">— بدون —</SelectItem>
+                        <SelectItem value="none">{ui("— بدون —")}</SelectItem>
                         {sites.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name} ({s.ctr_code})</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
-                  <div><Label>كود التكلفة CTR</Label><Input name="ctr_code" defaultValue={ed?.ctr_code ?? ""} /></div>
+                  <div><Label>{ui("كود التكلفة CTR")}</Label><Input name="ctr_code" defaultValue={ed?.ctr_code ?? ""} /></div>
                   <div>
-                    <Label>أجر التخصص</Label>
+                    <Label>{ui("أجر التخصص")}</Label>
                     <Select name="wage_rate_id" {...(editing ? { defaultValue: ed?.wage_rate_id ?? "none" } : {
                       value: onboarding.wageRateId,
                       onValueChange: (value: string) => setOnboarding((previous) => ({ ...previous, wageRateId: value })),
                     })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">— بدون —</SelectItem>
+                        <SelectItem value="none">{ui("— بدون —")}</SelectItem>
                         {wages.map((w: any) => <SelectItem key={w.id} value={w.id}>{w.title}</SelectItem>)}
                       </SelectContent>
                     </Select>
                     {!editing && onboarding.position.trim() && (
                       <p className="mt-1 text-xs text-muted-foreground">
                         {wageAmount && wageAmount > 0
-                          ? `${iqd.format(wageAmount)} ${newPayType === "daily" ? "يوميًا" : "شهريًا"}`
-                          : "لم يُحدد أجر معتمد لهذا التخصص. راجع الأجر قبل الحفظ."}
+                          ? ((iqd.format(wageAmount)) + " " + (newPayType === "daily" ? "يوميًا" : "شهريًا"))
+                          : ui("لم يُحدد أجر معتمد لهذا التخصص. راجع الأجر قبل الحفظ.")}
                       </p>
                     )}
                   </div>
                   <div>
-                    <Label>تصنيف الأجر *</Label>
+                    <Label>{ui("تصنيف الأجر *")}</Label>
                     <Select name="pay_type" {...(editing ? { defaultValue: ed?.pay_type ?? "monthly" } : {
                       value: newPayType,
                       onValueChange: (value: string) => {
@@ -761,26 +751,26 @@ function EmployeesPage() {
                     })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="monthly" disabled={needsDaily}>شهري</SelectItem>
-                        <SelectItem value="daily">يومي (تُحتسب أيام الجمعة بأجر)</SelectItem>
+                        <SelectItem value="monthly" disabled={needsDaily}>{ui("شهري")}</SelectItem>
+                        <SelectItem value="daily">{ui("يومي (تُحتسب أيام الجمعة بأجر)")}</SelectItem>
                       </SelectContent>
                     </Select>
-                    {needsDaily && <p className="mt-1 text-xs text-muted-foreground">هذا التخصص يُسجّل بأجر يومي.</p>}
+                    {needsDaily && <p className="mt-1 text-xs text-muted-foreground">{ui("هذا التخصص يُسجّل بأجر يومي.")}</p>}
                   </div>
-                  <div><Label>الراتب الأساسي</Label><Input name="base_salary" type="number" step="0.01" defaultValue={ed?.base_salary ?? ""} /></div>
-                  <div><Label>نوع الراتب</Label><Input name="salary_type" {...(editing ? { defaultValue: ed?.salary_type ?? "" } : { value: needsDaily ? "أجر يومي" : onboarding.salaryType, readOnly: needsDaily, onChange: (event) => setOnboarding((previous) => ({ ...previous, salaryType: event.target.value })) })} /></div>
-                  <div><Label>هيكل الراتب</Label><Input name="salary_structure" defaultValue={ed?.salary_structure ?? ""} /></div>
+                  <div><Label>{ui("الراتب الأساسي")}</Label><Input name="base_salary" type="number" step="0.01" defaultValue={ed?.base_salary ?? ""} /></div>
+                  <div><Label>{ui("نوع الراتب")}</Label><Input name="salary_type" {...(editing ? { defaultValue: ed?.salary_type ?? "" } : { value: needsDaily ? "أجر يومي" : onboarding.salaryType, readOnly: needsDaily, onChange: (event) => setOnboarding((previous) => ({ ...previous, salaryType: event.target.value })) })} /></div>
+                  <div><Label>{ui("هيكل الراتب")}</Label><Input name="salary_structure" defaultValue={ed?.salary_structure ?? ""} /></div>
                 </div>
               </section>
 
               {isAdmin && (
                 <section className="space-y-3 rounded-xl border border-cyan-900/10 bg-cyan-50/40 p-4 shadow-sm dark:bg-cyan-950/10">
                   <div>
-                    <h3 className="font-semibold">إعدادات الحضور الذاتي</h3>
-                    <p className="text-xs text-muted-foreground">اختر المواقع المسموحة وحدد مهلة تجاوز حد تسجيل الدخول لهذا الموظف.</p>
+                    <h3 className="font-semibold">{ui("إعدادات الحضور الذاتي")}</h3>
+                    <p className="text-xs text-muted-foreground">{ui("اختر المواقع المسموحة وحدد مهلة تجاوز حد تسجيل الدخول لهذا الموظف.")}</p>
                   </div>
                   <div className="max-w-xs space-y-2 rounded-lg border bg-background p-3">
-                    <Label htmlFor="employee-check-in-grace">مهلة تجاوز حد تسجيل الدخول (ساعات)</Label>
+                    <Label htmlFor="employee-check-in-grace">{ui("مهلة تجاوز حد تسجيل الدخول (ساعات)")}</Label>
                     <Input
                       id="employee-check-in-grace"
                       type="number"
@@ -790,7 +780,7 @@ function EmployeesPage() {
                       value={checkInGraceHours}
                       onChange={(event) => setCheckInGraceHours(event.target.value)}
                     />
-                    <p className="text-xs text-muted-foreground">صفر: لا توجد مهلة إضافية. الحد الأعلى 24 ساعة بعد وقت الدخول المحدد في إعدادات الحضور.</p>
+                    <p className="text-xs text-muted-foreground">{ui("صفر: لا توجد مهلة إضافية. الحد الأعلى 24 ساعة بعد وقت الدخول المحدد في إعدادات الحضور.")}</p>
                   </div>
                   <label className="flex cursor-pointer items-center gap-3 rounded-lg border bg-background p-3">
                     <Checkbox
@@ -798,8 +788,8 @@ function EmployeesPage() {
                       onCheckedChange={(checked) => setAllowAllAttendanceSites(checked === true)}
                     />
                     <span>
-                      <span className="block text-sm font-medium">السماح بالتسجيل من كل المواقع</span>
-                      <span className="block text-xs text-muted-foreground">يُحدد الموقع تلقائياً من GPS ضمن نطاقه الجغرافي.</span>
+                      <span className="block text-sm font-medium">{ui("السماح بالتسجيل من كل المواقع")}</span>
+                      <span className="block text-xs text-muted-foreground">{ui("يُحدد الموقع تلقائياً من GPS ضمن نطاقه الجغرافي.")}</span>
                     </span>
                   </label>
                   {!allowAllAttendanceSites && (
@@ -820,70 +810,70 @@ function EmployeesPage() {
                     </div>
                   )}
                   {employeeSiteAccessQuery.isLoading && editing && (
-                    <p className="text-xs text-muted-foreground">جارٍ تحميل سماح المواقع...</p>
+                    <p className="text-xs text-muted-foreground">{ui("جارٍ تحميل سماح المواقع...")}</p>
                   )}
                   {employeeSiteAccessQuery.isError && editing && (
-                    <p role="alert" className="text-xs text-destructive">تعذر تحميل سماح المواقع: {formatErrorMessage(employeeSiteAccessQuery.error)}</p>
+                    <p role="alert" className="text-xs text-destructive">{ui("تعذر تحميل سماح المواقع: ")}{ui(formatErrorMessage(employeeSiteAccessQuery.error))}</p>
                   )}
                 </section>
               )}
 
               <details className="group rounded-xl border bg-card p-4 shadow-sm">
-                <summary className="cursor-pointer list-none font-semibold marker:hidden"><span className="flex items-center justify-between">البيانات الإضافية <span className="text-xs font-normal text-muted-foreground group-open:hidden">الجنسية، التواصل، العقد والحساب البنكي</span><span className="hidden text-xs font-normal text-muted-foreground group-open:inline">إخفاء التفاصيل</span></span></summary>
+                <summary className="cursor-pointer list-none font-semibold marker:hidden"><span className="flex items-center justify-between">{ui("البيانات الإضافية ")}<span className="text-xs font-normal text-muted-foreground group-open:hidden">{ui("الجنسية، التواصل، العقد والحساب البنكي")}</span><span className="hidden text-xs font-normal text-muted-foreground group-open:inline">{ui("إخفاء التفاصيل")}</span></span></summary>
                 <div className="mt-4 space-y-5 border-t pt-4">
               <section className="space-y-3">
-                <h3 className="font-semibold text-sm text-muted-foreground">البيانات الشخصية</h3>
+                <h3 className="font-semibold text-sm text-muted-foreground">{ui("البيانات الشخصية")}</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div><Label>الجنسية</Label><Input name="nationality" defaultValue={ed?.nationality ?? ""} /></div>
+                  <div><Label>{ui("الجنسية")}</Label><Input name="nationality" defaultValue={ed?.nationality ?? ""} /></div>
                   <div>
-                    <Label>الجنس</Label>
+                    <Label>{ui("الجنس")}</Label>
                     <Select name="gender" defaultValue={ed?.gender ?? "none"}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">— غير محدد —</SelectItem>
-                        <SelectItem value="male">ذكر</SelectItem>
-                        <SelectItem value="female">أنثى</SelectItem>
+                        <SelectItem value="none">{ui("— غير محدد —")}</SelectItem>
+                        <SelectItem value="male">{ui("ذكر")}</SelectItem>
+                        <SelectItem value="female">{ui("أنثى")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  <div><Label>الحالة الاجتماعية</Label><Input name="marital_status" defaultValue={ed?.marital_status ?? ""} /></div>
-                  <div><Label>فصيلة الدم</Label><Input name="blood_type" defaultValue={ed?.blood_type ?? ""} /></div>
-                  <div><Label>التعليم</Label><Input name="education" defaultValue={ed?.education ?? ""} /></div>
-                  <div><Label>تاريخ الميلاد</Label><Input name="birth_date" type="date" defaultValue={ed?.birth_date ?? ""} /></div>
+                  <div><Label>{ui("الحالة الاجتماعية")}</Label><Input name="marital_status" defaultValue={ed?.marital_status ?? ""} /></div>
+                  <div><Label>{ui("فصيلة الدم")}</Label><Input name="blood_type" defaultValue={ed?.blood_type ?? ""} /></div>
+                  <div><Label>{ui("التعليم")}</Label><Input name="education" defaultValue={ed?.education ?? ""} /></div>
+                  <div><Label>{ui("تاريخ الميلاد")}</Label><Input name="birth_date" type="date" defaultValue={ed?.birth_date ?? ""} /></div>
                 </div>
               </section>
 
               <section className="space-y-3">
-                <h3 className="font-semibold text-sm text-muted-foreground">التواصل</h3>
+                <h3 className="font-semibold text-sm text-muted-foreground">{ui("التواصل")}</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div><Label>البريد الإلكتروني</Label><Input name="email" type="email" defaultValue={ed?.email ?? ""} /></div>
-                  <div><Label>هاتف 1</Label><Input name="phone1" defaultValue={ed?.phone1 ?? ""} /></div>
-                  <div><Label>هاتف 2</Label><Input name="phone2" defaultValue={ed?.phone2 ?? ""} /></div>
-                  <div className="md:col-span-3"><Label>عنوان السكن</Label><Input name="address" defaultValue={ed?.address ?? ""} /></div>
-                  <div><Label>جهة اتصال الطوارئ</Label><Input name="emergency_contact_name" defaultValue={ed?.emergency_contact_name ?? ""} /></div>
-                  <div><Label>هاتف الطوارئ</Label><Input name="emergency_contact_phone" defaultValue={ed?.emergency_contact_phone ?? ""} /></div>
+                  <div><Label>{ui("البريد الإلكتروني")}</Label><Input name="email" type="email" defaultValue={ed?.email ?? ""} /></div>
+                  <div><Label>{ui("هاتف 1")}</Label><Input name="phone1" defaultValue={ed?.phone1 ?? ""} /></div>
+                  <div><Label>{ui("هاتف 2")}</Label><Input name="phone2" defaultValue={ed?.phone2 ?? ""} /></div>
+                  <div className="md:col-span-3"><Label>{ui("عنوان السكن")}</Label><Input name="address" defaultValue={ed?.address ?? ""} /></div>
+                  <div><Label>{ui("جهة اتصال الطوارئ")}</Label><Input name="emergency_contact_name" defaultValue={ed?.emergency_contact_name ?? ""} /></div>
+                  <div><Label>{ui("هاتف الطوارئ")}</Label><Input name="emergency_contact_phone" defaultValue={ed?.emergency_contact_phone ?? ""} /></div>
                 </div>
               </section>
 
               <section className="space-y-3">
-                <h3 className="font-semibold text-sm text-muted-foreground">العقد والوثائق</h3>
+                <h3 className="font-semibold text-sm text-muted-foreground">{ui("العقد والوثائق")}</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div><Label>تاريخ المباشرة</Label><Input name="hire_date" type="date" defaultValue={ed?.hire_date ?? ""} /></div>
-                  <div><Label>آخر يوم عمل</Label><Input name="last_working_day" type="date" defaultValue={ed?.last_working_day ?? ""} /></div>
-                  <div><Label>نوع العقد</Label><Input name="contract_type" defaultValue={ed?.contract_type ?? ""} /></div>
-                  <div><Label>انتهاء العقد</Label><Input name="contract_end_date" type="date" defaultValue={ed?.contract_end_date ?? ""} /></div>
-                  <div><Label>رقم الجواز</Label><Input name="passport_no" defaultValue={ed?.passport_no ?? ""} /></div>
-                  <div><Label>انتهاء الجواز</Label><Input name="passport_expiry" type="date" defaultValue={ed?.passport_expiry ?? ""} /></div>
-                  <div><Label>رقم الإقامة</Label><Input name="residency_no" defaultValue={ed?.residency_no ?? ""} /></div>
-                  <div><Label>انتهاء الإقامة</Label><Input name="residency_expiry" type="date" defaultValue={ed?.residency_expiry ?? ""} /></div>
-                  <div><Label>رقم جواز السلامة</Label><Input name="safety_passport_no" defaultValue={ed?.safety_passport_no ?? ""} /></div>
-                  <div><Label>انتهاء جواز السلامة</Label><Input name="safety_passport_expiry" type="date" defaultValue={ed?.safety_passport_expiry ?? ""} /></div>
+                  <div><Label>{ui("تاريخ المباشرة")}</Label><Input name="hire_date" type="date" defaultValue={ed?.hire_date ?? ""} /></div>
+                  <div><Label>{ui("آخر يوم عمل")}</Label><Input name="last_working_day" type="date" defaultValue={ed?.last_working_day ?? ""} /></div>
+                  <div><Label>{ui("نوع العقد")}</Label><Input name="contract_type" defaultValue={ed?.contract_type ?? ""} /></div>
+                  <div><Label>{ui("انتهاء العقد")}</Label><Input name="contract_end_date" type="date" defaultValue={ed?.contract_end_date ?? ""} /></div>
+                  <div><Label>{ui("رقم الجواز")}</Label><Input name="passport_no" defaultValue={ed?.passport_no ?? ""} /></div>
+                  <div><Label>{ui("انتهاء الجواز")}</Label><Input name="passport_expiry" type="date" defaultValue={ed?.passport_expiry ?? ""} /></div>
+                  <div><Label>{ui("رقم الإقامة")}</Label><Input name="residency_no" defaultValue={ed?.residency_no ?? ""} /></div>
+                  <div><Label>{ui("انتهاء الإقامة")}</Label><Input name="residency_expiry" type="date" defaultValue={ed?.residency_expiry ?? ""} /></div>
+                  <div><Label>{ui("رقم جواز السلامة")}</Label><Input name="safety_passport_no" defaultValue={ed?.safety_passport_no ?? ""} /></div>
+                  <div><Label>{ui("انتهاء جواز السلامة")}</Label><Input name="safety_passport_expiry" type="date" defaultValue={ed?.safety_passport_expiry ?? ""} /></div>
                 </div>
               </section>
 
               <section className="space-y-3">
-                <h3 className="font-semibold text-sm text-muted-foreground">حقول الملف الشامل الإضافية</h3>
-                <p className="text-xs text-muted-foreground">تُحفظ هذه الحقول كما وردت في قاعدة البيانات الشاملة، وتظهر في ملف الموظف.</p>
+                <h3 className="font-semibold text-sm text-muted-foreground">{ui("حقول الملف الشامل الإضافية")}</h3>
+                <p className="text-xs text-muted-foreground">{ui("تُحفظ هذه الحقول كما وردت في قاعدة البيانات الشاملة، وتظهر في ملف الموظف.")}</p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   {EMPLOYEE_EXTRA_SOURCE_FIELDS.map(({ header, column }) => (
                     <div key={column}>
@@ -894,19 +884,19 @@ function EmployeesPage() {
                 </div>
               </section>
               <section className="space-y-3">
-                <h3 className="font-semibold text-sm text-muted-foreground">المعلومات البنكية والملاحظات</h3>
+                <h3 className="font-semibold text-sm text-muted-foreground">{ui("المعلومات البنكية والملاحظات")}</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div><Label>اسم البنك</Label><Input name="bank_name" defaultValue={ed?.bank_name ?? ""} /></div>
-                  <div><Label>رقم الحساب</Label><Input name="bank_account" defaultValue={ed?.bank_account ?? ""} /></div>
+                  <div><Label>{ui("اسم البنك")}</Label><Input name="bank_name" defaultValue={ed?.bank_name ?? ""} /></div>
+                  <div><Label>{ui("رقم الحساب")}</Label><Input name="bank_account" defaultValue={ed?.bank_account ?? ""} /></div>
                   <div><Label>IBAN</Label><Input name="iban" defaultValue={ed?.iban ?? ""} /></div>
-                  <div className="md:col-span-3"><Label>ملاحظات</Label><Textarea name="notes" defaultValue={ed?.notes ?? ""} /></div>
+                  <div className="md:col-span-3"><Label>{ui("ملاحظات")}</Label><Textarea name="notes" defaultValue={ed?.notes ?? ""} /></div>
                 </div>
               </section>
                 </div>
               </details>
               <div className="sticky bottom-0 -mx-6 -mb-6 flex flex-col-reverse gap-2 border-t bg-background/95 p-4 backdrop-blur sm:flex-row sm:justify-end">
-                <Button type="button" variant="outline" disabled={save.isPending} onClick={closeEmployeeDialog}>إلغاء</Button>
-                <Button type="submit" className="min-w-36 bg-gradient-to-l from-teal-800 to-emerald-600 shadow-md" disabled={save.isPending || (isAdmin && !!editing && (employeeSiteAccessQuery.isLoading || employeeSiteAccessQuery.isError))}>{save.isPending ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : null}{save.isPending ? "جارٍ الحفظ..." : editing ? "حفظ التعديلات" : "حفظ بيانات الموظف"}</Button>
+                <Button type="button" variant="outline" disabled={save.isPending} onClick={closeEmployeeDialog}>{ui("إلغاء")}</Button>
+                <Button type="submit" className="min-w-36 bg-gradient-to-l from-teal-800 to-emerald-600 shadow-md" disabled={save.isPending || (isAdmin && !!editing && (employeeSiteAccessQuery.isLoading || employeeSiteAccessQuery.isError))}>{save.isPending ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : null}{save.isPending ? ui("جارٍ الحفظ...") : editing ? ui("حفظ التعديلات") : ui("حفظ بيانات الموظف")}</Button>
               </div>
             </form>
           </DialogContent>
@@ -923,65 +913,65 @@ function EmployeesPage() {
       )}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>القائمة</CardTitle>
+          <CardTitle>{ui("القائمة")}</CardTitle>
           <div className="relative w-full max-w-80">
             <Search className="absolute right-3 top-3 w-4 h-4 text-muted-foreground" />
-            <Input aria-label="بحث في دليل الموظفين" placeholder="الاسم، الرقم، الهوية، البصمة، الهاتف أو البريد" className="pr-9" value={filters.search} onChange={e => changeFilter("search", e.target.value)} />
+            <Input aria-label={ui("بحث في دليل الموظفين")} placeholder={ui("الاسم، الرقم، الهوية، البصمة، الهاتف أو البريد")} className="pr-9" value={filters.search} onChange={e => changeFilter("search", e.target.value)} />
           </div>
         </CardHeader>
         <CardContent>
           <div className="mb-4 flex flex-wrap items-start gap-4">
-            <details><summary className="cursor-pointer py-2 font-medium">تخصيص الأعمدة</summary><div className="grid grid-cols-2 gap-3 rounded-md border p-3">
-              {columnKeys.map(key => <label key={key} className="flex items-center gap-2"><input type="checkbox" checked={columns.includes(key)} disabled={columns.length === 1 && columns[0] === key} onChange={e => chooseColumns(e.target.checked ? [...columns,key] : columns.filter(col => col !== key))} />{directoryColumns[key]}</label>)}
-              <Button variant="ghost" onClick={() => chooseColumns(defaultColumns)}>استعادة الأعمدة الافتراضية</Button>
+            <details><summary className="cursor-pointer py-2 font-medium">{ui("تخصيص الأعمدة")}</summary><div className="grid grid-cols-2 gap-3 rounded-md border p-3">
+              {columnKeys.map(key => <label key={key} className="flex items-center gap-2"><input type="checkbox" checked={columns.includes(key)} disabled={columns.length === 1 && columns[0] === key} onChange={e => chooseColumns(e.target.checked ? [...columns,key] : columns.filter(col => col !== key))} />{ui(directoryColumns[key])}</label>)}
+              <Button variant="ghost" onClick={() => chooseColumns(defaultColumns)}>{ui("استعادة الأعمدة الافتراضية")}</Button>
             </div></details>
           </div>
-          <Table dir="rtl" aria-busy={isFetching}>
+          <Table dir={direction()} aria-busy={isFetching}>
             <TableHeader>
-              <TableRow>{visibleColumns.map(key => <TableHead key={key}>{directoryColumns[key]}</TableHead>)}
-                <TableHead>الإجراءات {isFetching && <Loader2 aria-label="جارٍ تحديث النتائج" className="inline size-3.5 animate-spin text-muted-foreground" />}</TableHead>
+              <TableRow>{visibleColumns.map(key => <TableHead key={key}>{ui(directoryColumns[key])}</TableHead>)}
+                <TableHead>{ui("الإجراءات ")}{isFetching && <Loader2 aria-label={ui("جارٍ تحديث النتائج")} className="inline size-3.5 animate-spin text-muted-foreground" />}</TableHead>
               </TableRow>
               <TableRow>
                 {visibleColumns.map(key => {
                   const label = `تصفية حسب ${directoryColumns[key]}`;
                   let control;
                   if (key === "department" || key === "pay" || key === "status") {
-                    control = <select aria-label={label} className="h-8 w-full rounded-md border border-input bg-background px-1 text-xs" value={filters[key]} onChange={e => changeFilter(key, e.target.value)}>
-                      <option value="">الكل</option>
+                    control = <select aria-label={ui(label)} className="h-8 w-full rounded-md border border-input bg-background px-1 text-xs" value={filters[key]} onChange={e => changeFilter(key, e.target.value)}>
+                      <option value="">{ui("الكل")}</option>
                       {options[key].map(([value, name]) => <option key={value} value={value}>{name}</option>)}
                     </select>;
                   } else if (key === "hire_date") {
                     control = <div className="flex gap-1">{(["from", "to"] as const).map(edge =>
-                      <Input key={edge} type="date" aria-label={edge === "from" ? "تاريخ المباشرة من" : "تاريخ المباشرة إلى"} className="h-8 w-32 px-1 text-xs" value={filters[edge]} onChange={e => changeFilter(edge, e.target.value)} />
+                      <Input key={edge} type="date" aria-label={edge === "from" ? ui("تاريخ المباشرة من") : ui("تاريخ المباشرة إلى")} className="h-8 w-32 px-1 text-xs" value={filters[edge]} onChange={e => changeFilter(edge, e.target.value)} />
                     )}</div>;
                   } else {
                     control = <div className="relative">
-                      <Input aria-label={label} placeholder="بحث…" inputMode={key === "device" ? "numeric" : undefined} className="h-8 ps-2 pe-6 text-xs" value={filters[key]} onChange={e => changeFilter(key, e.target.value)} />
-                      {filters[key] && <button type="button" aria-label={`مسح فلتر ${directoryColumns[key]}`} className="absolute end-1 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground hover:text-foreground" onClick={() => changeFilter(key, "")}><X className="size-3.5" /></button>}
+                      <Input aria-label={ui(label)} placeholder={ui("بحث…")} inputMode={key === "device" ? "numeric" : undefined} className="h-8 ps-2 pe-6 text-xs" value={filters[key]} onChange={e => changeFilter(key, e.target.value)} />
+                      {filters[key] && <button type="button" aria-label={(ui("مسح فلتر ") + (directoryColumns[key]))} className="absolute end-1 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground hover:text-foreground" onClick={() => changeFilter(key, "")}><X className="size-3.5" /></button>}
                     </div>;
                   }
                   return <TableHead key={key} className="h-10 min-w-24 px-2">{control}</TableHead>;
                 })}
-                <TableHead><Button size="sm" variant="ghost" onClick={() => setFilters(emptyFilters)}><RotateCcw className="size-3.5" />مسح كل الفلاتر</Button></TableHead>
+                <TableHead><Button size="sm" variant="ghost" onClick={() => setFilters(emptyFilters)}><RotateCcw className="size-3.5" />{ui("مسح كل الفلاتر")}</Button></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody showAllRows>
               {filtered.map((e) => (
                 <TableRow key={e.id}>
                   {columns.includes("employee_no") && <TableCell className="font-mono">{e.employee_no}</TableCell>}
-                  {columns.includes("full_name") && <TableCell className="font-medium"><button type="button" onClick={() => openPersonalReport(e)} className="inline-flex min-h-10 items-center text-primary underline-offset-4 hover:underline" aria-label={`فتح التقرير الشخصي لـ ${e.full_name}`}>{e.full_name}</button></TableCell>}
+                  {columns.includes("full_name") && <TableCell className="font-medium"><button type="button" onClick={() => openPersonalReport(e)} className="inline-flex min-h-10 items-center text-primary underline-offset-4 hover:underline" aria-label={(ui("فتح التقرير الشخصي لـ ") + (e.full_name))}>{e.full_name}</button></TableCell>}
                   {columns.includes("department") && <TableCell>{e.departments?.name ?? "-"}</TableCell>}
                   {columns.includes("id_no") && <TableCell className="font-mono">{e.id_no || "-"}</TableCell>}
                   {columns.includes("position") && <TableCell>{e.position ?? "-"}</TableCell>}
                   {columns.includes("device") && <TableCell className="font-mono">{e.attendance_device_id || "-"}</TableCell>}
-                  {columns.includes("pay") && <TableCell>{e.pay_type === "daily" ? "يومي" : "شهري"}</TableCell>}
+                  {columns.includes("pay") && <TableCell>{e.pay_type === "daily" ? ui("يومي") : ui("شهري")}</TableCell>}
                   {columns.includes("status") && <TableCell>
                     <Select value={e.status} onValueChange={(status: "active" | "inactive" | "terminated") => updateStatus.mutate({ employeeId: e.id, status })}>
-                      <SelectTrigger className="h-9 min-w-28" aria-label={`حالة ${e.full_name}`}><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="h-9 min-w-28" aria-label={(ui("حالة ") + (e.full_name))}><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="active">نشط</SelectItem>
-                        <SelectItem value="inactive">معطل</SelectItem>
-                        <SelectItem value="terminated">منتهي</SelectItem>
+                        <SelectItem value="active">{ui("نشط")}</SelectItem>
+                        <SelectItem value="inactive">{ui("معطل")}</SelectItem>
+                        <SelectItem value="terminated">{ui("منتهي")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </TableCell>}
@@ -990,21 +980,21 @@ function EmployeesPage() {
                   {columns.includes("hire_date") && <TableCell>{e.hire_date || "—"}</TableCell>}
                   <TableCell>
                     <div className="flex gap-1">
-                      <Button size="icon" variant="ghost" title="فتح التقرير الشخصي" aria-label="فتح التقرير الشخصي" onClick={() => openPersonalReport(e)}><UserRound className="w-4 h-4" /></Button>
-                      <Button size="icon" variant="ghost" title="تعديل الموظف" aria-label="تعديل الموظف" disabled={editEmployee.isPending} onClick={() => editEmployee.mutate(e.id)}><Pencil className="w-4 h-4" /></Button>
-                      <Button size="icon" variant="ghost" disabled={del.isPending} aria-label={`حذف ملف ${e.full_name} رقم ${e.employee_no}`} onClick={() => { if (confirm(`حذف ملف ${e.full_name} ذي الرقم الوظيفي ${e.employee_no}؟`)) del.mutate(e); }}><Trash2 className="w-4 h-4 text-destructive" /></Button>
+                      <Button size="icon" variant="ghost" title={ui("فتح التقرير الشخصي")} aria-label={ui("فتح التقرير الشخصي")} onClick={() => openPersonalReport(e)}><UserRound className="w-4 h-4" /></Button>
+                      <Button size="icon" variant="ghost" title={ui("تعديل الموظف")} aria-label={ui("تعديل الموظف")} disabled={editEmployee.isPending} onClick={() => editEmployee.mutate(e.id)}><Pencil className="w-4 h-4" /></Button>
+                      <Button size="icon" variant="ghost" disabled={del.isPending} aria-label={(ui("حذف ملف ") + (e.full_name) + ui(" رقم ") + (e.employee_no))} onClick={() => { if (confirm((ui("حذف ملف ") + (e.full_name) + ui(" ذي الرقم الوظيفي ") + (e.employee_no) + "؟"))) del.mutate(e); }}><Trash2 className="w-4 h-4 text-destructive" /></Button>
                     </div>
                   </TableCell>
                 </TableRow>
               ))}
-              {(directoryError || !filtered.length) && <TableRow><TableCell colSpan={columns.length + 1} className="text-center text-muted-foreground py-8">{directoryError ? "تعذر تحميل الموظفين" : isFetching ? "جارٍ تحميل الموظفين…" : "لا يوجد موظفون مطابقون"}</TableCell></TableRow>}
+              {(directoryError || !filtered.length) && <TableRow><TableCell colSpan={columns.length + 1} className="text-center text-muted-foreground py-8">{directoryError ? ui("تعذر تحميل الموظفين") : isFetching ? ui("جارٍ تحميل الموظفين…") : ui("لا يوجد موظفون مطابقون")}</TableCell></TableRow>}
             </TableBody>
           </Table>
           <div className="mt-4 flex items-center justify-center gap-3">
-            <p className="text-xs text-muted-foreground">يتم عرض {filtered.length} من إجمالي {matchCount} موظف مطابق للفلترة</p>
+            <p className="text-xs text-muted-foreground">{ui("يتم عرض ")}{filtered.length}{ui(" من إجمالي ")}{matchCount}{ui(" موظف مطابق للفلترة")}</p>
             {directoryQuery.hasNextPage && (
               <Button variant="outline" size="sm" disabled={isFetching} onClick={() => directoryQuery.fetchNextPage()}>
-                {isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : "عرض المزيد"}
+                {isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : ui("عرض المزيد")}
               </Button>
             )}
           </div>
@@ -1014,14 +1004,14 @@ function EmployeesPage() {
         <TabsContent value="personal" className="mt-0 space-y-5">
           <Card className="overflow-hidden border-primary/20 bg-gradient-to-br from-primary/5 via-card to-card">
             <CardContent className="p-5 md:p-6">
-              <div className="mb-4"><h2 className="text-2xl font-bold">التقرير الشخصي</h2><p className="mt-1 text-sm text-muted-foreground">ابحث بالاسم أو الرقم الوظيفي لعرض كل ما يتعلق بالموظف في مكان واحد.</p></div>
-              <div className="relative max-w-2xl"><Search className="pointer-events-none absolute right-3 top-3 h-5 w-5 text-muted-foreground" /><Input value={profileSearch} onChange={(event) => { setProfileSearch(event.target.value); setSelectedProfileId(""); }} placeholder="ابحث عن موظف بالاسم أو الرقم الوظيفي..." className="min-h-12 pr-11 text-base" /></div>
-              {profileSearching && <p className="mt-3 text-sm text-muted-foreground">جاري البحث...</p>}
-              {profileSearch.trim().length >= 2 && !profileSearching && profileMatches.length > 0 && <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{profileMatches.map((employee) => <button key={employee.id} type="button" onClick={() => setSelectedProfileId(employee.id)} className={`rounded-xl border p-3 text-right transition hover:border-primary hover:bg-primary/5 ${activeProfileId === employee.id ? "border-primary bg-primary/10 ring-2 ring-primary/20" : "bg-background"}`}><div className="font-semibold">{employee.full_name}</div><div className="mt-1 text-xs text-muted-foreground">#{employee.employee_no} · {employee.position || "بدون مسمى"}</div><div className="mt-1 text-xs text-muted-foreground">{employee.departments?.name || "بدون قسم"}</div></button>)}</div>}
-              {profileSearch.trim().length >= 2 && !profileSearching && !profileMatches.length && <p className="mt-4 rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">لم يتم العثور على موظف مطابق للبحث.</p>}
+              <div className="mb-4"><h2 className="text-2xl font-bold">{ui("التقرير الشخصي")}</h2><p className="mt-1 text-sm text-muted-foreground">{ui("ابحث بالاسم أو الرقم الوظيفي لعرض كل ما يتعلق بالموظف في مكان واحد.")}</p></div>
+              <div className="relative max-w-2xl"><Search className="pointer-events-none absolute right-3 top-3 h-5 w-5 text-muted-foreground" /><Input value={profileSearch} onChange={(event) => { setProfileSearch(event.target.value); setSelectedProfileId(""); }} placeholder={ui("ابحث عن موظف بالاسم أو الرقم الوظيفي...")} className="min-h-12 pr-11 text-base" /></div>
+              {profileSearching && <p className="mt-3 text-sm text-muted-foreground">{ui("جاري البحث...")}</p>}
+              {profileSearch.trim().length >= 2 && !profileSearching && profileMatches.length > 0 && <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{profileMatches.map((employee) => <button key={employee.id} type="button" onClick={() => setSelectedProfileId(employee.id)} className={`rounded-xl border p-3 text-right transition hover:border-primary hover:bg-primary/5 ${activeProfileId === employee.id ? "border-primary bg-primary/10 ring-2 ring-primary/20" : "bg-background"}`}><div className="font-semibold">{employee.full_name}</div><div className="mt-1 text-xs text-muted-foreground">#{employee.employee_no} · {employee.position || ui("بدون مسمى")}</div><div className="mt-1 text-xs text-muted-foreground">{employee.departments?.name || ui("بدون قسم")}</div></button>)}</div>}
+              {profileSearch.trim().length >= 2 && !profileSearching && !profileMatches.length && <p className="mt-4 rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">{ui("لم يتم العثور على موظف مطابق للبحث.")}</p>}
             </CardContent>
           </Card>
-          {activeProfileId ? <EmployeeProfileContent employeeId={activeProfileId} embedded /> : <Card><CardContent className="p-10 text-center text-muted-foreground">اختر موظفاً من نتائج البحث لعرض التقرير الشخصي الكامل.</CardContent></Card>}
+          {activeProfileId ? <EmployeeProfileContent employeeId={activeProfileId} embedded /> : <Card><CardContent className="p-10 text-center text-muted-foreground">{ui("اختر موظفاً من نتائج البحث لعرض التقرير الشخصي الكامل.")}</CardContent></Card>}
         </TabsContent>
         <TabsContent value="documents" className="mt-0"><EmployeeDocumentsTab /></TabsContent>
       </Tabs>

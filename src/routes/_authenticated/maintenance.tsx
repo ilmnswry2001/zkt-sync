@@ -1,3 +1,4 @@
+import { direction, ui } from "@/lib/ui-language";
 import { readWorkspaceName } from "@/lib/workspace-name";
 import { PrivateStorageMedia } from "@/components/PrivateStorageMedia";
 import { useEffect, useState } from "react";
@@ -72,7 +73,7 @@ import {
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/maintenance")({
-  head: () => ({ meta: [{ title: "الصيانة" }] }),
+  head: () => ({ meta: [{ title: ui("الصيانة") }] }),
   beforeLoad: async () => {
     const { data } = await supabase.auth.getUser();
     if (!data.user) throw redirect({ to: "/auth" });
@@ -465,13 +466,13 @@ function MaintenancePage() {
       }
     },
     onSuccess: async () => {
-      toast.success("تم حفظ سجل الصيانة");
+      toast.success(ui("تم حفظ سجل الصيانة"));
       setFormOpen(false);
       await client.invalidateQueries({ queryKey: ["maintenance-records"] });
       await client.invalidateQueries({ queryKey: ["maintenance-machinery"] });
       await client.invalidateQueries({ queryKey: ["maintenance-vehicles"] });
     },
-    onError: (error: Error) => toast.error(`تعذر حفظ السجل: ${formatErrorMessage(error)}`),
+    onError: (error: Error) => toast.error((ui("تعذر حفظ السجل: ") + (formatErrorMessage(error)))),
   });
 
   const deleteRecord = useMutation({
@@ -480,10 +481,10 @@ function MaintenancePage() {
       if (error) throw error;
     },
     onSuccess: async () => {
-      toast.success("تم حذف سجل الصيانة");
+      toast.success(ui("تم حذف سجل الصيانة"));
       await client.invalidateQueries({ queryKey: ["maintenance-records"] });
     },
-    onError: (error: Error) => toast.error(`تعذر الحذف: ${formatErrorMessage(error)}`),
+    onError: (error: Error) => toast.error((ui("تعذر الحذف: ") + (formatErrorMessage(error)))),
   });
 
   const removeAttachment = async (attachment: MaintenanceAttachment) => {
@@ -509,7 +510,7 @@ function MaintenancePage() {
 
   const exportExcel = () => {
     if (!filteredRecords.length) {
-      toast.error("لا توجد سجلات للتصدير");
+      toast.error(ui("لا توجد سجلات للتصدير"));
       return;
     }
     const rows = filteredRecords.map((record) => ({
@@ -540,28 +541,25 @@ function MaintenancePage() {
   const activeTabLabel = recordTypeLabel(activeTab);
 
   return (
-    <div dir="rtl" className="space-y-6">
+    <div dir={direction()} className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="rounded-2xl bg-primary/10 p-3">
             <Wrench className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <p className="text-sm font-medium text-muted-foreground">سجلات الصيانة والقطع والكلف</p>
+            <p className="text-sm font-medium text-muted-foreground">{ui("سجلات الصيانة والقطع والكلف")}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" asChild>
             <a href="/warehouses">
-              <Package className="ml-2 h-4 w-4" /> مخزن الصيانة
-            </a>
+              <Package className="ml-2 h-4 w-4" />{ui(" مخزن الصيانة")}</a>
           </Button>
           <Button variant="outline" onClick={() => setCatalogOpen(true)}>
-            <Settings2 className="ml-2 h-4 w-4" /> كتالوج الصيانة
-          </Button>
+            <Settings2 className="ml-2 h-4 w-4" />{ui(" كتالوج الصيانة")}</Button>
           <Button onClick={() => void openCreate()}>
-            <Plus className="ml-2 h-4 w-4" /> إضافة سجل صيانة
-          </Button>
+            <Plus className="ml-2 h-4 w-4" />{ui(" إضافة سجل صيانة")}</Button>
         </div>
       </div>
 
@@ -580,7 +578,7 @@ function MaintenancePage() {
               ) : (
                 <Package className="h-4 w-4" />
               )}
-              {tab.label}
+              {ui(tab.label)}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -588,42 +586,40 @@ function MaintenancePage() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="glass-card rounded-3xl p-5">
-          <p className="text-xs text-muted-foreground">سجلات {activeTabLabel}</p>
+          <p className="text-xs text-muted-foreground">{ui("سجلات ")}{activeTabLabel}</p>
           <p className="mt-2 text-2xl font-bold tabular-nums">{filteredRecords.length}</p>
         </div>
         <div className="glass-card rounded-3xl p-5">
-          <p className="text-xs text-muted-foreground">إجمالي الكلفة</p>
-          <p className="mt-2 text-2xl font-bold tabular-nums">{money(totalCost)} د.ع</p>
+          <p className="text-xs text-muted-foreground">{ui("إجمالي الكلفة")}</p>
+          <p className="mt-2 text-2xl font-bold tabular-nums">{money(totalCost)}{ui(" د.ع")}</p>
         </div>
         <div className="glass-card rounded-3xl p-5">
-          <p className="text-xs text-muted-foreground">صيانة قادمة خلال 30 يومًا</p>
+          <p className="text-xs text-muted-foreground">{ui("صيانة قادمة خلال 30 يومًا")}</p>
           <p className="mt-2 text-2xl font-bold tabular-nums text-amber-600 dark:text-amber-400">
             {upcomingCount}
           </p>
         </div>
         <div className="glass-card rounded-3xl p-5">
-          <p className="text-xs text-muted-foreground">صيانة متأخرة</p>
+          <p className="text-xs text-muted-foreground">{ui("صيانة متأخرة")}</p>
           <p className="mt-2 text-2xl font-bold tabular-nums text-destructive">{overdueCount}</p>
         </div>
       </div>
 
       {overdueCount > 0 && (
         <div className="flex items-center gap-2 rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-          <AlertTriangle className="h-4 w-4" />
-          توجد {overdueCount} عملية صيانة متأخرة في {activeTabLabel}. راجع سجلات الصيانة القادمة.
-        </div>
+          <AlertTriangle className="h-4 w-4" />{ui("توجد ")}{overdueCount}{ui(" عملية صيانة متأخرة في ")}{activeTabLabel}{ui(". راجع سجلات الصيانة القادمة.")}</div>
       )}
 
       <Card>
         <CardHeader className="flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-          <CardTitle>سجل {activeTabLabel}</CardTitle>
+          <CardTitle>{ui("سجل ")}{activeTabLabel}</CardTitle>
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative w-full sm:w-64">
               <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                aria-label="بحث في سجلات الصيانة"
+                aria-label={ui("بحث في سجلات الصيانة")}
                 className="pr-9"
-                placeholder="بحث برقم السجل / الجهة / النوع…"
+                placeholder={ui("بحث برقم السجل / الجهة / النوع…")}
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
               />
@@ -636,10 +632,10 @@ function MaintenancePage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">كل الحالات</SelectItem>
+                <SelectItem value="all">{ui("كل الحالات")}</SelectItem>
                 {STATUS_OPTIONS.map((option) => (
                   <SelectItem key={option.key} value={option.key}>
-                    {option.label}
+                    {ui(option.label)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -651,26 +647,25 @@ function MaintenancePage() {
         </CardHeader>
         <CardContent className="overflow-x-auto p-0">
           {recordsQuery.isError ? (
-            <p className="p-8 text-center text-destructive">
-              تعذر تحميل سجلات الصيانة: {(recordsQuery.error as Error).message}
+            <p className="p-8 text-center text-destructive">{ui("تعذر تحميل سجلات الصيانة: ")}{(recordsQuery.error as Error).message}
             </p>
           ) : recordsQuery.isLoading ? (
-            <p className="p-8 text-center text-muted-foreground">جارٍ تحميل السجلات…</p>
+            <p className="p-8 text-center text-muted-foreground">{ui("جارٍ تحميل السجلات…")}</p>
           ) : (
             <table className="w-full min-w-[1050px] text-sm">
               <thead>
                 <tr className="border-b bg-muted/40 text-right">
-                  <th className="p-3">رقم السجل</th>
-                  <th className="p-3">التاريخ</th>
-                  <th className="p-3">الجهة</th>
-                  <th className="p-3">نوع الصيانة</th>
-                  <th className="p-3">الورشة</th>
-                  <th className="p-3">الحالة</th>
-                  <th className="p-3">القطع</th>
-                  <th className="p-3">الإجمالي</th>
-                  <th className="p-3">الصيانة القادمة</th>
-                  <th className="p-3">مرفقات</th>
-                  <th className="p-3">إجراءات</th>
+                  <th className="p-3">{ui("رقم السجل")}</th>
+                  <th className="p-3">{ui("التاريخ")}</th>
+                  <th className="p-3">{ui("الجهة")}</th>
+                  <th className="p-3">{ui("نوع الصيانة")}</th>
+                  <th className="p-3">{ui("الورشة")}</th>
+                  <th className="p-3">{ui("الحالة")}</th>
+                  <th className="p-3">{ui("القطع")}</th>
+                  <th className="p-3">{ui("الإجمالي")}</th>
+                  <th className="p-3">{ui("الصيانة القادمة")}</th>
+                  <th className="p-3">{ui("مرفقات")}</th>
+                  <th className="p-3">{ui("إجراءات")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -683,15 +678,14 @@ function MaintenancePage() {
                     <td className="p-3">{record.workshop_name ?? "—"}</td>
                     <td className="p-3">
                       <Badge className={statusClass(record.status)}>
-                        {statusLabel(record.status)}
+                        {ui(statusLabel(record.status))}
                       </Badge>
                     </td>
                     <td className="p-3 tabular-nums">
                       {record.maintenance_record_parts?.length ?? 0}
                     </td>
                     <td className="p-3 font-semibold tabular-nums">
-                      {money(record.total_cost)} د.ع
-                    </td>
+                      {money(record.total_cost)}{ui(" د.ع")}</td>
                     <td className="p-3 whitespace-nowrap">
                       {record.next_maintenance_date ? (
                         <span
@@ -722,7 +716,7 @@ function MaintenancePage() {
                         <Button
                           size="icon"
                           variant="ghost"
-                          aria-label={`تعديل ${record.record_no}`}
+                          aria-label={(ui("تعديل ") + (record.record_no))}
                           onClick={() => openEdit(record)}
                         >
                           <PencilLine className="h-4 w-4" />
@@ -730,7 +724,7 @@ function MaintenancePage() {
                         <Button
                           size="icon"
                           variant="ghost"
-                          aria-label={`طباعة ${record.record_no}`}
+                          aria-label={(ui("طباعة ") + (record.record_no))}
                           onClick={() => handlePrint(record)}
                         >
                           <Printer className="h-4 w-4" />
@@ -738,9 +732,9 @@ function MaintenancePage() {
                         <Button
                           size="icon"
                           variant="ghost"
-                          aria-label={`حذف ${record.record_no}`}
+                          aria-label={(ui("حذف ") + (record.record_no))}
                           onClick={() => {
-                            if (confirm(`حذف سجل الصيانة ${record.record_no}؟`))
+                            if (confirm((ui("حذف سجل الصيانة ") + (record.record_no) + "؟")))
                               deleteRecord.mutate(record.id);
                           }}
                         >
@@ -754,29 +748,25 @@ function MaintenancePage() {
             </table>
           )}
           {!recordsQuery.isLoading && filteredRecords.length === 0 && (
-            <p className="p-8 text-center text-muted-foreground">
-              لا توجد سجلات صيانة لهذا التبويب بعد.
-            </p>
+            <p className="p-8 text-center text-muted-foreground">{ui("لا توجد سجلات صيانة لهذا التبويب بعد.")}</p>
           )}
         </CardContent>
       </Card>
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent dir="rtl" className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
+        <DialogContent dir={direction()} className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle>{form.id ? `تعديل سجل ${form.recordNo}` : "إضافة سجل صيانة"}</DialogTitle>
-            <DialogDescription>
-              سجل {activeTabLabel} بتفاصيل القطع والكلفة والمرفقات.
-            </DialogDescription>
+            <DialogTitle>{form.id ? (ui("تعديل سجل ") + (form.recordNo)) : ui("إضافة سجل صيانة")}</DialogTitle>
+            <DialogDescription>{ui("سجل ")}{activeTabLabel}{ui(" بتفاصيل القطع والكلفة والمرفقات.")}</DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="r-no">رقم السجل</Label>
+              <Label htmlFor="r-no">{ui("رقم السجل")}</Label>
               <Input id="r-no" value={form.recordNo} readOnly className="font-mono" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="r-date">تاريخ الصيانة</Label>
+              <Label htmlFor="r-date">{ui("تاريخ الصيانة")}</Label>
               <Input
                 id="r-date"
                 type="date"
@@ -785,36 +775,34 @@ function MaintenancePage() {
               />
             </div>
             <div className="space-y-2 sm:col-span-2">
-              <Label>الجهة</Label>
+              <Label>{ui("الجهة")}</Label>
               <Select value={form.entityId} onValueChange={handleEntityChange}>
                 <SelectTrigger>
-                  <SelectValue placeholder="اختر الجهة" />
+                  <SelectValue placeholder={ui("اختر الجهة")} />
                 </SelectTrigger>
                 <SelectContent>
                   {entityOptions.map((option) => (
                     <SelectItem key={option.id} value={option.id}>
-                      {option.label}
+                      {ui(option.label)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               {entityOptions.length === 0 && (
-                <p className="text-xs text-muted-foreground">
-                  لا توجد جهات مسجلة لهذا التبويب. أضفها من «كتالوج الصيانة».
-                </p>
+                <p className="text-xs text-muted-foreground">{ui("لا توجد جهات مسجلة لهذا التبويب. أضفها من «كتالوج الصيانة».")}</p>
               )}
             </div>
             <div className="space-y-2">
-              <Label>نوع الصيانة</Label>
+              <Label>{ui("نوع الصيانة")}</Label>
               <Select
                 value={form.typeId || "other"}
                 onValueChange={(value) => handleTypeChange(value === "other" ? "" : value)}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="اختر النوع" />
+                  <SelectValue placeholder={ui("اختر النوع")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="other">نوع آخر (إدخال يدوي)</SelectItem>
+                  <SelectItem value="other">{ui("نوع آخر (إدخال يدوي)")}</SelectItem>
                   {types.map((type) => (
                     <SelectItem key={type.id} value={type.id}>
                       {type.name}
@@ -824,14 +812,14 @@ function MaintenancePage() {
               </Select>
               {!form.typeId && (
                 <Input
-                  placeholder="اكتب نوع الصيانة"
+                  placeholder={ui("اكتب نوع الصيانة")}
                   value={form.typeName}
                   onChange={(event) => setForm({ ...form, typeName: event.target.value })}
                 />
               )}
             </div>
             <div className="space-y-2">
-              <Label>الورشة / الفني</Label>
+              <Label>{ui("الورشة / الفني")}</Label>
               <Select
                 value={form.workshopId || "none"}
                 onValueChange={(value) =>
@@ -839,20 +827,20 @@ function MaintenancePage() {
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="اختر الورشة" />
+                  <SelectValue placeholder={ui("اختر الورشة")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">بدون</SelectItem>
+                  <SelectItem value="none">{ui("بدون")}</SelectItem>
                   {workshops.map((workshop) => (
                     <SelectItem key={workshop.id} value={workshop.id}>
-                      {workshop.name} · {workshop.kind === "workshop" ? "ورشة" : "فني"}
+                      {workshop.name} · {workshop.kind === "workshop" ? ui("ورشة") : ui("فني")}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="r-tech">اسم الفني المسؤول</Label>
+              <Label htmlFor="r-tech">{ui("اسم الفني المسؤول")}</Label>
               <Input
                 id="r-tech"
                 value={form.technician}
@@ -860,7 +848,7 @@ function MaintenancePage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="r-odo">قراءة العداد (كم)</Label>
+              <Label htmlFor="r-odo">{ui("قراءة العداد (كم)")}</Label>
               <Input
                 id="r-odo"
                 type="number"
@@ -871,7 +859,7 @@ function MaintenancePage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="r-hours">ساعات التشغيل</Label>
+              <Label htmlFor="r-hours">{ui("ساعات التشغيل")}</Label>
               <Input
                 id="r-hours"
                 type="number"
@@ -882,7 +870,7 @@ function MaintenancePage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>الحالة</Label>
+              <Label>{ui("الحالة")}</Label>
               <Select
                 value={form.status}
                 onValueChange={(value) => setForm({ ...form, status: value as MaintenanceStatus })}
@@ -893,14 +881,14 @@ function MaintenancePage() {
                 <SelectContent>
                   {STATUS_OPTIONS.map((option) => (
                     <SelectItem key={option.key} value={option.key}>
-                      {option.label}
+                      {ui(option.label)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="r-next">الصيانة القادمة</Label>
+              <Label htmlFor="r-next">{ui("الصيانة القادمة")}</Label>
               <Input
                 id="r-next"
                 type="date"
@@ -909,7 +897,7 @@ function MaintenancePage() {
               />
             </div>
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="r-desc">وصف الأعمال</Label>
+              <Label htmlFor="r-desc">{ui("وصف الأعمال")}</Label>
               <Textarea
                 id="r-desc"
                 rows={2}
@@ -921,7 +909,7 @@ function MaintenancePage() {
 
           <section className="mt-4 space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold">القطع والأعمال</h3>
+              <h3 className="text-sm font-bold">{ui("القطع والأعمال")}</h3>
               <Button
                 type="button"
                 size="sm"
@@ -936,8 +924,7 @@ function MaintenancePage() {
                   })
                 }
               >
-                <Plus className="ml-1 h-4 w-4" /> إضافة قطعة
-              </Button>
+                <Plus className="ml-1 h-4 w-4" />{ui(" إضافة قطعة")}</Button>
             </div>
             <div className="space-y-2">
               {form.parts.map((part, index) => (
@@ -966,11 +953,11 @@ function MaintenancePage() {
                       });
                     }}
                   >
-                    <SelectTrigger aria-label="صنف مخزن الصيانة">
-                      <SelectValue placeholder="قطعة من المخزن" />
+                    <SelectTrigger aria-label={ui("صنف مخزن الصيانة")}>
+                      <SelectValue placeholder={ui("قطعة من المخزن")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="manual">قطعة خارج المخزن</SelectItem>
+                      <SelectItem value="manual">{ui("قطعة خارج المخزن")}</SelectItem>
                       {stockItems.map((item) => (
                         <SelectItem key={item.id} value={item.id}>
                           {item.name}
@@ -980,8 +967,8 @@ function MaintenancePage() {
                     </SelectContent>
                   </Select>
                   <Input
-                    aria-label="اسم القطعة أو العمل"
-                    placeholder="اسم القطعة أو العمل"
+                    aria-label={ui("اسم القطعة أو العمل")}
+                    placeholder={ui("اسم القطعة أو العمل")}
                     value={part.part_name}
                     onChange={(event) =>
                       setForm({
@@ -993,11 +980,11 @@ function MaintenancePage() {
                     }
                   />
                   <Input
-                    aria-label="الكمية"
+                    aria-label={ui("الكمية")}
                     type="number"
                     min="0"
                     step="0.01"
-                    placeholder="الكمية"
+                    placeholder={ui("الكمية")}
                     value={part.quantity}
                     onChange={(event) =>
                       setForm({
@@ -1009,11 +996,11 @@ function MaintenancePage() {
                     }
                   />
                   <Input
-                    aria-label="كلفة الوحدة"
+                    aria-label={ui("كلفة الوحدة")}
                     type="number"
                     min="0"
                     step="0.01"
-                    placeholder="كلفة الوحدة"
+                    placeholder={ui("كلفة الوحدة")}
                     value={part.unit_cost}
                     onChange={(event) =>
                       setForm({
@@ -1025,13 +1012,12 @@ function MaintenancePage() {
                     }
                   />
                   <div className="flex items-center rounded-md border border-input bg-muted/40 px-3 text-sm tabular-nums">
-                    {money((Number(part.quantity) || 0) * (Number(part.unit_cost) || 0))} د.ع
-                  </div>
+                    {money((Number(part.quantity) || 0) * (Number(part.unit_cost) || 0))}{ui(" د.ع")}</div>
                   <Button
                     type="button"
                     size="icon"
                     variant="ghost"
-                    aria-label="حذف القطعة"
+                    aria-label={ui("حذف القطعة")}
                     onClick={() =>
                       setForm({
                         ...form,
@@ -1044,13 +1030,10 @@ function MaintenancePage() {
                 </div>
               ))}
             </div>
-            <p className="text-xs text-muted-foreground">
-              اختيار قطعة من مخزن الصيانة يصرف كميتها تلقائياً عند حفظ سجل بحالة «مكتملة». القطعة
-              الخارجية تبقى للتوثيق والكلفة فقط.
-            </p>
+            <p className="text-xs text-muted-foreground">{ui("اختيار قطعة من مخزن الصيانة يصرف كميتها تلقائياً عند حفظ سجل بحالة «مكتملة». القطعة الخارجية تبقى للتوثيق والكلفة فقط.")}</p>
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="space-y-2">
-                <Label htmlFor="r-labor">أجرة اليد (د.ع)</Label>
+                <Label htmlFor="r-labor">{ui("أجرة اليد (د.ع)")}</Label>
                 <Input
                   id="r-labor"
                   type="number"
@@ -1061,25 +1044,22 @@ function MaintenancePage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>كلفة القطع</Label>
+                <Label>{ui("كلفة القطع")}</Label>
                 <div className="flex h-10 items-center rounded-md border border-input bg-muted/40 px-3 text-sm font-semibold tabular-nums">
-                  {money(partsTotal)} د.ع
-                </div>
+                  {money(partsTotal)}{ui(" د.ع")}</div>
               </div>
               <div className="space-y-2">
-                <Label>الإجمالي</Label>
+                <Label>{ui("الإجمالي")}</Label>
                 <div className="flex h-10 items-center rounded-md border border-input bg-muted/40 px-3 text-sm font-bold tabular-nums">
-                  {money(formTotal)} د.ع
-                </div>
+                  {money(formTotal)}{ui(" د.ع")}</div>
               </div>
             </div>
           </section>
 
           <section className="mt-4 space-y-3">
-            <h3 className="text-sm font-bold">المرفقات (صور / فواتير)</h3>
+            <h3 className="text-sm font-bold">{ui("المرفقات (صور / فواتير)")}</h3>
             <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm font-medium transition-colors hover:bg-accent">
-              <ImageIcon className="h-4 w-4" /> إرفاق ملفات
-              <input
+              <ImageIcon className="h-4 w-4" />{ui(" إرفاق ملفات")}<input
                 type="file"
                 multiple
                 accept="image/png,image/jpeg,image/webp,application/pdf"
@@ -1103,14 +1083,14 @@ function MaintenancePage() {
                       ) : (
                         <img
                           src={url}
-                          alt="مرفق الصيانة"
+                          alt={ui("مرفق الصيانة")}
                           className="h-16 w-16 rounded-lg border object-cover"
                         />
                       )}
                     </a>}</PrivateStorageMedia>
                     <button
                       type="button"
-                      aria-label="حذف المرفق"
+                      aria-label={ui("حذف المرفق")}
                       onClick={() => void removeAttachment(attachment)}
                       className="absolute -left-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground"
                     >
@@ -1125,7 +1105,7 @@ function MaintenancePage() {
                     </span>
                     <button
                       type="button"
-                      aria-label="إزالة الملف"
+                      aria-label={ui("إزالة الملف")}
                       onClick={() =>
                         setForm({
                           ...form,
@@ -1143,11 +1123,9 @@ function MaintenancePage() {
           </section>
 
           <div className="mt-4 flex justify-end gap-2 border-t pt-4">
-            <Button variant="outline" onClick={() => setFormOpen(false)}>
-              إلغاء
-            </Button>
+            <Button variant="outline" onClick={() => setFormOpen(false)}>{ui("إلغاء")}</Button>
             <Button onClick={() => saveRecord.mutate()} disabled={saveRecord.isPending}>
-              <Save className="ml-2 h-4 w-4" /> {saveRecord.isPending ? "جارٍ الحفظ…" : "حفظ السجل"}
+              <Save className="ml-2 h-4 w-4" /> {saveRecord.isPending ? ui("جارٍ الحفظ…") : ui("حفظ السجل")}
             </Button>
           </div>
         </DialogContent>
@@ -1156,7 +1134,7 @@ function MaintenancePage() {
       {catalogOpen && <MaintenanceCatalogDialog onClose={() => setCatalogOpen(false)} />}
 
       {printRecord && (
-        <div className="maintenance-print" dir="rtl">
+        <div className="maintenance-print" dir={direction()}>
           <div
             style={{
               display: "flex",
@@ -1171,9 +1149,8 @@ function MaintenancePage() {
           >
             <div>
               <p style={{ margin: 0, fontSize: 10, opacity: 0.8 }}>{workspaceName}</p>
-              <h1 style={{ margin: "3px 0 0", fontSize: 22, fontWeight: 800 }}>وصل صيانة</h1>
-              <p style={{ margin: "3px 0 0", fontSize: 11 }}>
-                صيانة {recordTypeLabel(printRecord.record_type)}
+              <h1 style={{ margin: "3px 0 0", fontSize: 22, fontWeight: 800 }}>{ui("وصل صيانة")}</h1>
+              <p style={{ margin: "3px 0 0", fontSize: 11 }}>{ui("صيانة ")}{recordTypeLabel(printRecord.record_type)}
               </p>
             </div>
             <div
@@ -1186,11 +1163,9 @@ function MaintenancePage() {
                 padding: "6px 12px",
               }}
             >
-              <p style={{ margin: 0 }}>
-                رقم الوصل: <b>{printRecord.record_no}</b>
+              <p style={{ margin: 0 }}>{ui("رقم الوصل: ")}<b>{printRecord.record_no}</b>
               </p>
-              <p style={{ margin: 0 }}>
-                التاريخ: <b>{dateLabel(printRecord.maintenance_date)}</b>
+              <p style={{ margin: 0 }}>{ui("التاريخ: ")}<b>{dateLabel(printRecord.maintenance_date)}</b>
               </p>
             </div>
           </div>
@@ -1198,51 +1173,50 @@ function MaintenancePage() {
           <table style={{ width: "100%", marginTop: 16, borderCollapse: "collapse", fontSize: 13 }}>
             <tbody>
               <tr>
-                <td style={printCell}>الجهة</td>
+                <td style={printCell}>{ui("الجهة")}</td>
                 <td style={printCell}>{entityLabel(printRecord)}</td>
               </tr>
               <tr>
-                <td style={printCell}>نوع الصيانة</td>
+                <td style={printCell}>{ui("نوع الصيانة")}</td>
                 <td style={printCell}>{printRecord.maintenance_type_name ?? "—"}</td>
               </tr>
               <tr>
-                <td style={printCell}>الورشة / الفني</td>
+                <td style={printCell}>{ui("الورشة / الفني")}</td>
                 <td style={printCell}>
                   {printRecord.workshop_name ?? "—"}
                   {printRecord.technician ? ` · ${printRecord.technician}` : ""}
                 </td>
               </tr>
               <tr>
-                <td style={printCell}>الحالة</td>
-                <td style={printCell}>{statusLabel(printRecord.status)}</td>
+                <td style={printCell}>{ui("الحالة")}</td>
+                <td style={printCell}>{ui(statusLabel(printRecord.status))}</td>
               </tr>
               <tr>
-                <td style={printCell}>العداد / ساعات التشغيل</td>
+                <td style={printCell}>{ui("العداد / ساعات التشغيل")}</td>
                 <td style={printCell}>
-                  {printRecord.odometer_reading ?? "—"} كم
-                  {printRecord.hours_reading != null ? ` · ${printRecord.hours_reading} ساعة` : ""}
+                  {printRecord.odometer_reading ?? "—"}{ui(" كم")}{printRecord.hours_reading != null ? (" · " + (printRecord.hours_reading) + ui(" ساعة")) : ""}
                 </td>
               </tr>
               <tr>
-                <td style={printCell}>الصيانة القادمة</td>
+                <td style={printCell}>{ui("الصيانة القادمة")}</td>
                 <td style={printCell}>{dateLabel(printRecord.next_maintenance_date)}</td>
               </tr>
               <tr>
-                <td style={printCell}>وصف الأعمال</td>
+                <td style={printCell}>{ui("وصف الأعمال")}</td>
                 <td style={printCell}>{printRecord.notes ?? "—"}</td>
               </tr>
             </tbody>
           </table>
 
-          <h3 style={{ margin: "18px 0 8px", fontSize: 14 }}>القطع والأعمال</h3>
+          <h3 style={{ margin: "18px 0 8px", fontSize: 14 }}>{ui("القطع والأعمال")}</h3>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr>
                 <th style={printCell}>#</th>
-                <th style={printCell}>القطعة / العمل</th>
-                <th style={printCell}>الكمية</th>
-                <th style={printCell}>كلفة الوحدة</th>
-                <th style={printCell}>الإجمالي</th>
+                <th style={printCell}>{ui("القطعة / العمل")}</th>
+                <th style={printCell}>{ui("الكمية")}</th>
+                <th style={printCell}>{ui("كلفة الوحدة")}</th>
+                <th style={printCell}>{ui("الإجمالي")}</th>
               </tr>
             </thead>
             <tbody>
@@ -1251,15 +1225,13 @@ function MaintenancePage() {
                   <td style={printCell}>{index + 1}</td>
                   <td style={printCell}>{part.part_name}</td>
                   <td style={printCell}>{Number(part.quantity).toLocaleString()}</td>
-                  <td style={printCell}>{money(part.unit_cost)} د.ع</td>
-                  <td style={printCell}>{money(part.line_total)} د.ع</td>
+                  <td style={printCell}>{money(part.unit_cost)}{ui(" د.ع")}</td>
+                  <td style={printCell}>{money(part.line_total)}{ui(" د.ع")}</td>
                 </tr>
               ))}
               {(printRecord.maintenance_record_parts ?? []).length === 0 && (
                 <tr>
-                  <td style={printCell} colSpan={5}>
-                    لا توجد قطع مسجلة.
-                  </td>
+                  <td style={printCell} colSpan={5}>{ui("لا توجد قطع مسجلة.")}</td>
                 </tr>
               )}
             </tbody>
@@ -1268,19 +1240,19 @@ function MaintenancePage() {
           <table style={{ width: "100%", marginTop: 10, borderCollapse: "collapse", fontSize: 13 }}>
             <tbody>
               <tr>
-                <td style={printCell}>أجرة اليد</td>
-                <td style={printCell}>{money(printRecord.labor_cost)} د.ع</td>
+                <td style={printCell}>{ui("أجرة اليد")}</td>
+                <td style={printCell}>{money(printRecord.labor_cost)}{ui(" د.ع")}</td>
               </tr>
               <tr>
-                <td style={printCell}>كلفة القطع</td>
-                <td style={printCell}>{money(printRecord.parts_total)} د.ع</td>
+                <td style={printCell}>{ui("كلفة القطع")}</td>
+                <td style={printCell}>{money(printRecord.parts_total)}{ui(" د.ع")}</td>
               </tr>
               <tr>
                 <td style={printCell}>
-                  <b>الإجمالي</b>
+                  <b>{ui("الإجمالي")}</b>
                 </td>
                 <td style={printCell}>
-                  <b>{money(printRecord.total_cost)} د.ع</b>
+                  <b>{money(printRecord.total_cost)}{ui(" د.ع")}</b>
                 </td>
               </tr>
             </tbody>
@@ -1290,7 +1262,7 @@ function MaintenancePage() {
             {["توقيع الفني", "توقيع المسؤول", "توقيع مدير الصيانة"].map((label) => (
               <div key={label} style={{ flex: 1, textAlign: "center" }}>
                 <div style={{ borderTop: "1px solid #0f172a", paddingTop: 8, fontSize: 12 }}>
-                  {label}
+                  {ui(label)}
                 </div>
               </div>
             ))}

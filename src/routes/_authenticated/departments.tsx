@@ -1,3 +1,4 @@
+import { direction, ui } from "@/lib/ui-language";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -35,7 +36,7 @@ import {
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/departments")({
-  head: () => ({ meta: [{ title: "الأقسام" }] }),
+  head: () => ({ meta: [{ title: ui("الأقسام") }] }),
   component: DepartmentsPage,
 });
 
@@ -129,9 +130,9 @@ function DepartmentsPage() {
       await qc.invalidateQueries({ queryKey: ["departments"] });
       setOpen(false);
       setEditing(null);
-      toast.success("تم حفظ بيانات القسم");
+      toast.success(ui("تم حفظ بيانات القسم"));
     },
-    onError: (error: unknown) => toast.error(`تعذر حفظ القسم: ${formatErrorMessage(error)}`),
+    onError: (error: unknown) => toast.error((ui("تعذر حفظ القسم: ") + (formatErrorMessage(error)))),
   });
   const remove = useMutation({
     mutationFn: async (department: Department) => {
@@ -142,9 +143,9 @@ function DepartmentsPage() {
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["departments"] });
-      toast.success("تم حذف القسم");
+      toast.success(ui("تم حذف القسم"));
     },
-    onError: (error: unknown) => toast.error(`تعذر حذف القسم: ${formatErrorMessage(error)}`),
+    onError: (error: unknown) => toast.error((ui("تعذر حذف القسم: ") + (formatErrorMessage(error)))),
   });
   const updateEmployeeDepartment = useMutation({
     mutationFn: async ({ employeeId, departmentId }: { employeeId: string; departmentId: string | null }) => {
@@ -157,10 +158,10 @@ function DepartmentsPage() {
       await qc.invalidateQueries({ queryKey: ["employees"] });
       await qc.invalidateQueries({ queryKey: ["monthly"] });
       await qc.invalidateQueries({ queryKey: ["team-follow-up"] });
-      if (details && variables.departmentId === details.id) toast.success("تمت إضافة الموظف إلى القسم");
-      else toast.success("تم نقل الموظف من القسم");
+      if (details && variables.departmentId === details.id) toast.success(ui("تمت إضافة الموظف إلى القسم"));
+      else toast.success(ui("تم نقل الموظف من القسم"));
     },
-    onError: (error: unknown) => toast.error(`تعذر تحديث القسم: ${formatErrorMessage(error)}`),
+    onError: (error: unknown) => toast.error((ui("تعذر تحديث القسم: ") + (formatErrorMessage(error)))),
   });
   const setManager = useMutation({
     mutationFn: async ({ departmentId, employeeId }: { departmentId: string; employeeId: string | null }) => {
@@ -177,28 +178,28 @@ function DepartmentsPage() {
         qc.invalidateQueries({ queryKey: ["accounts", "user-departments"] }),
         qc.invalidateQueries({ queryKey: ["team-follow-up"] }),
       ]);
-      toast.success("تم تحديث مسؤول القسم وصلاحيات حسابه");
+      toast.success(ui("تم تحديث مسؤول القسم وصلاحيات حسابه"));
     },
-    onError: (error: unknown) => toast.error(`تعذر تعيين مسؤول القسم: ${formatErrorMessage(error)}`),
+    onError: (error: unknown) => toast.error((ui("تعذر تعيين مسؤول القسم: ") + (formatErrorMessage(error)))),
   });
 
   return (
-    <main dir="rtl" className="space-y-6">
+    <main dir={direction()} className="space-y-6">
       <header className="relative overflow-hidden rounded-3xl bg-gradient-to-l from-slate-950 via-slate-900 to-teal-950 p-6 text-white shadow-lg sm:p-8">
         <div className="absolute -left-10 -top-16 h-56 w-56 rounded-full bg-teal-400/10 blur-3xl" />
         <div className="relative flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
           <div className="flex items-start gap-4">
             <div className="rounded-2xl border border-white/15 bg-white/10 p-3"><Building2 className="h-7 w-7" /></div>
-            <div><p className="text-sm text-teal-100">الهيكل التنظيمي</p><h1 className="mt-1 text-3xl font-bold">إدارة الأقسام</h1><p className="mt-2 max-w-xl text-sm text-slate-300">أدر أعضاء كل قسم ومسؤوله، وراجع المهام والطلبات من صفحة تفاصيل موحّدة.</p></div>
+            <div><p className="text-sm text-teal-100">{ui("الهيكل التنظيمي")}</p><h1 className="mt-1 text-3xl font-bold">{ui("إدارة الأقسام")}</h1><p className="mt-2 max-w-xl text-sm text-slate-300">{ui("أدر أعضاء كل قسم ومسؤوله، وراجع المهام والطلبات من صفحة تفاصيل موحّدة.")}</p></div>
           </div>
           <Dialog open={open} onOpenChange={(value) => { setOpen(value); if (!value) setEditing(null); }}>
-            <DialogTrigger asChild><Button className="bg-white text-slate-900 hover:bg-slate-100" onClick={() => setEditing(null)}><Plus className="ml-2 h-4 w-4" /> إضافة قسم</Button></DialogTrigger>
-            <DialogContent dir="rtl" className="sm:max-w-lg">
-              <DialogHeader><DialogTitle>{editing ? "تعديل بيانات القسم" : "إضافة قسم جديد"}</DialogTitle></DialogHeader>
+            <DialogTrigger asChild><Button className="bg-white text-slate-900 hover:bg-slate-100" onClick={() => setEditing(null)}><Plus className="ml-2 h-4 w-4" />{ui(" إضافة قسم")}</Button></DialogTrigger>
+            <DialogContent dir={direction()} className="sm:max-w-lg">
+              <DialogHeader><DialogTitle>{editing ? ui("تعديل بيانات القسم") : ui("إضافة قسم جديد")}</DialogTitle></DialogHeader>
               <form key={editing?.id ?? "new"} className="space-y-4" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); save.mutate({ name: String(form.get("name") ?? ""), description: String(form.get("description") ?? "") || null }); }}>
-                <div className="space-y-2"><Label htmlFor="department-name">اسم القسم</Label><Input id="department-name" name="name" required maxLength={100} defaultValue={editing?.name} placeholder="مثال: الموارد البشرية" /></div>
-                <div className="space-y-2"><Label htmlFor="department-description">الوصف والمهام</Label><textarea id="department-description" name="description" maxLength={500} defaultValue={editing?.description ?? ""} placeholder="نبذة مختصرة عن مسؤوليات القسم" className="min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" /></div>
-                <Button type="submit" className="w-full" disabled={save.isPending}>{save.isPending ? "جارٍ الحفظ…" : "حفظ القسم"}</Button>
+                <div className="space-y-2"><Label htmlFor="department-name">{ui("اسم القسم")}</Label><Input id="department-name" name="name" required maxLength={100} defaultValue={editing?.name} placeholder={ui("مثال: الموارد البشرية")} /></div>
+                <div className="space-y-2"><Label htmlFor="department-description">{ui("الوصف والمهام")}</Label><textarea id="department-description" name="description" maxLength={500} defaultValue={editing?.description ?? ""} placeholder={ui("نبذة مختصرة عن مسؤوليات القسم")} className="min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" /></div>
+                <Button type="submit" className="w-full" disabled={save.isPending}>{save.isPending ? ui("جارٍ الحفظ…") : ui("حفظ القسم")}</Button>
               </form>
             </DialogContent>
           </Dialog>
@@ -210,25 +211,25 @@ function DepartmentsPage() {
           { label: "إجمالي الأقسام", value: departments.length, icon: Building2, tone: "text-teal-700 bg-teal-50" },
           { label: "الموظفون المنتسبون", value: assignedEmployees, icon: Users, tone: "text-blue-700 bg-blue-50" },
           { label: "موظفون بلا قسم", value: Math.max(0, employees.length - assignedEmployees), icon: BriefcaseBusiness, tone: "text-amber-700 bg-amber-50" },
-        ].map((stat) => <Card key={stat.label} className="rounded-2xl"><CardContent className="flex items-center justify-between p-5"><div><p className="text-sm text-muted-foreground">{stat.label}</p><p className="mt-1 text-3xl font-bold tabular-nums">{query.isPending ? "—" : stat.value.toLocaleString("ar")}</p></div><div className={`rounded-2xl p-3 ${stat.tone}`}><stat.icon className="h-5 w-5" /></div></CardContent></Card>)}
+        ].map((stat) => <Card key={stat.label} className="rounded-2xl"><CardContent className="flex items-center justify-between p-5"><div><p className="text-sm text-muted-foreground">{ui(stat.label)}</p><p className="mt-1 text-3xl font-bold tabular-nums">{query.isPending ? "—" : stat.value.toLocaleString("ar")}</p></div><div className={`rounded-2xl p-3 ${stat.tone}`}><stat.icon className="h-5 w-5" /></div></CardContent></Card>)}
       </section>
 
       <section className="overflow-hidden rounded-2xl border bg-card shadow-sm">
         <div className="flex flex-col justify-between gap-3 border-b bg-muted/20 p-4 sm:flex-row sm:items-center sm:p-5">
-          <div><h2 className="font-semibold">دليل الأقسام</h2><p className="mt-1 text-sm text-muted-foreground">إجمالي {filtered.length.toLocaleString("ar")} قسم</p></div>
-          <div className="flex gap-2"><div className="relative w-full sm:w-72"><Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input value={search} onChange={(event) => setSearch(event.target.value)} className="pr-9" placeholder="ابحث باسم القسم أو وصفه" aria-label="بحث في الأقسام" /></div><Button variant="outline" size="icon" aria-label="تحديث الأقسام" onClick={() => void query.refetch()} disabled={query.isFetching}><RefreshCw className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} /></Button></div>
+          <div><h2 className="font-semibold">{ui("دليل الأقسام")}</h2><p className="mt-1 text-sm text-muted-foreground">{ui("إجمالي ")}{filtered.length.toLocaleString("ar")}{ui(" قسم")}</p></div>
+          <div className="flex gap-2"><div className="relative w-full sm:w-72"><Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input value={search} onChange={(event) => setSearch(event.target.value)} className="pr-9" placeholder={ui("ابحث باسم القسم أو وصفه")} aria-label={ui("بحث في الأقسام")} /></div><Button variant="outline" size="icon" aria-label={ui("تحديث الأقسام")} onClick={() => void query.refetch()} disabled={query.isFetching}><RefreshCw className={`h-4 w-4 ${query.isFetching ? "animate-spin" : ""}`} /></Button></div>
         </div>
-        {query.isError ? <div role="alert" className="space-y-3 p-10 text-center"><p className="text-destructive">تعذر تحميل الأقسام وبيانات الربط: {formatErrorMessage(query.error)}</p><Button variant="outline" onClick={() => void query.refetch()}>إعادة المحاولة</Button></div> : query.isPending ? <p role="status" className="p-12 text-center text-muted-foreground">جارٍ تحميل الهيكل التنظيمي…</p> : !filtered.length ? <div className="p-12 text-center"><div className="mx-auto mb-3 w-fit rounded-full bg-muted p-3"><Building2 className="h-6 w-6 text-muted-foreground" /></div><p className="font-medium">{search ? "لا توجد أقسام مطابقة للبحث" : "لا توجد أقسام مسجلة بعد"}</p><p className="mt-1 text-sm text-muted-foreground">{search ? "جرّب كلمة بحث أخرى." : "أضف القسم الأول لبدء تنظيم الموظفين."}</p></div> : <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3 sm:p-5">
+        {query.isError ? <div role="alert" className="space-y-3 p-10 text-center"><p className="text-destructive">{ui("تعذر تحميل الأقسام وبيانات الربط: ")}{ui(formatErrorMessage(query.error))}</p><Button variant="outline" onClick={() => void query.refetch()}>{ui("إعادة المحاولة")}</Button></div> : query.isPending ? <p role="status" className="p-12 text-center text-muted-foreground">{ui("جارٍ تحميل الهيكل التنظيمي…")}</p> : !filtered.length ? <div className="p-12 text-center"><div className="mx-auto mb-3 w-fit rounded-full bg-muted p-3"><Building2 className="h-6 w-6 text-muted-foreground" /></div><p className="font-medium">{search ? ui("لا توجد أقسام مطابقة للبحث") : ui("لا توجد أقسام مسجلة بعد")}</p><p className="mt-1 text-sm text-muted-foreground">{search ? ui("جرّب كلمة بحث أخرى.") : ui("أضف القسم الأول لبدء تنظيم الموظفين.")}</p></div> : <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3 sm:p-5">
           {filtered.map((department) => {
             const members = employeesByDepartment.get(department.id) ?? [];
             const activeCount = members.filter((employee) => !employee.status || employee.status === "active").length;
             const manager = profiles.find((profile) => profile.id === department.manager_user_id);
             return <article key={department.id} className="group rounded-2xl border bg-background p-4 transition hover:border-teal-300 hover:shadow-md">
-              <div className="flex items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><div className="rounded-xl bg-teal-50 p-2.5 text-teal-700"><Building2 className="h-5 w-5" /></div><div className="min-w-0"><h3 className="truncate font-semibold" title={department.name}>{department.name}</h3><p className="mt-0.5 text-xs text-muted-foreground">{activeCount.toLocaleString("ar")} موظف نشط</p></div></div><div className="flex shrink-0 gap-1"><Button size="icon" variant="ghost" aria-label={`تعديل ${department.name}`} onClick={() => { setEditing(department); setOpen(true); }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" aria-label={`حذف ${department.name}`} disabled={members.length > 0 || remove.isPending} title={members.length > 0 ? "انقل الموظفين المرتبطين قبل الحذف" : "حذف القسم"} onClick={() => { if (confirm(`حذف القسم «${department.name}»؟`)) remove.mutate(department); }}><Trash2 className="h-4 w-4 text-destructive" /></Button></div></div>
-              <p className="mt-4 min-h-10 text-sm leading-6 text-muted-foreground">{department.description || "لا يوجد وصف لهذا القسم."}</p>
-              <div className="mt-3 flex items-center gap-2 rounded-lg bg-muted/40 p-2.5 text-sm"><UserRoundCog className="h-4 w-4 shrink-0 text-primary" /><span className="truncate">{manager?.full_name || (manager?.email ? manager.email : "لم يُعيّن مسؤول للقسم")}</span></div>
-              <div className="mt-4 flex items-center justify-between border-t pt-3 text-xs"><span className="text-muted-foreground">الأعضاء</span><span className="rounded-full bg-muted px-2.5 py-1 font-semibold tabular-nums">{members.length.toLocaleString("ar")}</span></div>
-              <Button className="mt-3 w-full" variant="outline" onClick={() => { setDetails(department); setEmployeeToAdd(""); }}><Building2 className="ml-2 h-4 w-4" /> عرض جميع تفاصيل القسم</Button>
+              <div className="flex items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><div className="rounded-xl bg-teal-50 p-2.5 text-teal-700"><Building2 className="h-5 w-5" /></div><div className="min-w-0"><h3 className="truncate font-semibold" title={department.name}>{department.name}</h3><p className="mt-0.5 text-xs text-muted-foreground">{activeCount.toLocaleString("ar")}{ui(" موظف نشط")}</p></div></div><div className="flex shrink-0 gap-1"><Button size="icon" variant="ghost" aria-label={(ui("تعديل ") + (department.name))} onClick={() => { setEditing(department); setOpen(true); }}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" aria-label={(ui("حذف ") + (department.name))} disabled={members.length > 0 || remove.isPending} title={members.length > 0 ? ui("انقل الموظفين المرتبطين قبل الحذف") : ui("حذف القسم")} onClick={() => { if (confirm((ui("حذف القسم «") + (department.name) + "»؟"))) remove.mutate(department); }}><Trash2 className="h-4 w-4 text-destructive" /></Button></div></div>
+              <p className="mt-4 min-h-10 text-sm leading-6 text-muted-foreground">{department.description || ui("لا يوجد وصف لهذا القسم.")}</p>
+              <div className="mt-3 flex items-center gap-2 rounded-lg bg-muted/40 p-2.5 text-sm"><UserRoundCog className="h-4 w-4 shrink-0 text-primary" /><span className="truncate">{manager?.full_name || (manager?.email ? manager.email : ui("لم يُعيّن مسؤول للقسم"))}</span></div>
+              <div className="mt-4 flex items-center justify-between border-t pt-3 text-xs"><span className="text-muted-foreground">{ui("الأعضاء")}</span><span className="rounded-full bg-muted px-2.5 py-1 font-semibold tabular-nums">{members.length.toLocaleString("ar")}</span></div>
+              <Button className="mt-3 w-full" variant="outline" onClick={() => { setDetails(department); setEmployeeToAdd(""); }}><Building2 className="ml-2 h-4 w-4" />{ui(" عرض جميع تفاصيل القسم")}</Button>
             </article>;
           })}
         </div>}
@@ -304,47 +305,47 @@ function DepartmentDetailsDialog({
   const activeTasks = (report.data?.tasks ?? []).filter((task) => !["completed", "cancelled"].includes(task.status)).length;
 
   return <Dialog open={!!department} onOpenChange={(open) => { if (!open) onClose(); }}>
-    <DialogContent dir="rtl" className="max-h-[92vh] overflow-y-auto sm:max-w-5xl">
+    <DialogContent dir={direction()} className="max-h-[92vh] overflow-y-auto sm:max-w-5xl">
       {department && <>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-xl"><Building2 className="h-5 w-5 text-primary" /> تفاصيل قسم {department.name}</DialogTitle>
-          <DialogDescription>{department.description || "لا يوجد وصف مسجل للقسم."}</DialogDescription>
+          <DialogTitle className="flex items-center gap-2 text-xl"><Building2 className="h-5 w-5 text-primary" />{ui(" تفاصيل قسم ")}{department.name}</DialogTitle>
+          <DialogDescription>{department.description || ui("لا يوجد وصف مسجل للقسم.")}</DialogDescription>
         </DialogHeader>
 
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Metric icon={Users} label="عدد الأعضاء" value={members.length} />
-          <Metric icon={ShieldCheck} label="الموظفون النشطون" value={members.filter((employee) => !employee.status || employee.status === "active").length} />
-          <Metric icon={ClipboardList} label="مهام غير منجزة" value={report.isPending ? "…" : activeTasks} />
-          <Metric icon={FileClock} label="طلبات قيد الإجراء" value={report.isPending ? "…" : pendingForms} />
+          <Metric icon={Users} label={ui("عدد الأعضاء")} value={members.length} />
+          <Metric icon={ShieldCheck} label={ui("الموظفون النشطون")} value={members.filter((employee) => !employee.status || employee.status === "active").length} />
+          <Metric icon={ClipboardList} label={ui("مهام غير منجزة")} value={report.isPending ? "…" : activeTasks} />
+          <Metric icon={FileClock} label={ui("طلبات قيد الإجراء")} value={report.isPending ? "…" : pendingForms} />
         </section>
 
         <section className="space-y-3 rounded-2xl border p-4">
-          <div className="flex items-center gap-2 font-semibold"><UserRoundCog className="h-4 w-4 text-primary" /> مسؤول القسم وصلاحياته</div>
+          <div className="flex items-center gap-2 font-semibold"><UserRoundCog className="h-4 w-4 text-primary" />{ui(" مسؤول القسم وصلاحياته")}</div>
           {isAdmin ? <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-            <div className="space-y-1.5"><Label htmlFor="department-manager">اختر المسؤول من موظفي القسم المرتبطين بحساب دخول</Label><select id="department-manager" className={selectClass} value={currentManager?.id ?? ""} disabled={managerPending} onChange={(event) => onUpdateManager(event.target.value || null)}><option value="">بدون مسؤول</option>{managerOptions.map(({ employee, profile }) => <option key={employee.id} value={employee.id}>{employee.full_name} · {profile?.email}</option>)}</select></div>
-            <div className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800"><ShieldCheck className="ml-1 inline h-4 w-4" />{managerProfile ? `صلاحية مدير قسم مفعلة للحساب ${managerProfile.email}` : "تعيين المسؤول يضيف صلاحية مدير قسم تلقائياً"}</div>
-          </div> : <p className="rounded-xl bg-muted/40 p-3 text-sm">{managerProfile ? `المسؤول: ${managerProfile.full_name || managerProfile.email} · حسابه يحمل صلاحية مدير قسم.` : "لم يُعيّن مسؤول لهذا القسم."} تعديل المسؤول متاح لمدير النظام.</p>}
-          {isAdmin && !managerOptions.length && <p className="text-xs text-amber-700">للتعيين، أضف الموظف إلى القسم أولاً واربط بريده الإلكتروني بحساب دخول من صفحة الموظفين.</p>}
+            <div className="space-y-1.5"><Label htmlFor="department-manager">{ui("اختر المسؤول من موظفي القسم المرتبطين بحساب دخول")}</Label><select id="department-manager" className={selectClass} value={currentManager?.id ?? ""} disabled={managerPending} onChange={(event) => onUpdateManager(event.target.value || null)}><option value="">{ui("بدون مسؤول")}</option>{managerOptions.map(({ employee, profile }) => <option key={employee.id} value={employee.id}>{employee.full_name} · {profile?.email}</option>)}</select></div>
+            <div className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800"><ShieldCheck className="ml-1 inline h-4 w-4" />{managerProfile ? (ui("صلاحية مدير قسم مفعلة للحساب ") + (managerProfile.email)) : ui("تعيين المسؤول يضيف صلاحية مدير قسم تلقائياً")}</div>
+          </div> : <p className="rounded-xl bg-muted/40 p-3 text-sm">{managerProfile ? (ui("المسؤول: ") + (managerProfile.full_name || managerProfile.email) + ui(" · حسابه يحمل صلاحية مدير قسم.")) : ui("لم يُعيّن مسؤول لهذا القسم.")}{ui(" تعديل المسؤول متاح لمدير النظام.")}</p>}
+          {isAdmin && !managerOptions.length && <p className="text-xs text-amber-700">{ui("للتعيين، أضف الموظف إلى القسم أولاً واربط بريده الإلكتروني بحساب دخول من صفحة الموظفين.")}</p>}
         </section>
 
         <section className="space-y-3 rounded-2xl border p-4">
-          <div><h3 className="font-semibold">موظفو القسم</h3><p className="mt-1 text-xs text-muted-foreground">إضافة موظف ينقله من قسمه الحالي إلى هذا القسم.</p></div>
+          <div><h3 className="font-semibold">{ui("موظفو القسم")}</h3><p className="mt-1 text-xs text-muted-foreground">{ui("إضافة موظف ينقله من قسمه الحالي إلى هذا القسم.")}</p></div>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <select className={selectClass} value={employeeToAdd} onChange={(event) => setEmployeeToAdd(event.target.value)}><option value="">اختر موظفاً للإضافة</option>{availableEmployees.map((employee) => <option key={employee.id} value={employee.id}>{employee.employee_no} · {employee.full_name}{employee.department_id ? " · سينتقل من قسمه الحالي" : " · بلا قسم"}</option>)}</select>
-            <Button onClick={() => employeeToAdd && onAdd(employeeToAdd)} disabled={!employeeToAdd || addPending} className="shrink-0"><UserPlus className="ml-2 h-4 w-4" /> إضافة للقسم</Button>
+            <select className={selectClass} value={employeeToAdd} onChange={(event) => setEmployeeToAdd(event.target.value)}><option value="">{ui("اختر موظفاً للإضافة")}</option>{availableEmployees.map((employee) => <option key={employee.id} value={employee.id}>{employee.employee_no} · {employee.full_name}{employee.department_id ? ui(" · سينتقل من قسمه الحالي") : ui(" · بلا قسم")}</option>)}</select>
+            <Button onClick={() => employeeToAdd && onAdd(employeeToAdd)} disabled={!employeeToAdd || addPending} className="shrink-0"><UserPlus className="ml-2 h-4 w-4" />{ui(" إضافة للقسم")}</Button>
           </div>
           <div className="overflow-x-auto rounded-xl border">
-            <table className="w-full min-w-[700px] text-sm"><thead><tr className="border-b bg-muted/40 text-right"><th className="p-3">الموظف</th><th className="p-3">المسمى</th><th className="p-3">الحالة</th><th className="p-3">البريد / الحساب</th><th className="p-3">الإجراء</th></tr></thead>
-              <tbody>{members.map((employee) => <tr key={employee.id} className="border-b last:border-0"><td className="p-3"><b>{employee.full_name}</b><div className="text-xs text-muted-foreground">{employee.employee_no}</div></td><td className="p-3">{employee.position || "—"}</td><td className="p-3">{employee.status || "نشط"}</td><td className="p-3">{profileByEmail.get(normalizeEmail(employee.email))?.email ?? employee.email ?? "لا يوجد بريد مرتبط"}</td><td className="p-3"><Button size="sm" variant="ghost" title={employee.id === currentManager?.id ? "عيّن مسؤولاً آخر قبل نقل هذا الموظف" : undefined} onClick={() => { if (confirm(`نقل ${employee.full_name} خارج هذا القسم؟`)) onRemove(employee.id); }} disabled={addPending || employee.id === currentManager?.id}><UserMinus className="ml-2 h-4 w-4 text-destructive" /> نقل من القسم</Button></td></tr>)}
-                {!members.length && <tr><td colSpan={5} className="p-8 text-center text-muted-foreground">لا يوجد موظفون مرتبطون بهذا القسم.</td></tr>}
+            <table className="w-full min-w-[700px] text-sm"><thead><tr className="border-b bg-muted/40 text-right"><th className="p-3">{ui("الموظف")}</th><th className="p-3">{ui("المسمى")}</th><th className="p-3">{ui("الحالة")}</th><th className="p-3">{ui("البريد / الحساب")}</th><th className="p-3">{ui("الإجراء")}</th></tr></thead>
+              <tbody>{members.map((employee) => <tr key={employee.id} className="border-b last:border-0"><td className="p-3"><b>{employee.full_name}</b><div className="text-xs text-muted-foreground">{employee.employee_no}</div></td><td className="p-3">{employee.position || "—"}</td><td className="p-3">{employee.status || ui("نشط")}</td><td className="p-3">{profileByEmail.get(normalizeEmail(employee.email))?.email ?? employee.email ?? ui("لا يوجد بريد مرتبط")}</td><td className="p-3"><Button size="sm" variant="ghost" title={employee.id === currentManager?.id ? ui("عيّن مسؤولاً آخر قبل نقل هذا الموظف") : undefined} onClick={() => { if (confirm((ui("نقل ") + (employee.full_name) + ui(" خارج هذا القسم؟")))) onRemove(employee.id); }} disabled={addPending || employee.id === currentManager?.id}><UserMinus className="ml-2 h-4 w-4 text-destructive" />{ui(" نقل من القسم")}</Button></td></tr>)}
+                {!members.length && <tr><td colSpan={5} className="p-8 text-center text-muted-foreground">{ui("لا يوجد موظفون مرتبطون بهذا القسم.")}</td></tr>}
               </tbody>
             </table>
           </div>
         </section>
 
         <section className="grid gap-4 lg:grid-cols-2">
-          <div className="space-y-3 rounded-2xl border p-4"><div className="flex items-center gap-2 font-semibold"><ClipboardList className="h-4 w-4 text-primary" /> مهام القسم</div>{report.isError ? <p className="text-sm text-destructive">تعذر تحميل المهام: {formatErrorMessage(report.error)}</p> : report.isPending ? <p className="text-sm text-muted-foreground">جارٍ تحميل المهام…</p> : <div className="max-h-64 space-y-2 overflow-y-auto">{(report.data?.tasks ?? []).map((task) => <div key={task.id} className="rounded-lg bg-muted/40 p-3"><div className="flex justify-between gap-2"><span className="font-medium">{task.title}</span><span className="text-xs text-muted-foreground">{task.status}</span></div><p className="mt-1 text-xs text-muted-foreground">{task.task_date} · {employeeById.get(task.employee_id ?? "")?.full_name ?? "غير مسند"}</p></div>)}{!report.data?.tasks.length && <p className="py-4 text-center text-sm text-muted-foreground">لا توجد مهام مسجلة للقسم.</p>}</div>}</div>
-          <div className="space-y-3 rounded-2xl border p-4"><div className="flex items-center gap-2 font-semibold"><FileClock className="h-4 w-4 text-primary" /> طلبات واستمارات القسم</div>{report.isError ? <p className="text-sm text-destructive">تعذر تحميل الطلبات: {formatErrorMessage(report.error)}</p> : report.isPending ? <p className="text-sm text-muted-foreground">جارٍ تحميل الطلبات…</p> : <div className="max-h-64 space-y-2 overflow-y-auto">{(report.data?.forms ?? []).map((form) => <div key={form.id} className="flex items-center justify-between gap-2 rounded-lg bg-muted/40 p-3"><div><p className="font-medium">{form.kind}</p><p className="mt-1 text-xs text-muted-foreground">{form.work_date} · {employeeById.get(form.employee_id)?.full_name ?? "موظف"}</p></div><span className="rounded-full bg-background px-2 py-1 text-xs">{form.status}</span></div>)}{!report.data?.forms.length && <p className="py-4 text-center text-sm text-muted-foreground">لا توجد طلبات مسجلة للقسم.</p>}</div>}</div>
+          <div className="space-y-3 rounded-2xl border p-4"><div className="flex items-center gap-2 font-semibold"><ClipboardList className="h-4 w-4 text-primary" />{ui(" مهام القسم")}</div>{report.isError ? <p className="text-sm text-destructive">{ui("تعذر تحميل المهام: ")}{ui(formatErrorMessage(report.error))}</p> : report.isPending ? <p className="text-sm text-muted-foreground">{ui("جارٍ تحميل المهام…")}</p> : <div className="max-h-64 space-y-2 overflow-y-auto">{(report.data?.tasks ?? []).map((task) => <div key={task.id} className="rounded-lg bg-muted/40 p-3"><div className="flex justify-between gap-2"><span className="font-medium">{task.title}</span><span className="text-xs text-muted-foreground">{task.status}</span></div><p className="mt-1 text-xs text-muted-foreground">{task.task_date} · {employeeById.get(task.employee_id ?? "")?.full_name ?? ui("غير مسند")}</p></div>)}{!report.data?.tasks.length && <p className="py-4 text-center text-sm text-muted-foreground">{ui("لا توجد مهام مسجلة للقسم.")}</p>}</div>}</div>
+          <div className="space-y-3 rounded-2xl border p-4"><div className="flex items-center gap-2 font-semibold"><FileClock className="h-4 w-4 text-primary" />{ui(" طلبات واستمارات القسم")}</div>{report.isError ? <p className="text-sm text-destructive">{ui("تعذر تحميل الطلبات: ")}{ui(formatErrorMessage(report.error))}</p> : report.isPending ? <p className="text-sm text-muted-foreground">{ui("جارٍ تحميل الطلبات…")}</p> : <div className="max-h-64 space-y-2 overflow-y-auto">{(report.data?.forms ?? []).map((form) => <div key={form.id} className="flex items-center justify-between gap-2 rounded-lg bg-muted/40 p-3"><div><p className="font-medium">{form.kind}</p><p className="mt-1 text-xs text-muted-foreground">{form.work_date} · {employeeById.get(form.employee_id)?.full_name ?? ui("موظف")}</p></div><span className="rounded-full bg-background px-2 py-1 text-xs">{form.status}</span></div>)}{!report.data?.forms.length && <p className="py-4 text-center text-sm text-muted-foreground">{ui("لا توجد طلبات مسجلة للقسم.")}</p>}</div>}</div>
         </section>
       </>}
     </DialogContent>
@@ -352,5 +353,5 @@ function DepartmentDetailsDialog({
 }
 
 function Metric({ icon: Icon, label, value }: { icon: typeof Users; label: string; value: number | string }) {
-  return <div className="flex items-center gap-3 rounded-xl border bg-card p-3"><span className="rounded-lg bg-primary/10 p-2 text-primary"><Icon className="h-4 w-4" /></span><div><p className="text-xs text-muted-foreground">{label}</p><p className="mt-0.5 font-bold tabular-nums">{typeof value === "number" ? value.toLocaleString("ar") : value}</p></div></div>;
+  return <div className="flex items-center gap-3 rounded-xl border bg-card p-3"><span className="rounded-lg bg-primary/10 p-2 text-primary"><Icon className="h-4 w-4" /></span><div><p className="text-xs text-muted-foreground">{ui(label)}</p><p className="mt-0.5 font-bold tabular-nums">{typeof value === "number" ? value.toLocaleString("ar") : value}</p></div></div>;
 }

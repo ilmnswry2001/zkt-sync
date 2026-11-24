@@ -1,3 +1,4 @@
+import { direction, ui } from "@/lib/ui-language";
 import { useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
@@ -35,13 +36,13 @@ export function CertificationFormsDialog({
         if (!open) close();
       }}
     >
-      <DialogContent dir="rtl">
+      <DialogContent dir={direction()}>
         <DialogTitle>
           {mode === "quick"
-            ? "روابط الاستمارات النشطة"
+            ? ui("روابط الاستمارات النشطة")
             : mode === "new"
-              ? "إضافة نوع استمارة جديدة"
-              : (selected?.title ?? "الاستمارة غير متاحة")}
+              ? ui("إضافة نوع استمارة جديدة")
+              : (selected?.title ?? ui("الاستمارة غير متاحة"))}
         </DialogTitle>
         {mode === "quick" && (
           <div className="grid gap-3">
@@ -51,10 +52,10 @@ export function CertificationFormsDialog({
                     <a className="underline" href={formUrl(t.id)}>
                       {t.title}
                     </a>
-                    <Button onClick={() => copyForm(t.id)}>نسخ الرابط</Button>
+                    <Button onClick={() => copyForm(t.id)}>{ui("نسخ الرابط")}</Button>
                   </div>
                 ))
-              : "لا توجد استمارات نشطة"}
+              : ui("لا توجد استمارات نشطة")}
           </div>
         )}
         {mode === "qr" && selected && (
@@ -66,7 +67,7 @@ export function CertificationFormsDialog({
               marginSize={4}
               className="mx-auto"
             />
-            <Button onClick={() => copyForm(selected.id)}>نسخ الرابط</Button>
+            <Button onClick={() => copyForm(selected.id)}>{ui("نسخ الرابط")}</Button>
             <Button
               onClick={() => {
                 if (!qr.current) return;
@@ -81,9 +82,7 @@ export function CertificationFormsDialog({
                 a.click();
                 setTimeout(() => URL.revokeObjectURL(url), 1000);
               }}
-            >
-              تحميل الرمز
-            </Button>
+            >{ui("تحميل الرمز")}</Button>
           </>
         )}
         {(mode === "new" || (mode === "fill" && selected)) && (
@@ -94,7 +93,7 @@ export function CertificationFormsDialog({
               const values = Object.fromEntries(
                 Array.from(new FormData(e.currentTarget), ([key, v]) => [key, String(v).trim()]),
               );
-              if (Object.values(values).some((v) => !v)) return toast.error("أكمل الحقول المطلوبة");
+              if (Object.values(values).some((v) => !v)) return toast.error(ui("أكمل الحقول المطلوبة"));
               if (mode === "new") saveTemplate?.(values);
               else submit?.(values);
             }}
@@ -109,7 +108,7 @@ export function CertificationFormsDialog({
               : fields
             ).map((f) => (
               <label key={f.name}>
-                {f.label}
+                {ui(f.label)}
                 {f.type === "textarea" ? (
                   <textarea required name={f.name} className="w-full border p-2" />
                 ) : f.options?.length ? (
@@ -123,7 +122,7 @@ export function CertificationFormsDialog({
                 )}
               </label>
             ))}
-            <Button disabled={busy}>{mode === "new" ? "حفظ القالب" : "إرسال للمراجعة"}</Button>
+            <Button disabled={busy}>{mode === "new" ? ui("حفظ القالب") : ui("إرسال للمراجعة")}</Button>
           </form>
         )}
       </DialogContent>

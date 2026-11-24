@@ -1,3 +1,4 @@
+import { direction, ui } from "@/lib/ui-language";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState } from "react";
@@ -46,18 +47,18 @@ function FillForm() {
       if (result.error) throw Error(result.error.message);
     },
     onSuccess: () => setSent(true),
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toast.error(ui(e.message)),
   });
   return (
-    <main dir="rtl" className="mx-auto max-w-xl p-8">
+    <main dir={direction()} className="mx-auto max-w-xl p-8">
       {sent ? (
-        "تم إرسال الاستمارة للمراجعة"
+        ui("تم إرسال الاستمارة للمراجعة")
       ) : template.isPending ? (
-        "جارٍ تحميل الاستمارة…"
+        ui("جارٍ تحميل الاستمارة…")
       ) : template.error ? (
-        "تعذر تحميل الاستمارة"
+        ui("تعذر تحميل الاستمارة")
       ) : !template.data ? (
-        "هذه الاستمارة غير متاحة"
+        ui("هذه الاستمارة غير متاحة")
       ) : (
         <CertificationFormsDialog
           mode="fill"

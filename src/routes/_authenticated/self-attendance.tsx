@@ -1,3 +1,4 @@
+import { direction, displayLocale, ui } from "@/lib/ui-language";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
@@ -95,7 +96,7 @@ type BeforeInstallPromptEvent = Event & {
 export const Route = createFileRoute("/_authenticated/self-attendance")({
   head: () => ({
     meta: [
-      { title: "الحضور الذاتي | حضوري الذكي" },
+      { title: ui("الحضور الذاتي | حضوري الذكي") },
       { name: "description", content: "تسجيل الحضور والانصراف من الهاتف مع التحقق من موقع العمل." },
     ],
   }),
@@ -127,7 +128,7 @@ function minutesFromTime(value: string) {
 }
 function formatMinutes(value: number) {
   const minutes = new Intl.NumberFormat("ar-IQ", { minimumIntegerDigits: 2, useGrouping: false }).format(value % 60);
-  return `${Math.floor(value / 60).toLocaleString("ar-IQ")} س ${minutes} د`;
+  return `${Math.floor(value / 60).toLocaleString(displayLocale())} س ${minutes} د`;
 }
 function haversineMeters(aLat: number, aLon: number, bLat: number, bLon: number) {
   const radius = 6371000;
@@ -220,7 +221,7 @@ function SelfAttendancePage() {
       .eq("status", "active")
       .maybeSingle();
     if (employeeResult.error) {
-      toast.error(`تعذر قراءة بيانات الموظف: ${formatErrorMessage(employeeResult.error)}`);
+      toast.error((ui("تعذر قراءة بيانات الموظف: ") + (formatErrorMessage(employeeResult.error))));
       setLoading(false);
       return;
     }
@@ -247,7 +248,7 @@ function SelfAttendancePage() {
         .maybeSingle(),
     ]);
     if (accessResult.error || assignedSitesResult.error) {
-      toast.error(`تعذر قراءة مواقع الحضور المسموحة: ${formatErrorMessage(accessResult.error ?? assignedSitesResult.error)}`);
+      toast.error((ui("تعذر قراءة مواقع الحضور المسموحة: ") + (formatErrorMessage(accessResult.error ?? assignedSitesResult.error))));
       setLoading(false);
       return;
     }
@@ -260,7 +261,7 @@ function SelfAttendancePage() {
       if (!allowAllSites) sitesQuery = sitesQuery.in("id", assignedSiteIds);
       const { data: permittedSites, error: permittedSitesError } = await sitesQuery;
       if (permittedSitesError) {
-        toast.error(`تعذر تحميل المواقع المسموحة: ${formatErrorMessage(permittedSitesError)}`);
+        toast.error((ui("تعذر تحميل المواقع المسموحة: ") + (formatErrorMessage(permittedSitesError))));
         setLoading(false);
         return;
       }
@@ -277,7 +278,7 @@ function SelfAttendancePage() {
       .gte("verify_time", start)
       .lt("verify_time", end)
       .order("verify_time", { ascending: true });
-    if (logsResult.error) toast.error(`تعذر قراءة حالة حضور اليوم: ${formatErrorMessage(logsResult.error)}`);
+    if (logsResult.error) toast.error((ui("تعذر قراءة حالة حضور اليوم: ") + (formatErrorMessage(logsResult.error))));
     setLogs((logsResult.data ?? []) as AttendanceLog[]);
     const { data: formRows, error: formsError } = await (supabase as any)
       .from("forms")
@@ -286,7 +287,7 @@ function SelfAttendancePage() {
       .eq("work_date", today)
       .in("kind", ["overtime", "early_exit"])
       .order("created_at", { ascending: false });
-    if (formsError) toast.error(`تعذر تحميل طلباتك: ${formatErrorMessage(formsError)}`);
+    if (formsError) toast.error((ui("تعذر تحميل طلباتك: ") + (formatErrorMessage(formsError))));
     setSelfForms((formRows ?? []) as typeof selfForms);
     setLoading(false);
   };
@@ -321,12 +322,12 @@ function SelfAttendancePage() {
         p_client_event_id: item.id,
         p_device_info: { user_agent: navigator.userAgent, platform: navigator.platform, offline_queue_id: item.id },
       });
-      if (error) { toast.error(`تعذر إرسال حركة محفوظة: ${formatErrorMessage(error)}`); break; }
+      if (error) { toast.error((ui("تعذر إرسال حركة محفوظة: ") + (formatErrorMessage(error)))); break; }
       await removeQueuedSelfAttendance(item.id);
     }
     const remaining = await readSelfAttendanceQueue();
     setQueuedCount(remaining.length);
-    if (queued.length && remaining.length < queued.length) { toast.success("تم إرسال الحركات المحفوظة دون اتصال"); await loadAttendance(); }
+    if (queued.length && remaining.length < queued.length) { toast.success(ui("تم إرسال الحركات المحفوظة دون اتصال")); await loadAttendance(); }
   };
   useEffect(() => {
     void readSelfAttendanceQueue().then((items) => setQueuedCount(items.length)).catch(() => undefined);
@@ -355,7 +356,7 @@ function SelfAttendancePage() {
         .from("sites")
         .select("id, name, latitude, longitude, geofence_radius_meters")
         .order("name");
-      if (error) return toast.error(`تعذر تحميل المواقع: ${formatErrorMessage(error)}`);
+      if (error) return toast.error((ui("تعذر تحميل المواقع: ") + (formatErrorMessage(error))));
       const nextSites = (data ?? []) as Site[];
       setSites(nextSites);
       if (nextSites.length && !selectedSiteId) setSelectedSiteId(nextSites[0].id);
@@ -368,7 +369,7 @@ function SelfAttendancePage() {
         .select("latest_check_in_time, latest_check_out_time")
         .eq("id", true)
         .maybeSingle();
-      if (error) return toast.error(`تعذر تحميل أوقات الحضور الذاتي: ${formatErrorMessage(error)}`);
+      if (error) return toast.error((ui("تعذر تحميل أوقات الحضور الذاتي: ") + (formatErrorMessage(error))));
       setLatestCheckInTime(data?.latest_check_in_time?.slice(0, 5) ?? "");
       setLatestCheckOutTime(data?.latest_check_out_time?.slice(0, 5) ?? "");
     })();
@@ -385,7 +386,7 @@ function SelfAttendancePage() {
   }, [selectedSite, selectedSiteId]);
 
   const refreshLocation = () => {
-    if (!navigator.geolocation) return toast.error("المتصفح لا يدعم تحديد الموقع");
+    if (!navigator.geolocation) return toast.error(ui("المتصفح لا يدعم تحديد الموقع"));
     setLocationLoading(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -395,14 +396,14 @@ function SelfAttendancePage() {
           accuracy: position.coords.accuracy,
         });
         setLocationLoading(false);
-        toast.success("تم تحديث موقعك الحالي");
+        toast.success(ui("تم تحديث موقعك الحالي"));
       },
       (error) => {
         setLocationLoading(false);
         toast.error(
           error.code === error.PERMISSION_DENIED
-            ? "اسمح للمتصفح بالوصول إلى موقعك أولاً"
-            : "تعذر قراءة موقعك الحالي",
+            ? ui("اسمح للمتصفح بالوصول إلى موقعك أولاً")
+            : ui("تعذر قراءة موقعك الحالي"),
         );
       },
       { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 },
@@ -425,7 +426,7 @@ function SelfAttendancePage() {
         setLocationLoading(false);
         if (error.code === error.PERMISSION_DENIED) {
           setCoordinates(null);
-          toast.error("اسمح للمتصفح بالوصول إلى موقعك لتسجيل الحضور تلقائياً");
+          toast.error(ui("اسمح للمتصفح بالوصول إلى موقعك لتسجيل الحضور تلقائياً"));
         }
       },
       { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 },
@@ -440,37 +441,37 @@ function SelfAttendancePage() {
       if (currentMinutes > allowedMinutes) {
         const lateMinutes = currentMinutes - allowedMinutes;
         const graceMessage = checkInGraceHours > 0
-          ? ` والمهلة الخاصة بك ${checkInGraceHours.toLocaleString("ar-IQ")} ساعة`
+          ? ` والمهلة الخاصة بك ${checkInGraceHours.toLocaleString(displayLocale())} ساعة`
           : "";
         return toast.error(
-          `تعذر التسجيل: الوقت الآن ${baghdadTime(now)} والحد العام ${latestCheckInTime}${graceMessage}. تجاوزت آخر وقت مسموح بـ ${formatMinutes(lateMinutes)}.`,
+          (ui("تعذر التسجيل: الوقت الآن ") + (baghdadTime(now)) + ui(" والحد العام ") + (latestCheckInTime) + (graceMessage) + ui(". تجاوزت آخر وقت مسموح بـ ") + (formatMinutes(lateMinutes)) + "."),
         );
       }
     }
-    if (!employee || !site) return toast.error("لا يوجد موقع عمل مخصص لهذا الموظف");
-    if (!coordinates) return toast.error("حدّث موقعك قبل تسجيل الحركة");
+    if (!employee || !site) return toast.error(ui("لا يوجد موقع عمل مخصص لهذا الموظف"));
+    if (!coordinates) return toast.error(ui("حدّث موقعك قبل تسجيل الحركة"));
     if (!insideGeofence)
       return toast.error(
-        `لا يمكن التسجيل، أنت تبعد ${Math.round(distance ?? 0)} متراً عن موقع العمل`,
+        (ui("لا يمكن التسجيل، أنت تبعد ") + (Math.round(distance ?? 0)) + ui(" متراً عن موقع العمل")),
       );
     if (eventType === "check_in" && checkedIn)
-      return toast.error("تم تسجيل حضورك لهذا اليوم بالفعل");
+      return toast.error(ui("تم تسجيل حضورك لهذا اليوم بالفعل"));
     if (eventType === "check_out" && (!checkedIn || checkedOut))
       return toast.error(
-        checkedOut ? "تم تسجيل انصرافك لهذا اليوم بالفعل" : "لا يمكن الانصراف قبل تسجيل الحضور",
+        checkedOut ? ui("تم تسجيل انصرافك لهذا اليوم بالفعل") : ui("لا يمكن الانصراف قبل تسجيل الحضور"),
       );
     if (!employee.face_descriptor || employee.face_descriptor.length !== 128) {
-      return toast.error("بصمة الوجه غير مسجلة لهذا الموظف. راجع الموارد البشرية لتسجيلها أولاً");
+      return toast.error(ui("بصمة الوجه غير مسجلة لهذا الموظف. راجع الموارد البشرية لتسجيلها أولاً"));
     }
     setPendingEventType(eventType);
     setFaceCameraOpen(true);
   };
 
   const requestEarlyExit = async () => {
-    if (!employee || !checkedIn) return toast.error("يجب تسجيل الحضور أولاً قبل طلب الخروج المبكر");
-    if (!latestCheckOutTime) return toast.error("لم تحدد الإدارة وقت نهاية الدوام");
-    if (baghdadMinutes(now) >= minutesFromTime(latestCheckOutTime)) return toast.error("انتهى وقت الدوام؛ لم يعد طلب الخروج المبكر متاحاً");
-    if (earlyExitReason.trim().length < 3) return toast.error("اكتب سبب طلب الخروج المبكر");
+    if (!employee || !checkedIn) return toast.error(ui("يجب تسجيل الحضور أولاً قبل طلب الخروج المبكر"));
+    if (!latestCheckOutTime) return toast.error(ui("لم تحدد الإدارة وقت نهاية الدوام"));
+    if (baghdadMinutes(now) >= minutesFromTime(latestCheckOutTime)) return toast.error(ui("انتهى وقت الدوام؛ لم يعد طلب الخروج المبكر متاحاً"));
+    if (earlyExitReason.trim().length < 3) return toast.error(ui("اكتب سبب طلب الخروج المبكر"));
     setSelfFormSaving(true);
     try {
       const currentParts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Baghdad", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(now);
@@ -482,23 +483,23 @@ function SelfAttendancePage() {
         reason: earlyExitReason.trim(),
       } });
       setEarlyExitReason("");
-      toast.success("أُرسل طلب الخروج المبكر إلى مدير القسم ثم مدير الشركة");
+      toast.success(ui("أُرسل طلب الخروج المبكر إلى مدير القسم ثم مدير الشركة"));
       await loadAttendance();
     } catch (error) {
-      toast.error(`تعذر إرسال الطلب: ${formatErrorMessage(error)}`);
+      toast.error((ui("تعذر إرسال الطلب: ") + (formatErrorMessage(error))));
     } finally {
       setSelfFormSaving(false);
     }
   };
 
   const requestOvertime = async () => {
-    if (!employee) return toast.error("تعذر تحديد ملف الموظف");
-    if (!latestCheckOutTime) return toast.error("لم تحدد الإدارة وقت نهاية الدوام؛ لا يمكن تسجيل وقت إضافي");
+    if (!employee) return toast.error(ui("تعذر تحديد ملف الموظف"));
+    if (!latestCheckOutTime) return toast.error(ui("لم تحدد الإدارة وقت نهاية الدوام؛ لا يمكن تسجيل وقت إضافي"));
     const elapsedMinutes = baghdadMinutes(now) - minutesFromTime(latestCheckOutTime);
     const hours = Math.floor(elapsedMinutes / 30) / 2;
-    if (hours < 0.5) return toast.error("يتاح تسجيل الوقت الإضافي بعد نهاية الدوام بنصف ساعة على الأقل");
-    if (overtimeReason.trim().length < 3) return toast.error("اكتب وصف العمل الإضافي");
-    if (selfForms.some((form) => form.kind === "overtime" && form.status !== "rejected")) return toast.error("يوجد طلب وقت إضافي لهذا اليوم قيد الإجراء أو معتمد");
+    if (hours < 0.5) return toast.error(ui("يتاح تسجيل الوقت الإضافي بعد نهاية الدوام بنصف ساعة على الأقل"));
+    if (overtimeReason.trim().length < 3) return toast.error(ui("اكتب وصف العمل الإضافي"));
+    if (selfForms.some((form) => form.kind === "overtime" && form.status !== "rejected")) return toast.error(ui("يوجد طلب وقت إضافي لهذا اليوم قيد الإجراء أو معتمد"));
     setSelfFormSaving(true);
     try {
       await submitForm({ data: {
@@ -507,10 +508,10 @@ function SelfAttendancePage() {
         check_in: null, check_out: null, reason: overtimeReason.trim(),
       } });
       setOvertimeReason("");
-      toast.success(`أُرسل طلب الوقت الإضافي (${hours.toLocaleString("ar-IQ")} ساعة) للموافقة`);
+      toast.success(`أُرسل طلب الوقت الإضافي (${hours.toLocaleString(displayLocale())} ساعة) للموافقة`);
       await loadAttendance();
     } catch (error) {
-      toast.error(`تعذر إرسال طلب الوقت الإضافي: ${formatErrorMessage(error)}`);
+      toast.error((ui("تعذر إرسال طلب الوقت الإضافي: ") + (formatErrorMessage(error))));
     } finally {
       setSelfFormSaving(false);
     }
@@ -524,11 +525,11 @@ function SelfAttendancePage() {
   ) => {
     if (faceScore < 75 || !livenessVerified) {
       setRecording(null);
-      return toast.error("لم يكتمل التحقق من مطابقة الوجه والحيوية");
+      return toast.error(ui("لم يكتمل التحقق من مطابقة الوجه والحيوية"));
     }
     if (!coordinates) {
       setRecording(null);
-      return toast.error("حدّث موقعك قبل تسجيل الحركة");
+      return toast.error(ui("حدّث موقعك قبل تسجيل الحركة"));
     }
     setRecording(eventType);
     const queueItem: QueuedSelfAttendance = {
@@ -538,12 +539,12 @@ function SelfAttendancePage() {
     const saveForLater = async () => {
       await enqueueSelfAttendance(queueItem);
       setQueuedCount((count) => count + 1);
-      toast.success("حُفظت الحركة والصورة لإرسالها تلقائياً عند عودة الإنترنت");
+      toast.success(ui("حُفظت الحركة والصورة لإرسالها تلقائياً عند عودة الإنترنت"));
     };
     if (!navigator.onLine) {
       try {
         await saveForLater();
-      } catch { toast.error("تعذر حفظ الحركة دون اتصال؛ لا تغلق الصفحة وحاول مجدداً"); }
+      } catch { toast.error(ui("تعذر حفظ الحركة دون اتصال؛ لا تغلق الصفحة وحاول مجدداً")); }
       setRecording(null);
       return;
     }
@@ -552,7 +553,7 @@ function SelfAttendancePage() {
     if (uploaded.error) {
       setRecording(null);
       if (!navigator.onLine) { await saveForLater(); return; }
-      return toast.error(`تعذر حفظ صورة التحقق: ${formatErrorMessage(uploaded.error)}`);
+      return toast.error((ui("تعذر حفظ صورة التحقق: ") + (formatErrorMessage(uploaded.error))));
     }
     const rpc = supabase as unknown as SelfAttendanceRpc;
     const { data, error } = await rpc.rpc("record_mobile_self_attendance", {
@@ -575,12 +576,12 @@ function SelfAttendancePage() {
     setRecording(null);
     if (error) {
       if (!navigator.onLine) { await saveForLater(); return; }
-      return toast.error(formatErrorMessage(error));
+      return toast.error(ui(formatErrorMessage(error)));
     }
     const result = data?.[0];
-    if (!result?.id) return toast.error("رُفضت الحركة بسبب انتقال غير منطقي وسُجلت للمراجعة الإدارية");
+    if (!result?.id) return toast.error(ui("رُفضت الحركة بسبب انتقال غير منطقي وسُجلت للمراجعة الإدارية"));
     if (eventType === "check_in") {
-      toast.success("تم تسجيل حضورك بنجاح");
+      toast.success(ui("تم تسجيل حضورك بنجاح"));
     } else {
       const overtimeHours = todayShift?.end_time
         ? summarizeAttendancePunches(
@@ -591,8 +592,8 @@ function SelfAttendancePage() {
         : 0;
       toast.success(
         overtimeHours > 0
-          ? `تم تسجيل انصرافك بنجاح، والوقت الإضافي المحتسب اليوم ${overtimeHours.toLocaleString("ar-IQ")} ساعة`
-          : "تم تسجيل انصرافك بنجاح، ولم يُحتسب وقت إضافي اليوم",
+          ? `تم تسجيل انصرافك بنجاح، والوقت الإضافي المحتسب اليوم ${overtimeHours.toLocaleString(displayLocale())} ساعة`
+          : ui("تم تسجيل انصرافك بنجاح، ولم يُحتسب وقت إضافي اليوم"),
       );
     }
     await loadAttendance();
@@ -605,24 +606,24 @@ function SelfAttendancePage() {
     setInstallPrompt(null);
   };
   const enablePushNotifications = async () => {
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return toast.error("المتصفح لا يدعم الإشعارات الفورية");
-    if (Notification.permission === "denied") return toast.error("الإشعارات محظورة من إعدادات المتصفح");
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return toast.error(ui("المتصفح لا يدعم الإشعارات الفورية"));
+    if (Notification.permission === "denied") return toast.error(ui("الإشعارات محظورة من إعدادات المتصفح"));
     const permission = await Notification.requestPermission();
-    if (permission !== "granted") return toast.error("لم يتم السماح بالإشعارات");
+    if (permission !== "granted") return toast.error(ui("لم يتم السماح بالإشعارات"));
     const { publicKey } = await getPushKey();
-    if (!publicKey) return toast.error("إعداد الإشعارات غير مكتمل لدى الإدارة");
+    if (!publicKey) return toast.error(ui("إعداد الإشعارات غير مكتمل لدى الإدارة"));
     const registration = await navigator.serviceWorker.register("/sw.js");
     const key = publicKey.replace(/-/g, "+").replace(/_/g, "/");
     const applicationServerKey = Uint8Array.from(atob(key.padEnd(Math.ceil(key.length / 4) * 4, "=")), (char) => char.charCodeAt(0));
     const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey });
     await savePushSubscription({ data: subscription.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } } });
-    toast.success("تم تفعيل تذكيرات الدوام على هذا الجهاز");
+    toast.success(ui("تم تفعيل تذكيرات الدوام على هذا الجهاز"));
   };
   const updateSelectedSite = async (
     latitude: number | null = Number(siteLatitude),
     longitude: number | null = Number(siteLongitude),
   ) => {
-    if (!selectedSiteId) return toast.error("اختر الموقع أولاً");
+    if (!selectedSiteId) return toast.error(ui("اختر الموقع أولاً"));
     const radius = Number(siteRadius);
     if (
       latitude == null ||
@@ -630,9 +631,9 @@ function SelfAttendancePage() {
       longitude == null ||
       !Number.isFinite(longitude)
     )
-      return toast.error("أدخل إحداثيات صحيحة");
+      return toast.error(ui("أدخل إحداثيات صحيحة"));
     if (!Number.isFinite(radius) || radius < 25 || radius > 5000)
-      return toast.error("نصف القطر يجب أن يكون بين 25 و5000 متر");
+      return toast.error(ui("نصف القطر يجب أن يكون بين 25 و5000 متر"));
     setSiteSaving(true);
     const { data, error } = await (supabase as any)
       .from("sites")
@@ -641,11 +642,11 @@ function SelfAttendancePage() {
       .select("id, name, latitude, longitude, geofence_radius_meters")
       .single();
     setSiteSaving(false);
-    if (error) return toast.error(`تعذر حفظ إعدادات الموقع: ${formatErrorMessage(error)}`);
+    if (error) return toast.error((ui("تعذر حفظ إعدادات الموقع: ") + (formatErrorMessage(error))));
     setSites((current) =>
       current.map((item) => (item.id === selectedSiteId ? (data as Site) : item)),
     );
-    toast.success("تم حفظ إعدادات موقع العمل");
+    toast.success(ui("تم حفظ إعدادات موقع العمل"));
   };
 
   const saveAttendanceSettings = async () => {
@@ -658,11 +659,11 @@ function SelfAttendancePage() {
       updated_by: user?.id ?? null,
     });
     setAttendanceSettingsSaving(false);
-    if (error) return toast.error(`تعذر حفظ أوقات الحضور: ${formatErrorMessage(error)}`);
-    toast.success("تم حفظ حدود وقت تسجيل الحضور والانصراف");
+    if (error) return toast.error((ui("تعذر حفظ أوقات الحضور: ") + (formatErrorMessage(error))));
+    toast.success(ui("تم حفظ حدود وقت تسجيل الحضور والانصراف"));
   };
   const pinCurrentSite = () => {
-    if (!navigator.geolocation) return toast.error("المتصفح لا يدعم تحديد الموقع");
+    if (!navigator.geolocation) return toast.error(ui("المتصفح لا يدعم تحديد الموقع"));
     setSiteSaving(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -688,52 +689,47 @@ function SelfAttendancePage() {
       </div>
     );
   return (
-    <div dir="rtl" className="mx-auto max-w-2xl space-y-5 pb-8">
+    <div dir={direction()} className="mx-auto max-w-2xl space-y-5 pb-8">
       {(installPrompt || isIos) && (
         <Card className="border-cyan-200 bg-cyan-50/80">
           <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
             <div>
-              <p className="font-semibold">ثبّت التطبيق على شاشتك الرئيسية لتسجيل الحضور بسهولة</p>
+              <p className="font-semibold">{ui("ثبّت التطبيق على شاشتك الرئيسية لتسجيل الحضور بسهولة")}</p>
               <p className="text-sm text-muted-foreground">
                 {isIos
-                  ? "في Safari اضغط زر المشاركة ثم اختر إضافة إلى الشاشة الرئيسية."
-                  : "ثبّت حضوري الذكي للوصول السريع من هاتفك."}
+                  ? ui("في Safari اضغط زر المشاركة ثم اختر إضافة إلى الشاشة الرئيسية.")
+                  : ui("ثبّت حضوري الذكي للوصول السريع من هاتفك.")}
               </p>
             </div>
-            {installPrompt && <Button onClick={() => void install()}>تثبيت الآن</Button>}
+            {installPrompt && <Button onClick={() => void install()}>{ui("تثبيت الآن")}</Button>}
           </CardContent>
         </Card>
       )}
       <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-teal-950 p-6 text-white shadow-xl sm:p-8">
         <div className="flex items-center justify-between gap-3">
           <Badge className="border-white/20 bg-white/10 text-white">
-            <Smartphone className="ml-1.5 h-3.5 w-3.5" /> حضوري الذكي
-          </Badge>
+            <Smartphone className="ml-1.5 h-3.5 w-3.5" />{ui(" حضوري الذكي")}</Badge>
           <Wifi className="h-5 w-5 text-cyan-300" />
         </div>
-        <p className="mt-6 text-sm text-slate-300">التوقيت الرسمي — بغداد</p>
+        <p className="mt-6 text-sm text-slate-300">{ui("التوقيت الرسمي — بغداد")}</p>
         <p className="mt-1 text-5xl font-bold tracking-tight sm:text-6xl">{baghdadTime(now)}</p>
         <p className="mt-2 text-sm text-slate-300">{today}</p>
       </section>
-      {queuedCount > 0 && <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">لديك {queuedCount} حركة محفوظة دون اتصال؛ ستُرسل تلقائياً عند عودة الإنترنت.</p>}
-      <Tabs defaultValue="attendance" dir="rtl">
+      {queuedCount > 0 && <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">{ui("لديك ")}{queuedCount}{ui(" حركة محفوظة دون اتصال؛ ستُرسل تلقائياً عند عودة الإنترنت.")}</p>}
+      <Tabs defaultValue="attendance" dir={direction()}>
         <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1">
-          <TabsTrigger value="attendance">تسجيل الحضور</TabsTrigger>
-          <TabsTrigger value="overtime"><Clock3 className="ml-2 h-4 w-4" /> الوقت الإضافي</TabsTrigger>
-          <TabsTrigger value="early-exit"><LogOut className="ml-2 h-4 w-4" /> طلب خروج مبكر</TabsTrigger>
+          <TabsTrigger value="attendance">{ui("تسجيل الحضور")}</TabsTrigger>
+          <TabsTrigger value="overtime"><Clock3 className="ml-2 h-4 w-4" />{ui(" الوقت الإضافي")}</TabsTrigger>
+          <TabsTrigger value="early-exit"><LogOut className="ml-2 h-4 w-4" />{ui(" طلب خروج مبكر")}</TabsTrigger>
           {isAdmin && (
             <TabsTrigger value="settings">
-              <Settings2 className="ml-2 h-4 w-4" /> الإعدادات
-            </TabsTrigger>
+              <Settings2 className="ml-2 h-4 w-4" />{ui(" الإعدادات")}</TabsTrigger>
           )}
         </TabsList>
         <TabsContent value="attendance" className="space-y-5">
           {!employee ? (
             <Card>
-              <CardContent className="p-6 text-center text-sm text-muted-foreground">
-                لا يوجد سجل موظف نشط مرتبط بحسابك. اطلب من الموارد البشرية ربط البريد الإلكتروني
-                بملف الموظف.
-              </CardContent>
+              <CardContent className="p-6 text-center text-sm text-muted-foreground">{ui("لا يوجد سجل موظف نشط مرتبط بحسابك. اطلب من الموارد البشرية ربط البريد الإلكتروني بملف الموظف.")}</CardContent>
             </Card>
           ) : (
             <>
@@ -741,21 +737,21 @@ function SelfAttendancePage() {
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between gap-3">
                     <span>{employee.full_name}</span>
-                    <span className="flex items-center gap-2"><Button size="sm" variant="outline" onClick={() => void enablePushNotifications()}>تفعيل التذكيرات</Button><Badge variant={checkedOut ? "secondary" : checkedIn ? "default" : "outline"}>{statusText}</Badge></span>
+                    <span className="flex items-center gap-2"><Button size="sm" variant="outline" onClick={() => void enablePushNotifications()}>{ui("تفعيل التذكيرات")}</Button><Badge variant={checkedOut ? "secondary" : checkedIn ? "default" : "outline"}>{ui(statusText)}</Badge></span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="grid gap-3 text-sm sm:grid-cols-3">
                   <div>
-                    <span className="text-muted-foreground">الرقم الوظيفي</span>
+                    <span className="text-muted-foreground">{ui("الرقم الوظيفي")}</span>
                     <p className="font-semibold">{employee.employee_no}</p>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">الموقع المعتمد</span>
-                    <p className="font-semibold">{site?.name ?? "غير محدد"}</p>
+                    <span className="text-muted-foreground">{ui("الموقع المعتمد")}</span>
+                    <p className="font-semibold">{site?.name ?? ui("غير محدد")}</p>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">المنصب</span>
-                    <p className="font-semibold">{employee.position ?? "غير محدد"}</p>
+                    <span className="text-muted-foreground">{ui("المنصب")}</span>
+                    <p className="font-semibold">{employee.position ?? ui("غير محدد")}</p>
                   </div>
                 </CardContent>
               </Card>
@@ -776,14 +772,13 @@ function SelfAttendancePage() {
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold">
                         {insideGeofence
-                          ? `أنت داخل نطاق موقع العمل (ضمن ${Math.round(distance ?? 0)} متراً)`
+                          ? (ui("أنت داخل نطاق موقع العمل (ضمن ") + (Math.round(distance ?? 0)) + ui(" متراً)"))
                           : distance != null
-                            ? `أنت خارج نطاق موقع العمل (تبعد ${Math.round(distance)} متراً)`
-                            : "لم يتم تحديد موقعك بعد"}
+                            ? (ui("أنت خارج نطاق موقع العمل (تبعد ") + (Math.round(distance)) + ui(" متراً)"))
+                            : ui("لم يتم تحديد موقعك بعد")}
                       </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        دقة GPS الحالية:{" "}
-                        {coordinates ? `${Math.round(coordinates.accuracy)} متر` : "غير متاحة"}
+                      <p className="mt-1 text-xs text-muted-foreground">{ui("دقة GPS الحالية:")}{" "}
+                        {coordinates ? ((Math.round(coordinates.accuracy)) + ui(" متر")) : ui("غير متاحة")}
                       </p>
                     </div>
                     <Button
@@ -792,7 +787,7 @@ function SelfAttendancePage() {
                       onClick={refreshLocation}
                       disabled={locationLoading}
                     >
-                      {locationLoading ? "جارٍ التحديث" : "تحديث موقعي الآن"}
+                      {locationLoading ? ui("جارٍ التحديث") : ui("تحديث موقعي الآن")}
                     </Button>
                   </div>
                 </CardContent>
@@ -804,7 +799,7 @@ function SelfAttendancePage() {
                   onClick={() => void recordAttendance("check_in")}
                 >
                   <LogIn className="ml-3 h-7 w-7" />
-                  {recording === "check_in" ? "جارٍ التسجيل..." : faceCameraOpen && pendingEventType === "check_in" ? "جارٍ التحقق من الوجه..." : "تسجيل حضور (دخول)"}
+                  {recording === "check_in" ? ui("جارٍ التسجيل...") : faceCameraOpen && pendingEventType === "check_in" ? ui("جارٍ التحقق من الوجه...") : ui("تسجيل حضور (دخول)")}
                 </Button>
                 <Button
                   className="h-20 bg-orange-600 text-lg hover:bg-orange-700"
@@ -812,14 +807,13 @@ function SelfAttendancePage() {
                   onClick={() => void recordAttendance("check_out")}
                 >
                   <LogOut className="ml-3 h-7 w-7" />
-                  {recording === "check_out" ? "جارٍ التسجيل..." : faceCameraOpen && pendingEventType === "check_out" ? "جارٍ التحقق من الوجه..." : "تسجيل انصراف (خروج)"}
+                  {recording === "check_out" ? ui("جارٍ التسجيل...") : faceCameraOpen && pendingEventType === "check_out" ? ui("جارٍ التحقق من الوجه...") : ui("تسجيل انصراف (خروج)")}
                 </Button>
               </div>
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <CheckCircle2 className="h-5 w-5 text-primary" /> حركات اليوم
-                  </CardTitle>
+                    <CheckCircle2 className="h-5 w-5 text-primary" />{ui(" حركات اليوم")}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {logs.length ? (
@@ -830,23 +824,23 @@ function SelfAttendancePage() {
                       >
                         <span>
                           {log.self_event_type === "check_out" || log.status === 1
-                            ? "انصراف"
-                            : "حضور"}
+                            ? ui("انصراف")
+                            : ui("حضور")}
                         </span>
                         <span className="font-semibold">
-                          {new Date(log.verify_time).toLocaleTimeString("ar-IQ", {
+                          {new Date(log.verify_time).toLocaleTimeString(displayLocale(), {
                             timeZone: "Asia/Baghdad",
                             hour: "2-digit",
                             minute: "2-digit",
                           })}
                         </span>
                         <span className="text-xs text-muted-foreground">
-                          {log.source === "mobile_self" ? "تسجيل من الهاتف" : "جهاز بصمة"}
+                          {log.source === "mobile_self" ? ui("تسجيل من الهاتف") : ui("جهاز بصمة")}
                         </span>
                       </div>
                     ))
                   ) : (
-                    <p className="text-sm text-muted-foreground">لا توجد حركات مسجلة اليوم.</p>
+                    <p className="text-sm text-muted-foreground">{ui("لا توجد حركات مسجلة اليوم.")}</p>
                   )}
                 </CardContent>
               </Card>
@@ -855,62 +849,60 @@ function SelfAttendancePage() {
         </TabsContent>
         <TabsContent value="overtime" className="space-y-4">
           <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2"><Clock3 className="h-5 w-5" /> تسجيل وقت إضافي</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="flex items-center gap-2"><Clock3 className="h-5 w-5" />{ui(" تسجيل وقت إضافي")}</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                لا يتاح الطلب إلا بعد وقت نهاية الدوام ({latestCheckOutTime || "غير محدد"}) بنصف ساعة على الأقل. تُحسب الساعات المكتملة بنصف ساعة وتُرسل للموافقة.
-              </p>
-              <p className="text-sm font-semibold">الساعات المتاحة الآن: {overtimeHoursAvailable.toLocaleString("ar-IQ")}</p>
+              <p className="text-sm text-muted-foreground">{ui("لا يتاح الطلب إلا بعد وقت نهاية الدوام (")}{latestCheckOutTime || ui("غير محدد")}{ui(") بنصف ساعة على الأقل. تُحسب الساعات المكتملة بنصف ساعة وتُرسل للموافقة.")}</p>
+              <p className="text-sm font-semibold">{ui("الساعات المتاحة الآن: ")}{overtimeHoursAvailable.toLocaleString(displayLocale())}</p>
               <div className="space-y-2">
-                <Label htmlFor="self-overtime-reason">وصف العمل الإضافي</Label>
-                <Textarea id="self-overtime-reason" value={overtimeReason} onChange={(event) => setOvertimeReason(event.target.value)} minLength={3} maxLength={1000} rows={3} placeholder="اكتب وصف العمل الذي أنجزته بعد الدوام" />
+                <Label htmlFor="self-overtime-reason">{ui("وصف العمل الإضافي")}</Label>
+                <Textarea id="self-overtime-reason" value={overtimeReason} onChange={(event) => setOvertimeReason(event.target.value)} minLength={3} maxLength={1000} rows={3} placeholder={ui("اكتب وصف العمل الذي أنجزته بعد الدوام")} />
               </div>
               <Button onClick={() => void requestOvertime()} disabled={selfFormSaving || overtimeHoursAvailable < 0.5 || hasActiveOvertimeForm}>
-                {selfFormSaving ? "جارٍ الإرسال..." : hasActiveOvertimeForm ? "يوجد طلب لهذا اليوم" : "إرسال طلب الوقت الإضافي"}
+                {selfFormSaving ? ui("جارٍ الإرسال...") : hasActiveOvertimeForm ? ui("يوجد طلب لهذا اليوم") : ui("إرسال طلب الوقت الإضافي")}
               </Button>
             </CardContent>
           </Card>
           <Card>
-            <CardHeader><CardTitle>حالة طلبات الوقت الإضافي لليوم</CardTitle></CardHeader>
+            <CardHeader><CardTitle>{ui("حالة طلبات الوقت الإضافي لليوم")}</CardTitle></CardHeader>
             <CardContent className="space-y-2">
               {overtimeForms.length ? overtimeForms.map((form) => (
                 <div key={form.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm">
-                  <span>استمارة #{form.form_no} · {Number(form.overtime_hours).toLocaleString("ar-IQ")} ساعة</span>
+                  <span>{ui("استمارة #")}{form.form_no} · {Number(form.overtime_hours).toLocaleString(displayLocale())}{ui(" ساعة")}</span>
                   <Badge variant={form.status === "executed" ? "default" : form.status === "rejected" ? "destructive" : "secondary"}>
-                    {form.status === "pending_manager" ? "بانتظار مدير القسم" : form.status === "pending_ceo" ? "بانتظار مدير الشركة" : form.status === "pending_execution" ? "بانتظار التنفيذ" : form.status === "executed" ? "معتمد" : "مرفوض"}
+                    {form.status === "pending_manager" ? ui("بانتظار مدير القسم") : form.status === "pending_ceo" ? ui("بانتظار مدير الشركة") : form.status === "pending_execution" ? ui("بانتظار التنفيذ") : form.status === "executed" ? ui("معتمد") : ui("مرفوض")}
                   </Badge>
                 </div>
-              )) : <p className="text-sm text-muted-foreground">لا توجد طلبات وقت إضافي لهذا اليوم.</p>}
+              )) : <p className="text-sm text-muted-foreground">{ui("لا توجد طلبات وقت إضافي لهذا اليوم.")}</p>}
             </CardContent>
           </Card>
         </TabsContent>
         <TabsContent value="early-exit" className="space-y-4">
           <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2"><LogOut className="h-5 w-5" /> طلب خروج قبل نهاية الدوام</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="flex items-center gap-2"><LogOut className="h-5 w-5" />{ui(" طلب خروج قبل نهاية الدوام")}</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground">يُرسل الطلب أولاً إلى مدير قسمك، ثم إلى مدير الشركة. عند الموافقة النهائية يُعتمد اليوم كحضور.</p>
-              <p className="text-sm">نهاية الدوام المحددة: <strong>{latestCheckOutTime || "غير محددة"}</strong> · الوقت الحالي: <strong>{baghdadTime(now)}</strong></p>
+              <p className="text-sm text-muted-foreground">{ui("يُرسل الطلب أولاً إلى مدير قسمك، ثم إلى مدير الشركة. عند الموافقة النهائية يُعتمد اليوم كحضور.")}</p>
+              <p className="text-sm">{ui("نهاية الدوام المحددة: ")}<strong>{latestCheckOutTime || ui("غير محددة")}</strong>{ui(" · الوقت الحالي: ")}<strong>{baghdadTime(now)}</strong></p>
               <div className="space-y-2">
-                <Label htmlFor="early-exit-reason">سبب طلب الخروج</Label>
-                <Textarea id="early-exit-reason" value={earlyExitReason} onChange={(event) => setEarlyExitReason(event.target.value)} minLength={3} maxLength={1000} rows={3} placeholder="اذكر سبب طلب المغادرة قبل نهاية الدوام" />
+                <Label htmlFor="early-exit-reason">{ui("سبب طلب الخروج")}</Label>
+                <Textarea id="early-exit-reason" value={earlyExitReason} onChange={(event) => setEarlyExitReason(event.target.value)} minLength={3} maxLength={1000} rows={3} placeholder={ui("اذكر سبب طلب المغادرة قبل نهاية الدوام")} />
               </div>
               <Button onClick={() => void requestEarlyExit()} disabled={selfFormSaving || !checkedIn || !latestCheckOutTime || baghdadMinutes(now) >= minutesFromTime(latestCheckOutTime) || earlyExitForms.some((form) => form.status !== "rejected")}>
-                {selfFormSaving ? "جارٍ الإرسال..." : "إرسال طلب الخروج المبكر"}
+                {selfFormSaving ? ui("جارٍ الإرسال...") : ui("إرسال طلب الخروج المبكر")}
               </Button>
-              {!checkedIn && <p className="text-sm text-muted-foreground">سجّل حضورك أولاً حتى تتمكن من تقديم الطلب.</p>}
+              {!checkedIn && <p className="text-sm text-muted-foreground">{ui("سجّل حضورك أولاً حتى تتمكن من تقديم الطلب.")}</p>}
             </CardContent>
           </Card>
           <Card>
-            <CardHeader><CardTitle>حالة طلبات الخروج المبكر لليوم</CardTitle></CardHeader>
+            <CardHeader><CardTitle>{ui("حالة طلبات الخروج المبكر لليوم")}</CardTitle></CardHeader>
             <CardContent className="space-y-2">
               {earlyExitForms.length ? earlyExitForms.map((form) => (
                 <div key={form.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm">
-                  <span>استمارة #{form.form_no} · وقت الخروج المطلوب {form.check_out ?? "—"}</span>
+                  <span>{ui("استمارة #")}{form.form_no}{ui(" · وقت الخروج المطلوب ")}{form.check_out ?? "—"}</span>
                   <Badge variant={form.status === "executed" ? "default" : form.status === "rejected" ? "destructive" : "secondary"}>
-                    {form.status === "pending_manager" ? "بانتظار مدير القسم" : form.status === "pending_ceo" ? "بانتظار مدير الشركة" : form.status === "executed" ? "معتمد كحضور" : "مرفوض"}
+                    {form.status === "pending_manager" ? ui("بانتظار مدير القسم") : form.status === "pending_ceo" ? ui("بانتظار مدير الشركة") : form.status === "executed" ? ui("معتمد كحضور") : ui("مرفوض")}
                   </Badge>
                 </div>
-              )) : <p className="text-sm text-muted-foreground">لا توجد طلبات خروج مبكر لهذا اليوم.</p>}
+              )) : <p className="text-sm text-muted-foreground">{ui("لا توجد طلبات خروج مبكر لهذا اليوم.")}</p>}
             </CardContent>
           </Card>
         </TabsContent>
@@ -918,22 +910,22 @@ function SelfAttendancePage() {
           <TabsContent value="settings" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>حدود وقت الحضور والانصراف</CardTitle>
+                <CardTitle>{ui("حدود وقت الحضور والانصراف")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">لن تُقبل الحركة بعد الوقت المحدد. اترك الحقل فارغاً إذا لم ترد وضع حد. تُطبق الأوقات حسب توقيت بغداد.</p>
+                <p className="text-sm text-muted-foreground">{ui("لن تُقبل الحركة بعد الوقت المحدد. اترك الحقل فارغاً إذا لم ترد وضع حد. تُطبق الأوقات حسب توقيت بغداد.")}</p>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="latest-check-in-time">آخر وقت مسموح لتسجيل الدخول</Label>
+                    <Label htmlFor="latest-check-in-time">{ui("آخر وقت مسموح لتسجيل الدخول")}</Label>
                     <Input id="latest-check-in-time" type="time" value={latestCheckInTime} onChange={(event) => setLatestCheckInTime(event.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="latest-check-out-time">آخر وقت مسموح لتسجيل الخروج</Label>
+                    <Label htmlFor="latest-check-out-time">{ui("آخر وقت مسموح لتسجيل الخروج")}</Label>
                     <Input id="latest-check-out-time" type="time" value={latestCheckOutTime} onChange={(event) => setLatestCheckOutTime(event.target.value)} />
                   </div>
                 </div>
                 <Button onClick={() => void saveAttendanceSettings()} disabled={attendanceSettingsSaving}>
-                  {attendanceSettingsSaving ? "جارٍ الحفظ..." : "حفظ إعدادات الوقت"}
+                  {attendanceSettingsSaving ? ui("جارٍ الحفظ...") : ui("حفظ إعدادات الوقت")}
                 </Button>
               </CardContent>
             </Card>
@@ -941,24 +933,21 @@ function SelfAttendancePage() {
               <Card className="border-rose-300 bg-rose-50/70 text-rose-900">
                 <CardContent className="p-4">
                   <p className="font-semibold">
-                    {sitesWithoutCoordinates} مواقع بدون إحداثيات
-                  </p>
-                  <p className="mt-1 text-sm">
-                    أكمل إحداثيات هذه المواقع حتى يتمكن موظفوها من تسجيل الحضور الجغرافي.
-                  </p>
+                    {sitesWithoutCoordinates}{ui(" مواقع بدون إحداثيات")}</p>
+                  <p className="mt-1 text-sm">{ui("أكمل إحداثيات هذه المواقع حتى يتمكن موظفوها من تسجيل الحضور الجغرافي.")}</p>
                 </CardContent>
               </Card>
             )}
             <Card>
               <CardHeader>
-                <CardTitle>تحديد موقع العمل الجغرافي</CardTitle>
+                <CardTitle>{ui("تحديد موقع العمل الجغرافي")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label>الموقع</Label>
+                  <Label>{ui("الموقع")}</Label>
                   <Select value={selectedSiteId} onValueChange={setSelectedSiteId}>
                     <SelectTrigger>
-                      <SelectValue placeholder="اختر الموقع" />
+                      <SelectValue placeholder={ui("اختر الموقع")} />
                     </SelectTrigger>
                     <SelectContent>
                       {sites.map((item) => {
@@ -968,7 +957,7 @@ function SelfAttendancePage() {
                             <span className="flex items-center gap-2">
                               {item.name}
                               {missingCoordinates && (
-                                <span className="font-semibold text-rose-600">— بدون إحداثيات</span>
+                                <span className="font-semibold text-rose-600">{ui("— بدون إحداثيات")}</span>
                               )}
                             </span>
                           </SelectItem>
@@ -979,7 +968,7 @@ function SelfAttendancePage() {
                 </div>
                 <div className="grid gap-4 sm:grid-cols-3">
                   <div>
-                    <Label htmlFor="site-latitude">خط العرض</Label>
+                    <Label htmlFor="site-latitude">{ui("خط العرض")}</Label>
                     <Input
                       id="site-latitude"
                       type="number"
@@ -989,7 +978,7 @@ function SelfAttendancePage() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="site-longitude">خط الطول</Label>
+                    <Label htmlFor="site-longitude">{ui("خط الطول")}</Label>
                     <Input
                       id="site-longitude"
                       type="number"
@@ -999,7 +988,7 @@ function SelfAttendancePage() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="site-radius">نصف قطر الأمان بالمتر</Label>
+                    <Label htmlFor="site-radius">{ui("نصف قطر الأمان بالمتر")}</Label>
                     <Input
                       id="site-radius"
                       type="number"
@@ -1012,20 +1001,14 @@ function SelfAttendancePage() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button onClick={pinCurrentSite} disabled={siteSaving || !selectedSiteId}>
-                    <MapPin className="ml-2 h-4 w-4" /> تثبيت موقعي الحالي كمقر للموقع
-                  </Button>
+                    <MapPin className="ml-2 h-4 w-4" />{ui(" تثبيت موقعي الحالي كمقر للموقع")}</Button>
                   <Button
                     variant="outline"
                     onClick={() => void updateSelectedSite()}
                     disabled={siteSaving || !selectedSiteId}
-                  >
-                    حفظ التعديلات اليدوية
-                  </Button>
+                  >{ui("حفظ التعديلات اليدوية")}</Button>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  يسمح النظام بنصف قطر أمان بين 25 و5000 متر، ويطبق التغيير فوراً على تسجيل الحضور
-                  الجغرافي.
-                </p>
+                <p className="text-xs text-muted-foreground">{ui("يسمح النظام بنصف قطر أمان بين 25 و5000 متر، ويطبق التغيير فوراً على تسجيل الحضور الجغرافي.")}</p>
               </CardContent>
             </Card>
           </TabsContent>

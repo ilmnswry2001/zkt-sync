@@ -1,3 +1,4 @@
+import { direction, ui } from "@/lib/ui-language";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -28,7 +29,7 @@ import { MaterialRequestWorkflow } from "@/components/material-requests/Material
 export const Route = createFileRoute("/_authenticated/warehouses")({
   head: () => ({
     meta: [
-      { title: "المخازن | EMAD_tc" },
+      { title: ui("المخازن | EMAD_tc") },
       { name: "description", content: "إدارة المخازن والمواد والعدد والصرف للمواقع والجرد الدوري" },
       { property: "og:title", content: "المخازن | EMAD_tc" },
       {
@@ -176,16 +177,16 @@ function WarehousesPage() {
   const saveMove = async () => {
     const qty = Number(mv.qty);
     if (!mv.warehouse_id || !mv.item_id || !(qty > 0))
-      return toast.error("اختر المخزن والصنف وأدخل كمية صحيحة");
-    if (mv.type === "issue" && !mv.site_id) return toast.error("اختر الموقع المصروف له");
-    if (mv.type.startsWith("tool") && !mv.employee_id) return toast.error("اختر الموظف");
+      return toast.error(ui("اختر المخزن والصنف وأدخل كمية صحيحة"));
+    if (mv.type === "issue" && !mv.site_id) return toast.error(ui("اختر الموقع المصروف له"));
+    if (mv.type.startsWith("tool") && !mv.employee_id) return toast.error(ui("اختر الموظف"));
     if (mv.type === "transfer" && (!mv.to_wh || mv.to_wh === mv.warehouse_id))
-      return toast.error("اختر مخزن الوجهة");
+      return toast.error(ui("اختر مخزن الوجهة"));
     if (
       (OUT_TYPES.includes(mv.type) || mv.type === "transfer") &&
       qtyOf(mv.warehouse_id, mv.item_id) < qty
     )
-      return toast.error(`الرصيد غير كافٍ (المتوفر ${qtyOf(mv.warehouse_id, mv.item_id)})`);
+      return toast.error((ui("الرصيد غير كافٍ (المتوفر ") + (qtyOf(mv.warehouse_id, mv.item_id)) + ")"));
     const base = {
       item_id: mv.item_id,
       movement_date: mv.date,
@@ -221,8 +222,8 @@ function WarehousesPage() {
             },
           ];
     const { error } = await supabase.from("stock_movements").insert(rows as never);
-    if (error) return toast.error(formatErrorMessage(error));
-    toast.success("تم تسجيل الحركة");
+    if (error) return toast.error(ui(formatErrorMessage(error)));
+    toast.success(ui("تم تسجيل الحركة"));
     setMv({ ...mv, qty: "", notes: "" });
     refresh();
   };
@@ -237,7 +238,7 @@ function WarehousesPage() {
     unit_cost: "",
   });
   const saveItem = async () => {
-    if (!it.name.trim()) return toast.error("أدخل اسم الصنف");
+    if (!it.name.trim()) return toast.error(ui("أدخل اسم الصنف"));
     const { error } = await supabase.from("warehouse_items").insert({
       name: it.name.trim(),
       code: it.code || null,
@@ -246,19 +247,19 @@ function WarehousesPage() {
       min_qty: Number(it.min_qty) || 0,
       unit_cost: Number(it.unit_cost) || 0,
     });
-    if (error) return toast.error(formatErrorMessage(error));
-    toast.success("تمت إضافة الصنف");
+    if (error) return toast.error(ui(formatErrorMessage(error)));
+    toast.success(ui("تمت إضافة الصنف"));
     setIt({ name: "", code: "", kind: "material", unit: "قطعة", min_qty: "", unit_cost: "" });
     refresh();
   };
   const [wh, setWh] = useState({ name: "", site_id: "", is_main: false });
   const saveWh = async () => {
-    if (!wh.name.trim()) return toast.error("أدخل اسم المخزن");
+    if (!wh.name.trim()) return toast.error(ui("أدخل اسم المخزن"));
     const { error } = await supabase
       .from("warehouses")
       .insert({ name: wh.name.trim(), site_id: wh.site_id || null, is_main: wh.is_main });
-    if (error) return toast.error(formatErrorMessage(error));
-    toast.success("تمت إضافة المخزن");
+    if (error) return toast.error(ui(formatErrorMessage(error)));
+    toast.success(ui("تمت إضافة المخزن"));
     setWh({ name: "", site_id: "", is_main: false });
     refresh();
   };
@@ -285,7 +286,7 @@ function WarehousesPage() {
   const [countWh, setCountWh] = useState("");
   const [counted, setCounted] = useState<Record<string, string>>({});
   const saveCount = async () => {
-    if (!countWh) return toast.error("اختر المخزن");
+    if (!countWh) return toast.error(ui("اختر المخزن"));
     const lines = items
       .filter((i) => counted[i.id] !== undefined && counted[i.id] !== "")
       .map((i) => ({
@@ -293,17 +294,17 @@ function WarehousesPage() {
         system_qty: qtyOf(countWh, i.id),
         counted_qty: Number(counted[i.id]),
       }));
-    if (!lines.length) return toast.error("أدخل العدد الفعلي لصنف واحد على الأقل");
+    if (!lines.length) return toast.error(ui("أدخل العدد الفعلي لصنف واحد على الأقل"));
     const { data: c, error } = await supabase
       .from("stock_counts")
       .insert({ warehouse_id: countWh, count_date: today, created_by: user?.id })
       .select("id")
       .single();
-    if (error || !c) return toast.error(formatErrorMessage(error, "تعذر حفظ الجرد"));
+    if (error || !c) return toast.error(ui(formatErrorMessage(error, "تعذر حفظ الجرد")));
     const { error: e2 } = await supabase
       .from("stock_count_lines")
       .insert(lines.map((l) => ({ ...l, count_id: c.id })));
-    if (e2) return toast.error(formatErrorMessage(e2));
+    if (e2) return toast.error(ui(formatErrorMessage(e2)));
     const adjust = lines
       .filter((l) => l.counted_qty !== l.system_qty)
       .map((l) => ({
@@ -318,9 +319,9 @@ function WarehousesPage() {
       }));
     if (adjust.length) {
       const { error: e3 } = await supabase.from("stock_movements").insert(adjust);
-      if (e3) return toast.error(formatErrorMessage(e3));
+      if (e3) return toast.error(ui(formatErrorMessage(e3)));
     }
-    toast.success(`تم حفظ الجرد — ${adjust.length} فروقات سُوّيت`);
+    toast.success((ui("تم حفظ الجرد — ") + (adjust.length) + ui(" فروقات سُوّيت")));
     setCounted({});
     refresh();
   };
@@ -340,42 +341,42 @@ function WarehousesPage() {
   return (
     <div className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-4">
-        <Stat icon={WarehouseIcon} label="المخازن" value={warehouses.length} />
-        <Stat icon={Package} label="الأصناف" value={items.length} />
+        <Stat icon={WarehouseIcon} label={ui("المخازن")} value={warehouses.length} />
+        <Stat icon={Package} label={ui("الأصناف")} value={items.length} />
         <Stat
           icon={AlertTriangle}
-          label="تحت الحد الأدنى"
+          label={ui("تحت الحد الأدنى")}
           value={lowStock.length}
           warn={lowStock.length > 0}
         />
         <Stat
           icon={Wrench}
-          label="عدد لدى الموظفين"
+          label={ui("عدد لدى الموظفين")}
           value={toolsWithEmps.reduce((s, t) => s + t.q, 0)}
         />
       </div>
 
-      <Tabs defaultValue="stock" dir="rtl">
+      <Tabs defaultValue="stock" dir={direction()}>
         <TabsList className="flex-wrap">
-          <TabsTrigger value="stock">الرصيد</TabsTrigger>
-          {canEdit && <TabsTrigger value="move">تسجيل حركة</TabsTrigger>}
-          <TabsTrigger value="daily">التقرير اليومي</TabsTrigger>
-          <TabsTrigger value="tools">العدد والأدوات</TabsTrigger>
-          {canReceivePurchases && <TabsTrigger value="purchase-receipts">استلام المشتريات</TabsTrigger>}
-          {canEdit && <TabsTrigger value="count">الجرد</TabsTrigger>}
-          {canEdit && <TabsTrigger value="setup">الأصناف والمخازن</TabsTrigger>}
+          <TabsTrigger value="stock">{ui("الرصيد")}</TabsTrigger>
+          {canEdit && <TabsTrigger value="move">{ui("تسجيل حركة")}</TabsTrigger>}
+          <TabsTrigger value="daily">{ui("التقرير اليومي")}</TabsTrigger>
+          <TabsTrigger value="tools">{ui("العدد والأدوات")}</TabsTrigger>
+          {canReceivePurchases && <TabsTrigger value="purchase-receipts">{ui("استلام المشتريات")}</TabsTrigger>}
+          {canEdit && <TabsTrigger value="count">{ui("الجرد")}</TabsTrigger>}
+          {canEdit && <TabsTrigger value="setup">{ui("الأصناف والمخازن")}</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="stock">
           <Card>
             <CardHeader className="flex-row items-center justify-between gap-3">
-              <div className="flex items-center gap-2"><CardTitle className="text-base">رصيد المخازن</CardTitle><Button size="sm" variant="outline" onClick={() => exportSheet("الجرد", items.map((item) => ({ الصنف: item.name, النوع: item.kind === "tool" ? "عدة" : "مادة", ...Object.fromEntries(shownWh.map((warehouse) => [warehouse.name, qtyOf(warehouse.id, item.id)])), الإجمالي: shownWh.reduce((sum, warehouse) => sum + qtyOf(warehouse.id, item.id), 0), الوحدة: item.unit })))}><FileDown className="ml-2 h-4 w-4"/> Excel</Button></div>
+              <div className="flex items-center gap-2"><CardTitle className="text-base">{ui("رصيد المخازن")}</CardTitle><Button size="sm" variant="outline" onClick={() => exportSheet("الجرد", items.map((item) => ({ الصنف: item.name, النوع: item.kind === "tool" ? "عدة" : "مادة", ...Object.fromEntries(shownWh.map((warehouse) => [warehouse.name, qtyOf(warehouse.id, item.id)])), الإجمالي: shownWh.reduce((sum, warehouse) => sum + qtyOf(warehouse.id, item.id), 0), الوحدة: item.unit })))}><FileDown className="ml-2 h-4 w-4"/> Excel</Button></div>
               <select
                 className={sel + " max-w-60"}
                 value={whFilter}
                 onChange={(e) => setWhFilter(e.target.value)}
               >
-                <option value="all">كل المخازن</option>
+                <option value="all">{ui("كل المخازن")}</option>
                 {warehouses.map((w) => (
                   <option key={w.id} value={w.id}>
                     {w.name}
@@ -390,12 +391,12 @@ function WarehousesPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>الصنف</TableHead>
-                      <TableHead>النوع</TableHead>
+                      <TableHead>{ui("الصنف")}</TableHead>
+                      <TableHead>{ui("النوع")}</TableHead>
                       {shownWh.map((w) => (
                         <TableHead key={w.id}>{w.name}</TableHead>
                       ))}
-                      <TableHead>الإجمالي</TableHead>
+                      <TableHead>{ui("الإجمالي")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -409,7 +410,7 @@ function WarehousesPage() {
                             {i.name} <span className="text-xs text-muted-foreground">{i.code}</span>
                           </TableCell>
                           <TableCell>
-                            <Badge variant="outline">{i.kind === "tool" ? "عدة" : "مادة"}</Badge>
+                            <Badge variant="outline">{i.kind === "tool" ? ui("عدة") : ui("مادة")}</Badge>
                           </TableCell>
                           {shownWh.map((w) => (
                             <TableCell key={w.id}>{qtyOf(w.id, i.id)}</TableCell>
@@ -432,30 +433,30 @@ function WarehousesPage() {
           <TabsContent value="move">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">تسجيل حركة مخزنية</CardTitle>
+                <CardTitle className="text-base">{ui("تسجيل حركة مخزنية")}</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-3 sm:grid-cols-3">
-                <F label="نوع الحركة">
+                <F label={ui("نوع الحركة")}>
                   <select
                     className={sel}
                     value={mv.type}
                     onChange={(e) => setMv({ ...mv, type: e.target.value })}
                   >
-                    <option value="in">إدخال (شراء/توريد)</option>
-                    <option value="issue">صرف لموقع</option>
-                    <option value="return">مرتجع من موقع</option>
-                    <option value="transfer">تحويل بين مخازن</option>
-                    <option value="tool_out">تسليم عدة لموظف</option>
-                    <option value="tool_back">إرجاع عدة من موظف</option>
+                    <option value="in">{ui("إدخال (شراء/توريد)")}</option>
+                    <option value="issue">{ui("صرف لموقع")}</option>
+                    <option value="return">{ui("مرتجع من موقع")}</option>
+                    <option value="transfer">{ui("تحويل بين مخازن")}</option>
+                    <option value="tool_out">{ui("تسليم عدة لموظف")}</option>
+                    <option value="tool_back">{ui("إرجاع عدة من موظف")}</option>
                   </select>
                 </F>
-                <F label={mv.type === "transfer" ? "من مخزن" : "المخزن"}>
+                <F label={mv.type === "transfer" ? ui("من مخزن") : ui("المخزن")}>
                   <select
                     className={sel}
                     value={mv.warehouse_id}
                     onChange={(e) => setMv({ ...mv, warehouse_id: e.target.value })}
                   >
-                    <option value="">— اختر —</option>
+                    <option value="">{ui("— اختر —")}</option>
                     {warehouses.map((w) => (
                       <option key={w.id} value={w.id}>
                         {w.name}
@@ -463,13 +464,13 @@ function WarehousesPage() {
                     ))}
                   </select>
                 </F>
-                <F label="الصنف">
+                <F label={ui("الصنف")}>
                   <select
                     className={sel}
                     value={mv.item_id}
                     onChange={(e) => setMv({ ...mv, item_id: e.target.value })}
                   >
-                    <option value="">— اختر —</option>
+                    <option value="">{ui("— اختر —")}</option>
                     {items
                       .filter((i) => (mv.type.startsWith("tool") ? i.kind === "tool" : true))
                       .map((i) => (
@@ -479,12 +480,11 @@ function WarehousesPage() {
                       ))}
                   </select>
                   {mv.warehouse_id && mv.item_id && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      المتوفر: {qtyOf(mv.warehouse_id, mv.item_id)}
+                    <p className="mt-1 text-xs text-muted-foreground">{ui("المتوفر: ")}{qtyOf(mv.warehouse_id, mv.item_id)}
                     </p>
                   )}
                 </F>
-                <F label="الكمية">
+                <F label={ui("الكمية")}>
                   <Input
                     type="number"
                     min="0"
@@ -492,7 +492,7 @@ function WarehousesPage() {
                     onChange={(e) => setMv({ ...mv, qty: e.target.value })}
                   />
                 </F>
-                <F label="التاريخ">
+                <F label={ui("التاريخ")}>
                   <Input
                     type="date"
                     value={mv.date}
@@ -500,13 +500,13 @@ function WarehousesPage() {
                   />
                 </F>
                 {(mv.type === "issue" || mv.type === "return") && (
-                  <F label="الموقع">
+                  <F label={ui("الموقع")}>
                     <select
                       className={sel}
                       value={mv.site_id}
                       onChange={(e) => setMv({ ...mv, site_id: e.target.value })}
                     >
-                      <option value="">— اختر —</option>
+                      <option value="">{ui("— اختر —")}</option>
                       {sites.map((s) => (
                         <option key={s.id} value={s.id}>
                           {s.name}
@@ -516,13 +516,13 @@ function WarehousesPage() {
                   </F>
                 )}
                 {mv.type.startsWith("tool") && (
-                  <F label="الموظف">
+                  <F label={ui("الموظف")}>
                     <select
                       className={sel}
                       value={mv.employee_id}
                       onChange={(e) => setMv({ ...mv, employee_id: e.target.value })}
                     >
-                      <option value="">— اختر —</option>
+                      <option value="">{ui("— اختر —")}</option>
                       {emps.map((e) => (
                         <option key={e.id} value={e.id}>
                           {e.full_name}
@@ -532,13 +532,13 @@ function WarehousesPage() {
                   </F>
                 )}
                 {mv.type === "transfer" && (
-                  <F label="إلى مخزن">
+                  <F label={ui("إلى مخزن")}>
                     <select
                       className={sel}
                       value={mv.to_wh}
                       onChange={(e) => setMv({ ...mv, to_wh: e.target.value })}
                     >
-                      <option value="">— اختر —</option>
+                      <option value="">{ui("— اختر —")}</option>
                       {warehouses
                         .filter((w) => w.id !== mv.warehouse_id)
                         .map((w) => (
@@ -549,14 +549,14 @@ function WarehousesPage() {
                     </select>
                   </F>
                 )}
-                <F label="ملاحظات">
+                <F label={ui("ملاحظات")}>
                   <Input
                     value={mv.notes}
                     onChange={(e) => setMv({ ...mv, notes: e.target.value })}
                   />
                 </F>
                 <div className="sm:col-span-3">
-                  <Button onClick={saveMove}>حفظ الحركة</Button>
+                  <Button onClick={saveMove}>{ui("حفظ الحركة")}</Button>
                 </div>
               </CardContent>
             </Card>
@@ -565,19 +565,19 @@ function WarehousesPage() {
 
         <TabsContent value="daily" className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
-            <Label>اليوم</Label>
+            <Label>{ui("اليوم")}</Label>
             <Input
               type="date"
               className="w-44"
               value={day}
               onChange={(e) => setDay(e.target.value)}
             />
-            <Button variant="outline" onClick={() => exportSheet("حركات-يومية", dayMoves.map((move) => ({ التاريخ: move.movement_date, النوع: MOVE_LABELS[move.movement_type] ?? move.movement_type, المخزن: whById.get(move.warehouse_id)?.name ?? "", الصنف: itemById.get(move.item_id)?.name ?? "", الكمية: Number(move.qty_delta), الجهة: moveLine(move), ملاحظات: move.notes ?? "" })))}><FileDown className="ml-2 h-4 w-4"/> تصدير اليوم</Button>
-            <Button variant="outline" onClick={() => window.print()}><Printer className="ml-2 h-4 w-4"/> طباعة</Button>
+            <Button variant="outline" onClick={() => exportSheet("حركات-يومية", dayMoves.map((move) => ({ التاريخ: move.movement_date, النوع: MOVE_LABELS[move.movement_type] ?? move.movement_type, المخزن: whById.get(move.warehouse_id)?.name ?? "", الصنف: itemById.get(move.item_id)?.name ?? "", الكمية: Number(move.qty_delta), الجهة: moveLine(move), ملاحظات: move.notes ?? "" })))}><FileDown className="ml-2 h-4 w-4"/>{ui(" تصدير اليوم")}</Button>
+            <Button variant="outline" onClick={() => window.print()}><Printer className="ml-2 h-4 w-4"/>{ui(" طباعة")}</Button>
           </div>
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">المصروف للمواقع</CardTitle>
+              <CardTitle className="text-base">{ui("المصروف للمواقع")}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {!issuesBySite.length ? (
@@ -586,8 +586,8 @@ function WarehousesPage() {
                 issuesBySite.map(([sid, v]) => (
                   <div key={sid} className="rounded-xl border p-3">
                     <div className="flex justify-between font-semibold">
-                      <span>{siteById.get(sid) ?? "بدون موقع"}</span>
-                      <span className="text-primary">{v.cost.toLocaleString()} د.ع</span>
+                      <span>{siteById.get(sid) ?? ui("بدون موقع")}</span>
+                      <span className="text-primary">{v.cost.toLocaleString()}{ui(" د.ع")}</span>
                     </div>
                     <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
                       {v.lines.map((l, i) => (
@@ -601,18 +601,18 @@ function WarehousesPage() {
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">كل حركات اليوم ({dayMoves.length})</CardTitle>
+              <CardTitle className="text-base">{ui("كل حركات اليوم (")}{dayMoves.length})</CardTitle>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>النوع</TableHead>
-                    <TableHead>المخزن</TableHead>
-                    <TableHead>الصنف</TableHead>
-                    <TableHead>الكمية</TableHead>
-                    <TableHead>الجهة</TableHead>
-                    <TableHead>ملاحظات</TableHead>
+                    <TableHead>{ui("النوع")}</TableHead>
+                    <TableHead>{ui("المخزن")}</TableHead>
+                    <TableHead>{ui("الصنف")}</TableHead>
+                    <TableHead>{ui("الكمية")}</TableHead>
+                    <TableHead>{ui("الجهة")}</TableHead>
+                    <TableHead>{ui("ملاحظات")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -641,7 +641,7 @@ function WarehousesPage() {
         <TabsContent value="tools">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">العدد المسلّمة للموظفين حالياً</CardTitle>
+              <CardTitle className="text-base">{ui("العدد المسلّمة للموظفين حالياً")}</CardTitle>
             </CardHeader>
             <CardContent>
               {!toolsWithEmps.length ? (
@@ -650,9 +650,9 @@ function WarehousesPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>الموظف</TableHead>
-                      <TableHead>العدة</TableHead>
-                      <TableHead>الكمية</TableHead>
+                      <TableHead>{ui("الموظف")}</TableHead>
+                      <TableHead>{ui("العدة")}</TableHead>
+                      <TableHead>{ui("الكمية")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -674,10 +674,8 @@ function WarehousesPage() {
           <TabsContent value="purchase-receipts" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">استلام طلبات المشتريات</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  راجع دفعات الشراء الواردة، وثبّت الكميات التي وصلت فعلياً لإضافتها إلى المخزن وتوثيق وصل الاستلام.
-                </p>
+                <CardTitle className="text-base">{ui("استلام طلبات المشتريات")}</CardTitle>
+                <p className="text-sm text-muted-foreground">{ui("راجع دفعات الشراء الواردة، وثبّت الكميات التي وصلت فعلياً لإضافتها إلى المخزن وتوثيق وصل الاستلام.")}</p>
               </CardHeader>
               <CardContent>
                 <MaterialRequestWorkflow stage="warehouse" />
@@ -690,9 +688,7 @@ function WarehousesPage() {
           <TabsContent value="count">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">
-                  جرد دوري — أدخل العدد الفعلي وسيُسوّى الفرق تلقائياً
-                </CardTitle>
+                <CardTitle className="text-base">{ui("جرد دوري — أدخل العدد الفعلي وسيُسوّى الفرق تلقائياً")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <select
@@ -703,7 +699,7 @@ function WarehousesPage() {
                     setCounted({});
                   }}
                 >
-                  <option value="">— اختر المخزن —</option>
+                  <option value="">{ui("— اختر المخزن —")}</option>
                   {warehouses.map((w) => (
                     <option key={w.id} value={w.id}>
                       {w.name}
@@ -714,10 +710,10 @@ function WarehousesPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>الصنف</TableHead>
-                        <TableHead>رصيد النظام</TableHead>
-                        <TableHead>العدد الفعلي</TableHead>
-                        <TableHead>الفرق</TableHead>
+                        <TableHead>{ui("الصنف")}</TableHead>
+                        <TableHead>{ui("رصيد النظام")}</TableHead>
+                        <TableHead>{ui("العدد الفعلي")}</TableHead>
+                        <TableHead>{ui("الفرق")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -746,9 +742,7 @@ function WarehousesPage() {
                     </TableBody>
                   </Table>
                 )}
-                <Button onClick={saveCount} disabled={!countWh}>
-                  اعتماد الجرد
-                </Button>
+                <Button onClick={saveCount} disabled={!countWh}>{ui("اعتماد الجرد")}</Button>
               </CardContent>
             </Card>
           </TabsContent>
@@ -758,36 +752,36 @@ function WarehousesPage() {
           <TabsContent value="setup" className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">إضافة صنف</CardTitle>
+                <CardTitle className="text-base">{ui("إضافة صنف")}</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-3 sm:grid-cols-2">
-                <F label="الاسم">
+                <F label={ui("الاسم")}>
                   <Input value={it.name} onChange={(e) => setIt({ ...it, name: e.target.value })} />
                 </F>
-                <F label="الرمز">
+                <F label={ui("الرمز")}>
                   <Input value={it.code} onChange={(e) => setIt({ ...it, code: e.target.value })} />
                 </F>
-                <F label="النوع">
+                <F label={ui("النوع")}>
                   <select
                     className={sel}
                     value={it.kind}
                     onChange={(e) => setIt({ ...it, kind: e.target.value })}
                   >
-                    <option value="material">مادة / مستهلك</option>
-                    <option value="tool">عدة / أداة</option>
+                    <option value="material">{ui("مادة / مستهلك")}</option>
+                    <option value="tool">{ui("عدة / أداة")}</option>
                   </select>
                 </F>
-                <F label="الوحدة">
+                <F label={ui("الوحدة")}>
                   <Input value={it.unit} onChange={(e) => setIt({ ...it, unit: e.target.value })} />
                 </F>
-                <F label="الحد الأدنى">
+                <F label={ui("الحد الأدنى")}>
                   <Input
                     type="number"
                     value={it.min_qty}
                     onChange={(e) => setIt({ ...it, min_qty: e.target.value })}
                   />
                 </F>
-                <F label="سعر الوحدة (د.ع)">
+                <F label={ui("سعر الوحدة (د.ع)")}>
                   <Input
                     type="number"
                     value={it.unit_cost}
@@ -795,25 +789,25 @@ function WarehousesPage() {
                   />
                 </F>
                 <div className="sm:col-span-2">
-                  <Button onClick={saveItem}>إضافة الصنف</Button>
+                  <Button onClick={saveItem}>{ui("إضافة الصنف")}</Button>
                 </div>
               </CardContent>
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">إضافة مخزن</CardTitle>
+                <CardTitle className="text-base">{ui("إضافة مخزن")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <F label="اسم المخزن">
+                <F label={ui("اسم المخزن")}>
                   <Input value={wh.name} onChange={(e) => setWh({ ...wh, name: e.target.value })} />
                 </F>
-                <F label="الموقع المرتبط (اختياري)">
+                <F label={ui("الموقع المرتبط (اختياري)")}>
                   <select
                     className={sel}
                     value={wh.site_id}
                     onChange={(e) => setWh({ ...wh, site_id: e.target.value })}
                   >
-                    <option value="">— بدون —</option>
+                    <option value="">{ui("— بدون —")}</option>
                     {sites.map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.name}
@@ -826,10 +820,8 @@ function WarehousesPage() {
                     type="checkbox"
                     checked={wh.is_main}
                     onChange={(e) => setWh({ ...wh, is_main: e.target.checked })}
-                  />{" "}
-                  مخزن رئيسي
-                </label>
-                <Button onClick={saveWh}>إضافة المخزن</Button>
+                  />{" "}{ui("مخزن رئيسي")}</label>
+                <Button onClick={saveWh}>{ui("إضافة المخزن")}</Button>
                 <div className="flex flex-wrap gap-2 pt-2">
                   {warehouses.map((w) => (
                     <Badge key={w.id} variant={w.is_main ? "default" : "outline"}>
@@ -852,7 +844,7 @@ function WarehousesPage() {
 function F({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
-      <Label className="text-xs">{label}</Label>
+      <Label className="text-xs">{ui(label)}</Label>
       {children}
     </div>
   );
@@ -883,7 +875,7 @@ function Stat({
           <Icon className="h-5 w-5" />
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">{label}</p>
+          <p className="text-xs text-muted-foreground">{ui(label)}</p>
           <p className="text-xl font-bold">{value}</p>
         </div>
       </CardContent>

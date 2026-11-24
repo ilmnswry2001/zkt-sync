@@ -1,3 +1,4 @@
+import { direction, displayLocale, ui } from "@/lib/ui-language";
 import { useDirectorySearch } from "@/hooks/use-directory-search";
 import { useServerFn } from "@tanstack/react-start";
 import { getPenaltyTotals } from "@/lib/penalty-totals.functions";
@@ -41,7 +42,7 @@ import { toast } from "sonner";
 import { todayInBaghdad } from "@/lib/date-time";
 
 export const Route = createFileRoute("/_authenticated/penalties")({
-  head: () => ({ meta: [{ title: "العقوبات والتغييب" }] }),
+  head: () => ({ meta: [{ title: ui("العقوبات والتغييب") }] }),
   component: PenaltiesPage,
 });
 
@@ -171,7 +172,7 @@ function PenaltiesPage() {
         },
       );
     } catch (error) {
-      toast.error(formatErrorMessage(error, "تعذر تصدير العقوبات إلى Excel"));
+      toast.error(ui(formatErrorMessage(error, "تعذر تصدير العقوبات إلى Excel")));
     } finally {
       setExporting(false);
     }
@@ -211,13 +212,13 @@ function PenaltiesPage() {
       setEmployeeSearch("");
       setPenaltyType("absence");
       setPenaltyDate(today);
-      toast.success("تمت إضافة العقوبة بنجاح");
+      toast.success(ui("تمت إضافة العقوبة بنجاح"));
     },
     onError: (error: any) =>
       toast.error(
         error.message?.includes("employee_penalties")
-          ? "جدول العقوبات غير موجود في قاعدة Lovable Cloud. طبّق ملف Migration أولاً."
-          : (error.message ?? "تعذر إضافة العقوبة"),
+          ? ui("جدول العقوبات غير موجود في قاعدة Lovable Cloud. طبّق ملف Migration أولاً.")
+          : (ui(error.message) ?? ui("تعذر إضافة العقوبة")),
       ),
   });
   const deletePenalty = useMutation({
@@ -227,9 +228,9 @@ function PenaltiesPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["employee-penalties"] });
-      toast.success("تم حذف السجل");
+      toast.success(ui("تم حذف السجل"));
     },
-    onError: (error: any) => toast.error(formatErrorMessage(error)),
+    onError: (error: any) => toast.error(ui(formatErrorMessage(error))),
   });
   const executePenalty = useMutation({
     mutationFn: async (penalty: Penalty) => {
@@ -249,47 +250,43 @@ function PenaltiesPage() {
     onSuccess: (_data, penalty) => {
       qc.invalidateQueries({ queryKey: ["employee-penalties"] });
       if (penalty.penalty_type === "absence") {
-        toast.success("تم تنفيذ العقوبة وتغييب الموظف في التاريخ المحدد في التقرير الشهري");
+        toast.success(ui("تم تنفيذ العقوبة وتغييب الموظف في التاريخ المحدد في التقرير الشهري"));
       } else {
-        toast.info("تم تسجيل العقوبة في السجل فقط لأن نوعها لا يغيّر يوم الحضور");
+        toast.info(ui("تم تسجيل العقوبة في السجل فقط لأن نوعها لا يغيّر يوم الحضور"));
       }
     },
-    onError: (error: any) => toast.error(formatErrorMessage(error) ?? "تعذر تنفيذ العقوبة"),
+    onError: (error: any) => toast.error(ui(formatErrorMessage(error)) ?? ui("تعذر تنفيذ العقوبة")),
   });
 
   return (
     <div className="space-y-6">
-      {totals.isError && <p role="alert">تعذر تحميل إجماليات العقوبات الشهرية.</p>}
+      {totals.isError && <p role="alert">{ui("تعذر تحميل إجماليات العقوبات الشهرية.")}</p>}
       {penaltiesQuery.error && (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
-          تعذر قراءة سجل العقوبات:{" "}
-          {(penaltiesQuery.error as any).message ?? "تحقق من جدول employee_penalties وصلاحيات RLS"}
+        <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">{ui("تعذر قراءة سجل العقوبات:")}{" "}
+          {(penaltiesQuery.error as any).message ?? ui("تحقق من جدول employee_penalties وصلاحيات RLS")}
         </div>
       )}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">العقوبات والتغييب</h1>
-          <p className="text-muted-foreground mt-1">
-            سجل شهري منظم للغياب والاستقطاعات والإنذارات مع تواريخها
-          </p>
+          <h1 className="text-3xl font-bold">{ui("العقوبات والتغييب")}</h1>
+          <p className="text-muted-foreground mt-1">{ui("سجل شهري منظم للغياب والاستقطاعات والإنذارات مع تواريخها")}</p>
         </div>
         <Button onClick={() => setOpen(true)}>
-          <Plus className="w-4 h-4 ml-2" /> إدخال عقوبة
-        </Button>
+          <Plus className="w-4 h-4 ml-2" />{ui(" إدخال عقوبة")}</Button>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
-        <Stat icon={FileWarning} label="كل السجلات" value={stats.total} color="bg-slate-700" />
-        <Stat icon={UserMinus} label="غياب" value={stats.absence} color="bg-red-600" />
+        <Stat icon={FileWarning} label={ui("كل السجلات")} value={stats.total} color="bg-slate-700" />
+        <Stat icon={UserMinus} label={ui("غياب")} value={stats.absence} color="bg-red-600" />
         <Stat
           icon={CircleDollarSign}
-          label="استقطاع"
+          label={ui("استقطاع")}
           value={stats.deduction}
           color="bg-amber-600"
         />
-        <Stat icon={AlertTriangle} label="إنذارات" value={stats.warning} color="bg-orange-600" />
+        <Stat icon={AlertTriangle} label={ui("إنذارات")} value={stats.warning} color="bg-orange-600" />
         <Stat
           icon={CircleDollarSign}
-          label="إجمالي الاستقطاعات"
+          label={ui("إجمالي الاستقطاعات")}
           value={`${stats.amount.toLocaleString()} د.ع`}
           color="bg-emerald-600"
         />
@@ -297,38 +294,37 @@ function PenaltiesPage() {
       <Card className="border-primary/20 bg-gradient-to-l from-primary/5 to-transparent">
         <CardContent className="p-5 flex flex-wrap items-end gap-4">
           <div>
-            <Label>شهر التقرير</Label>
+            <Label>{ui("شهر التقرير")}</Label>
             <Input type="month" value={month} onChange={(event) => { setMonth(event.target.value || today.slice(0, 7)); setPage(0); }} />
           </div>
           <div className="w-44">
-            <Label>التصنيف</Label>
+            <Label>{ui("التصنيف")}</Label>
             <Select value={typeFilter} onValueChange={(value) => { setTypeFilter(value); setPage(0); }}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">كل التصنيفات</SelectItem>
-                <SelectItem value="absence">غياب</SelectItem>
-                <SelectItem value="deduction">استقطاع</SelectItem>
-                <SelectItem value="warning">إنذار</SelectItem>
+                <SelectItem value="all">{ui("كل التصنيفات")}</SelectItem>
+                <SelectItem value="absence">{ui("غياب")}</SelectItem>
+                <SelectItem value="deduction">{ui("استقطاع")}</SelectItem>
+                <SelectItem value="warning">{ui("إنذار")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="min-w-60 flex-1">
-            <Label>بحث باسم الموظف</Label>
+            <Label>{ui("بحث باسم الموظف")}</Label>
             <div className="relative">
               <Search className="absolute right-3 top-2.5 w-4 h-4 text-muted-foreground" />
               <Input
                 className="pr-9"
-                placeholder="ابحث في التقرير..."
+                placeholder={ui("ابحث في التقرير...")}
                 value={search}
                 onChange={(event) => { setSearch(event.target.value); setPage(0); }}
               />
             </div>
           </div>
           <div className="text-sm text-muted-foreground flex items-center gap-2">
-            <CalendarDays className="w-4 h-4" /> {count} سجل في التقرير
-          </div>
+            <CalendarDays className="w-4 h-4" /> {count}{ui(" سجل في التقرير")}</div>
           <Button
             type="button"
             variant="outline"
@@ -336,25 +332,25 @@ function PenaltiesPage() {
             onClick={exportPenalties}
           >
             <Download className="h-4 w-4" />
-            {exporting ? "جارٍ التصدير..." : "تصدير Excel"}
+            {exporting ? ui("جارٍ التصدير...") : ui("تصدير Excel")}
           </Button>
         </CardContent>
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>تقرير العقوبات والتغييب — {month}</CardTitle>
+          <CardTitle>{ui("تقرير العقوبات والتغييب — ")}{month}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-right">
-                  <th className="p-3">الموظف</th>
-                  <th className="p-3">نوع العقوبة</th>
-                  <th className="p-3">التاريخ</th>
-                  <th className="p-3">المبلغ</th>
-                  <th className="p-3">الملاحظات</th>
-                  <th className="p-3">إجراء</th>
+                  <th className="p-3">{ui("الموظف")}</th>
+                  <th className="p-3">{ui("نوع العقوبة")}</th>
+                  <th className="p-3">{ui("التاريخ")}</th>
+                  <th className="p-3">{ui("المبلغ")}</th>
+                  <th className="p-3">{ui("الملاحظات")}</th>
+                  <th className="p-3">{ui("إجراء")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -377,15 +373,14 @@ function PenaltiesPage() {
                     <td className="p-3">{penalty.penalty_date}</td>
                     <td className="p-3">
                       {Number(penalty.deduction_amount)
-                        ? `${Number(penalty.deduction_amount).toLocaleString()} د.ع`
+                        ? ((Number(penalty.deduction_amount).toLocaleString()) + ui(" د.ع"))
                         : "—"}
                     </td>
                     <td className="p-3 max-w-md">{penalty.notes || "—"}</td>
                     <td className="p-3 flex items-center gap-2">
                       <div className="flex flex-col gap-2">
                         {penalty.executed_at && (
-                          <Badge className="bg-success text-success-foreground">
-                            نُفذت {new Date(penalty.executed_at).toLocaleDateString("ar-IQ")}
+                          <Badge className="bg-success text-success-foreground">{ui("نُفذت ")}{new Date(penalty.executed_at).toLocaleDateString(displayLocale())}
                           </Badge>
                         )}
                         <Button
@@ -400,18 +395,18 @@ function PenaltiesPage() {
                           onClick={() => executePenalty.mutate(penalty)}
                         >
                           <CheckCircle2 className="w-4 h-4 ml-1" />{" "}
-                          {penalty.executed_at ? "تم التنفيذ" : "تنفيذ"}
+                          {penalty.executed_at ? ui("تم التنفيذ") : ui("تنفيذ")}
                         </Button>
                         {(canManageFinancialPenalties ||
                           (penalty.penalty_type !== "deduction" && !penalty.executed_at)) && (
                           <Button
                             size="icon"
                             variant="ghost"
-                            aria-label={`حذف سجل ${typeLabel[penalty.penalty_type]} للموظف ${penalty.employee_name}`}
+                            aria-label={(ui("حذف سجل ") + (typeLabel[penalty.penalty_type]) + ui(" للموظف ") + (penalty.employee_name))}
                             onClick={() => {
                               if (
                                 confirm(
-                                  `حذف سجل ${typeLabel[penalty.penalty_type]} للموظف ${penalty.employee_name}؟`,
+                                  (ui("حذف سجل ") + (typeLabel[penalty.penalty_type]) + ui(" للموظف ") + (penalty.employee_name) + "؟"),
                                 )
                               )
                                 deletePenalty.mutate(penalty.id);
@@ -426,9 +421,7 @@ function PenaltiesPage() {
                 ))}
                 {!visiblePenalties.length && (
                   <tr>
-                    <td colSpan={6} className="p-10 text-center text-muted-foreground">
-                      لا توجد عقوبات أو تغيبات في الشهر المحدد
-                    </td>
+                    <td colSpan={6} className="p-10 text-center text-muted-foreground">{ui("لا توجد عقوبات أو تغيبات في الشهر المحدد")}</td>
                   </tr>
                 )}
               </tbody>
@@ -437,9 +430,9 @@ function PenaltiesPage() {
         </CardContent>
       </Card>
       {(count > pageSize || page > 0) && <div className="flex items-center justify-center gap-3">
-        <Button variant="outline" disabled={page === 0} onClick={() => setPage(page - 1)}>السابق</Button>
-        <span>صفحة {page + 1}</span>
-        <Button variant="outline" disabled={(page + 1) * pageSize >= count} onClick={() => setPage(page + 1)}>التالي</Button>
+        <Button variant="outline" disabled={page === 0} onClick={() => setPage(page - 1)}>{ui("السابق")}</Button>
+        <span>{ui("صفحة ")}{page + 1}</span>
+        <Button variant="outline" disabled={(page + 1) * pageSize >= count} onClick={() => setPage(page + 1)}>{ui("التالي")}</Button>
       </div>}
       <Dialog
         open={open}
@@ -452,9 +445,9 @@ function PenaltiesPage() {
           }
         }}
       >
-        <DialogContent dir="rtl" className="max-w-2xl">
+        <DialogContent dir={direction()} className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>إدخال عقوبة أو تغيّب</DialogTitle>
+            <DialogTitle>{ui("إدخال عقوبة أو تغيّب")}</DialogTitle>
           </DialogHeader>
           <form
             onSubmit={(event) => {
@@ -462,11 +455,11 @@ function PenaltiesPage() {
               const form = new FormData(event.currentTarget);
               const directName = String(form.get("direct_name") || "").trim();
               if (!selectedEmployees.length && !directName)
-                return toast.error("اختر موظفاً واحداً على الأقل أو أدخل الاسم مباشرة");
+                return toast.error(ui("اختر موظفاً واحداً على الأقل أو أدخل الاسم مباشرة"));
               const amount = Number(form.get("deduction_amount") || 0);
               if (penaltyType === "deduction" && amount <= 0)
-                return toast.error("أدخل مبلغ الاستقطاع");
-              if (!penaltyDate) return toast.error("حدد تاريخ العقوبة");
+                return toast.error(ui("أدخل مبلغ الاستقطاع"));
+              if (!penaltyDate) return toast.error(ui("حدد تاريخ العقوبة"));
               addPenalty.mutate({
                 employees: selectedEmployees,
                 directName,
@@ -480,19 +473,17 @@ function PenaltiesPage() {
           >
             <div className="rounded-xl border bg-muted/20 p-4 space-y-3">
               <div className="flex items-center justify-between gap-2">
-                <Label>الموظف المرتبط بالعقوبة</Label>
-                <Badge variant="outline">{selectedEmployees.length} محدد</Badge>
+                <Label>{ui("الموظف المرتبط بالعقوبة")}</Label>
+                <Badge variant="outline">{selectedEmployees.length}{ui(" محدد")}</Badge>
               </div>
               <Popover open={employeePickerOpen} onOpenChange={setEmployeePickerOpen}>
                 <PopoverTrigger asChild>
                   <Button type="button" variant="outline" className="w-full justify-start min-h-11">
-                    <Search className="ml-2 h-4 w-4" />
-                    ابحث واختر موظفاً مسجلاً
-                  </Button>
+                    <Search className="ml-2 h-4 w-4" />{ui("ابحث واختر موظفاً مسجلاً")}</Button>
                 </PopoverTrigger>
-                <PopoverContent dir="rtl" align="start" className="w-[min(32rem,calc(100vw-2rem))] p-0">
+                <PopoverContent dir={direction()} align="start" className="w-[min(32rem,calc(100vw-2rem))] p-0">
                   <Command shouldFilter={false}>
-                    <CommandInput maxLength={100} value={employeeSearch} onValueChange={setEmployeeSearch} placeholder="ابحث بالاسم أو الرقم الوظيفي أو المسمى..." />
+                    <CommandInput maxLength={100} value={employeeSearch} onValueChange={setEmployeeSearch} placeholder={ui("ابحث بالاسم أو الرقم الوظيفي أو المسمى...")} />
                     <CommandList className="max-h-64">
                       <CommandEmpty>{employeeSearchMessage}</CommandEmpty>
                       <CommandGroup>
@@ -501,7 +492,7 @@ function PenaltiesPage() {
                           return <CommandItem key={employee.id} value={employee.id} onSelect={() => {
                             setSelectedEmployees((current) => selected ? current.filter((item) => item.id !== employee.id) : [...current, employee]);
                           }}>
-                            <div className="min-w-0 flex-1 text-right"><p className="font-semibold">{employee.full_name}</p><p className="text-xs text-muted-foreground">{employee.employee_no} · {employee.position || "بدون مسمى"}</p></div>
+                            <div className="min-w-0 flex-1 text-right"><p className="font-semibold">{employee.full_name}</p><p className="text-xs text-muted-foreground">{employee.employee_no} · {employee.position || ui("بدون مسمى")}</p></div>
                             {selected && <Check className="h-4 w-4 text-primary" />}
                           </CommandItem>;
                         })}
@@ -510,20 +501,20 @@ function PenaltiesPage() {
                   </Command>
                 </PopoverContent>
               </Popover>
-              {!!selectedEmployees.length && <div className="flex flex-wrap gap-2">{selectedEmployees.map((employee) => <Badge key={employee.id} variant="secondary" className="gap-2 py-1">{employee.full_name} · {employee.employee_no}<button type="button" aria-label={`إزالة ${employee.full_name}`} onClick={() => setSelectedEmployees((current) => current.filter((item) => item.id !== employee.id))}>×</button></Badge>)}</div>}
-              <div className="text-center text-xs text-muted-foreground">أو</div>
+              {!!selectedEmployees.length && <div className="flex flex-wrap gap-2">{selectedEmployees.map((employee) => <Badge key={employee.id} variant="secondary" className="gap-2 py-1">{employee.full_name} · {employee.employee_no}<button type="button" aria-label={(ui("إزالة ") + (employee.full_name))} onClick={() => setSelectedEmployees((current) => current.filter((item) => item.id !== employee.id))}>×</button></Badge>)}</div>}
+              <div className="text-center text-xs text-muted-foreground">{ui("أو")}</div>
               <div>
-                <Label>إدخال اسم مباشر</Label>
+                <Label>{ui("إدخال اسم مباشر")}</Label>
                 <Input
                   name="direct_name"
-                  placeholder="للموظف غير المسجل في قاعدة البيانات"
+                  placeholder={ui("للموظف غير المسجل في قاعدة البيانات")}
                   onChange={() => setSelectedEmployees([])}
                 />
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <Label>نوع العقوبة</Label>
+                <Label>{ui("نوع العقوبة")}</Label>
                 <Select
                   value={penaltyType}
                   onValueChange={(value) => setPenaltyType(value as Penalty["penalty_type"])}
@@ -532,16 +523,16 @@ function PenaltiesPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="absence">غياب</SelectItem>
+                    <SelectItem value="absence">{ui("غياب")}</SelectItem>
                     {canManageFinancialPenalties && (
-                      <SelectItem value="deduction">استقطاع</SelectItem>
+                      <SelectItem value="deduction">{ui("استقطاع")}</SelectItem>
                     )}
-                    <SelectItem value="warning">إنذار</SelectItem>
+                    <SelectItem value="warning">{ui("إنذار")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>تاريخ العقوبة</Label>
+                <Label>{ui("تاريخ العقوبة")}</Label>
                 <Input
                   name="penalty_date"
                   type="date"
@@ -552,24 +543,24 @@ function PenaltiesPage() {
               </div>
               {canManageFinancialPenalties && (
                 <div>
-                  <Label>مبلغ الاستقطاع</Label>
+                  <Label>{ui("مبلغ الاستقطاع")}</Label>
                   <Input
                     name="deduction_amount"
                     type="number"
                     min="0"
                     step="1"
-                    placeholder="يطبق على الاستقطاع فقط"
+                    placeholder={ui("يطبق على الاستقطاع فقط")}
                   />
                 </div>
               )}
             </div>
             <div>
-              <Label>الملاحظات والتفاصيل</Label>
-              <Textarea name="notes" placeholder="سبب العقوبة أو تفاصيل الغياب..." rows={3} />
+              <Label>{ui("الملاحظات والتفاصيل")}</Label>
+              <Textarea name="notes" placeholder={ui("سبب العقوبة أو تفاصيل الغياب...")} rows={3} />
             </div>
             <Button type="submit" className="w-full" disabled={addPenalty.isPending}>
               <CheckCircle2 className="w-4 h-4 ml-2" />{" "}
-              {addPenalty.isPending ? "جارٍ الحفظ..." : "تأكيد الإضافة"}
+              {addPenalty.isPending ? ui("جارٍ الحفظ...") : ui("تأكيد الإضافة")}
             </Button>
           </form>
         </DialogContent>
@@ -596,7 +587,7 @@ function Stat({
           <Icon className="w-5 h-5 text-white" />
         </div>
         <div>
-          <p className="text-sm text-muted-foreground">{label}</p>
+          <p className="text-sm text-muted-foreground">{ui(label)}</p>
           <p className="text-xl font-bold">{value}</p>
         </div>
       </CardContent>

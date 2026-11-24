@@ -1,3 +1,4 @@
+import { direction, displayLocale, ui } from "@/lib/ui-language";
 import { MetricCard, type MetricTone } from "@/components/MetricCard";
 import { OperationsOverview } from "@/components/OperationsOverview";
 import { createFileRoute, redirect, Link } from "@tanstack/react-router";
@@ -46,7 +47,7 @@ import {
 } from "recharts";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
-  head: () => ({ meta: [{ title: "لوحة التحكم" }] }),
+  head: () => ({ meta: [{ title: ui("لوحة التحكم") }] }),
   beforeLoad: async () => {
     const { data: userData, error: authError } = await supabase.auth.getUser();
     if (authError || !userData.user) throw redirect({ to: "/auth" });
@@ -85,11 +86,11 @@ function StatCard({
 }
 
 const refreshInterval = 120_000;
-const formatCount = (value: number) => value.toLocaleString("ar-IQ");
-const formatIQD = (value: number) => `${Math.round(value).toLocaleString("ar-IQ")} د.ع`;
+const formatCount = (value: number) => value.toLocaleString(displayLocale());
+const formatIQD = (value: number) => `${Math.round(value).toLocaleString(displayLocale())} د.ع`;
 const formatDateTime = (value: string | null | undefined) =>
   value
-    ? new Date(value).toLocaleString("ar-IQ", { dateStyle: "medium", timeStyle: "short" })
+    ? new Date(value).toLocaleString(displayLocale(), { dateStyle: "medium", timeStyle: "short" })
     : "لم تتم المزامنة بعد";
 const monthStart = (value: string) => `${value}-01`;
 const monthEnd = (value: string) => {
@@ -204,7 +205,7 @@ function Dashboard() {
           date,
           present,
           total: activeRows.length,
-          day: new Date(`${date}T00:00:00Z`).toLocaleDateString("ar-IQ", {
+          day: new Date(`${date}T00:00:00Z`).toLocaleDateString(displayLocale(), {
             weekday: "short",
             day: "numeric",
             timeZone: "UTC",
@@ -358,17 +359,15 @@ function Dashboard() {
       <Card role="alert">
         <CardContent className="p-8 text-center">
           <ShieldAlert className="mx-auto mb-3 h-8 w-8 text-destructive" />
-          <h1 className="text-xl font-bold">غير مصرح بالوصول</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            لوحة التحكم متاحة لمدير النظام ومدير الشركة فقط.
-          </p>
+          <h1 className="text-xl font-bold">{ui("غير مصرح بالوصول")}</h1>
+          <p className="mt-2 text-sm text-muted-foreground">{ui("لوحة التحكم متاحة لمدير النظام ومدير الشركة فقط.")}</p>
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <div dir="rtl" className="space-y-5 rounded-2xl bg-muted/35 p-3 sm:p-6">
+    <div dir={direction()} className="space-y-5 rounded-2xl bg-muted/35 p-3 sm:p-6">
       <OperationsOverview
         today={today}
         updatedAt={updatedAt}
@@ -398,110 +397,94 @@ function Dashboard() {
         <Card role="alert" className="border-destructive/40 bg-destructive/5">
           <CardContent className="flex items-start gap-2 p-4 text-sm text-destructive">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>
-              تعذر تحميل جزء من بيانات اللوحة:{" "}
-              {errorMessage ?? "تحقق من اتصال قاعدة البيانات والصلاحيات"}. بقية الأقسام تستمر بعرض
-              بياناتها.
-            </span>
+            <span>{ui("تعذر تحميل جزء من بيانات اللوحة:")}{" "}
+              {errorMessage ?? ui("تحقق من اتصال قاعدة البيانات والصلاحيات")}{ui(". بقية الأقسام تستمر بعرض بياناتها.")}</span>
           </CardContent>
         </Card>
       )}
 
       <details className="space-y-4 rounded-xl border bg-card p-4">
-        <summary className="cursor-pointer font-bold">تفاصيل الإدارة والتشغيل</summary>
+        <summary className="cursor-pointer font-bold">{ui("تفاصيل الإدارة والتشغيل")}</summary>
         <ExecutiveIntelligenceCard />
         {canAccessSection("/command-center") && (
-          <Link to="/command-center" className="text-primary underline">
-            فتح مركز العمليات الحي
-          </Link>
+          <Link to="/command-center" className="text-primary underline">{ui("فتح مركز العمليات الحي")}</Link>
         )}
         <section
-          aria-label="إحصاءات سريعة"
+          aria-label={ui("إحصاءات سريعة")}
           className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"
         >
           <StatCard
-            title="الموظفون النشطون"
+            title={ui("الموظفون النشطون")}
             tone="info"
             value={formatCount(activeEmployeesQuery.data?.total ?? 0)}
             icon={Users}
             loading={activeEmployeesQuery.isLoading}
             detail={
               <div className="flex flex-wrap gap-2 text-xs">
-                <Badge variant="outline">
-                  شهري: {formatCount(activeEmployeesQuery.data?.monthly ?? 0)}
+                <Badge variant="outline">{ui("شهري: ")}{formatCount(activeEmployeesQuery.data?.monthly ?? 0)}
                 </Badge>
-                <Badge variant="outline">
-                  أجر يومي: {formatCount(activeEmployeesQuery.data?.daily ?? 0)}
+                <Badge variant="outline">{ui("أجر يومي: ")}{formatCount(activeEmployeesQuery.data?.daily ?? 0)}
                 </Badge>
               </div>
             }
           />
           <StatCard
-            title="حضور اليوم"
+            title={ui("حضور اليوم")}
             tone="success"
             value={formatCount(presentToday)}
             icon={UserCheck}
             loading={dailyQuery.isLoading}
             detail={
               <div className="flex flex-wrap gap-2 text-xs">
-                <Badge className="bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200">
-                  غائب: {formatCount(absentToday)}
+                <Badge className="bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200">{ui("غائب: ")}{formatCount(absentToday)}
                 </Badge>
-                <Badge className="bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200">
-                  متأخر: {formatCount(lateToday)}
+                <Badge className="bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200">{ui("متأخر: ")}{formatCount(lateToday)}
                 </Badge>
-                <Badge variant="outline">
-                  البصمة: {formatCount(dailyQuery.data?.sourceCounts?.device ?? 0)}
+                <Badge variant="outline">{ui("البصمة: ")}{formatCount(dailyQuery.data?.sourceCounts?.device ?? 0)}
                 </Badge>
-                <Badge variant="outline">
-                  الهاتف: {formatCount(dailyQuery.data?.sourceCounts?.mobile_self ?? 0)}
+                <Badge variant="outline">{ui("الهاتف: ")}{formatCount(dailyQuery.data?.sourceCounts?.mobile_self ?? 0)}
                 </Badge>
-                <Badge variant="outline">
-                  الوكيل المحلي: {formatCount(dailyQuery.data?.sourceCounts?.zk_agent ?? 0)}
+                <Badge variant="outline">{ui("الوكيل المحلي: ")}{formatCount(dailyQuery.data?.sourceCounts?.zk_agent ?? 0)}
                 </Badge>
                 {(dailyQuery.data?.suspiciousCount ?? 0) > 0 && (
-                  <Badge variant="destructive">
-                    مشبوهة: {formatCount(dailyQuery.data?.suspiciousCount ?? 0)}
+                  <Badge variant="destructive">{ui("مشبوهة: ")}{formatCount(dailyQuery.data?.suspiciousCount ?? 0)}
                   </Badge>
                 )}
               </div>
             }
           />
           <StatCard
-            title="المواقع النشطة"
+            title={ui("المواقع النشطة")}
             tone="primary"
             value={formatCount(sitesQuery.data?.active ?? 0)}
             icon={MapPinned}
             loading={sitesQuery.isLoading}
             detail={
               <div className="space-y-1 text-xs text-muted-foreground">
-                <p>رفع تقرير اليوم: {formatCount(sitesQuery.data?.reported ?? 0)}</p>
-                <p>لم ترفع: {formatCount(sitesQuery.data?.missing ?? 0)}</p>
+                <p>{ui("رفع تقرير اليوم: ")}{formatCount(sitesQuery.data?.reported ?? 0)}</p>
+                <p>{ui("لم ترفع: ")}{formatCount(sitesQuery.data?.missing ?? 0)}</p>
               </div>
             }
           />
           <StatCard
-            title="التكلفة الشهرية التقديرية"
+            title={ui("التكلفة الشهرية التقديرية")}
             value={formatIQD(activeEmployeesQuery.data?.monthlySiteCost ?? 0)}
             icon={CircleDollarSign}
             loading={activeEmployeesQuery.isLoading}
             detail={
-              <span className="text-xs text-muted-foreground">
-                بنفس أساس الأجر في التخطيط والمواقع
-              </span>
+              <span className="text-xs text-muted-foreground">{ui("بنفس أساس الأجر في التخطيط والمواقع")}</span>
             }
           />
         </section>
 
         <section
           className="grid grid-cols-1 gap-4 xl:grid-cols-[1.6fr_1fr]"
-          aria-label="الحضور والأداء"
+          aria-label={ui("الحضور والأداء")}
         >
           <Card className="min-w-0">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <Activity className="h-5 w-5 text-primary" /> نسبة الحضور · آخر 7 أيام
-              </CardTitle>
+                <Activity className="h-5 w-5 text-primary" />{ui(" نسبة الحضور · آخر 7 أيام")}</CardTitle>
             </CardHeader>
             <CardContent className="h-72">
               {trendIsLoading ? (
@@ -528,17 +511,14 @@ function Dashboard() {
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                  لا توجد سجلات حضور خلال آخر 7 أيام.
-                </div>
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">{ui("لا توجد سجلات حضور خلال آخر 7 أيام.")}</div>
               )}
             </CardContent>
           </Card>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <CalendarClock className="h-5 w-5 text-primary" /> الوقت الإضافي هذا الشهر
-              </CardTitle>
+                <CalendarClock className="h-5 w-5 text-primary" />{ui(" الوقت الإضافي هذا الشهر")}</CardTitle>
             </CardHeader>
             <CardContent>
               {monthlyQuery.isLoading ? (
@@ -546,66 +526,56 @@ function Dashboard() {
               ) : overtimeThisMonth > 0 ? (
                 <>
                   <p className="text-4xl font-bold tabular-nums">
-                    {overtimeThisMonth.toLocaleString("ar-IQ")}{" "}
-                    <span className="text-lg font-medium">ساعة</span>
+                    {overtimeThisMonth.toLocaleString(displayLocale())}{" "}
+                    <span className="text-lg font-medium">{ui("ساعة")}</span>
                   </p>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    مجموع التقرير الشهري المحسوب من البصمات والاعتمادات لهذا الشهر.
-                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground">{ui("مجموع التقرير الشهري المحسوب من البصمات والاعتمادات لهذا الشهر.")}</p>
                 </>
               ) : (
-                <p className="text-sm text-muted-foreground">
-                  لا توجد ساعات إضافية مسجلة هذا الشهر.
-                </p>
+                <p className="text-sm text-muted-foreground">{ui("لا توجد ساعات إضافية مسجلة هذا الشهر.")}</p>
               )}
             </CardContent>
           </Card>
         </section>
 
-        <section aria-label="الأجهزة" className="space-y-3">
+        <section aria-label={ui("الأجهزة")} className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold">الأجهزة</h2>
-            <Link to="/devices" className="text-sm font-medium text-primary hover:underline">
-              إدارة الأجهزة
-            </Link>
+            <h2 className="text-lg font-bold">{ui("الأجهزة")}</h2>
+            <Link to="/devices" className="text-sm font-medium text-primary hover:underline">{ui("إدارة الأجهزة")}</Link>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <StatCard
-              title="متصلة خلال آخر 24 ساعة"
+              title={ui("متصلة خلال آخر 24 ساعة")}
             tone="success"
               value={formatCount(connectedDevices)}
               icon={Fingerprint}
               loading={devicesQuery.isLoading}
               detail={
-                <span className="text-xs text-muted-foreground">حالة نشطة ومزامنة حديثة</span>
+                <span className="text-xs text-muted-foreground">{ui("حالة نشطة ومزامنة حديثة")}</span>
               }
             />
             <StatCard
-              title="نشطة ولم تزامن خلال 24 ساعة"
+              title={ui("نشطة ولم تزامن خلال 24 ساعة")}
             tone="warning"
               value={formatCount(staleDevices.length)}
               icon={AlertTriangle}
               loading={devicesQuery.isLoading}
               detail={
-                <span className="text-xs text-muted-foreground">
-                  أجهزة غير نشطة: {formatCount(inactiveDevices)}
+                <span className="text-xs text-muted-foreground">{ui("أجهزة غير نشطة: ")}{formatCount(inactiveDevices)}
                 </span>
               }
             />
           </div>
           {devicesQuery.data?.length === 0 && !devicesQuery.isLoading ? (
             <Card>
-              <CardContent className="p-4 text-sm text-muted-foreground">
-                لا توجد أجهزة مسجلة بعد.
-              </CardContent>
+              <CardContent className="p-4 text-sm text-muted-foreground">{ui("لا توجد أجهزة مسجلة بعد.")}</CardContent>
             </Card>
           ) : (
             staleDevices.length > 0 && (
               <Card className="border-amber-400/60 bg-amber-50/70 dark:bg-amber-950/20">
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 text-base text-amber-900 dark:text-amber-200">
-                    <AlertTriangle className="h-5 w-5" /> أجهزة لم تزامن منذ أكثر من 24 ساعة
-                  </CardTitle>
+                    <AlertTriangle className="h-5 w-5" />{ui(" أجهزة لم تزامن منذ أكثر من 24 ساعة")}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {staleDevices.map((device) => (
@@ -614,8 +584,7 @@ function Dashboard() {
                       className="flex flex-col justify-between gap-1 border-b border-amber-200/70 pb-2 last:border-0 sm:flex-row sm:items-center"
                     >
                       <span className="font-medium">{device.name}</span>
-                      <span className="text-sm text-muted-foreground">
-                        آخر مزامنة: {formatDateTime(device.last_sync_at)}
+                      <span className="text-sm text-muted-foreground">{ui("آخر مزامنة: ")}{formatDateTime(device.last_sync_at)}
                       </span>
                     </div>
                   ))}
@@ -626,7 +595,7 @@ function Dashboard() {
           {(devicesQuery.data?.length ?? 0) > 0 && (
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">حالة المزامنة لكل جهاز</CardTitle>
+                <CardTitle className="text-base">{ui("حالة المزامنة لكل جهاز")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 {(devicesQuery.data ?? []).map((device) => {
@@ -644,15 +613,14 @@ function Dashboard() {
                       <div className="flex items-center gap-2">
                         <Badge variant={isConnected ? "default" : "secondary"}>
                           {isConnected
-                            ? "متصل"
+                            ? ui("متصل")
                             : device.status === "active"
-                              ? "غير متصل"
-                              : "غير نشط"}
+                              ? ui("غير متصل")
+                              : ui("غير نشط")}
                         </Badge>
                         <span className="font-medium">{device.name}</span>
                       </div>
-                      <span className="text-sm text-muted-foreground">
-                        آخر مزامنة: {formatDateTime(device.last_sync_at)}
+                      <span className="text-sm text-muted-foreground">{ui("آخر مزامنة: ")}{formatDateTime(device.last_sync_at)}
                       </span>
                     </div>
                   );
@@ -662,12 +630,11 @@ function Dashboard() {
           )}
         </section>
 
-        <section className="grid grid-cols-1 gap-4 xl:grid-cols-2" aria-label="العقوبات والموافقات">
+        <section className="grid grid-cols-1 gap-4 xl:grid-cols-2" aria-label={ui("العقوبات والموافقات")}>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <AlertTriangle className="h-5 w-5 text-primary" /> العقوبات والتغييب · هذا الشهر
-              </CardTitle>
+                <AlertTriangle className="h-5 w-5 text-primary" />{ui(" العقوبات والتغييب · هذا الشهر")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {penaltiesQuery.isLoading ? (
@@ -676,43 +643,40 @@ function Dashboard() {
                 <>
                   <div className="grid grid-cols-3 gap-2 text-center">
                     <div className="rounded-lg bg-muted/50 p-3">
-                      <p className="text-xs text-muted-foreground">استقطاع</p>
+                      <p className="text-xs text-muted-foreground">{ui("استقطاع")}</p>
                       <p className="mt-1 text-xl font-bold">
                         {formatCount(penaltiesQuery.data.deduction)}
                       </p>
                     </div>
                     <div className="rounded-lg bg-muted/50 p-3">
-                      <p className="text-xs text-muted-foreground">غياب</p>
+                      <p className="text-xs text-muted-foreground">{ui("غياب")}</p>
                       <p className="mt-1 text-xl font-bold">
                         {formatCount(penaltiesQuery.data.absence)}
                       </p>
                     </div>
                     <div className="rounded-lg bg-muted/50 p-3">
-                      <p className="text-xs text-muted-foreground">إنذار</p>
+                      <p className="text-xs text-muted-foreground">{ui("إنذار")}</p>
                       <p className="mt-1 text-xl font-bold">
                         {formatCount(penaltiesQuery.data.warning)}
                       </p>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Badge className="bg-emerald-600 text-white">
-                      منفذة: {formatCount(penaltiesQuery.data.executed)}
+                    <Badge className="bg-emerald-600 text-white">{ui("منفذة: ")}{formatCount(penaltiesQuery.data.executed)}
                     </Badge>
-                    <Badge variant="outline">
-                      غير منفذة: {formatCount(penaltiesQuery.data.pending)}
+                    <Badge variant="outline">{ui("غير منفذة: ")}{formatCount(penaltiesQuery.data.pending)}
                     </Badge>
                   </div>
                 </>
               ) : (
-                <p className="text-sm text-muted-foreground">لا توجد عقوبات هذا الشهر.</p>
+                <p className="text-sm text-muted-foreground">{ui("لا توجد عقوبات هذا الشهر.")}</p>
               )}
             </CardContent>
           </Card>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <FileSignature className="h-5 w-5 text-primary" /> الاستمارات والموافقات
-              </CardTitle>
+                <FileSignature className="h-5 w-5 text-primary" />{ui(" الاستمارات والموافقات")}</CardTitle>
             </CardHeader>
             <CardContent>
               {formsQuery.isLoading ? (
@@ -722,21 +686,20 @@ function Dashboard() {
                   <p className="text-4xl font-bold tabular-nums">
                     {formatCount(formsQuery.data ?? 0)}
                   </p>
-                  <p className="mt-2 text-sm text-muted-foreground">استمارة بانتظار التنفيذ</p>
+                  <p className="mt-2 text-sm text-muted-foreground">{ui("استمارة بانتظار التنفيذ")}</p>
                 </>
               ) : (
-                <p className="text-sm text-muted-foreground">لا توجد استمارات بانتظار التنفيذ.</p>
+                <p className="text-sm text-muted-foreground">{ui("لا توجد استمارات بانتظار التنفيذ.")}</p>
               )}
             </CardContent>
           </Card>
         </section>
 
-        <section className="grid grid-cols-1 gap-4" aria-label="مهام الفريق">
+        <section className="grid grid-cols-1 gap-4" aria-label={ui("مهام الفريق")}>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <ClipboardCheck className="h-5 w-5 text-primary" /> مهام الفريق اليوم
-              </CardTitle>
+                <ClipboardCheck className="h-5 w-5 text-primary" />{ui(" مهام الفريق اليوم")}</CardTitle>
             </CardHeader>
             <CardContent>
               {tasksQuery.isLoading ? (
@@ -745,9 +708,8 @@ function Dashboard() {
                 <div className="space-y-3">
                   <div className="flex items-baseline gap-2">
                     <strong className="text-4xl">{formatCount(tasksQuery.data.total)}</strong>
-                    <span className="text-sm text-muted-foreground">مهمة</span>
-                    <Badge variant="secondary">
-                      منجزة {formatCount(tasksQuery.data.completed)}
+                    <span className="text-sm text-muted-foreground">{ui("مهمة")}</span>
+                    <Badge variant="secondary">{ui("منجزة ")}{formatCount(tasksQuery.data.completed)}
                     </Badge>
                   </div>
                   <Progress
@@ -756,11 +718,11 @@ function Dashboard() {
                         ? (tasksQuery.data.completed / tasksQuery.data.total) * 100
                         : 0
                     }
-                    aria-label="نسبة إنجاز مهام اليوم"
+                    aria-label={ui("نسبة إنجاز مهام اليوم")}
                   />
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">لا توجد مهام مسجلة للفريق اليوم.</p>
+                <p className="text-sm text-muted-foreground">{ui("لا توجد مهام مسجلة للفريق اليوم.")}</p>
               )}
             </CardContent>
           </Card>

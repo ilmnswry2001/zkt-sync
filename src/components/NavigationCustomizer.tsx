@@ -1,3 +1,4 @@
+import { direction, ui } from "@/lib/ui-language";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -61,7 +62,7 @@ export function NavigationCustomizer({
       if (error) throw error;
     },
     onSuccess: async () => {
-      toast.success("تم حفظ تخصيص القائمة");
+      toast.success(ui("تم حفظ تخصيص القائمة"));
       await client.invalidateQueries({ queryKey: ["navigation-settings"] });
       onClose();
     },
@@ -69,8 +70,8 @@ export function NavigationCustomizer({
       const message = formatErrorMessage(error);
       toast.error(
         /navigation_settings|relation|does not exist/i.test(message)
-          ? "جدول تخصيص القائمة غير موجود. طبّق ترحيل 20261019160000_navigation_settings.sql أولاً."
-          : `تعذر حفظ التخصيص: ${message}`,
+          ? ui("جدول تخصيص القائمة غير موجود. طبّق ترحيل 20261019160000_navigation_settings.sql أولاً.")
+          : (ui("تعذر حفظ التخصيص: ") + (message)),
       );
     },
   });
@@ -99,24 +100,21 @@ export function NavigationCustomizer({
         if (!value) onClose();
       }}
     >
-      <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent dir={direction()} className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <SlidersHorizontal className="h-4 w-4 text-primary" /> تخصيص القائمة الجانبية
-          </DialogTitle>
-          <DialogDescription>
-            أعد تسمية المجموعات أو انقل الأقسام بينها. يظهر التخصيص لجميع المستخدمين.
-          </DialogDescription>
+            <SlidersHorizontal className="h-4 w-4 text-primary" />{ui(" تخصيص القائمة الجانبية")}</DialogTitle>
+          <DialogDescription>{ui("أعد تسمية المجموعات أو انقل الأقسام بينها. يظهر التخصيص لجميع المستخدمين.")}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
           <section className="space-y-3">
-            <h3 className="text-sm font-bold">أسماء المجموعات</h3>
+            <h3 className="text-sm font-bold">{ui("أسماء المجموعات")}</h3>
             <div className="grid gap-3 sm:grid-cols-2">
               {groups.map((group) => (
                 <div key={group.key} className="space-y-1.5">
                   <Label htmlFor={`group-${group.key}`} className="text-xs text-muted-foreground">
-                    {group.label}
+                    {ui(group.label)}
                   </Label>
                   <Input
                     id={`group-${group.key}`}
@@ -124,7 +122,7 @@ export function NavigationCustomizer({
                     onChange={(event) =>
                       setLabels((current) => ({ ...current, [group.key]: event.target.value }))
                     }
-                    placeholder={group.label}
+                    placeholder={ui(group.label)}
                   />
                 </div>
               ))}
@@ -132,14 +130,14 @@ export function NavigationCustomizer({
           </section>
 
           <section className="space-y-3">
-            <h3 className="text-sm font-bold">توزيع الأقسام</h3>
+            <h3 className="text-sm font-bold">{ui("توزيع الأقسام")}</h3>
             <div className="space-y-2">
               {items.map((item) => (
                 <div
                   key={item.to}
                   className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/70 bg-background/40 px-3 py-2"
                 >
-                  <span className="text-sm font-medium">{item.label}</span>
+                  <span className="text-sm font-medium">{ui(item.label)}</span>
                   <Select
                     value={assignments[item.to] || item.groupKey}
                     onValueChange={(value) =>
@@ -152,7 +150,7 @@ export function NavigationCustomizer({
                     <SelectContent>
                       {groups.map((group) => (
                         <SelectItem key={group.key} value={group.key}>
-                          {labels[group.key]?.trim() || group.label}
+                          {ui(labels[group.key]?.trim()) || ui(group.label)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -165,14 +163,11 @@ export function NavigationCustomizer({
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-4">
           <Button type="button" variant="ghost" onClick={handleReset} disabled={saveConfig.isPending}>
-            <RotateCcw className="ml-2 h-4 w-4" /> استعادة الافتراضي
-          </Button>
+            <RotateCcw className="ml-2 h-4 w-4" />{ui(" استعادة الافتراضي")}</Button>
           <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" onClick={onClose}>
-              إلغاء
-            </Button>
+            <Button type="button" variant="outline" onClick={onClose}>{ui("إلغاء")}</Button>
             <Button type="button" onClick={handleSave} disabled={saveConfig.isPending}>
-              <Save className="ml-2 h-4 w-4" /> {saveConfig.isPending ? "جارٍ الحفظ…" : "حفظ التخصيص"}
+              <Save className="ml-2 h-4 w-4" /> {saveConfig.isPending ? ui("جارٍ الحفظ…") : ui("حفظ التخصيص")}
             </Button>
           </div>
         </div>

@@ -1,3 +1,4 @@
+import { direction, displayLocale, ui } from "@/lib/ui-language";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -51,7 +52,7 @@ import type {
 export const Route = createFileRoute("/_authenticated/work-center")({
   head: () => ({
     meta: [
-      { title: "مركز العمل — EMAD_tc" },
+      { title: ui("مركز العمل — EMAD_tc") },
       { name: "description", content: "إدارة وتنفيذ ومتابعة مهام وتوجيهات القسم." },
       { property: "og:title", content: "مركز العمل — EMAD_tc" },
       { property: "og:description", content: "إدارة وتنفيذ ومتابعة مهام وتوجيهات القسم." },
@@ -153,7 +154,7 @@ function StatusBadge({ s }: { s: string }) {
   const m = STATUS[s] ?? STATUS.not_started;
   return (
     <span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-semibold ${m.cls}`}>
-      {m.label}
+      {ui(m.label)}
     </span>
   );
 }
@@ -171,21 +172,19 @@ function State({
   if (loading)
     return (
       <div className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" /> جارٍ التحميل...
-      </div>
+        <Loader2 className="h-4 w-4 animate-spin" />{ui(" جارٍ التحميل...")}</div>
     );
   if (error)
     return (
       <div
         role="alert"
         className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive"
-      >
-        تعذر تحميل البيانات: {formatErrorMessage(error)}
+      >{ui("تعذر تحميل البيانات: ")}{ui(formatErrorMessage(error))}
       </div>
     );
   if (empty)
     return (
-      <div className="p-6 text-center text-sm text-muted-foreground">لا توجد بيانات لعرضها.</div>
+      <div className="p-6 text-center text-sm text-muted-foreground">{ui("لا توجد بيانات لعرضها.")}</div>
     );
   return <>{children}</>;
 }
@@ -211,7 +210,7 @@ function Section({
 function Stat({ label, value, tone }: { label: string; value: number; tone?: string }) {
   return (
     <div className="rounded-lg border bg-card px-4 py-3">
-      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-xs text-muted-foreground">{ui(label)}</div>
       <div className={`mt-1 text-2xl font-bold ${tone ?? ""}`}>{value}</div>
     </div>
   );
@@ -456,13 +455,13 @@ function WorkCenterPage() {
 
   const canDelete = isAdmin || isHR || roles.includes("department_manager");
   const deleteTask = async (t: Task) => {
-    if (!window.confirm(`حذف المهمة "${t.title}" نهائياً؟`)) return;
+    if (!window.confirm((ui("حذف المهمة \"") + (t.title) + ui("\" نهائياً؟")))) return;
     const { error, count } = await workCenterDb
       .from("employee_tasks")
       .delete({ count: "exact" })
       .eq("id", t.id);
-    if (error || !count) return toast.error(formatErrorMessage(error, "لا تملك صلاحية حذف هذه المهمة"));
-    toast.success("تم حذف المهمة");
+    if (error || !count) return toast.error(ui(formatErrorMessage(error, "لا تملك صلاحية حذف هذه المهمة")));
+    toast.success(ui("تم حذف المهمة"));
     refresh();
   };
   const updateStatus = async (t: Task, status: string) => {
@@ -470,10 +469,10 @@ function WorkCenterPage() {
       const patch: WorkCenterTaskUpdate = { status };
       const { error } = await workCenterDb.from("employee_tasks").update(patch).eq("id", t.id);
       if (error) throw error;
-      toast.success("تم تحديث الحالة");
+      toast.success(ui("تم تحديث الحالة"));
       refresh();
     } catch (e) {
-      toast.error(`تعذر التحديث: ${formatErrorMessage(e)}`);
+      toast.error((ui("تعذر التحديث: ") + (formatErrorMessage(e))));
     }
   };
 
@@ -534,15 +533,15 @@ function WorkCenterPage() {
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>المهمة</TableHead>
-          {showEmp && <TableHead>الموظف</TableHead>}
-          <TableHead>المصدر</TableHead>
-          <TableHead>النوع</TableHead>
-          <TableHead>الأولوية</TableHead>
-          <TableHead>التاريخ</TableHead>
-          <TableHead>الموعد النهائي</TableHead>
-          <TableHead>الحالة</TableHead>
-          <TableHead className="text-left">إجراء</TableHead>
+          <TableHead>{ui("المهمة")}</TableHead>
+          {showEmp && <TableHead>{ui("الموظف")}</TableHead>}
+          <TableHead>{ui("المصدر")}</TableHead>
+          <TableHead>{ui("النوع")}</TableHead>
+          <TableHead>{ui("الأولوية")}</TableHead>
+          <TableHead>{ui("التاريخ")}</TableHead>
+          <TableHead>{ui("الموعد النهائي")}</TableHead>
+          <TableHead>{ui("الحالة")}</TableHead>
+          <TableHead className="text-left">{ui("إجراء")}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -554,15 +553,14 @@ function WorkCenterPage() {
                 <div className="truncate text-xs text-muted-foreground">{t.description}</div>
               )}
               {t.completion_note && (
-                <div className="text-xs text-emerald-700 dark:text-emerald-300">
-                  ملاحظة الإنجاز: {t.completion_note}
+                <div className="text-xs text-emerald-700 dark:text-emerald-300">{ui("ملاحظة الإنجاز: ")}{t.completion_note}
                 </div>
               )}
             </TableCell>
             {showEmp && <TableCell>{empName(t.employee_id)}</TableCell>}
             <TableCell>
               <Badge variant="outline">
-                {t.assignment_source === "personal" ? "شخصية" : "مسندة"}
+                {t.assignment_source === "personal" ? ui("شخصية") : ui("مسندة")}
               </Badge>
             </TableCell>
             <TableCell>{TYPES[t.task_type] ?? t.task_type}</TableCell>
@@ -574,21 +572,15 @@ function WorkCenterPage() {
             </TableCell>
             <TableCell className="text-left">
               <div className="flex justify-end gap-1">
-                <Button size="sm" variant="ghost" onClick={() => setDetailsTask(t)}>
-                  التفاصيل
-                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setDetailsTask(t)}>{ui("التفاصيل")}</Button>
                 {s === "pending_review" && isManager && t.employee_id !== meQ.data && (
-                  <Button size="sm" onClick={() => setReviewTask(t)}>
-                    مراجعة
-                  </Button>
+                  <Button size="sm" onClick={() => setReviewTask(t)}>{ui("مراجعة")}</Button>
                 )}
                 {s === "overdue" && (isManager || t.employee_id === meQ.data) && (
-                  <Button size="sm" variant="outline" onClick={() => setDelayTask(t)}>
-                    سبب التأخير
-                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setDelayTask(t)}>{ui("سبب التأخير")}</Button>
                 )}
                 {s === "pending_review" && (
-                  <span className="self-center text-xs text-orange-600">بانتظار المراجعة</span>
+                  <span className="self-center text-xs text-orange-600">{ui("بانتظار المراجعة")}</span>
                 )}
                 {s !== "completed" &&
                   s !== "cancelled" &&
@@ -601,19 +593,13 @@ function WorkCenterPage() {
                           size="sm"
                           variant="outline"
                           onClick={() => updateStatus(t, "in_progress")}
-                        >
-                          بدء
-                        </Button>
+                        >{ui("بدء")}</Button>
                       )}
-                      <Button size="sm" onClick={() => setCompleteTask(t)}>
-                        تم الإنجاز
-                      </Button>
+                      <Button size="sm" onClick={() => setCompleteTask(t)}>{ui("تم الإنجاز")}</Button>
                     </>
                   )}
                 {isManager && (
-                  <Button size="sm" variant="ghost" onClick={() => setEditTask(t)}>
-                    تعديل
-                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setEditTask(t)}>{ui("تعديل")}</Button>
                 )}
                 {canDelete && (
                   <Button
@@ -621,9 +607,7 @@ function WorkCenterPage() {
                     variant="ghost"
                     className="text-destructive"
                     onClick={() => deleteTask(t)}
-                  >
-                    حذف
-                  </Button>
+                  >{ui("حذف")}</Button>
                 )}
               </div>
             </TableCell>
@@ -634,54 +618,46 @@ function WorkCenterPage() {
   );
 
   return (
-    <div dir="rtl" className="space-y-4">
+    <div dir={direction()} className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold">مركز العمل</h1>
+          <h1 className="text-xl font-bold">{ui("مركز العمل")}</h1>
           <p className="text-sm text-muted-foreground">
-            {isManager ? "إدارة ومتابعة مهام وتوجيهات القسم" : "مهامك والتوجيهات الموجهة إليك"}
+            {isManager ? ui("إدارة ومتابعة مهام وتوجيهات القسم") : ui("مهامك والتوجيهات الموجهة إليك")}
           </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setPersonalCreateOpen(true)}>
-            <Plus className="ml-1 h-4 w-4" /> مهمة شخصية
-          </Button>
+            <Plus className="ml-1 h-4 w-4" />{ui(" مهمة شخصية")}</Button>
           {isManager && (
             <>
               <Button onClick={() => setCreateOpen(true)} disabled={!scopeIds.length}>
-                <Plus className="ml-1 h-4 w-4" /> إنشاء مهمة
-              </Button>
+                <Plus className="ml-1 h-4 w-4" />{ui(" إنشاء مهمة")}</Button>
               <Button
                 variant="outline"
                 onClick={() => setGuidanceOpen(true)}
                 disabled={!scopeIds.length}
               >
-                <Send className="ml-1 h-4 w-4" /> إرسال توجيه
-              </Button>
+                <Send className="ml-1 h-4 w-4" />{ui(" إرسال توجيه")}</Button>
             </>
           )}
         </div>
       </div>
       {isManager && deptsQ.isFetched && !scopeIds.length && (
-        <div className="rounded-lg border p-4 text-sm text-muted-foreground">
-          لا توجد أقسام مرتبطة بحسابك. تواصل مع مدير النظام.
-        </div>
+        <div className="rounded-lg border p-4 text-sm text-muted-foreground">{ui("لا توجد أقسام مرتبطة بحسابك. تواصل مع مدير النظام.")}</div>
       )}
       {!isManager && meQ.isFetched && !meQ.data && (
-        <div className="rounded-lg border border-orange-300 bg-orange-50 p-3 text-sm text-orange-900 dark:bg-orange-950/30 dark:text-orange-100">
-          لم يتم ربط حسابك بسجل موظف (البريد أو الاسم غير مطابق)، لذلك قد لا تظهر المهام المسندة
-          إليك.
-        </div>
+        <div className="rounded-lg border border-orange-300 bg-orange-50 p-3 text-sm text-orange-900 dark:bg-orange-950/30 dark:text-orange-100">{ui("لم يتم ربط حسابك بسجل موظف (البريد أو الاسم غير مطابق)، لذلك قد لا تظهر المهام المسندة إليك.")}</div>
       )}
 
       <Tabs defaultValue="today" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="today">اليوم</TabsTrigger>
-          <TabsTrigger value="tasks">المهام</TabsTrigger>
-          {isManager && <TabsTrigger value="team">الفريق</TabsTrigger>}
-          <TabsTrigger value="goals">الأهداف</TabsTrigger>
-          <TabsTrigger value="guidance">التوجيهات</TabsTrigger>
-          <TabsTrigger value="performance">الأداء</TabsTrigger>
+          <TabsTrigger value="today">{ui("اليوم")}</TabsTrigger>
+          <TabsTrigger value="tasks">{ui("المهام")}</TabsTrigger>
+          {isManager && <TabsTrigger value="team">{ui("الفريق")}</TabsTrigger>}
+          <TabsTrigger value="goals">{ui("الأهداف")}</TabsTrigger>
+          <TabsTrigger value="guidance">{ui("التوجيهات")}</TabsTrigger>
+          <TabsTrigger value="performance">{ui("الأداء")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="today" className="space-y-4">
@@ -689,49 +665,48 @@ function WorkCenterPage() {
             {isManager ? (
               <>
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
-                  <Stat label="مهام الفريق اليوم" value={todays.length} />
+                  <Stat label={ui("مهام الفريق اليوم")} value={todays.length} />
                   <Stat
-                    label="المكتملة"
+                    label={ui("المكتملة")}
                     value={todays.filter((x) => x.s === "completed").length}
                     tone="text-emerald-600"
                   />
                   <Stat
-                    label="قيد التنفيذ"
+                    label={ui("قيد التنفيذ")}
                     value={todays.filter((x) => x.s === "in_progress").length}
                     tone="text-sky-600"
                   />
                   <Stat
-                    label="لم تبدأ"
+                    label={ui("لم تبدأ")}
                     value={todays.filter((x) => x.s === "not_started").length}
                     tone="text-muted-foreground"
                   />
-                  <Stat label="المتأخرة" value={overdue.length} tone="text-red-600" />
-                  <Stat label="تحتاج متابعة" value={followUp.length} tone="text-orange-600" />
-                  <Stat label="توجيهات غير مقروءة" value={unreadSent} tone="text-orange-600" />
+                  <Stat label={ui("المتأخرة")} value={overdue.length} tone="text-red-600" />
+                  <Stat label={ui("تحتاج متابعة")} value={followUp.length} tone="text-orange-600" />
+                  <Stat label={ui("توجيهات غير مقروءة")} value={unreadSent} tone="text-orange-600" />
                 </div>
-                <Section title="يحتاج متابعة">
+                <Section title={ui("يحتاج متابعة")}>
                   <State empty={!followUp.length && !unreadSent}>
                     {followUp.length > 0 && taskRows(followUp)}
                     {unreadSent > 0 && (
                       <p className="px-3 py-2 text-sm text-orange-700 dark:text-orange-300">
-                        {unreadSent} توجيه لم يُقرأ بعد — راجع تبويب التوجيهات.
-                      </p>
+                        {unreadSent}{ui(" توجيه لم يُقرأ بعد — راجع تبويب التوجيهات.")}</p>
                     )}
                   </State>
                 </Section>
               </>
             ) : (
               <>
-                <Section title="مهام اليوم">
+                <Section title={ui("مهام اليوم")}>
                   <State empty={!todays.length}>{taskRows(todays, false)}</State>
                 </Section>
-                <Section title="المهام المتأخرة">
+                <Section title={ui("المهام المتأخرة")}>
                   <State empty={!overdue.length}>{taskRows(overdue, false)}</State>
                 </Section>
-                <Section title="المهام القادمة">
+                <Section title={ui("المهام القادمة")}>
                   <State empty={!upcoming.length}>{taskRows(upcoming.slice(0, 20), false)}</State>
                 </Section>
-                <Section title={`التوجيهات الجديدة (${unreadMine})`}>
+                <Section title={(ui("التوجيهات الجديدة (") + (unreadMine) + ")")}>
                   <State loading={guidanceQ.isLoading} error={guidanceQ.error} empty={!unreadMine}>
                     <GuidanceInbox
                       notes={myNotes.filter((n) => !n.read_at)}
@@ -755,7 +730,7 @@ function WorkCenterPage() {
             render={taskRows}
           />
           {isManager && (
-            <Section title="المهام المتكررة">
+            <Section title={ui("المهام المتكررة")}>
               <State
                 loading={templatesQ.isLoading}
                 error={templatesQ.error}
@@ -764,12 +739,12 @@ function WorkCenterPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>المهمة</TableHead>
-                      <TableHead>التكرار</TableHead>
-                      <TableHead>المسؤول</TableHead>
-                      <TableHead>الفترة</TableHead>
-                      <TableHead>الحالة</TableHead>
-                      <TableHead className="text-left">إجراء</TableHead>
+                      <TableHead>{ui("المهمة")}</TableHead>
+                      <TableHead>{ui("التكرار")}</TableHead>
+                      <TableHead>{ui("المسؤول")}</TableHead>
+                      <TableHead>{ui("الفترة")}</TableHead>
+                      <TableHead>{ui("الحالة")}</TableHead>
+                      <TableHead className="text-left">{ui("إجراء")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -780,16 +755,16 @@ function WorkCenterPage() {
                         <TableCell className="max-w-[220px] truncate">
                           {tp.assignee_employee_ids.length
                             ? tp.assignee_employee_ids.map(empName).join("، ")
-                            : "جميع موظفي القسم"}
+                            : ui("جميع موظفي القسم")}
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
-                          {tp.start_date} ← {tp.end_date ?? "مفتوح"}
+                          {tp.start_date} ← {tp.end_date ?? ui("مفتوح")}
                         </TableCell>
                         <TableCell>
                           {tp.active ? (
-                            <Badge variant="secondary">نشطة</Badge>
+                            <Badge variant="secondary">{ui("نشطة")}</Badge>
                           ) : (
-                            <Badge variant="outline">موقوفة</Badge>
+                            <Badge variant="outline">{ui("موقوفة")}</Badge>
                           )}
                         </TableCell>
                         <TableCell className="text-left">
@@ -810,19 +785,17 @@ function WorkCenterPage() {
                                       _to: today,
                                     });
                                   toast.success(
-                                    tp.active ? "تم إيقاف التكرار" : "تم استئناف التكرار",
+                                    tp.active ? ui("تم إيقاف التكرار") : ui("تم استئناف التكرار"),
                                   );
                                   refresh();
                                 } catch (e) {
-                                  toast.error(formatErrorMessage(e));
+                                  toast.error(ui(formatErrorMessage(e)));
                                 }
                               }}
                             >
-                              {tp.active ? "إيقاف" : "استئناف"}
+                              {tp.active ? ui("إيقاف") : ui("استئناف")}
                             </Button>
-                            <Button size="sm" variant="ghost" onClick={() => setEditTemplate(tp)}>
-                              تعديل الجدول
-                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => setEditTemplate(tp)}>{ui("تعديل الجدول")}</Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -836,7 +809,7 @@ function WorkCenterPage() {
 
         {isManager && (
           <TabsContent value="team">
-            <Section title="أعضاء الفريق">
+            <Section title={ui("أعضاء الفريق")}>
               <State
                 loading={empsQ.isLoading || tasksQ.isLoading || attendanceQ.isLoading}
                 error={empsQ.error ?? tasksQ.error ?? attendanceQ.error}
@@ -845,17 +818,17 @@ function WorkCenterPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>الاسم</TableHead>
-                      <TableHead>المسمى الوظيفي</TableHead>
-                      <TableHead>الحضور</TableHead>
-                      <TableHead>مهام اليوم</TableHead>
-                      <TableHead>النشطة</TableHead>
-                      <TableHead>المكتمل</TableHead>
-                      <TableHead>قيد التنفيذ</TableHead>
-                      <TableHead>المتأخر</TableHead>
-                      <TableHead>العاجل</TableHead>
-                      <TableHead>نسبة الإنجاز</TableHead>
-                      <TableHead>الحمل</TableHead>
+                      <TableHead>{ui("الاسم")}</TableHead>
+                      <TableHead>{ui("المسمى الوظيفي")}</TableHead>
+                      <TableHead>{ui("الحضور")}</TableHead>
+                      <TableHead>{ui("مهام اليوم")}</TableHead>
+                      <TableHead>{ui("النشطة")}</TableHead>
+                      <TableHead>{ui("المكتمل")}</TableHead>
+                      <TableHead>{ui("قيد التنفيذ")}</TableHead>
+                      <TableHead>{ui("المتأخر")}</TableHead>
+                      <TableHead>{ui("العاجل")}</TableHead>
+                      <TableHead>{ui("نسبة الإنجاز")}</TableHead>
+                      <TableHead>{ui("الحمل")}</TableHead>
                       <TableHead />
                     </TableRow>
                   </TableHeader>
@@ -890,16 +863,14 @@ function WorkCenterPage() {
                           <TableCell>
                             <Badge variant={capacity?.load === "high" ? "destructive" : "outline"}>
                               {capacity?.load === "high"
-                                ? "مرتفع"
+                                ? ui("مرتفع")
                                 : capacity?.load === "medium"
-                                  ? "متوسط"
-                                  : "منخفض"}
+                                  ? ui("متوسط")
+                                  : ui("منخفض")}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-left">
-                            <Button size="sm" variant="outline" onClick={() => setHistoryEmp(e)}>
-                              عرض السجل
-                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => setHistoryEmp(e)}>{ui("عرض السجل")}</Button>
                           </TableCell>
                         </TableRow>
                       );
@@ -920,7 +891,7 @@ function WorkCenterPage() {
                 empName={empName}
               />
             ) : (
-              <Section title="التوجيهات الموجهة إليك">
+              <Section title={ui("التوجيهات الموجهة إليك")}>
                 <State empty={!myNotes.length && !(guidanceQ.data?.legacy ?? []).length}>
                   <GuidanceInbox
                     notes={myNotes}
@@ -1088,21 +1059,21 @@ function TasksTab({
     return true;
   });
   return (
-    <Section title={`المهام (${filtered.length})`}>
+    <Section title={(ui("المهام (") + (filtered.length) + ")")}>
       <div className="flex flex-wrap gap-2 p-2">
         <Input
           className="w-56"
-          placeholder="بحث باسم المهمة أو الموظف"
+          placeholder={ui("بحث باسم المهمة أو الموظف")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
         {isManager && (
           <Select value={emp} onValueChange={setEmp}>
             <SelectTrigger className="w-44">
-              <SelectValue placeholder="الموظف" />
+              <SelectValue placeholder={ui("الموظف")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">كل الموظفين</SelectItem>
+              <SelectItem value="all">{ui("كل الموظفين")}</SelectItem>
               {emps.map((e) => (
                 <SelectItem key={e.id} value={e.id}>
                   {e.full_name}
@@ -1116,9 +1087,9 @@ function TasksTab({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">كل المصادر</SelectItem>
-            <SelectItem value="assigned">المهام المسندة</SelectItem>
-            <SelectItem value="personal">المهام الشخصية</SelectItem>
+            <SelectItem value="all">{ui("كل المصادر")}</SelectItem>
+            <SelectItem value="assigned">{ui("المهام المسندة")}</SelectItem>
+            <SelectItem value="personal">{ui("المهام الشخصية")}</SelectItem>
           </SelectContent>
         </Select>
         <Select value={status} onValueChange={setStatus}>
@@ -1126,10 +1097,10 @@ function TasksTab({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">كل الحالات</SelectItem>
+            <SelectItem value="all">{ui("كل الحالات")}</SelectItem>
             {ALLOWED_STATUSES.map((s) => (
               <SelectItem key={s} value={s}>
-                {STATUS[s].label}
+                {ui(STATUS[s].label)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -1139,7 +1110,7 @@ function TasksTab({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">كل الأنواع</SelectItem>
+            <SelectItem value="all">{ui("كل الأنواع")}</SelectItem>
             {["one_time", "daily", "weekly", "monthly"].map((k) => (
               <SelectItem key={k} value={k}>
                 {TYPES[k]}
@@ -1152,7 +1123,7 @@ function TasksTab({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">كل الأولويات</SelectItem>
+            <SelectItem value="all">{ui("كل الأولويات")}</SelectItem>
             {Object.entries(PRIORITIES).map(([k, v]) => (
               <SelectItem key={k} value={k}>
                 {v}
@@ -1195,7 +1166,7 @@ function GuidanceInbox({
       if (error) throw error;
       onRead();
     } catch (e) {
-      toast.error(`تعذر التحديث: ${formatErrorMessage(e)}`);
+      toast.error((ui("تعذر التحديث: ") + (formatErrorMessage(e))));
     }
   };
   return (
@@ -1206,15 +1177,13 @@ function GuidanceInbox({
             <div className="flex items-center gap-2 font-semibold">
               {n.title}
               {!n.read_at && (
-                <span className="rounded bg-sky-100 px-1.5 text-[10px] text-sky-800 dark:bg-sky-950 dark:text-sky-200">
-                  جديد
-                </span>
+                <span className="rounded bg-sky-100 px-1.5 text-[10px] text-sky-800 dark:bg-sky-950 dark:text-sky-200">{ui("جديد")}</span>
               )}
             </div>
             <p className="mt-1 whitespace-pre-wrap text-sm">{n.content}</p>
             <div className="mt-1 text-xs text-muted-foreground">
               {n.guidance_date} ·{" "}
-              {new Date(n.created_at).toLocaleTimeString("ar-IQ", {
+              {new Date(n.created_at).toLocaleTimeString(displayLocale(), {
                 hour: "2-digit",
                 minute: "2-digit",
               })}
@@ -1225,23 +1194,17 @@ function GuidanceInbox({
               size="sm"
               variant="outline"
               onClick={() => markRead("employee_guidance_notes", n.id)}
-            >
-              تمت القراءة
-            </Button>
+            >{ui("تمت القراءة")}</Button>
           ) : (
-            <span className="text-xs text-emerald-600">مقروء</span>
+            <span className="text-xs text-emerald-600">{ui("مقروء")}</span>
           )}
         </div>
       ))}
       {legacy.map((r) => (
         <div key={r.id} className="flex items-start justify-between gap-3 px-3 py-3">
           <div>
-            <div className="flex items-center gap-2 font-semibold">
-              توجيه القسم
-              {!r.read_at && (
-                <span className="rounded bg-sky-100 px-1.5 text-[10px] text-sky-800 dark:bg-sky-950 dark:text-sky-200">
-                  جديد
-                </span>
+            <div className="flex items-center gap-2 font-semibold">{ui("توجيه القسم")}{!r.read_at && (
+                <span className="rounded bg-sky-100 px-1.5 text-[10px] text-sky-800 dark:bg-sky-950 dark:text-sky-200">{ui("جديد")}</span>
               )}
             </div>
             <p className="mt-1 whitespace-pre-wrap text-sm">{r.team_guidance_notes?.content}</p>
@@ -1254,11 +1217,9 @@ function GuidanceInbox({
               size="sm"
               variant="outline"
               onClick={() => markRead("team_guidance_recipients", r.id)}
-            >
-              تمت القراءة
-            </Button>
+            >{ui("تمت القراءة")}</Button>
           ) : (
-            <span className="text-xs text-emerald-600">مقروء</span>
+            <span className="text-xs text-emerald-600">{ui("مقروء")}</span>
           )}
         </div>
       ))}
@@ -1282,16 +1243,16 @@ function SentGuidance({
   return (
     <div className="space-y-4">
       <Section
-        title={`التوجيهات المرسلة (${notes.length})`}
+        title={(ui("التوجيهات المرسلة (") + (notes.length) + ")")}
         action={
           <Select value={filter} onValueChange={setFilter}>
             <SelectTrigger className="h-8 w-32">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">الكل</SelectItem>
-              <SelectItem value="read">مقروء</SelectItem>
-              <SelectItem value="unread">غير مقروء</SelectItem>
+              <SelectItem value="all">{ui("الكل")}</SelectItem>
+              <SelectItem value="read">{ui("مقروء")}</SelectItem>
+              <SelectItem value="unread">{ui("غير مقروء")}</SelectItem>
             </SelectContent>
           </Select>
         }
@@ -1300,12 +1261,12 @@ function SentGuidance({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>العنوان</TableHead>
-                <TableHead>النص</TableHead>
-                <TableHead>المستلم</TableHead>
-                <TableHead>التاريخ</TableHead>
-                <TableHead>وقت الإرسال</TableHead>
-                <TableHead>حالة القراءة</TableHead>
+                <TableHead>{ui("العنوان")}</TableHead>
+                <TableHead>{ui("النص")}</TableHead>
+                <TableHead>{ui("المستلم")}</TableHead>
+                <TableHead>{ui("التاريخ")}</TableHead>
+                <TableHead>{ui("وقت الإرسال")}</TableHead>
+                <TableHead>{ui("حالة القراءة")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1316,16 +1277,16 @@ function SentGuidance({
                   <TableCell>{empName(n.target_employee_id)}</TableCell>
                   <TableCell>{n.guidance_date}</TableCell>
                   <TableCell>
-                    {new Date(n.created_at).toLocaleTimeString("ar-IQ", {
+                    {new Date(n.created_at).toLocaleTimeString(displayLocale(), {
                       hour: "2-digit",
                       minute: "2-digit",
                     })}
                   </TableCell>
                   <TableCell>
                     {n.read_at ? (
-                      <span className="text-emerald-600">مقروء</span>
+                      <span className="text-emerald-600">{ui("مقروء")}</span>
                     ) : (
-                      <span className="text-orange-600">غير مقروء</span>
+                      <span className="text-orange-600">{ui("غير مقروء")}</span>
                     )}
                   </TableCell>
                 </TableRow>
@@ -1335,14 +1296,14 @@ function SentGuidance({
         </State>
       </Section>
       {legacy.length > 0 && (
-        <Section title="توجيهات القسم السابقة">
+        <Section title={ui("توجيهات القسم السابقة")}>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>النص</TableHead>
-                <TableHead>المستلم</TableHead>
-                <TableHead>التاريخ</TableHead>
-                <TableHead>حالة القراءة</TableHead>
+                <TableHead>{ui("النص")}</TableHead>
+                <TableHead>{ui("المستلم")}</TableHead>
+                <TableHead>{ui("التاريخ")}</TableHead>
+                <TableHead>{ui("حالة القراءة")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1355,9 +1316,9 @@ function SentGuidance({
                   <TableCell>{r.team_guidance_notes?.note_date}</TableCell>
                   <TableCell>
                     {r.read_at ? (
-                      <span className="text-emerald-600">مقروء</span>
+                      <span className="text-emerald-600">{ui("مقروء")}</span>
                     ) : (
-                      <span className="text-orange-600">غير مقروء</span>
+                      <span className="text-orange-600">{ui("غير مقروء")}</span>
                     )}
                   </TableCell>
                 </TableRow>
@@ -1454,7 +1415,7 @@ function PerformanceTab({
   const submit = async (empId: string) => {
     const score = Number(scores[empId]);
     if (!Number.isInteger(score) || score < 0 || score > 100)
-      return toast.error("أدخل درجة صحيحة من 0 إلى 100");
+      return toast.error(ui("أدخل درجة صحيحة من 0 إلى 100"));
     try {
       const { data, error: e } = await supabase.rpc("submit_employee_monthly_evaluation", {
         _employee_id: empId,
@@ -1464,12 +1425,12 @@ function PerformanceTab({
       if (e) throw e;
       toast.success(
         Number(data?.[0]?.bonus_added ?? 0) > 0
-          ? "تم حفظ التقييم وإضافة المكافأة"
-          : "تم حفظ التقييم",
+          ? ui("تم حفظ التقييم وإضافة المكافأة")
+          : ui("تم حفظ التقييم"),
       );
       await qc.invalidateQueries({ queryKey: ["wc-evals"] });
     } catch (e) {
-      toast.error(formatErrorMessage(e));
+      toast.error(ui(formatErrorMessage(e)));
     }
   };
   const list = isManager
@@ -1478,7 +1439,7 @@ function PerformanceTab({
   const own = metrics(inMonth);
   return (
     <Section
-      title="مؤشرات العمل"
+      title={ui("مؤشرات العمل")}
       action={
         <Input
           type="month"
@@ -1497,16 +1458,16 @@ function PerformanceTab({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>الموظف</TableHead>
-                  <TableHead>عدد المهام</TableHead>
-                  <TableHead>المكتملة</TableHead>
-                  <TableHead>المتأخرة</TableHead>
-                  <TableHead>المعادة</TableHead>
-                  <TableHead>متوسط الإنجاز (دقيقة)</TableHead>
-                  <TableHead>المكتملة ضمن الموعد</TableHead>
-                  <TableHead>نسبة الإنجاز</TableHead>
-                  <TableHead>المتكررة المنجزة</TableHead>
-                  <TableHead>التقييم الشهري</TableHead>
+                  <TableHead>{ui("الموظف")}</TableHead>
+                  <TableHead>{ui("عدد المهام")}</TableHead>
+                  <TableHead>{ui("المكتملة")}</TableHead>
+                  <TableHead>{ui("المتأخرة")}</TableHead>
+                  <TableHead>{ui("المعادة")}</TableHead>
+                  <TableHead>{ui("متوسط الإنجاز (دقيقة)")}</TableHead>
+                  <TableHead>{ui("المكتملة ضمن الموعد")}</TableHead>
+                  <TableHead>{ui("نسبة الإنجاز")}</TableHead>
+                  <TableHead>{ui("المتكررة المنجزة")}</TableHead>
+                  <TableHead>{ui("التقييم الشهري")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1538,9 +1499,7 @@ function PerformanceTab({
                                 setScores((s) => ({ ...s, [e.id]: ev.target.value }))
                               }
                             />
-                            <Button size="sm" variant="outline" onClick={() => submit(e.id)}>
-                              حفظ
-                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => submit(e.id)}>{ui("حفظ")}</Button>
                           </div>
                         )}
                       </TableCell>
@@ -1552,14 +1511,14 @@ function PerformanceTab({
           </State>
         ) : (
           <div className="grid grid-cols-2 gap-3 p-2 md:grid-cols-4">
-            <Stat label="عدد المهام" value={own.total} />
-            <Stat label="المكتملة" value={own.done} tone="text-emerald-600" />
-            <Stat label="المتأخرة" value={own.late} tone="text-red-600" />
-            <Stat label="المعادة" value={own.returned} />
-            <Stat label="متوسط الإنجاز (دقيقة)" value={own.averageMinutes} />
-            <Stat label="المكتملة ضمن الموعد" value={own.onTime} />
-            <Stat label="نسبة الإنجاز %" value={own.rate} />
-            <Stat label="المتكررة المنجزة" value={own.recurring} />
+            <Stat label={ui("عدد المهام")} value={own.total} />
+            <Stat label={ui("المكتملة")} value={own.done} tone="text-emerald-600" />
+            <Stat label={ui("المتأخرة")} value={own.late} tone="text-red-600" />
+            <Stat label={ui("المعادة")} value={own.returned} />
+            <Stat label={ui("متوسط الإنجاز (دقيقة)")} value={own.averageMinutes} />
+            <Stat label={ui("المكتملة ضمن الموعد")} value={own.onTime} />
+            <Stat label={ui("نسبة الإنجاز %")} value={own.rate} />
+            <Stat label={ui("المتكررة المنجزة")} value={own.recurring} />
           </div>
         )}
       </State>
@@ -1587,8 +1546,8 @@ function PersonalTaskDialog({
   const [dueDate, setDueDate] = useState(today);
   const [saving, setSaving] = useState(false);
   const save = async () => {
-    if (title.trim().length < 2) return toast.error("أدخل عنوان المهمة");
-    if (dueDate < today) return toast.error("تاريخ المهمة لا يمكن أن يكون في الماضي");
+    if (title.trim().length < 2) return toast.error(ui("أدخل عنوان المهمة"));
+    if (dueDate < today) return toast.error(ui("تاريخ المهمة لا يمكن أن يكون في الماضي"));
     setSaving(true);
     try {
       const { error } = await workCenterDb.from("employee_tasks").insert({
@@ -1608,38 +1567,38 @@ function PersonalTaskDialog({
         require_review: false,
       });
       if (error) throw error;
-      toast.success("تمت إضافة المهمة الشخصية");
+      toast.success(ui("تمت إضافة المهمة الشخصية"));
       setTitle("");
       setDescription("");
       setDueDate(today);
       onDone();
       onOpenChange(false);
     } catch (error) {
-      toast.error(`تعذر إنشاء المهمة: ${formatErrorMessage(error)}`);
+      toast.error((ui("تعذر إنشاء المهمة: ") + (formatErrorMessage(error))));
     } finally {
       setSaving(false);
     }
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent dir="rtl">
+      <DialogContent dir={direction()}>
         <DialogHeader>
-          <DialogTitle>مهمة شخصية</DialogTitle>
+          <DialogTitle>{ui("مهمة شخصية")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div>
-            <Label>العنوان</Label>
+            <Label>{ui("العنوان")}</Label>
             <Input value={title} onChange={(event) => setTitle(event.target.value)} />
           </div>
           <div>
-            <Label>الوصف</Label>
+            <Label>{ui("الوصف")}</Label>
             <Textarea
               value={description}
               onChange={(event) => setDescription(event.target.value)}
             />
           </div>
           <div>
-            <Label>التاريخ</Label>
+            <Label>{ui("التاريخ")}</Label>
             <Input
               type="date"
               min={today}
@@ -1650,8 +1609,7 @@ function PersonalTaskDialog({
         </div>
         <DialogFooter>
           <Button onClick={save} disabled={saving}>
-            {saving && <Loader2 className="ml-1 h-4 w-4 animate-spin" />} حفظ
-          </Button>
+            {saving && <Loader2 className="ml-1 h-4 w-4 animate-spin" />}{ui(" حفظ")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1683,18 +1641,16 @@ function EmployeePicker({
   return (
     <div className="space-y-2">
       <label className="flex items-center gap-2 text-sm font-semibold">
-        <Checkbox checked={all} onCheckedChange={(v) => setAll(v === true)} /> جميع موظفي القسم (
-        {list.length})
+        <Checkbox checked={all} onCheckedChange={(v) => setAll(v === true)} />{ui(" جميع موظفي القسم (")}{list.length})
       </label>
       {!!error && (
-        <div role="alert" className="text-sm text-destructive">
-          تعذر تحميل بيانات الموظفين أو الحضور: {formatErrorMessage(error)}
+        <div role="alert" className="text-sm text-destructive">{ui("تعذر تحميل بيانات الموظفين أو الحضور: ")}{ui(formatErrorMessage(error))}
         </div>
       )}
       {!all && (
         <div className="max-h-44 space-y-1 overflow-y-auto rounded-md border p-2">
           {loading ? (
-            <p className="text-xs text-muted-foreground">جارٍ تحميل أعضاء القسم...</p>
+            <p className="text-xs text-muted-foreground">{ui("جارٍ تحميل أعضاء القسم...")}</p>
           ) : list.length ? (
             list.map((e) => {
               const capacity = capacities.get(e.id);
@@ -1716,46 +1672,40 @@ function EmployeePicker({
                     <span className="font-medium">{e.full_name}</span>
                     <span className="mr-2 text-xs text-muted-foreground">{e.position ?? ""}</span>
                     <span className="block text-xs text-muted-foreground">
-                      {ATTENDANCE_LABELS[attendance]} · {capacity?.today ?? 0} مهام اليوم ·{" "}
-                      {capacity?.active ?? 0} نشطة · {capacity?.overdue ?? 0} متأخرة ·{" "}
-                      {capacity?.urgent ?? 0} عاجلة · حمل{" "}
+                      {ATTENDANCE_LABELS[attendance]} · {capacity?.today ?? 0}{ui(" مهام اليوم ·")}{" "}
+                      {capacity?.active ?? 0}{ui(" نشطة · ")}{capacity?.overdue ?? 0}{ui(" متأخرة ·")}{" "}
+                      {capacity?.urgent ?? 0}{ui(" عاجلة · حمل")}{" "}
                       {capacity?.load === "high"
-                        ? "مرتفع"
+                        ? ui("مرتفع")
                         : capacity?.load === "medium"
-                          ? "متوسط"
-                          : "منخفض"}
+                          ? ui("متوسط")
+                          : ui("منخفض")}
                     </span>
                     {selected.includes(e.id) && attendance !== "present" && (
                       <span className="block text-xs text-amber-700 dark:text-amber-300">
                         ⚠{" "}
                         {attendance === "unknown"
-                          ? "لا يوجد تسجيل حضور لهذا اليوم"
-                          : `هذا الموظف ${ATTENDANCE_LABELS[attendance]} اليوم`}
+                          ? ui("لا يوجد تسجيل حضور لهذا اليوم")
+                          : (ui("هذا الموظف ") + (ATTENDANCE_LABELS[attendance]) + ui(" اليوم"))}
                       </span>
                     )}
                     {selected.includes(e.id) && capacity?.load === "high" && (
-                      <span className="block text-xs text-amber-700 dark:text-amber-300">
-                        ⚠ هذا الموظف لديه حمل مرتفع من المهام النشطة.
-                      </span>
+                      <span className="block text-xs text-amber-700 dark:text-amber-300">{ui("⚠ هذا الموظف لديه حمل مرتفع من المهام النشطة.")}</span>
                     )}
                   </span>
                 </label>
               );
             })
           ) : (
-            <p className="text-xs text-muted-foreground">لا يوجد موظفون نشطون في هذا القسم.</p>
+            <p className="text-xs text-muted-foreground">{ui("لا يوجد موظفون نشطون في هذا القسم.")}</p>
           )}
         </div>
       )}
       {all && list.some((e) => capacities.get(e.id)?.attendance !== "present") && (
-        <p className="text-xs text-amber-700 dark:text-amber-300">
-          ⚠ الاختيار يشمل موظفين بإجازة أو غياب أو دون تسجيل حضور اليوم.
-        </p>
+        <p className="text-xs text-amber-700 dark:text-amber-300">{ui("⚠ الاختيار يشمل موظفين بإجازة أو غياب أو دون تسجيل حضور اليوم.")}</p>
       )}
       {all && list.some((e) => capacities.get(e.id)?.load === "high") && (
-        <p className="text-xs text-amber-700 dark:text-amber-300">
-          ⚠ الاختيار يشمل موظفين بحمل عمل مرتفع.
-        </p>
+        <p className="text-xs text-amber-700 dark:text-amber-300">{ui("⚠ الاختيار يشمل موظفين بحمل عمل مرتفع.")}</p>
       )}
     </div>
   );
@@ -1807,20 +1757,20 @@ function CreateTaskDialog({
   const dept = f.dept || depts[0]?.id || "";
   const set = (k: keyof typeof f, v: string) => setF((p) => ({ ...p, [k]: v }));
   const save = async () => {
-    if (f.title.trim().length < 2) return toast.error("أدخل عنوان المهمة");
-    if (!dept) return toast.error("اختر القسم");
+    if (f.title.trim().length < 2) return toast.error(ui("أدخل عنوان المهمة"));
+    if (!dept) return toast.error(ui("اختر القسم"));
     const deptEmps = emps.filter((e) => e.department_id === dept).map((e) => e.id);
     const targets = all ? deptEmps : selected;
-    if (!targets.length) return toast.error("اختر موظفاً واحداً على الأقل");
-    if (f.due && f.due < f.start) return toast.error("الموعد النهائي قبل تاريخ البداية");
-    if (f.type === "weekly" && !weekdays.length) return toast.error("اختر أيام الأسبوع");
+    if (!targets.length) return toast.error(ui("اختر موظفاً واحداً على الأقل"));
+    if (f.due && f.due < f.start) return toast.error(ui("الموعد النهائي قبل تاريخ البداية"));
+    if (f.type === "weekly" && !weekdays.length) return toast.error(ui("اختر أيام الأسبوع"));
     const checklistItems = checklistText
       .split("\n")
       .map((item) => item.trim())
       .filter(Boolean);
     if (checklistItems.some((item) => item.length > 240))
-      return toast.error("لا يتجاوز كل عنصر تحقق 240 حرفاً");
-    if (checklistItems.length > 50) return toast.error("قائمة التحقق لا تتجاوز 50 عنصراً");
+      return toast.error(ui("لا يتجاوز كل عنصر تحقق 240 حرفاً"));
+    if (checklistItems.length > 50) return toast.error(ui("قائمة التحقق لا تتجاوز 50 عنصراً"));
     setSaving(true);
     try {
       if (f.type === "one_time") {
@@ -1865,7 +1815,7 @@ function CreateTaskDialog({
         const g = await supabase.rpc("generate_recurring_tasks", { _from: today, _to: today });
         if (g.error) throw g.error;
       }
-      toast.success("تم إنشاء المهمة");
+      toast.success(ui("تم إنشاء المهمة"));
       onDone();
       onOpenChange(false);
       setF({
@@ -1886,7 +1836,7 @@ function CreateTaskDialog({
       setAll(false);
       setWeekdays([]);
     } catch (e) {
-      toast.error(`تعذر الإنشاء: ${formatErrorMessage(e)}`);
+      toast.error((ui("تعذر الإنشاء: ") + (formatErrorMessage(e))));
     } finally {
       setSaving(false);
     }
@@ -1894,21 +1844,21 @@ function CreateTaskDialog({
   const recurring = f.type !== "one_time";
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent dir="rtl" className="max-h-[90vh] max-w-2xl overflow-y-auto">
+      <DialogContent dir={direction()} className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>إنشاء مهمة</DialogTitle>
+          <DialogTitle>{ui("إنشاء مهمة")}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <Label>عنوان المهمة</Label>
+            <Label>{ui("عنوان المهمة")}</Label>
             <Input value={f.title} onChange={(e) => set("title", e.target.value)} />
           </div>
           <div className="sm:col-span-2">
-            <Label>وصف المهمة</Label>
+            <Label>{ui("وصف المهمة")}</Label>
             <Textarea value={f.description} onChange={(e) => set("description", e.target.value)} />
           </div>
           <div>
-            <Label>نوع المهمة</Label>
+            <Label>{ui("نوع المهمة")}</Label>
             <Select value={f.type} onValueChange={(v) => set("type", v)}>
               <SelectTrigger>
                 <SelectValue />
@@ -1916,14 +1866,14 @@ function CreateTaskDialog({
               <SelectContent>
                 {["one_time", "daily", "weekly", "monthly"].map((k) => (
                   <SelectItem key={k} value={k}>
-                    {k === "one_time" ? "مهمة لمرة واحدة" : `مهمة ${TYPES[k]}`}
+                    {k === "one_time" ? ui("مهمة لمرة واحدة") : (ui("مهمة ") + (TYPES[k]))}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label>الأولوية</Label>
+            <Label>{ui("الأولوية")}</Label>
             <Select value={f.priority} onValueChange={(v) => set("priority", v)}>
               <SelectTrigger>
                 <SelectValue />
@@ -1939,7 +1889,7 @@ function CreateTaskDialog({
           </div>
           {f.type === "weekly" && (
             <div className="sm:col-span-2">
-              <Label>أيام الأسبوع</Label>
+              <Label>{ui("أيام الأسبوع")}</Label>
               <div className="mt-1 flex flex-wrap gap-3">
                 {WEEKDAYS.map((d, i) => (
                   <label key={d} className="flex items-center gap-1 text-sm">
@@ -1957,7 +1907,7 @@ function CreateTaskDialog({
           )}
           {f.type === "monthly" && (
             <div>
-              <Label>يوم الشهر</Label>
+              <Label>{ui("يوم الشهر")}</Label>
               <Input
                 type="number"
                 min={1}
@@ -1969,15 +1919,15 @@ function CreateTaskDialog({
             </div>
           )}
           <div>
-            <Label>تاريخ البداية</Label>
+            <Label>{ui("تاريخ البداية")}</Label>
             <Input type="date" value={f.start} onChange={(e) => set("start", e.target.value)} />
           </div>
           <div>
-            <Label>{recurring ? "الموعد النهائي (نهاية التكرار)" : "الموعد النهائي"}</Label>
+            <Label>{recurring ? ui("الموعد النهائي (نهاية التكرار)") : ui("الموعد النهائي")}</Label>
             <Input type="date" value={f.due} onChange={(e) => set("due", e.target.value)} />
           </div>
           <div className="sm:col-span-2">
-            <Label>القسم</Label>
+            <Label>{ui("القسم")}</Label>
             <Select
               value={dept}
               onValueChange={(v) => {
@@ -1986,7 +1936,7 @@ function CreateTaskDialog({
               }}
             >
               <SelectTrigger>
-                <SelectValue placeholder="اختر القسم" />
+                <SelectValue placeholder={ui("اختر القسم")} />
               </SelectTrigger>
               <SelectContent>
                 {depts.map((d) => (
@@ -1998,7 +1948,7 @@ function CreateTaskDialog({
             </Select>
           </div>
           <div className="sm:col-span-2">
-            <Label>الموظف المسؤول</Label>
+            <Label>{ui("الموظف المسؤول")}</Label>
             <EmployeePicker
               emps={emps}
               deptId={dept}
@@ -2012,19 +1962,19 @@ function CreateTaskDialog({
             />
           </div>
           <details className="sm:col-span-2 rounded-md border px-3 py-2">
-            <summary className="cursor-pointer text-sm font-semibold">خيارات متقدمة</summary>
+            <summary className="cursor-pointer text-sm font-semibold">{ui("خيارات متقدمة")}</summary>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <div className="sm:col-span-2">
-                <Label>قائمة التحقق (عنصر واحد في كل سطر، اختيارية)</Label>
+                <Label>{ui("قائمة التحقق (عنصر واحد في كل سطر، اختيارية)")}</Label>
                 <Textarea
                   rows={3}
                   value={checklistText}
                   onChange={(e) => setChecklistText(e.target.value)}
-                  placeholder="مراجعة البيانات&#10;إعداد التقرير"
+                  placeholder={ui("مراجعة البيانات&#10;إعداد التقرير")}
                 />
               </div>
               <div>
-                <Label>متطلب الإغلاق</Label>
+                <Label>{ui("متطلب الإغلاق")}</Label>
                 <Select
                   value={closingRequirement}
                   onValueChange={(v) => setClosingRequirement(v as typeof closingRequirement)}
@@ -2033,12 +1983,12 @@ function CreateTaskDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">غير مطلوب</SelectItem>
-                    <SelectItem value="note">ملاحظة</SelectItem>
-                    <SelectItem value="file">ملف</SelectItem>
-                    <SelectItem value="attachment">مرفق</SelectItem>
-                    <SelectItem value="link">رابط</SelectItem>
-                    <SelectItem value="result">نتيجة نصية</SelectItem>
+                    <SelectItem value="none">{ui("غير مطلوب")}</SelectItem>
+                    <SelectItem value="note">{ui("ملاحظة")}</SelectItem>
+                    <SelectItem value="file">{ui("ملف")}</SelectItem>
+                    <SelectItem value="attachment">{ui("مرفق")}</SelectItem>
+                    <SelectItem value="link">{ui("رابط")}</SelectItem>
+                    <SelectItem value="result">{ui("نتيجة نصية")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -2046,11 +1996,9 @@ function CreateTaskDialog({
                 <Checkbox
                   checked={requireReview}
                   onCheckedChange={(value) => setRequireReview(value === true)}
-                />{" "}
-                يتطلب اعتماد المدير عند الإنجاز
-              </label>
+                />{" "}{ui("يتطلب اعتماد المدير عند الإنجاز")}</label>
               <div className="sm:col-span-2">
-                <Label>ملاحظات</Label>
+                <Label>{ui("ملاحظات")}</Label>
                 <Textarea value={f.notes} onChange={(e) => set("notes", e.target.value)} />
               </div>
             </div>
@@ -2058,8 +2006,7 @@ function CreateTaskDialog({
         </div>
         <DialogFooter>
           <Button onClick={save} disabled={saving}>
-            {saving && <Loader2 className="ml-1 h-4 w-4 animate-spin" />} حفظ
-          </Button>
+            {saving && <Loader2 className="ml-1 h-4 w-4 animate-spin" />}{ui(" حفظ")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -2100,9 +2047,9 @@ function SendGuidanceDialog({
   const [saving, setSaving] = useState(false);
   const dept = deptSel || depts[0]?.id || "";
   const send = async () => {
-    if (title.trim().length < 2 || !content.trim()) return toast.error("أدخل العنوان والنص");
+    if (title.trim().length < 2 || !content.trim()) return toast.error(ui("أدخل العنوان والنص"));
     const targets = all ? emps.filter((e) => e.department_id === dept).map((e) => e.id) : selected;
-    if (!targets.length) return toast.error("اختر مستلماً واحداً على الأقل");
+    if (!targets.length) return toast.error(ui("اختر مستلماً واحداً على الأقل"));
     setSaving(true);
     try {
       const { data, error } = await workCenterDb.rpc("send_work_guidance", {
@@ -2120,12 +2067,12 @@ function SendGuidanceDialog({
       if (!result) throw new Error("لم يتم حفظ التوجيه");
       toast.success(
         createTask
-          ? `تم إرسال ${result.guidances_sent} توجيهاً وإنشاء ${result.tasks_created} مهمة مرتبطة`
-          : `تم إرسال التوجيه إلى ${result.guidances_sent} موظف`,
+          ? (ui("تم إرسال ") + (result.guidances_sent) + ui(" توجيهاً وإنشاء ") + (result.tasks_created) + ui(" مهمة مرتبطة"))
+          : (ui("تم إرسال التوجيه إلى ") + (result.guidances_sent) + ui(" موظف")),
       );
       if (result.unlinked_employees)
         toast.warning(
-          `تعذر إيصال التوجيه إلى ${result.unlinked_employees} موظف لعدم ربط حساباتهم، لكن تم إنشاء المهام المرتبطة لهم عند تفعيلها.`,
+          (ui("تعذر إيصال التوجيه إلى ") + (result.unlinked_employees) + ui(" موظف لعدم ربط حساباتهم، لكن تم إنشاء المهام المرتبطة لهم عند تفعيلها.")),
         );
       onDone();
       onOpenChange(false);
@@ -2137,20 +2084,20 @@ function SendGuidanceDialog({
       setDueDate("");
       setPriority("normal");
     } catch (e) {
-      toast.error(`تعذر الإرسال: ${formatErrorMessage(e)}`);
+      toast.error((ui("تعذر الإرسال: ") + (formatErrorMessage(e))));
     } finally {
       setSaving(false);
     }
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent dir="rtl" className="max-h-[90vh] max-w-xl overflow-y-auto">
+      <DialogContent dir={direction()} className="max-h-[90vh] max-w-xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>إرسال توجيه</DialogTitle>
+          <DialogTitle>{ui("إرسال توجيه")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div>
-            <Label>القسم</Label>
+            <Label>{ui("القسم")}</Label>
             <Select
               value={dept}
               onValueChange={(v) => {
@@ -2171,7 +2118,7 @@ function SendGuidanceDialog({
             </Select>
           </div>
           <div>
-            <Label>المستلم</Label>
+            <Label>{ui("المستلم")}</Label>
             <EmployeePicker
               emps={emps}
               deptId={dept}
@@ -2185,11 +2132,11 @@ function SendGuidanceDialog({
             />
           </div>
           <div>
-            <Label>العنوان</Label>
+            <Label>{ui("العنوان")}</Label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
           <div>
-            <Label>النص</Label>
+            <Label>{ui("النص")}</Label>
             <Textarea rows={5} value={content} onChange={(e) => setContent(e.target.value)} />
           </div>
           <div className="rounded-md border p-3">
@@ -2197,13 +2144,11 @@ function SendGuidanceDialog({
               <Checkbox
                 checked={createTask}
                 onCheckedChange={(value) => setCreateTask(value === true)}
-              />{" "}
-              يحتاج هذا التوجيه إلى تنفيذ كمهمة
-            </label>
+              />{" "}{ui("يحتاج هذا التوجيه إلى تنفيذ كمهمة")}</label>
             {createTask && (
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div>
-                  <Label>الموعد النهائي</Label>
+                  <Label>{ui("الموعد النهائي")}</Label>
                   <Input
                     type="date"
                     min={today}
@@ -2212,7 +2157,7 @@ function SendGuidanceDialog({
                   />
                 </div>
                 <div>
-                  <Label>الأولوية</Label>
+                  <Label>{ui("الأولوية")}</Label>
                   <Select value={priority} onValueChange={setPriority}>
                     <SelectTrigger>
                       <SelectValue />
@@ -2220,7 +2165,7 @@ function SendGuidanceDialog({
                     <SelectContent>
                       {Object.entries(PRIORITIES).map(([key, label]) => (
                         <SelectItem key={key} value={key}>
-                          {label}
+                          {ui(label)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -2232,8 +2177,7 @@ function SendGuidanceDialog({
         </div>
         <DialogFooter>
           <Button onClick={send} disabled={saving}>
-            {saving && <Loader2 className="ml-1 h-4 w-4 animate-spin" />} إرسال
-          </Button>
+            {saving && <Loader2 className="ml-1 h-4 w-4 animate-spin" />}{ui(" إرسال")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -2260,7 +2204,7 @@ function EditTaskDialog({
   const [scope, setScope] = useState<"one" | "future">("one");
   const [saving, setSaving] = useState(false);
   const save = async () => {
-    if (f.title.trim().length < 2) return toast.error("أدخل عنوان المهمة");
+    if (f.title.trim().length < 2) return toast.error(ui("أدخل عنوان المهمة"));
     setSaving(true);
     try {
       const patch: WorkCenterTaskUpdate = {
@@ -2289,35 +2233,35 @@ function EditTaskDialog({
           .eq("status", "not_started");
         if (t2.error) throw t2.error;
       }
-      toast.success("تم حفظ التعديل");
+      toast.success(ui("تم حفظ التعديل"));
       onDone();
       onClose();
     } catch (e) {
-      toast.error(`تعذر الحفظ: ${formatErrorMessage(e)}`);
+      toast.error((ui("تعذر الحفظ: ") + (formatErrorMessage(e))));
     } finally {
       setSaving(false);
     }
   };
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent dir="rtl" className="max-w-xl">
+      <DialogContent dir={direction()} className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>تعديل المهمة</DialogTitle>
+          <DialogTitle>{ui("تعديل المهمة")}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <Label>العنوان</Label>
+            <Label>{ui("العنوان")}</Label>
             <Input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} />
           </div>
           <div className="sm:col-span-2">
-            <Label>الوصف</Label>
+            <Label>{ui("الوصف")}</Label>
             <Textarea
               value={f.description}
               onChange={(e) => setF({ ...f, description: e.target.value })}
             />
           </div>
           <div>
-            <Label>الأولوية</Label>
+            <Label>{ui("الأولوية")}</Label>
             <Select value={f.priority} onValueChange={(v) => setF({ ...f, priority: v })}>
               <SelectTrigger>
                 <SelectValue />
@@ -2332,7 +2276,7 @@ function EditTaskDialog({
             </Select>
           </div>
           <div>
-            <Label>الحالة</Label>
+            <Label>{ui("الحالة")}</Label>
             <Select value={f.status} onValueChange={(v) => setF({ ...f, status: v })}>
               <SelectTrigger>
                 <SelectValue />
@@ -2340,14 +2284,14 @@ function EditTaskDialog({
               <SelectContent>
                 {ALLOWED_STATUSES.map((s) => (
                   <SelectItem key={s} value={s}>
-                    {STATUS[s].label}
+                    {ui(STATUS[s].label)}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label>الموعد النهائي</Label>
+            <Label>{ui("الموعد النهائي")}</Label>
             <Input
               type="date"
               value={f.due}
@@ -2355,30 +2299,24 @@ function EditTaskDialog({
             />
           </div>
           <div className="sm:col-span-2">
-            <Label>ملاحظة المدير</Label>
+            <Label>{ui("ملاحظة المدير")}</Label>
             <Textarea value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} />
           </div>
           {task.template_id && (
             <div className="sm:col-span-2 space-y-1 text-sm">
               <label className="flex items-center gap-2">
-                <input type="radio" checked={scope === "one"} onChange={() => setScope("one")} />{" "}
-                تعديل هذا التنفيذ فقط
-              </label>
+                <input type="radio" checked={scope === "one"} onChange={() => setScope("one")} />{" "}{ui("تعديل هذا التنفيذ فقط")}</label>
               <label className="flex items-center gap-2">
                 <input
                   type="radio"
                   checked={scope === "future"}
                   onChange={() => setScope("future")}
-                />{" "}
-                تعديل هذا التنفيذ وجميع التنفيذات المستقبلية
-              </label>
+                />{" "}{ui("تعديل هذا التنفيذ وجميع التنفيذات المستقبلية")}</label>
             </div>
           )}
         </div>
         <DialogFooter>
-          <Button onClick={save} disabled={saving}>
-            حفظ
-          </Button>
+          <Button onClick={save} disabled={saving}>{ui("حفظ")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -2402,17 +2340,17 @@ function CompleteDialog({
   const [saving, setSaving] = useState(false);
   const save = async () => {
     if (task.closing_requirement === "note" && !proofNote.trim())
-      return toast.error("أضف ملاحظة الإثبات المطلوبة");
+      return toast.error(ui("أضف ملاحظة الإثبات المطلوبة"));
     if (
       ["file", "attachment"].includes(task.closing_requirement) &&
       !file &&
       !task.proof_storage_path
     )
-      return toast.error("أرفق الملف المطلوب");
+      return toast.error(ui("أرفق الملف المطلوب"));
     if (task.closing_requirement === "link" && !/^https?:\/\//i.test(proofLink.trim()))
-      return toast.error("أدخل رابطاً صحيحاً يبدأ بـ http أو https");
+      return toast.error(ui("أدخل رابطاً صحيحاً يبدأ بـ http أو https"));
     if (task.closing_requirement === "result" && !proofResult.trim())
-      return toast.error("أدخل نتيجة العمل");
+      return toast.error(ui("أدخل نتيجة العمل"));
     setSaving(true);
     try {
       let proofPath = task.proof_storage_path;
@@ -2441,28 +2379,27 @@ function CompleteDialog({
       if (error) throw error;
       if (!data?.length) throw new Error("لم تُحدّث المهمة. تحقق من صلاحيات الحساب أو ارتباط الموظف بالحساب.");
       toast.success(
-        task.require_review ? "تم إرسال الإنجاز إلى المدير للمراجعة" : "تم تسجيل الإنجاز",
+        task.require_review ? ui("تم إرسال الإنجاز إلى المدير للمراجعة") : ui("تم تسجيل الإنجاز"),
       );
       onDone();
       onClose();
     } catch (e) {
-      toast.error(`تعذر التسجيل: ${formatErrorMessage(e)}`);
+      toast.error((ui("تعذر التسجيل: ") + (formatErrorMessage(e))));
     } finally {
       setSaving(false);
     }
   };
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent dir="rtl">
+      <DialogContent dir={direction()}>
         <DialogHeader>
-          <DialogTitle>تم الإنجاز — {task.title}</DialogTitle>
+          <DialogTitle>{ui("تم الإنجاز — ")}{task.title}</DialogTitle>
         </DialogHeader>
-        <Label>ملاحظة الإنجاز (اختيارية)</Label>
+        <Label>{ui("ملاحظة الإنجاز (اختيارية)")}</Label>
         <Textarea value={note} onChange={(e) => setNote(e.target.value)} />
         {task.closing_requirement !== "none" && (
           <div className="space-y-2 rounded-md border p-3">
-            <Label>
-              متطلب الإغلاق:{" "}
+            <Label>{ui("متطلب الإغلاق:")}{" "}
               {
                 (
                   {
@@ -2479,7 +2416,7 @@ function CompleteDialog({
               <Textarea
                 value={proofNote}
                 onChange={(e) => setProofNote(e.target.value)}
-                placeholder="أدخل ملاحظة الإثبات"
+                placeholder={ui("أدخل ملاحظة الإثبات")}
               />
             )}
             {["file", "attachment"].includes(task.closing_requirement) && (
@@ -2489,11 +2426,9 @@ function CompleteDialog({
                   accept="application/pdf,image/jpeg,image/png,image/webp,text/plain"
                   onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                 />
-                <p className="mt-1 text-xs text-muted-foreground">
-                  PDF أو صورة أو ملف نصي، حتى 20 ميغابايت.
-                </p>
+                <p className="mt-1 text-xs text-muted-foreground">{ui("PDF أو صورة أو ملف نصي، حتى 20 ميغابايت.")}</p>
                 {task.proof_storage_path && !file && (
-                  <p className="text-xs text-muted-foreground">يوجد ملف إثبات محفوظ مسبقاً.</p>
+                  <p className="text-xs text-muted-foreground">{ui("يوجد ملف إثبات محفوظ مسبقاً.")}</p>
                 )}
               </div>
             )}
@@ -2508,15 +2443,13 @@ function CompleteDialog({
               <Textarea
                 value={proofResult}
                 onChange={(e) => setProofResult(e.target.value)}
-                placeholder="اكتب نتيجة العمل"
+                placeholder={ui("اكتب نتيجة العمل")}
               />
             )}
           </div>
         )}
         <DialogFooter>
-          <Button onClick={save} disabled={saving}>
-            تأكيد الإنجاز
-          </Button>
+          <Button onClick={save} disabled={saving}>{ui("تأكيد الإنجاز")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -2536,7 +2469,7 @@ function ReviewTaskDialog({
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const review = async (approve: boolean) => {
-    if (!approve && note.trim().length < 3) return toast.error("اكتب سبب إعادة المهمة للموظف");
+    if (!approve && note.trim().length < 3) return toast.error(ui("اكتب سبب إعادة المهمة للموظف"));
     setSaving(true);
     try {
       const { error } = await workCenterDb
@@ -2550,37 +2483,33 @@ function ReviewTaskDialog({
         })
         .eq("id", task.id);
       if (error) throw error;
-      toast.success(approve ? "تم اعتماد الإنجاز" : "أعيدت المهمة للموظف مع ملاحظة المراجعة");
+      toast.success(approve ? ui("تم اعتماد الإنجاز") : ui("أعيدت المهمة للموظف مع ملاحظة المراجعة"));
       onDone();
       onClose();
     } catch (error) {
-      toast.error(`تعذرت المراجعة: ${formatErrorMessage(error)}`);
+      toast.error((ui("تعذرت المراجعة: ") + (formatErrorMessage(error))));
     } finally {
       setSaving(false);
     }
   };
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent dir="rtl">
+      <DialogContent dir={direction()}>
         <DialogHeader>
-          <DialogTitle>مراجعة المهمة: {task.title}</DialogTitle>
+          <DialogTitle>{ui("مراجعة المهمة: ")}{task.title}</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          {task.completion_note || "لم يضف الموظف ملاحظة إنجاز."}
+          {task.completion_note || ui("لم يضف الموظف ملاحظة إنجاز.")}
         </p>
-        <Label>سبب الإعادة (مطلوب عند الإعادة)</Label>
+        <Label>{ui("سبب الإعادة (مطلوب عند الإعادة)")}</Label>
         <Textarea
           value={note}
           onChange={(event) => setNote(event.target.value)}
-          placeholder="مثال: التقرير ناقص بيانات الموقع الثالث"
+          placeholder={ui("مثال: التقرير ناقص بيانات الموقع الثالث")}
         />
         <DialogFooter>
-          <Button variant="outline" onClick={() => review(false)} disabled={saving}>
-            إعادة للموظف
-          </Button>
-          <Button onClick={() => review(true)} disabled={saving}>
-            اعتماد الإنجاز
-          </Button>
+          <Button variant="outline" onClick={() => review(false)} disabled={saving}>{ui("إعادة للموظف")}</Button>
+          <Button onClick={() => review(true)} disabled={saving}>{ui("اعتماد الإنجاز")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -2608,7 +2537,7 @@ function DelayReasonDialog({
   const [note, setNote] = useState(task.delay_reason_note ?? "");
   const [saving, setSaving] = useState(false);
   const save = async () => {
-    if (reason === "other" && note.trim().length < 3) return toast.error("اكتب سبب التأخير");
+    if (reason === "other" && note.trim().length < 3) return toast.error(ui("اكتب سبب التأخير"));
     setSaving(true);
     try {
       const { error } = await workCenterDb
@@ -2616,20 +2545,20 @@ function DelayReasonDialog({
         .update({ delay_reason: reason, delay_reason_note: note.trim() || null })
         .eq("id", task.id);
       if (error) throw error;
-      toast.success("تم حفظ سبب التأخير");
+      toast.success(ui("تم حفظ سبب التأخير"));
       onDone();
       onClose();
     } catch (error) {
-      toast.error(`تعذر حفظ السبب: ${formatErrorMessage(error)}`);
+      toast.error((ui("تعذر حفظ السبب: ") + (formatErrorMessage(error))));
     } finally {
       setSaving(false);
     }
   };
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent dir="rtl">
+      <DialogContent dir={direction()}>
         <DialogHeader>
-          <DialogTitle>سبب التأخير — {task.title}</DialogTitle>
+          <DialogTitle>{ui("سبب التأخير — ")}{task.title}</DialogTitle>
         </DialogHeader>
         <Select value={reason} onValueChange={setReason}>
           <SelectTrigger>
@@ -2638,7 +2567,7 @@ function DelayReasonDialog({
           <SelectContent>
             {Object.entries(DELAY_REASONS).map(([value, label]) => (
               <SelectItem key={value} value={value}>
-                {label}
+                {ui(label)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -2647,13 +2576,11 @@ function DelayReasonDialog({
           <Textarea
             value={note}
             onChange={(event) => setNote(event.target.value)}
-            placeholder="تفاصيل إضافية"
+            placeholder={ui("تفاصيل إضافية")}
           />
         )}
         <DialogFooter>
-          <Button onClick={save} disabled={saving}>
-            حفظ السبب
-          </Button>
+          <Button onClick={save} disabled={saving}>{ui("حفظ السبب")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -2735,7 +2662,7 @@ function TaskDetailsDialog({
       await Promise.all([checklistQ.refetch(), eventsQ.refetch()]);
       onDone();
     } catch (error) {
-      toast.error(`تعذر تحديث قائمة التحقق: ${formatErrorMessage(error)}`);
+      toast.error((ui("تعذر تحديث قائمة التحقق: ") + (formatErrorMessage(error))));
     }
   };
   const eventLabel = (event: TaskAuditEvent) => {
@@ -2767,7 +2694,7 @@ function TaskDetailsDialog({
     }).format(new Date(value));
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent dir="rtl" className="max-h-[90vh] max-w-2xl overflow-y-auto">
+      <DialogContent dir={direction()} className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{task.title}</DialogTitle>
         </DialogHeader>
@@ -2776,7 +2703,7 @@ function TaskDetailsDialog({
             <p className="whitespace-pre-wrap text-muted-foreground">{task.description}</p>
           )}
           {task.manager_note && (
-            <p className="rounded-md border p-3">ملاحظة المدير: {task.manager_note}</p>
+            <p className="rounded-md border p-3">{ui("ملاحظة المدير: ")}{task.manager_note}</p>
           )}
           {checklistQ.isLoading ? (
             <State loading>{null}</State>
@@ -2785,8 +2712,7 @@ function TaskDetailsDialog({
           ) : (
             checklist.length > 0 && (
               <section className="space-y-2">
-                <h3 className="font-semibold">
-                  قائمة التحقق · {completeCount} من {checklist.length} (
+                <h3 className="font-semibold">{ui("قائمة التحقق · ")}{completeCount}{ui(" من ")}{checklist.length} (
                   {Math.round((completeCount / checklist.length) * 100)}%)
                 </h3>
                 {checklist.map((item) => (
@@ -2796,30 +2722,28 @@ function TaskDetailsDialog({
                       disabled={task.status === "completed" || task.status === "pending_review"}
                       onCheckedChange={() => toggleChecklist(item)}
                     />
-                    {item.label}
+                    {ui(item.label)}
                   </label>
                 ))}
               </section>
             )
           )}
           <section className="rounded-md border p-3">
-            <h3 className="mb-2 font-semibold">متطلبات الإغلاق والإثبات</h3>
+            <h3 className="mb-2 font-semibold">{ui("متطلبات الإغلاق والإثبات")}</h3>
             <p>
               {task.closing_requirement === "none"
-                ? "لا يتطلب إثباتاً"
-                : `المطلوب: ${task.closing_requirement}`}
+                ? ui("لا يتطلب إثباتاً")
+                : (ui("المطلوب: ") + (task.closing_requirement))}
             </p>
-            {task.proof_note && <p className="mt-1">الملاحظة: {task.proof_note}</p>}
-            {task.proof_result && <p className="mt-1">النتيجة: {task.proof_result}</p>}
+            {task.proof_note && <p className="mt-1">{ui("الملاحظة: ")}{task.proof_note}</p>}
+            {task.proof_result && <p className="mt-1">{ui("النتيجة: ")}{task.proof_result}</p>}
             {task.proof_link && (
               <a
                 className="text-primary underline"
                 href={task.proof_link}
                 target="_blank"
                 rel="noreferrer"
-              >
-                فتح رابط الإثبات
-              </a>
+              >{ui("فتح رابط الإثبات")}</a>
             )}
             {task.proof_storage_path &&
               (proofQ.data ? (
@@ -2828,33 +2752,26 @@ function TaskDetailsDialog({
                   href={proofQ.data}
                   target="_blank"
                   rel="noreferrer"
-                >
-                  تنزيل ملف الإثبات
-                </a>
+                >{ui("تنزيل ملف الإثبات")}</a>
               ) : proofQ.error ? (
-                <p role="alert" className="text-destructive">
-                  تعذر فتح ملف الإثبات.
-                </p>
+                <p role="alert" className="text-destructive">{ui("تعذر فتح ملف الإثبات.")}</p>
               ) : (
-                <p className="text-muted-foreground">جارٍ تحميل ملف الإثبات...</p>
+                <p className="text-muted-foreground">{ui("جارٍ تحميل ملف الإثبات...")}</p>
               ))}
           </section>
           {task.delay_reason && (
-            <p className="rounded-md border border-amber-300 p-3">
-              سبب التأخير:{" "}
+            <p className="rounded-md border border-amber-300 p-3">{ui("سبب التأخير:")}{" "}
               {DELAY_REASONS[task.delay_reason as keyof typeof DELAY_REASONS] ?? task.delay_reason}
               {task.delay_reason_note ? ` · ${task.delay_reason_note}` : ""}
             </p>
           )}
           {task.guidance_id && (
             <section className="rounded-md border p-3">
-              <h3 className="font-semibold">توجيه مرتبط</h3>
+              <h3 className="font-semibold">{ui("توجيه مرتبط")}</h3>
               {guidanceQ.isLoading ? (
-                <p>جارٍ تحميل التوجيه...</p>
+                <p>{ui("جارٍ تحميل التوجيه...")}</p>
               ) : guidanceQ.error ? (
-                <p role="alert" className="text-destructive">
-                  تعذر تحميل التوجيه.
-                </p>
+                <p role="alert" className="text-destructive">{ui("تعذر تحميل التوجيه.")}</p>
               ) : guidanceQ.data ? (
                 <>
                   <p className="font-medium">{guidanceQ.data.title}</p>
@@ -2863,12 +2780,12 @@ function TaskDetailsDialog({
                   </p>
                 </>
               ) : (
-                <p className="text-muted-foreground">التوجيه غير متاح لهذا الحساب.</p>
+                <p className="text-muted-foreground">{ui("التوجيه غير متاح لهذا الحساب.")}</p>
               )}
             </section>
           )}
           <section>
-            <h3 className="mb-2 font-semibold">سجل التغييرات</h3>
+            <h3 className="mb-2 font-semibold">{ui("سجل التغييرات")}</h3>
             {eventsQ.isLoading ? (
               <State loading>{null}</State>
             ) : eventsQ.error ? (
@@ -2882,7 +2799,7 @@ function TaskDetailsDialog({
                         <span className="absolute -right-[21px] top-1.5 h-2 w-2 rounded-full bg-muted-foreground" />
                         <span className="font-medium">{eventLabel(event)}</span>
                         <span className="mr-2 text-xs text-muted-foreground">
-                          {event.actor_name || "النظام"} · {dateTime(event.created_at)}
+                          {event.actor_name || ui("النظام")} · {dateTime(event.created_at)}
                         </span>
                       </li>
                     ))}
@@ -2893,9 +2810,7 @@ function TaskDetailsDialog({
           </section>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            إغلاق
-          </Button>
+          <Button variant="outline" onClick={onClose}>{ui("إغلاق")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -2924,7 +2839,7 @@ function EditTemplateDialog({
   const [weekdays, setWeekdays] = useState<number[]>(tp.weekdays ?? []);
   const [saving, setSaving] = useState(false);
   const save = async () => {
-    if (f.rule === "weekly" && !weekdays.length) return toast.error("اختر أيام الأسبوع");
+    if (f.rule === "weekly" && !weekdays.length) return toast.error(ui("اختر أيام الأسبوع"));
     setSaving(true);
     try {
       const { error } = await workCenterDb
@@ -2946,32 +2861,32 @@ function EditTemplateDialog({
       if (d.error) throw d.error;
       const g = await supabase.rpc("generate_recurring_tasks", { _from: today, _to: today });
       if (g.error) throw g.error;
-      toast.success("تم تعديل الجدول وتحديث مهمة اليوم؛ سيُنشأ تنفيذ جديد في يوم التكرار التالي");
+      toast.success(ui("تم تعديل الجدول وتحديث مهمة اليوم؛ سيُنشأ تنفيذ جديد في يوم التكرار التالي"));
       onDone();
       onClose();
     } catch (e) {
-      toast.error(`تعذر الحفظ: ${formatErrorMessage(e)}`);
+      toast.error((ui("تعذر الحفظ: ") + (formatErrorMessage(e))));
     } finally {
       setSaving(false);
     }
   };
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent dir="rtl">
+      <DialogContent dir={direction()}>
         <DialogHeader>
-          <DialogTitle>تعديل جدول: {tp.title}</DialogTitle>
+          <DialogTitle>{ui("تعديل جدول: ")}{tp.title}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div>
-            <Label>التكرار</Label>
+            <Label>{ui("التكرار")}</Label>
             <Select value={f.rule} onValueChange={(v) => setF({ ...f, rule: v })}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="daily">يومي</SelectItem>
-                <SelectItem value="weekly">أسبوعي</SelectItem>
-                <SelectItem value="monthly">شهري</SelectItem>
+                <SelectItem value="daily">{ui("يومي")}</SelectItem>
+                <SelectItem value="weekly">{ui("أسبوعي")}</SelectItem>
+                <SelectItem value="monthly">{ui("شهري")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -2992,7 +2907,7 @@ function EditTemplateDialog({
           )}
           {f.rule === "monthly" && (
             <div>
-              <Label>يوم الشهر</Label>
+              <Label>{ui("يوم الشهر")}</Label>
               <Input
                 type="number"
                 min={1}
@@ -3003,21 +2918,17 @@ function EditTemplateDialog({
             </div>
           )}
           <div>
-            <Label>تاريخ النهاية</Label>
+            <Label>{ui("تاريخ النهاية")}</Label>
             <Input
               type="date"
               value={f.end}
               onChange={(e) => setF({ ...f, end: e.target.value })}
             />
           </div>
-          <p className="text-xs text-muted-foreground">
-            تُنشأ مهمة اليوم فقط، ويُنشأ سجل جديد تلقائياً في كل يوم تكرار قادم.
-          </p>
+          <p className="text-xs text-muted-foreground">{ui("تُنشأ مهمة اليوم فقط، ويُنشأ سجل جديد تلقائياً في كل يوم تكرار قادم.")}</p>
         </div>
         <DialogFooter>
-          <Button onClick={save} disabled={saving}>
-            حفظ
-          </Button>
+          <Button onClick={save} disabled={saving}>{ui("حفظ")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -3051,23 +2962,22 @@ function HistoryDialog({
   const done = rows.filter((x) => x.s === "completed").length;
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent dir="rtl" className="max-h-[90vh] max-w-5xl overflow-y-auto">
+      <DialogContent dir={direction()} className="max-h-[90vh] max-w-5xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>
-            سجل {emp.full_name}
+          <DialogTitle>{ui("سجل ")}{emp.full_name}
             {emp.position ? ` — ${emp.position}` : ""}
           </DialogTitle>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Stat label="إجمالي المهام" value={rows.length} />
-          <Stat label="المكتملة" value={done} tone="text-emerald-600" />
+          <Stat label={ui("إجمالي المهام")} value={rows.length} />
+          <Stat label={ui("المكتملة")} value={done} tone="text-emerald-600" />
           <Stat
-            label="المتأخرة"
+            label={ui("المتأخرة")}
             value={rows.filter((x) => x.s === "overdue").length}
             tone="text-red-600"
           />
           <Stat
-            label="نسبة الإنجاز %"
+            label={ui("نسبة الإنجاز %")}
             value={rows.length ? Math.round((done / rows.length) * 100) : 0}
           />
         </div>
@@ -3076,7 +2986,7 @@ function HistoryDialog({
             <State empty={!list.length}>{render(list, false)}</State>
           </Section>
         ))}
-        <Section title={`التوجيهات (${myNotes.length})`}>
+        <Section title={(ui("التوجيهات (") + (myNotes.length) + ")")}>
           <State empty={!myNotes.length}>
             <div className="divide-y">
               {myNotes.map((n) => (
@@ -3085,14 +2995,14 @@ function HistoryDialog({
                     <span className="font-semibold">{n.title}</span> — {n.content}
                   </div>
                   <span className={n.read_at ? "text-emerald-600" : "text-orange-600"}>
-                    {n.read_at ? "مقروء" : "غير مقروء"}
+                    {n.read_at ? ui("مقروء") : ui("غير مقروء")}
                   </span>
                 </div>
               ))}
             </div>
           </State>
         </Section>
-        <Section title="ملاحظات المدير">
+        <Section title={ui("ملاحظات المدير")}>
           <State empty={!managerNotes.length}>
             <div className="divide-y">
               {managerNotes.map(({ t }) => (

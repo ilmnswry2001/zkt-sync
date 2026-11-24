@@ -1,3 +1,4 @@
+import { direction, ui } from "@/lib/ui-language";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
@@ -25,7 +26,7 @@ import { uploadedFilesTable } from "@/lib/uploaded-files-client";
 export const Route = createFileRoute("/_authenticated/upload")({
   head: () => ({
     meta: [
-      { title: "رفع ملفات البصمة" },
+      { title: ui("رفع ملفات البصمة") },
       { name: "description", content: "رفع ملفات النسخ الاحتياطي لأجهزة البصمة ZKTeco قبل معالجتها." },
     ],
   }),
@@ -87,9 +88,9 @@ function UploadPage() {
       setStep("تم الرفع — ابدأ المعالجة من صفحة سجل الملفات");
       setDone(true);
       setFile(null);
-      toast.success("تم رفع الملف. اذهب إلى سجل الملفات واضغط «بدء معالجة البصمة»");
+      toast.success(ui("تم رفع الملف. اذهب إلى سجل الملفات واضغط «بدء معالجة البصمة»"));
     } catch (e: any) {
-      toast.error(`فشل الرفع: ${formatErrorMessage(e)}`);
+      toast.error((ui("فشل الرفع: ") + (formatErrorMessage(e))));
       setStep(`فشل: ${formatErrorMessage(e)}`);
     } finally {
       setBusy(false);
@@ -117,36 +118,32 @@ function UploadPage() {
       await doUpload(hash, false);
     } catch (e: any) {
       setBusy(false);
-      toast.error(`فشل: ${formatErrorMessage(e)}`);
+      toast.error((ui("فشل: ") + (formatErrorMessage(e))));
     }
   };
 
   return (
-    <div dir="rtl" className="space-y-6 max-w-3xl">
+    <div dir={direction()} className="space-y-6 max-w-3xl">
       <div>
-        <h1 className="text-3xl font-bold">رفع ملف البصمة</h1>
-        <p className="text-muted-foreground mt-1">
-          ارفع ملف <code>backupdata.dat</code> الصادر من جهاز ZKTeco — المعالجة تبدأ يدوياً من صفحة سجل
-          الملفات
-        </p>
+        <h1 className="text-3xl font-bold">{ui("رفع ملف البصمة")}</h1>
+        <p className="text-muted-foreground mt-1">{ui("ارفع ملف ")}<code>backupdata.dat</code>{ui(" الصادر من جهاز ZKTeco — المعالجة تبدأ يدوياً من صفحة سجل الملفات")}</p>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Upload className="w-5 h-5" /> الملف
-          </CardTitle>
-          <CardDescription>الصيغة المدعومة: ZK format 1.0.0.0 (GZIP + TAR + SQLite)</CardDescription>
+            <Upload className="w-5 h-5" />{ui(" الملف")}</CardTitle>
+          <CardDescription>{ui("الصيغة المدعومة: ZK format 1.0.0.0 (GZIP + TAR + SQLite)")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <Label>الجهاز (اختياري — لربط السجلات)</Label>
+            <Label>{ui("الجهاز (اختياري — لربط السجلات)")}</Label>
             <Select value={deviceId} onValueChange={setDeviceId}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">— غير محدد —</SelectItem>
+                <SelectItem value="none">{ui("— غير محدد —")}</SelectItem>
                 {devices.map((d: any) => (
                   <SelectItem key={d.id} value={d.id}>
                     {d.name} {d.serial_number ? `(${d.serial_number})` : ""}
@@ -156,28 +153,27 @@ function UploadPage() {
             </Select>
           </div>
           <div className="flex flex-col gap-3">
-            <Label htmlFor="punch-time-zone">توقيت السجلات في الملف</Label>
-            <Select dir="rtl" value={timeZone} disabled={busy || duplicate !== null}
+            <Label htmlFor="punch-time-zone">{ui("توقيت السجلات في الملف")}</Label>
+            <Select dir={direction()} value={timeZone} disabled={busy || duplicate !== null}
               onValueChange={(value) => {
                 const zone = punchTimeZones.find((item) => item === value);
                 if (zone) setTimeZone(zone);
               }}>
               <SelectTrigger id="punch-time-zone"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="Asia/Baghdad">توقيت العراق المحلي (+03:00) — افتراضي</SelectItem>
-                <SelectItem value="UTC">توقيت عالمي UTC خام</SelectItem>
+                <SelectItem value="Asia/Baghdad">{ui("توقيت العراق المحلي (+03:00) — افتراضي")}</SelectItem>
+                <SelectItem value="UTC">{ui("توقيت عالمي UTC خام")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label>اختر الملف</Label>
+            <Label>{ui("اختر الملف")}</Label>
             <label className="mt-2 flex flex-col items-center justify-center border-2 border-dashed border-border rounded-lg p-8 cursor-pointer hover:bg-accent/30 transition-colors">
               <Upload className="w-10 h-10 text-muted-foreground mb-2" />
-              <p className="text-sm font-medium">{file ? file.name : "اضغط لاختيار ملف .dat"}</p>
+              <p className="text-sm font-medium">{file ? file.name : ui("اضغط لاختيار ملف .dat")}</p>
               {file && (
                 <p className="text-xs text-muted-foreground mt-1">
-                  {(file.size / 1024 / 1024).toFixed(2)} ميجا
-                </p>
+                  {(file.size / 1024 / 1024).toFixed(2)}{ui(" ميجا")}</p>
               )}
               <input
                 type="file"
@@ -195,15 +191,14 @@ function UploadPage() {
             </div>
           )}
 
-          {!isAdmin && <p>رفع ملفات البصمة متاح لمدير النظام.</p>}
+          {!isAdmin && <p>{ui("رفع ملفات البصمة متاح لمدير النظام.")}</p>}
           <Button onClick={handleUpload} disabled={!isAdmin || !file || busy} className="w-full" size="lg">
-            {busy ? "جارٍ الرفع..." : "رفع الملف"}
+            {busy ? ui("جارٍ الرفع...") : ui("رفع الملف")}
           </Button>
           {done && (
             <Button asChild variant="outline" className="w-full">
               <Link to="/files">
-                <FileCheck2 className="w-4 h-4 ml-2" /> اذهب إلى سجل الملفات وابدأ المعالجة
-              </Link>
+                <FileCheck2 className="w-4 h-4 ml-2" />{ui(" اذهب إلى سجل الملفات وابدأ المعالجة")}</Link>
             </Button>
           )}
         </CardContent>
@@ -213,24 +208,17 @@ function UploadPage() {
         <CardContent className="p-4 flex gap-3 items-start">
           <AlertCircle className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5" />
           <div className="text-sm text-muted-foreground">
-            <p className="font-medium text-foreground mb-1">ملاحظة:</p>
-            <p>
-              الرفع لا يعالج الملف تلقائياً. بعد الرفع اضغط «بدء معالجة البصمة» في سجل الملفات ليتم
-              احتساب الحضور واعتماده في التقرير الشهري. البصمات المكررة (نفس الموظف ونفس الوقت) لا
-              تُحتسب مرتين.
-            </p>
+            <p className="font-medium text-foreground mb-1">{ui("ملاحظة:")}</p>
+            <p>{ui("الرفع لا يعالج الملف تلقائياً. بعد الرفع اضغط «بدء معالجة البصمة» في سجل الملفات ليتم احتساب الحضور واعتماده في التقرير الشهري. البصمات المكررة (نفس الموظف ونفس الوقت) لا تُحتسب مرتين.")}</p>
           </div>
         </CardContent>
       </Card>
 
       <Dialog open={!!duplicate} onOpenChange={(open) => !open && setDuplicate(null)}>
-        <DialogContent dir="rtl">
+        <DialogContent dir={direction()}>
           <DialogHeader className="sm:text-right">
-            <DialogTitle>هذا الملف مكرر، هل تريد الاستمرار؟</DialogTitle>
-            <DialogDescription>
-              تم رفع ملف بنفس المحتوى سابقاً ({duplicate?.name}). عند الاستمرار سيُرفع الملف مع وسم
-              «مكرر» ولن تُحتسب بصماته مرتين.
-            </DialogDescription>
+            <DialogTitle>{ui("هذا الملف مكرر، هل تريد الاستمرار؟")}</DialogTitle>
+            <DialogDescription>{ui("تم رفع ملف بنفس المحتوى سابقاً (")}{duplicate?.name}{ui("). عند الاستمرار سيُرفع الملف مع وسم «مكرر» ولن تُحتسب بصماته مرتين.")}</DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:justify-start">
             <Button
@@ -239,12 +227,8 @@ function UploadPage() {
                 setDuplicate(null);
                 void doUpload(hash, true);
               }}
-            >
-              استمرار
-            </Button>
-            <Button variant="outline" onClick={() => setDuplicate(null)}>
-              إلغاء
-            </Button>
+            >{ui("استمرار")}</Button>
+            <Button variant="outline" onClick={() => setDuplicate(null)}>{ui("إلغاء")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

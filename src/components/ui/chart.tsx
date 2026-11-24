@@ -1,3 +1,4 @@
+import { ui } from "@/lib/ui-language";
 import * as React from "react";
 import * as RechartsPrimitive from "recharts";
 
@@ -217,7 +218,7 @@ const ChartTooltipContent = React.forwardRef<
                         <div className="grid gap-1.5">
                           {nestLabel ? tooltipLabel : null}
                           <span className="text-muted-foreground">
-                            {itemConfig?.label || item.name}
+                            {ui(itemConfig?.label) || item.name}
                           </span>
                         </div>
                         {item.value && (
@@ -286,7 +287,7 @@ const ChartLegendContent = React.forwardRef<
                   }}
                 />
               )}
-              {itemConfig?.label}
+              {ui(itemConfig?.label)}
             </div>
           );
         })}

@@ -1,3 +1,4 @@
+import { direction, ui } from "@/lib/ui-language";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -33,7 +34,7 @@ import {
 import { getDefaultWage } from "@/lib/wage-defaults";
 
 export const Route = createFileRoute("/_authenticated/settings")({
-  head: () => ({ meta: [{ title: "الإعدادات" }] }),
+  head: () => ({ meta: [{ title: ui("الإعدادات") }] }),
   beforeLoad: async () => {
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) throw redirect({ to: "/auth" });
@@ -129,9 +130,9 @@ function SettingsPage() {
 
   const addItem = async (kind: CatalogKind) => {
     const name = newNames[kind].trim();
-    if (!name) return toast.error("اكتب اسم التخصص أو البند أولاً");
+    if (!name) return toast.error(ui("اكتب اسم التخصص أو البند أولاً"));
     if (items.some((item) => item.kind === kind && item.name.trim() === name)) {
-      return toast.error("هذا الاسم موجود مسبقاً");
+      return toast.error(ui("هذا الاسم موجود مسبقاً"));
     }
     const maxOrder = Math.max(
       0,
@@ -146,24 +147,24 @@ function SettingsPage() {
       const { error } = await supabase
         .from("report_catalog_items")
         .insert({ kind, name, sort_order: maxOrder + 10 });
-      if (error) return toast.error(formatErrorMessage(error));
+      if (error) return toast.error(ui(formatErrorMessage(error)));
       if (kind === "worker_specialty") {
         const wage = getDefaultWage(name);
         const { error: wageError } = await supabase.from("wage_rates").upsert(
           { title: name, ...wage },
           { onConflict: "title", ignoreDuplicates: true },
         );
-        if (wageError) return toast.error(`تمت إضافة التخصص لكن تعذر إنشاء أجره الافتراضي: ${formatErrorMessage(wageError)}`);
+        if (wageError) return toast.error((ui("تمت إضافة التخصص لكن تعذر إنشاء أجره الافتراضي: ") + (formatErrorMessage(wageError))));
       }
     }
     setNewNames((current) => ({ ...current, [kind]: "" }));
     await refresh();
-    toast.success("تمت إضافة البند وسيظهر فوراً في تقرير المواقع");
+    toast.success(ui("تمت إضافة البند وسيظهر فوراً في تقرير المواقع"));
   };
 
   const saveName = async (item: CatalogItem) => {
     const name = editingName.trim();
-    if (!name) return toast.error("لا يمكن ترك الاسم فارغاً");
+    if (!name) return toast.error(ui("لا يمكن ترك الاسم فارغاً"));
     if (usingFallback) {
       writeLocalCatalog(items.map((entry) => (entry.id === item.id ? { ...entry, name } : entry)));
     } else {
@@ -171,11 +172,11 @@ function SettingsPage() {
         .from("report_catalog_items")
         .update({ name })
         .eq("id", item.id);
-      if (error) return toast.error(formatErrorMessage(error));
+      if (error) return toast.error(ui(formatErrorMessage(error)));
     }
     setEditingId(null);
     await refresh();
-    toast.success("تم تعديل الاسم");
+    toast.success(ui("تم تعديل الاسم"));
   };
 
   const archive = async (item: CatalogItem) => {
@@ -190,10 +191,10 @@ function SettingsPage() {
         .from("report_catalog_items")
         .update({ is_archived: !item.is_archived })
         .eq("id", item.id);
-      if (error) return toast.error(formatErrorMessage(error));
+      if (error) return toast.error(ui(formatErrorMessage(error)));
     }
     await refresh();
-    toast.success(item.is_archived ? "تمت إعادة تفعيل البند" : "تمت أرشفة البند");
+    toast.success(item.is_archived ? ui("تمت إعادة تفعيل البند") : ui("تمت أرشفة البند"));
   };
 
   const move = async (list: CatalogItem[], item: CatalogItem, direction: -1 | 1) => {
@@ -225,7 +226,7 @@ function SettingsPage() {
           is_archived: target.is_archived,
         },
       ]);
-      if (error) return toast.error(formatErrorMessage(error));
+      if (error) return toast.error(ui(formatErrorMessage(error)));
     }
     await refresh();
   };
@@ -234,7 +235,7 @@ function SettingsPage() {
     event.preventDefault();
     const name = shiftForm.name.trim();
     if (!name || !shiftForm.start_time || !shiftForm.end_time) {
-      return toast.error("أدخل اسم الدوام ووقت البداية والنهاية");
+      return toast.error(ui("أدخل اسم الدوام ووقت البداية والنهاية"));
     }
     const payload = {
       name,
@@ -245,27 +246,24 @@ function SettingsPage() {
     const result = editingShiftId
       ? await supabase.from("shifts").update(payload).eq("id", editingShiftId)
       : await supabase.from("shifts").insert(payload);
-    if (result.error) return toast.error(formatErrorMessage(result.error));
+    if (result.error) return toast.error(ui(formatErrorMessage(result.error)));
     setEditingShiftId(null);
     setShiftForm({ name: "", start_time: "08:00", end_time: "17:00", grace_minutes: "0" });
     await queryClient.invalidateQueries({ queryKey: ["settings", "shift-rules"] });
-    toast.success("تم حفظ قاعدة الدوام");
+    toast.success(ui("تم حفظ قاعدة الدوام"));
   };
 
   const renderCatalog = (title: string, kind: CatalogKind, list: CatalogItem[]) => (
     <Card>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          كل بند نشط يظهر تلقائياً في نموذج تقرير المواقع اليومية. الأرشفة لا تحذف البند من التقارير
-          السابقة.
-        </p>
+        <p className="text-sm text-muted-foreground">{ui("كل بند نشط يظهر تلقائياً في نموذج تقرير المواقع اليومية. الأرشفة لا تحذف البند من التقارير السابقة.")}</p>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex gap-2">
           <div className="flex-1">
             <Label>
-              {kind === "worker_specialty" ? "إضافة تخصص جديد" : "إضافة نوع آلية أو مركبة"}
+              {kind === "worker_specialty" ? ui("إضافة تخصص جديد") : ui("إضافة نوع آلية أو مركبة")}
             </Label>
             <Input
               value={newNames[kind]}
@@ -274,13 +272,12 @@ function SettingsPage() {
                 if (e.key === "Enter") void addItem(kind);
               }}
               placeholder={
-                kind === "worker_specialty" ? "مثال: مهندس اتصالات" : "مثال: سيارة صالون"
+                kind === "worker_specialty" ? ui("مثال: مهندس اتصالات") : ui("مثال: سيارة صالون")
               }
             />
           </div>
           <Button className="mt-6" onClick={() => void addItem(kind)}>
-            <Plus className="w-4 h-4 ml-2" /> إضافة
-          </Button>
+            <Plus className="w-4 h-4 ml-2" />{ui(" إضافة")}</Button>
         </div>
         <div className="divide-y rounded-lg border">
           {list.map((item, index) => (
@@ -301,7 +298,7 @@ function SettingsPage() {
                     size="icon"
                     variant="ghost"
                     onClick={() => void saveName(item)}
-                    aria-label="حفظ"
+                    aria-label={ui("حفظ")}
                   >
                     <Check className="w-4 h-4 text-success" />
                   </Button>
@@ -309,7 +306,7 @@ function SettingsPage() {
                     size="icon"
                     variant="ghost"
                     onClick={() => setEditingId(null)}
-                    aria-label="إلغاء"
+                    aria-label={ui("إلغاء")}
                   >
                     <X className="w-4 h-4" />
                   </Button>
@@ -317,13 +314,13 @@ function SettingsPage() {
               ) : (
                 <>
                   <span className="flex-1 font-medium">{item.name}</span>
-                  {item.is_archived && <Badge variant="secondary">مؤرشف</Badge>}
+                  {item.is_archived && <Badge variant="secondary">{ui("مؤرشف")}</Badge>}
                   <Button
                     size="icon"
                     variant="ghost"
                     onClick={() => void move(list, item, -1)}
                     disabled={index === 0}
-                    aria-label="تحريك للأعلى"
+                    aria-label={ui("تحريك للأعلى")}
                   >
                     <ArrowUp className="w-4 h-4" />
                   </Button>
@@ -332,7 +329,7 @@ function SettingsPage() {
                     variant="ghost"
                     onClick={() => void move(list, item, 1)}
                     disabled={index === list.length - 1}
-                    aria-label="تحريك للأسفل"
+                    aria-label={ui("تحريك للأسفل")}
                   >
                     <ArrowDown className="w-4 h-4" />
                   </Button>
@@ -343,7 +340,7 @@ function SettingsPage() {
                       setEditingId(item.id);
                       setEditingName(item.name);
                     }}
-                    aria-label="تعديل"
+                    aria-label={ui("تعديل")}
                   >
                     <Pencil className="w-4 h-4" />
                   </Button>
@@ -351,7 +348,7 @@ function SettingsPage() {
                     size="icon"
                     variant="ghost"
                     onClick={() => void archive(item)}
-                    aria-label={item.is_archived ? "إعادة تفعيل" : "أرشفة"}
+                    aria-label={item.is_archived ? ui("إعادة تفعيل") : ui("أرشفة")}
                   >
                     {item.is_archived ? (
                       <RotateCcw className="w-4 h-4 text-success" />
@@ -364,7 +361,7 @@ function SettingsPage() {
             </div>
           ))}
           {!list.length && (
-            <p className="p-6 text-center text-muted-foreground">لا توجد بنود بعد</p>
+            <p className="p-6 text-center text-muted-foreground">{ui("لا توجد بنود بعد")}</p>
           )}
         </div>
       </CardContent>
@@ -376,35 +373,30 @@ function SettingsPage() {
       <div>
         <div className="flex items-center gap-2">
           <Settings2 className="w-7 h-7 text-primary" />
-          <h1 className="text-3xl font-bold">الإعدادات</h1>
+          <h1 className="text-3xl font-bold">{ui("الإعدادات")}</h1>
         </div>
-        <p className="text-muted-foreground mt-1">
-          إدارة التقارير اليومية والإعدادات الأساسية للنظام
-        </p>
+        <p className="text-muted-foreground mt-1">{ui("إدارة التقارير اليومية والإعدادات الأساسية للنظام")}</p>
       </div>
-      <Tabs defaultValue="reports" dir="rtl">
+      <Tabs defaultValue="reports" dir={direction()}>
         <TabsList className="h-auto flex-wrap justify-start">
-          <TabsTrigger value="reports">إعدادات التقارير اليومية</TabsTrigger>
-          <TabsTrigger value="work-rules">أوقات الدوام والإضافي</TabsTrigger>
-          <TabsTrigger value="basic">الإعدادات الأساسية</TabsTrigger>
+          <TabsTrigger value="reports">{ui("إعدادات التقارير اليومية")}</TabsTrigger>
+          <TabsTrigger value="work-rules">{ui("أوقات الدوام والإضافي")}</TabsTrigger>
+          <TabsTrigger value="basic">{ui("الإعدادات الأساسية")}</TabsTrigger>
         </TabsList>
         <TabsContent value="reports" className="space-y-5">
           {usingFallback && (
             <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
               <div>
-                <b>وضع توافق مؤقت:</b> جدول الإعدادات لم تتم مزامنته بعد مع قاعدة البيانات؛ التخصصات
-                المعروضة والإضافات محفوظة في هذا المتصفح وستظهر فوراً في التقارير اليومية.
-              </div>
+                <b>{ui("وضع توافق مؤقت:")}</b>{ui(" جدول الإعدادات لم تتم مزامنته بعد مع قاعدة البيانات؛ التخصصات المعروضة والإضافات محفوظة في هذا المتصفح وستظهر فوراً في التقارير اليومية.")}</div>
             </div>
           )}
           {catalogQuery.error && (
-            <p className="text-destructive">
-              تعذر تحميل قائمة التخصصات: {catalogQuery.error.message}
+            <p className="text-destructive">{ui("تعذر تحميل قائمة التخصصات: ")}{catalogQuery.error.message}
             </p>
           )}
           {catalogQuery.isLoading ? (
-            <p className="text-muted-foreground">جارٍ تحميل التخصصات والآليات...</p>
+            <p className="text-muted-foreground">{ui("جارٍ تحميل التخصصات والآليات...")}</p>
           ) : (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               {renderCatalog("التخصصات — العاملون", "worker_specialty", workers)}
@@ -416,33 +408,27 @@ function SettingsPage() {
           <Card className="border-primary/20 bg-primary/5">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Clock3 className="h-5 w-5 text-primary" />
-                قواعد الدوام الرسمي واحتساب الإضافي
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                يحدد وقت النهاية الحد الذي يبدأ بعده احتساب الوقت الإضافي من سجلات البصمة. ويُضاف
-                هامش السماح قبل بدء الاحتساب. يجب تحديد أجر الساعة الإضافية لكل فئة من قسم الأجور
-                والمكافآت.
-              </p>
+                <Clock3 className="h-5 w-5 text-primary" />{ui("قواعد الدوام الرسمي واحتساب الإضافي")}</CardTitle>
+              <p className="text-sm text-muted-foreground">{ui("يحدد وقت النهاية الحد الذي يبدأ بعده احتساب الوقت الإضافي من سجلات البصمة. ويُضاف هامش السماح قبل بدء الاحتساب. يجب تحديد أجر الساعة الإضافية لكل فئة من قسم الأجور والمكافآت.")}</p>
             </CardHeader>
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>{editingShiftId ? "تعديل قاعدة دوام" : "إضافة قاعدة دوام"}</CardTitle>
+              <CardTitle>{editingShiftId ? ui("تعديل قاعدة دوام") : ui("إضافة قاعدة دوام")}</CardTitle>
             </CardHeader>
             <CardContent>
               <form onSubmit={saveShift} className="grid grid-cols-1 gap-4 md:grid-cols-4">
                 <div>
-                  <Label>اسم الدوام</Label>
+                  <Label>{ui("اسم الدوام")}</Label>
                   <Input
                     required
                     value={shiftForm.name}
                     onChange={(e) => setShiftForm((v) => ({ ...v, name: e.target.value }))}
-                    placeholder="الدوام الرسمي"
+                    placeholder={ui("الدوام الرسمي")}
                   />
                 </div>
                 <div>
-                  <Label>بداية الدوام</Label>
+                  <Label>{ui("بداية الدوام")}</Label>
                   <Input
                     required
                     type="time"
@@ -451,7 +437,7 @@ function SettingsPage() {
                   />
                 </div>
                 <div>
-                  <Label>نهاية الدوام</Label>
+                  <Label>{ui("نهاية الدوام")}</Label>
                   <Input
                     required
                     type="time"
@@ -460,7 +446,7 @@ function SettingsPage() {
                   />
                 </div>
                 <div>
-                  <Label>هامش السماح بالدقائق</Label>
+                  <Label>{ui("هامش السماح بالدقائق")}</Label>
                   <Input
                     type="number"
                     min="0"
@@ -470,7 +456,7 @@ function SettingsPage() {
                   />
                 </div>
                 <div className="flex gap-2 md:col-span-4">
-                  <Button type="submit">{editingShiftId ? "حفظ التعديل" : "إضافة قاعدة"}</Button>
+                  <Button type="submit">{editingShiftId ? ui("حفظ التعديل") : ui("إضافة قاعدة")}</Button>
                   {editingShiftId && (
                     <Button
                       type="button"
@@ -484,9 +470,7 @@ function SettingsPage() {
                           grace_minutes: "0",
                         });
                       }}
-                    >
-                      إلغاء
-                    </Button>
+                    >{ui("إلغاء")}</Button>
                   )}
                 </div>
               </form>
@@ -494,15 +478,14 @@ function SettingsPage() {
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>قواعد الدوام المسجلة</CardTitle>
+              <CardTitle>{ui("قواعد الدوام المسجلة")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {shiftsQuery.isLoading && (
-                <p className="text-muted-foreground">جارٍ تحميل قواعد الدوام...</p>
+                <p className="text-muted-foreground">{ui("جارٍ تحميل قواعد الدوام...")}</p>
               )}
               {shiftsQuery.error && (
-                <p className="text-destructive">
-                  تعذر تحميل قواعد الدوام: {shiftsQuery.error.message}
+                <p className="text-destructive">{ui("تعذر تحميل قواعد الدوام: ")}{shiftsQuery.error.message}
                 </p>
               )}
               {shifts.map((shift) => (
@@ -513,9 +496,8 @@ function SettingsPage() {
                   <div>
                     <p className="font-semibold">{shift.name}</p>
                     <p className="text-sm text-muted-foreground">
-                      {shift.start_time.slice(0, 5)} — {shift.end_time.slice(0, 5)} · هامش السماح{" "}
-                      {shift.grace_minutes} دقيقة
-                    </p>
+                      {shift.start_time.slice(0, 5)} — {shift.end_time.slice(0, 5)}{ui(" · هامش السماح")}{" "}
+                      {shift.grace_minutes}{ui(" دقيقة")}</p>
                   </div>
                   <Button
                     variant="outline"
@@ -529,15 +511,11 @@ function SettingsPage() {
                         grace_minutes: String(shift.grace_minutes),
                       });
                     }}
-                  >
-                    تعديل
-                  </Button>
+                  >{ui("تعديل")}</Button>
                 </div>
               ))}
               {!shiftsQuery.isLoading && !shifts.length && (
-                <p className="py-6 text-center text-muted-foreground">
-                  لا توجد قواعد دوام. أضف أول قاعدة الآن.
-                </p>
+                <p className="py-6 text-center text-muted-foreground">{ui("لا توجد قواعد دوام. أضف أول قاعدة الآن.")}</p>
               )}
             </CardContent>
           </Card>
@@ -545,35 +523,31 @@ function SettingsPage() {
         <TabsContent value="basic">
           <Card>
             <CardHeader>
-              <CardTitle>الإعدادات الأساسية</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                هذه البيانات تحفظ محلياً حالياً إلى أن تتم مزامنة جدول إعدادات النظام.
-              </p>
+              <CardTitle>{ui("الإعدادات الأساسية")}</CardTitle>
+              <p className="text-sm text-muted-foreground">{ui("هذه البيانات تحفظ محلياً حالياً إلى أن تتم مزامنة جدول إعدادات النظام.")}</p>
             </CardHeader>
             <CardContent className="max-w-xl space-y-5">
               <div>
-                <Label>اسم النظام</Label>
+                <Label>{ui("اسم النظام")}</Label>
                 <Input
                   value={basicSettings.systemName}
                   onChange={(e) =>
                     setBasicSettings((current) => ({ ...current, systemName: e.target.value }))
                   }
-                  placeholder="نظام الحضور"
+                  placeholder={ui("نظام الحضور")}
                 />
               </div>
               <div>
-                <Label>اسم مدير الشركة</Label>
+                <Label>{ui("اسم مدير الشركة")}</Label>
                 <Input
                   value={basicSettings.companyManager}
                   onChange={(e) =>
                     setBasicSettings((current) => ({ ...current, companyManager: e.target.value }))
                   }
-                  placeholder="اكتب اسم مدير الشركة"
+                  placeholder={ui("اكتب اسم مدير الشركة")}
                 />
               </div>
-              <Button onClick={() => toast.success("تم حفظ الإعدادات الأساسية")}>
-                حفظ الإعدادات
-              </Button>
+              <Button onClick={() => toast.success(ui("تم حفظ الإعدادات الأساسية"))}>{ui("حفظ الإعدادات")}</Button>
             </CardContent>
           </Card>
         </TabsContent>

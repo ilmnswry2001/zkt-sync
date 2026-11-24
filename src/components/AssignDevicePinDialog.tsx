@@ -1,3 +1,4 @@
+import { direction, ui } from "@/lib/ui-language";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -64,10 +65,10 @@ export function AssignDevicePinDialog({
       ]) {
         void cache.invalidateQueries({ queryKey: key });
       }
-      toast.success(`تم تنسيب الرقم إلى ${employee.full_name} ومعالجة ${count} حركة`);
+      toast.success((ui("تم تنسيب الرقم إلى ") + (employee.full_name) + ui(" ومعالجة ") + (count) + ui(" حركة")));
       close();
     },
-    onError: (error) => toast.error(formatErrorMessage(error)),
+    onError: (error) => toast.error(ui(formatErrorMessage(error))),
   });
   return (
     <Dialog
@@ -76,16 +77,10 @@ export function AssignDevicePinDialog({
         if (!open && !assign.isPending) close();
       }}
     >
-      <DialogContent dir="rtl" className="max-h-[90dvh] overflow-auto">
-        <DialogTitle>
-          تنسيب رقم البصمة <bdi>{record.pin}</bdi> لموظف
-        </DialogTitle>
-        <DialogDescription>
-          يُحفظ الرقم في ملف الموظف وتُطابق حركاته غير المطابقة بهذا الرقم على جميع الأجهزة.
-        </DialogDescription>
-        <label className="grid gap-2">
-          اسم الموظف أو رقمه الوظيفي
-          <Input
+      <DialogContent dir={direction()} className="max-h-[90dvh] overflow-auto">
+        <DialogTitle>{ui("تنسيب رقم البصمة ")}<bdi>{record.pin}</bdi>{ui(" لموظف")}</DialogTitle>
+        <DialogDescription>{ui("يُحفظ الرقم في ملف الموظف وتُطابق حركاته غير المطابقة بهذا الرقم على جميع الأجهزة.")}</DialogDescription>
+        <label className="grid gap-2">{ui("اسم الموظف أو رقمه الوظيفي")}<Input
             autoFocus
             value={search}
             disabled={assign.isPending}
@@ -98,13 +93,11 @@ export function AssignDevicePinDialog({
         <div className="max-h-60 space-y-1 overflow-auto">
           {term &&
             (candidates.isPending ? (
-              <p>جارٍ البحث…</p>
+              <p>{ui("جارٍ البحث…")}</p>
             ) : candidates.isError ? (
-              <Button variant="outline" onClick={() => candidates.refetch()}>
-                تعذر البحث · إعادة المحاولة
-              </Button>
+              <Button variant="outline" onClick={() => candidates.refetch()}>{ui("تعذر البحث · إعادة المحاولة")}</Button>
             ) : !candidates.data?.length ? (
-              <p>لا يوجد موظف مطابق للبحث.</p>
+              <p>{ui("لا يوجد موظف مطابق للبحث.")}</p>
             ) : (
               candidates.data.map((employee) => (
                 <Button
@@ -121,12 +114,10 @@ export function AssignDevicePinDialog({
             ))}
         </div>
         {selected && (
-          <p>
-            الموظف المختار: {selected.full_name}
+          <p>{ui("الموظف المختار: ")}{selected.full_name}
             {selected.attendance_device_id && selected.attendance_device_id !== record.pin && (
               <>
-                {" "}
-                · سيُستبدل رقم البصمة الحالي <bdi>{selected.attendance_device_id}</bdi> بالرقم{" "}
+                {" "}{ui("· سيُستبدل رقم البصمة الحالي ")}<bdi>{selected.attendance_device_id}</bdi>{ui(" بالرقم")}{" "}
                 <bdi>{record.pin}</bdi>.
               </>
             )}
@@ -137,11 +128,9 @@ export function AssignDevicePinDialog({
             disabled={!selected || assign.isPending}
             onClick={() => selected && assign.mutate(selected)}
           >
-            {assign.isPending ? "جارٍ التنسيب…" : "تأكيد التنسيب"}
+            {assign.isPending ? ui("جارٍ التنسيب…") : ui("تأكيد التنسيب")}
           </Button>
-          <Button variant="outline" disabled={assign.isPending} onClick={close}>
-            إلغاء
-          </Button>
+          <Button variant="outline" disabled={assign.isPending} onClick={close}>{ui("إلغاء")}</Button>
         </div>
       </DialogContent>
     </Dialog>

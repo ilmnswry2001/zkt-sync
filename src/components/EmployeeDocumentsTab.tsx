@@ -1,3 +1,4 @@
+import { direction, ui } from "@/lib/ui-language";
 import { supabase } from "@/integrations/supabase/client";
 import { useDirectorySearch } from "@/hooks/use-directory-search";
 import { useEffect, useState } from "react";
@@ -104,9 +105,7 @@ export function EmployeeDocumentsTab({ employee }: { employee?: ArchiveEmployee 
   });
   if (!user || permissionsLoading)
     return (
-      <p role="status" className="text-muted-foreground">
-        جارٍ تحميل صلاحيات الأرشيف…
-      </p>
+      <p role="status" className="text-muted-foreground">{ui("جارٍ تحميل صلاحيات الأرشيف…")}</p>
     );
   if (person)
     return (
@@ -120,36 +119,33 @@ export function EmployeeDocumentsTab({ employee }: { employee?: ArchiveEmployee 
     );
   const candidates = lookup.valid && !lookup.waiting ? (directory.data ?? []) : [];
   return (
-    <Card dir="rtl">
+    <Card dir={direction()}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <FolderOpen className="h-5 w-5" /> مستودع مستندات الموظفين
-        </CardTitle>
-        <p className="text-sm text-muted-foreground">اختر موظفاً لفتح ملف مستنداته.</p>
+          <FolderOpen className="h-5 w-5" />{ui(" مستودع مستندات الموظفين")}</CardTitle>
+        <p className="text-sm text-muted-foreground">{ui("اختر موظفاً لفتح ملف مستنداته.")}</p>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex max-w-md flex-col gap-3">
-          <Label htmlFor="archive-employee-search">بحث عن الموظف</Label>
+          <Label htmlFor="archive-employee-search">{ui("بحث عن الموظف")}</Label>
           <Input
             id="archive-employee-search"
             maxLength={100}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="الاسم أو الرقم الوظيفي"
+            placeholder={ui("الاسم أو الرقم الوظيفي")}
           />
         </div>
         {!lookup.valid ? (
-          <p className="text-sm text-muted-foreground">اكتب حرفين أو رقمين على الأقل للبحث.</p>
+          <p className="text-sm text-muted-foreground">{ui("اكتب حرفين أو رقمين على الأقل للبحث.")}</p>
         ) : lookup.waiting || directory.isFetching ? (
-          <p role="status" className="text-sm text-muted-foreground">
-            جارٍ البحث…
-          </p>
+          <p role="status" className="text-sm text-muted-foreground">{ui("جارٍ البحث…")}</p>
         ) : directory.isError ? (
           <p role="alert" className="text-sm text-destructive">
-            {formatErrorMessage(directory.error, "تعذر البحث عن الموظفين")}
+            {ui(formatErrorMessage(directory.error, "تعذر البحث عن الموظفين"))}
           </p>
         ) : !candidates.length ? (
-          <p className="text-sm text-muted-foreground">لا يوجد موظف مطابق متاح لحسابك.</p>
+          <p className="text-sm text-muted-foreground">{ui("لا يوجد موظف مطابق متاح لحسابك.")}</p>
         ) : (
           <ul className="grid max-h-96 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2 xl:grid-cols-3">
             {candidates.map((item) => (
@@ -201,7 +197,7 @@ function EmployeeDocumentRepository({
     const supplied = Array.from(files);
     const valid = supplied.filter(isEmployeeDocumentAttachment);
     if (valid.length !== supplied.length)
-      toast.error("بعض الملفات غير مدعومة. اختر PDF أو صورة بحجم لا يتجاوز 15 ميغابايت للملف.");
+      toast.error(ui("بعض الملفات غير مدعومة. اختر PDF أو صورة بحجم لا يتجاوز 15 ميغابايت للملف."));
     if (valid.length) setBatch({ files: valid, index: 0 });
   };
   const [preview, setPreview] = useState<{
@@ -243,9 +239,9 @@ function EmployeeDocumentRepository({
       setDeleteTarget(null);
       setPage(0);
       await refresh();
-      toast.success("تم حذف المستند ومرفقه");
+      toast.success(ui("تم حذف المستند ومرفقه"));
     },
-    onError: (error) => toast.error(formatErrorMessage(error, "تعذر حذف المستند")),
+    onError: (error) => toast.error(ui(formatErrorMessage(error, "تعذر حذف المستند"))),
   });
   const downloadFile = useMutation({
     mutationFn: async (id: string) => {
@@ -256,18 +252,18 @@ function EmployeeDocumentRepository({
       linkElement.rel = "noopener noreferrer";
       linkElement.click();
     },
-    onError: (error) => toast.error(formatErrorMessage(error, "تعذر تنزيل المرفق")),
+    onError: (error) => toast.error(ui(formatErrorMessage(error, "تعذر تنزيل المرفق"))),
   });
   const stats = records.data?.stats;
   const rows = records.data?.rows ?? [];
   const total = records.data?.totalCount ?? 0;
 
   return (
-    <section dir="rtl" className="space-y-4">
+    <section dir={direction()} className="space-y-4">
       <Card>
         <CardHeader className="gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="mb-1 text-sm text-muted-foreground">ملف مستندات الموظف</p>
+            <p className="mb-1 text-sm text-muted-foreground">{ui("ملف مستندات الموظف")}</p>
             <CardTitle className="break-words">{employee.full_name}</CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
               {employee.employee_no} {employee.position ? `· ${employee.position}` : ""}
@@ -275,9 +271,7 @@ function EmployeeDocumentRepository({
             </p>
           </div>
           {onBack && (
-            <Button variant="outline" onClick={onBack}>
-              اختيار موظف آخر
-            </Button>
+            <Button variant="outline" onClick={onBack}>{ui("اختيار موظف آخر")}</Button>
           )}
         </CardHeader>
         {canManage && (
@@ -296,10 +290,8 @@ function EmployeeDocumentRepository({
               }}
             >
               <Upload className="h-6 w-6 text-primary" aria-hidden="true" />
-              <span className="font-semibold">أفلت ملفات هذا الموظف هنا أو اضغط لاختيارها</span>
-              <span className="text-sm text-muted-foreground">
-                PDF أو JPEG أو PNG أو WebP · حتى 15 ميغابايت لكل ملف
-              </span>
+              <span className="font-semibold">{ui("أفلت ملفات هذا الموظف هنا أو اضغط لاختيارها")}</span>
+              <span className="text-sm text-muted-foreground">{ui("PDF أو JPEG أو PNG أو WebP · حتى 15 ميغابايت لكل ملف")}</span>
               <Input
                 className="sr-only"
                 type="file"
@@ -317,24 +309,24 @@ function EmployeeDocumentRepository({
       </Card>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          title="إجمالي المستندات"
+          title={ui("إجمالي المستندات")}
           value={stats?.total ?? "—"}
           loading={records.isLoading}
         />
         <MetricCard
-          title="مباشرات العمل"
+          title={ui("مباشرات العمل")}
           value={stats?.work_commencement ?? "—"}
           loading={records.isLoading}
           tone="info"
         />
         <MetricCard
-          title="الأوامر الإدارية"
+          title={ui("الأوامر الإدارية")}
           value={stats?.administrative_order ?? "—"}
           loading={records.isLoading}
           tone="warning"
         />
         <MetricCard
-          title="الزيادات المسجلة"
+          title={ui("الزيادات المسجلة")}
           value={stats?.wage_increase ?? "—"}
           loading={records.isLoading}
           tone="success"
@@ -342,26 +334,23 @@ function EmployeeDocumentRepository({
       </div>
       <Card>
         <CardHeader className="gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>الأرشيف الإداري ومباشرات العمل للموظف</CardTitle>
+          <CardTitle>{ui("الأرشيف الإداري ومباشرات العمل للموظف")}</CardTitle>
           {canManage && (
             <Button onClick={() => setBatch({ files: [], index: 0 })}>
-              <Plus className="h-4 w-4" /> إضافة كتاب لهذا الموظف
-            </Button>
+              <Plus className="h-4 w-4" />{ui(" إضافة كتاب لهذا الموظف")}</Button>
           )}
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <label className="flex flex-col gap-2 text-sm">
-              البحث
-              <Input
+            <label className="flex flex-col gap-2 text-sm">{ui("البحث")}<Input
                 maxLength={100}
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder={"رقم الكتاب أو الموضوع"}
+                placeholder={ui("رقم الكتاب أو الموضوع")}
               />
             </label>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="archive-filter-type">نوع المستند</Label>
+              <Label htmlFor="archive-filter-type">{ui("نوع المستند")}</Label>
               <select
                 id="archive-filter-type"
                 className="h-10 rounded-md border border-input bg-background px-3 text-sm"
@@ -371,17 +360,15 @@ function EmployeeDocumentRepository({
                   setPage(0);
                 }}
               >
-                <option value="">كل الأنواع</option>
+                <option value="">{ui("كل الأنواع")}</option>
                 {employeeDocumentTypes.map((key) => (
                   <option value={key} key={key}>
-                    {documentTypeLabels[key]}
+                    {ui(documentTypeLabels[key])}
                   </option>
                 ))}
               </select>
             </div>
-            <label className="flex flex-col gap-2 text-sm">
-              من تاريخ
-              <Input
+            <label className="flex flex-col gap-2 text-sm">{ui("من تاريخ")}<Input
                 type="date"
                 value={from}
                 onChange={(event) => {
@@ -390,9 +377,7 @@ function EmployeeDocumentRepository({
                 }}
               />
             </label>
-            <label className="flex flex-col gap-2 text-sm">
-              إلى تاريخ
-              <Input
+            <label className="flex flex-col gap-2 text-sm">{ui("إلى تاريخ")}<Input
                 type="date"
                 value={to}
                 onChange={(event) => {
@@ -403,21 +388,15 @@ function EmployeeDocumentRepository({
             </label>
           </div>
           {invalidDates ? (
-            <p role="alert" className="text-destructive">
-              تاريخ البداية يجب أن يسبق تاريخ النهاية أو يساويه.
-            </p>
+            <p role="alert" className="text-destructive">{ui("تاريخ البداية يجب أن يسبق تاريخ النهاية أو يساويه.")}</p>
           ) : records.isPending ? (
-            <p role="status" className="text-muted-foreground">
-              جارٍ تحميل المستندات…
-            </p>
+            <p role="status" className="text-muted-foreground">{ui("جارٍ تحميل المستندات…")}</p>
           ) : records.isError ? (
             <div role="alert" className="space-y-2">
               <p className="text-destructive">
-                {formatErrorMessage(records.error, "تعذر تحميل المستندات")}
+                {ui(formatErrorMessage(records.error, "تعذر تحميل المستندات"))}
               </p>
-              <Button variant="outline" onClick={() => void records.refetch()}>
-                إعادة المحاولة
-              </Button>
+              <Button variant="outline" onClick={() => void records.refetch()}>{ui("إعادة المحاولة")}</Button>
             </div>
           ) : rows.length ? (
             <div className="overflow-hidden rounded-lg border">
@@ -427,7 +406,7 @@ function EmployeeDocumentRepository({
                     {["تاريخ الصدور", "رقم الكتاب", "النوع", "الموضوع", "الإجراءات"].map(
                       (label) => (
                         <TableHead key={label} className="text-right">
-                          {label}
+                          {ui(label)}
                         </TableHead>
                       ),
                     )}
@@ -444,23 +423,22 @@ function EmployeeDocumentRepository({
                       <TableCell className="break-words">{row.document_number}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className={badgeStyles[row.document_type]}>
-                          {documentTypeLabels[row.document_type]}
+                          {ui(documentTypeLabels[row.document_type])}
                         </Badge>
                       </TableCell>
                       <TableCell className="min-w-44 whitespace-normal break-words">
                         <p className="font-medium">{row.title}</p>
                         {row.amount_iqd !== null && (
                           <p className="text-xs text-muted-foreground">
-                            {money.format(row.amount_iqd)} د.ع
-                          </p>
+                            {money.format(row.amount_iqd)}{ui(" د.ع")}</p>
                         )}
                         {(row.issuing_authority || row.effective_date || row.notes) && (
                           <details className="mt-1 text-xs text-muted-foreground">
-                            <summary className="cursor-pointer">بيانات المستند</summary>
+                            <summary className="cursor-pointer">{ui("بيانات المستند")}</summary>
                             {row.issuing_authority && (
-                              <p>الجهة المصدرة · {row.issuing_authority}</p>
+                              <p>{ui("الجهة المصدرة · ")}{row.issuing_authority}</p>
                             )}
-                            {row.effective_date && <p>السريان · {row.effective_date}</p>}
+                            {row.effective_date && <p>{ui("السريان · ")}{row.effective_date}</p>}
                             {row.notes && (
                               <p className="whitespace-pre-wrap break-words">{row.notes}</p>
                             )}
@@ -483,16 +461,14 @@ function EmployeeDocumentRepository({
                                   })
                                 }
                               >
-                                <Eye className="h-4 w-4" /> معاينة
-                              </Button>
+                                <Eye className="h-4 w-4" />{ui(" معاينة")}</Button>
                               <Button
                                 size="sm"
                                 variant="outline"
                                 disabled={downloadFile.isPending}
                                 onClick={() => downloadFile.mutate(row.id)}
                               >
-                                <Download className="h-4 w-4" /> تنزيل
-                              </Button>
+                                <Download className="h-4 w-4" />{ui(" تنزيل")}</Button>
                             </>
                           )}
                           {canManage && (
@@ -502,8 +478,7 @@ function EmployeeDocumentRepository({
                               className="text-destructive"
                               onClick={() => setDeleteTarget({ id: row.id, title: row.title })}
                             >
-                              <Trash2 className="h-4 w-4" /> حذف
-                            </Button>
+                              <Trash2 className="h-4 w-4" />{ui(" حذف")}</Button>
                           )}
                           {!row.file_name && !canManage && "—"}
                         </div>
@@ -514,7 +489,7 @@ function EmployeeDocumentRepository({
               </Table>
             </div>
           ) : (
-            <p className="text-muted-foreground">لا توجد مستندات مطابقة.</p>
+            <p className="text-muted-foreground">{ui("لا توجد مستندات مطابقة.")}</p>
           )}
           {!invalidDates && !records.isError && (page > 0 || total > pageSize) && (
             <div className="flex flex-wrap items-center gap-3">
@@ -522,19 +497,13 @@ function EmployeeDocumentRepository({
                 variant="outline"
                 disabled={page === 0 || records.isFetching}
                 onClick={() => setPage(page - 1)}
-              >
-                السابق
-              </Button>
-              <span className="text-sm">
-                صفحة {page + 1} · {total} مستند
-              </span>
+              >{ui("السابق")}</Button>
+              <span className="text-sm">{ui("صفحة ")}{page + 1} · {total}{ui(" مستند")}</span>
               <Button
                 variant="outline"
                 disabled={records.isFetching || (page + 1) * pageSize >= total}
                 onClick={() => setPage(page + 1)}
-              >
-                التالي
-              </Button>
+              >{ui("التالي")}</Button>
             </div>
           )}
         </CardContent>
@@ -579,15 +548,13 @@ function EmployeeDocumentRepository({
           if (!open && !deleteDocument.isPending) setDeleteTarget(null);
         }}
       >
-        <AlertDialogContent dir="rtl">
+        <AlertDialogContent dir={direction()}>
           <AlertDialogHeader>
-            <AlertDialogTitle>حذف المستند الإداري؟</AlertDialogTitle>
-            <AlertDialogDescription>
-              سيُحذف «{deleteTarget?.title}» ومرفقه من الأرشيف.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{ui("حذف المستند الإداري؟")}</AlertDialogTitle>
+            <AlertDialogDescription>{ui("سيُحذف «")}{deleteTarget?.title}{ui("» ومرفقه من الأرشيف.")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleteDocument.isPending}>إلغاء</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleteDocument.isPending}>{ui("إلغاء")}</AlertDialogCancel>
             <AlertDialogAction
               disabled={deleteDocument.isPending}
               onClick={(event) => {
@@ -595,7 +562,7 @@ function EmployeeDocumentRepository({
                 if (deleteTarget) deleteDocument.mutate(deleteTarget.id);
               }}
             >
-              {deleteDocument.isPending ? "جارٍ الحذف…" : "تأكيد الحذف"}
+              {deleteDocument.isPending ? ui("جارٍ الحذف…") : ui("تأكيد الحذف")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

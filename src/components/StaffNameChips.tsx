@@ -1,3 +1,4 @@
+import { ui } from "@/lib/ui-language";
 import { X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -23,7 +24,7 @@ export function StaffNameChips({
             <button
               type="button"
               className="inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label={`حذف ${name}`}
+              aria-label={(ui("حذف ") + (name))}
               onClick={() => onRemove(name)}
             >
               <X className="h-4 w-4" />

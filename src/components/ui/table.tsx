@@ -1,3 +1,4 @@
+import { displayLocale, ui } from "@/lib/ui-language";
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
@@ -58,14 +59,12 @@ const TableBody = React.forwardRef<
         <tfoot>
           <tr className="border-t">
             <td colSpan={columnCount} className="px-3 py-3 text-center text-sm text-muted-foreground">
-              <span>يُعرض {visibleRows.toLocaleString("ar-IQ")} من {rows.length.toLocaleString("ar-IQ")} صفاً</span>
+              <span>{ui("يُعرض ")}{visibleRows.toLocaleString(displayLocale())}{ui(" من ")}{rows.length.toLocaleString(displayLocale())}{ui(" صفاً")}</span>
               <button
                 type="button"
                 className="ms-3 font-semibold text-primary underline-offset-4 hover:underline"
                 onClick={() => setVisibleRows((count) => Math.min(count + DEFAULT_VISIBLE_ROWS, rows.length))}
-              >
-                عرض 50 صفاً إضافياً
-              </button>
+              >{ui("عرض 50 صفاً إضافياً")}</button>
             </td>
           </tr>
         </tfoot>

@@ -1,3 +1,5 @@
+import { direction, ui } from "@/lib/ui-language";
+import { LanguageSwitch } from "@/components/LanguageSwitch";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
@@ -27,7 +29,7 @@ export const Route = createFileRoute("/auth")({
   validateSearch: (s: Record<string, unknown>) => ({
     ...(typeof s.form === "string" ? { form: s.form } : {}),
   }),
-  head: () => ({ meta: [{ title: "تسجيل الدخول — EMAD_tc" }] }),
+  head: () => ({ meta: [{ title: ui("تسجيل الدخول — EMAD_tc") }] }),
   component: AuthPage,
 });
 
@@ -52,13 +54,13 @@ function AuthPage() {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        toast.error(formatErrorMessage(error));
+        toast.error(ui(formatErrorMessage(error)));
         return;
       }
-      toast.success("مرحباً بك");
+      toast.success(ui("مرحباً بك"));
       navigate(form ? { to: "/digital-form/$id", params: { id: form } } : { to: "/dashboard" });
     } catch {
-      toast.error("تعذر الاتصال بالنظام. تحقق من الاتصال ثم حاول مجدداً.");
+      toast.error(ui("تعذر الاتصال بالنظام. تحقق من الاتصال ثم حاول مجدداً."));
     } finally {
       setBusy(false);
     }
@@ -72,16 +74,16 @@ function AuthPage() {
           ? new URL("/digital-form/" + encodeURIComponent(form), window.location.origin).href
           : window.location.origin,
       });
-      if (result.error) toast.error("فشل تسجيل الدخول بـ Google");
+      if (result.error) toast.error(ui("فشل تسجيل الدخول بـ Google"));
     } catch {
-      toast.error("تعذر بدء تسجيل الدخول بـ Google");
+      toast.error(ui("تعذر بدء تسجيل الدخول بـ Google"));
       setBusy(false);
     }
   };
 
   return (
     <main
-      dir="rtl"
+      dir={direction()}
       className="relative isolate flex min-h-svh items-center justify-center overflow-hidden bg-[#071a2b] px-4 py-8 sm:px-8"
     >
       <div
@@ -97,6 +99,7 @@ function AuthPage() {
         className="pointer-events-none absolute inset-0 -z-10 opacity-[.08] [background-image:linear-gradient(rgba(255,255,255,.3)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.3)_1px,transparent_1px)] [background-size:54px_54px] [mask-image:linear-gradient(to_bottom,black,transparent_80%)]"
       />
 
+      <div className="absolute end-4 top-3 z-10"><LanguageSwitch /></div>
       <section className="grid w-full max-w-6xl overflow-hidden rounded-[2rem] border border-white/10 bg-white shadow-[0_35px_100px_-35px_rgba(0,0,0,.7)] lg:min-h-[650px] lg:grid-cols-[.95fr_1.05fr]">
         <div className="flex flex-col justify-center px-6 py-10 sm:px-12 lg:px-16">
           <div className="mb-9 flex items-center gap-3 lg:hidden">
@@ -105,7 +108,7 @@ function AuthPage() {
             </span>
             <div>
               <p className="font-extrabold text-slate-900">EMAD_tc</p>
-              <p className="text-xs text-slate-500">إدارة الحضور والموارد</p>
+              <p className="text-xs text-slate-500">{ui("إدارة الحضور والموارد")}</p>
             </div>
           </div>
 
@@ -114,20 +117,14 @@ function AuthPage() {
               <span className="mb-5 hidden h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-600 text-white shadow-lg shadow-emerald-900/20 lg:flex">
                 <Fingerprint className="h-7 w-7" />
               </span>
-              <p className="mb-2 text-sm font-bold text-emerald-700">مساحة العمل الآمنة</p>
-              <h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
-                أهلاً بعودتك
-              </h1>
-              <p className="mt-3 leading-7 text-slate-500">
-                سجّل الدخول لمتابعة الحضور والفرق والمشاريع من مكان واحد.
-              </p>
+              <p className="mb-2 text-sm font-bold text-emerald-700">{ui("مساحة العمل الآمنة")}</p>
+              <h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">{ui("أهلاً بعودتك")}</h1>
+              <p className="mt-3 leading-7 text-slate-500">{ui("سجّل الدخول لمتابعة الحضور والفرق والمشاريع من مكان واحد.")}</p>
             </div>
 
             <form onSubmit={signIn} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="login-email" className="font-bold text-slate-700">
-                  البريد الإلكتروني
-                </Label>
+                <Label htmlFor="login-email" className="font-bold text-slate-700">{ui("البريد الإلكتروني")}</Label>
                 <div className="relative">
                   <Mail className="pointer-events-none absolute right-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-400" />
                   <Input
@@ -146,9 +143,7 @@ function AuthPage() {
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="login-password" className="font-bold text-slate-700">
-                    كلمة المرور
-                  </Label>
+                  <Label htmlFor="login-password" className="font-bold text-slate-700">{ui("كلمة المرور")}</Label>
                 </div>
                 <div className="relative">
                   <LockKeyhole className="pointer-events-none absolute right-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-400" />
@@ -159,13 +154,13 @@ function AuthPage() {
                     required
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
-                    placeholder="أدخل كلمة المرور"
+                    placeholder={ui("أدخل كلمة المرور")}
                     className="h-12 rounded-xl border-slate-200 bg-slate-50 px-11 text-slate-900 placeholder:text-slate-400 focus-visible:border-emerald-500 focus-visible:bg-white focus-visible:ring-emerald-500/20"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword((value) => !value)}
-                    aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
+                    aria-label={showPassword ? ui("إخفاء كلمة المرور") : ui("إظهار كلمة المرور")}
                     className="absolute left-3.5 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-400 transition-colors hover:text-slate-700"
                   >
                     {showPassword ? (
@@ -183,7 +178,7 @@ function AuthPage() {
                 disabled={busy}
               >
                 {busy ? <LoaderCircle className="ml-2 h-5 w-5 animate-spin" /> : null}
-                {busy ? "جارٍ تسجيل الدخول..." : "تسجيل الدخول"}
+                {busy ? ui("جارٍ تسجيل الدخول...") : ui("تسجيل الدخول")}
                 {!busy ? (
                   <ArrowLeft className="mr-2 h-4 w-4 transition-transform group-hover:-translate-x-1" />
                 ) : null}
@@ -192,7 +187,7 @@ function AuthPage() {
 
             <div className="my-6 flex items-center gap-3">
               <span className="h-px flex-1 bg-slate-200" />
-              <span className="text-xs font-medium text-slate-400">أو تابع باستخدام</span>
+              <span className="text-xs font-medium text-slate-400">{ui("أو تابع باستخدام")}</span>
               <span className="h-px flex-1 bg-slate-200" />
             </div>
 
@@ -203,13 +198,9 @@ function AuthPage() {
               onClick={google}
               disabled={busy}
             >
-              <Globe2 className="ml-2 h-[18px] w-[18px] text-slate-500" />
-              تسجيل الدخول باستخدام Google
-            </Button>
+              <Globe2 className="ml-2 h-[18px] w-[18px] text-slate-500" />{ui("تسجيل الدخول باستخدام Google")}</Button>
 
-            <p className="mt-6 text-center text-xs leading-6 text-slate-400">
-              الحسابات متاحة من خلال مسؤول النظام فقط.
-            </p>
+            <p className="mt-6 text-center text-xs leading-6 text-slate-400">{ui("الحسابات متاحة من خلال مسؤول النظام فقط.")}</p>
           </div>
         </div>
 
@@ -233,23 +224,17 @@ function AuthPage() {
             </span>
             <div>
               <p className="font-extrabold tracking-wide">EMAD_tc</p>
-              <p className="text-xs text-white/60">ZKTeco · إدارة الحضور والموارد</p>
+              <p className="text-xs text-white/60">{ui("ZKTeco · إدارة الحضور والموارد")}</p>
             </div>
           </div>
 
           <div className="relative z-10 max-w-lg py-12">
             <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-teal-200/20 bg-teal-100/10 px-3 py-1.5 text-xs font-semibold text-teal-100">
-              <Sparkles className="h-3.5 w-3.5" /> إدارة أوضح، قرارات أسرع
-            </div>
-            <h2 className="text-4xl font-black leading-[1.35] tracking-tight xl:text-5xl">
-              كل تفاصيل فريقك،
-              <br />
-              <span className="text-teal-200">في لوحة واحدة.</span>
+              <Sparkles className="h-3.5 w-3.5" />{ui(" إدارة أوضح، قرارات أسرع")}</div>
+            <h2 className="text-4xl font-black leading-[1.35] tracking-tight xl:text-5xl">{ui("كل تفاصيل فريقك،")}<br />
+              <span className="text-teal-200">{ui("في لوحة واحدة.")}</span>
             </h2>
-            <p className="mt-5 max-w-md text-base leading-8 text-white/65">
-              تابع الحضور والمهام والمواقع وتكاليف المشاريع ضمن تجربة موحدة مصممة لاحتياجات العمل
-              اليومية.
-            </p>
+            <p className="mt-5 max-w-md text-base leading-8 text-white/65">{ui("تابع الحضور والمهام والمواقع وتكاليف المشاريع ضمن تجربة موحدة مصممة لاحتياجات العمل اليومية.")}</p>
           </div>
 
           <div className="relative z-10 grid grid-cols-3 gap-3">
@@ -263,16 +248,13 @@ function AuthPage() {
                 className="rounded-2xl border border-white/10 bg-white/[.07] p-4 backdrop-blur-sm"
               >
                 <Icon className="mb-3 h-5 w-5 text-teal-200" />
-                <p className="text-xs font-semibold text-white/85">{label}</p>
+                <p className="text-xs font-semibold text-white/85">{ui(label)}</p>
                 <div className="mt-3 flex items-center gap-1 text-[10px] text-teal-100/70">
-                  <Check className="h-3 w-3" /> ضمن منظومة واحدة
-                </div>
+                  <Check className="h-3 w-3" />{ui(" ضمن منظومة واحدة")}</div>
               </div>
             ))}
           </div>
-          <p className="relative z-10 mt-8 text-[11px] text-white/35">
-            دخول آمن ومخصص لمستخدمي المؤسسة
-          </p>
+          <p className="relative z-10 mt-8 text-[11px] text-white/35">{ui("دخول آمن ومخصص لمستخدمي المؤسسة")}</p>
         </aside>
       </section>
     </main>

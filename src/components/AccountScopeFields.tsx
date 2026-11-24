@@ -1,3 +1,4 @@
+import { ui } from "@/lib/ui-language";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Building2, Search, X } from "lucide-react";
@@ -60,12 +61,12 @@ export function AccountScopeFields({
       <section className="space-y-3 rounded-xl border p-4">
         <div className="flex items-center gap-2">
           <Building2 className="size-4 text-primary" />
-          <Label htmlFor="account-departments-search">نطاق الأقسام</Label>
+          <Label htmlFor="account-departments-search">{ui("نطاق الأقسام")}</Label>
         </div>
         <p className="text-sm text-muted-foreground">
           {singleDepartment
-            ? "اختر قسماً واحداً لحساب مدير القسم."
-            : "عيّن الأقسام التي تنطبق عليها صلاحيات الدور."}
+            ? ui("اختر قسماً واحداً لحساب مدير القسم.")
+            : ui("عيّن الأقسام التي تنطبق عليها صلاحيات الدور.")}
         </p>
         {!!departments.length && (
           <div className="flex flex-wrap gap-2">
@@ -77,7 +78,7 @@ export function AccountScopeFields({
                   onClick={() =>
                     onDepartments(departments.filter((item) => item.id !== department.id))
                   }
-                  aria-label={`إزالة قسم ${department.name}`}
+                  aria-label={(ui("إزالة قسم ") + (department.name))}
                   className="rounded p-0.5 hover:bg-background"
                 >
                   <X className="size-3.5" />
@@ -90,16 +91,12 @@ export function AccountScopeFields({
           id="account-departments-search"
           value={departmentSearch}
           onChange={(event) => setDepartmentSearch(event.target.value)}
-          placeholder="ابحث باسم القسم"
+          placeholder={ui("ابحث باسم القسم")}
         />
         {waiting || options.isPending ? (
-          <p role="status" className="text-sm text-muted-foreground">
-            جارٍ تحميل الأقسام…
-          </p>
+          <p role="status" className="text-sm text-muted-foreground">{ui("جارٍ تحميل الأقسام…")}</p>
         ) : options.isError ? (
-          <Button type="button" variant="outline" onClick={() => void options.refetch()}>
-            تعذر تحميل الأقسام · إعادة المحاولة
-          </Button>
+          <Button type="button" variant="outline" onClick={() => void options.refetch()}>{ui("تعذر تحميل الأقسام · إعادة المحاولة")}</Button>
         ) : (
           <div className="grid max-h-40 gap-1 overflow-y-auto rounded-lg border p-2 sm:grid-cols-2">
             {(options.data ?? []).map((department) => (
@@ -123,39 +120,34 @@ export function AccountScopeFields({
               </label>
             ))}
             {!options.data?.length && (
-              <p className="p-2 text-sm text-muted-foreground">لا يوجد قسم مطابق.</p>
+              <p className="p-2 text-sm text-muted-foreground">{ui("لا يوجد قسم مطابق.")}</p>
             )}
           </div>
         )}
         {options.data?.length === 50 && (
-          <p className="text-xs text-muted-foreground">
-            تُعرض أول ٥٠ نتيجة. اكتب اسم القسم لتضييق البحث.
-          </p>
+          <p className="text-xs text-muted-foreground">{ui("تُعرض أول ٥٠ نتيجة. اكتب اسم القسم لتضييق البحث.")}</p>
         )}
       </section>
       <section className="space-y-3 rounded-xl border p-4">
         <div className="flex items-center justify-between gap-2">
-          <Label htmlFor={fixedScope ? undefined : "account-section-search"}>صفحات النظام</Label>
+          <Label htmlFor={fixedScope ? undefined : "account-section-search"}>{ui("صفحات النظام")}</Label>
           <Badge variant="outline">
             {fixedScope
-              ? "يتحدد بالدور"
+              ? ui("يتحدد بالدور")
               : sections.length
-                ? `${sections.length} محددة`
-                : "حسب الدور"}
+                ? ((sections.length) + ui(" محددة"))
+                : ui("حسب الدور")}
           </Badge>
         </div>
         {fixedScope ? (
           <p className="text-sm leading-6 text-muted-foreground">
             {fixedScope === "admin"
-              ? "مدير النظام يستطيع فتح جميع صفحات الإدارة."
-              : "دور المهندس يحدد نطاق الصفحات على الخطط وطلبات المواد والمعدات."}
+              ? ui("مدير النظام يستطيع فتح جميع صفحات الإدارة.")
+              : ui("دور المهندس يحدد نطاق الصفحات على الخطط وطلبات المواد والمعدات.")}
           </p>
         ) : (
           <>
-            <p className="text-sm leading-6 text-muted-foreground">
-              اختيار صفحات يخصص القائمة مع إبقاء الصفحات المرتبطة بالدور. صلاحية تنفيذ الإجراءات
-              تُحدد حسب الدور في كل قسم.
-            </p>
+            <p className="text-sm leading-6 text-muted-foreground">{ui("اختيار صفحات يخصص القائمة مع إبقاء الصفحات المرتبطة بالدور. صلاحية تنفيذ الإجراءات تُحدد حسب الدور في كل قسم.")}</p>
             <div className="relative">
               <Search
                 className="absolute start-3 top-3 size-4 text-muted-foreground"
@@ -166,7 +158,7 @@ export function AccountScopeFields({
                 className="ps-9"
                 value={sectionSearch}
                 onChange={(event) => setSectionSearch(event.target.value)}
-                placeholder="ابحث باسم الصفحة"
+                placeholder={ui("ابحث باسم الصفحة")}
               />
             </div>
             <div className="grid max-h-48 gap-1 overflow-y-auto rounded-lg border p-2 sm:grid-cols-2">
@@ -185,17 +177,15 @@ export function AccountScopeFields({
                       )
                     }
                   />
-                  {section.label}
+                  {ui(section.label)}
                 </label>
               ))}
               {!visibleSections.length && (
-                <p className="p-2 text-sm text-muted-foreground">لا توجد صفحة مطابقة.</p>
+                <p className="p-2 text-sm text-muted-foreground">{ui("لا توجد صفحة مطابقة.")}</p>
               )}
             </div>
             {!!sections.length && (
-              <Button type="button" variant="outline" size="sm" onClick={() => onSections([])}>
-                العودة إلى صفحات الدور
-              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => onSections([])}>{ui("العودة إلى صفحات الدور")}</Button>
             )}
           </>
         )}

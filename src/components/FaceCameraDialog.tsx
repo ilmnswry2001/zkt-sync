@@ -1,3 +1,4 @@
+import { direction, ui } from "@/lib/ui-language";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -205,8 +206,8 @@ export function FaceCameraDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent dir="rtl" className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader><DialogTitle>{mode === "enroll" ? "تسجيل بصمة الوجه" : "التحقق من الوجه والحيوية"}</DialogTitle></DialogHeader>
+      <DialogContent dir={direction()} className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader><DialogTitle>{mode === "enroll" ? ui("تسجيل بصمة الوجه") : ui("التحقق من الوجه والحيوية")}</DialogTitle></DialogHeader>
         <div className="space-y-4 text-center">
           <div className={`relative mx-auto aspect-[4/3] w-full max-w-md overflow-hidden rounded-2xl border-4 bg-slate-950 ${tone}`}>
             <video ref={videoRef} muted playsInline autoPlay className="h-full w-full object-cover" />
@@ -218,9 +219,9 @@ export function FaceCameraDialog({
           <p role="status" className={`text-sm font-medium ${phase === "matched" ? "text-emerald-700" : phase === "mismatch" || phase === "error" ? "text-rose-700" : phase === "blink" ? "text-amber-700" : "text-muted-foreground"}`}>
             {phase === "error" ? errorMessage || message : message}
           </p>
-          {mode === "verify" && phase === "mismatch" && <Button variant="outline" onClick={() => { setPhase("ready"); setScore(null); setMessage("وجّه وجهك داخل الإطار"); }}>إعادة المحاولة</Button>}
+          {mode === "verify" && phase === "mismatch" && <Button variant="outline" onClick={() => { setPhase("ready"); setScore(null); setMessage("وجّه وجهك داخل الإطار"); }}>{ui("إعادة المحاولة")}</Button>}
           <Button onClick={finish} disabled={phase === "loading" || phase === "error" || (mode === "enroll" ? stableRef.current < 3 : !matched)} className="w-full">
-            {mode === "enroll" ? "تسجيل البصمة" : matched ? "تأكيد الحضور مع التحقق" : "أكمل فحص الحيوية والمطابقة"}
+            {mode === "enroll" ? ui("تسجيل البصمة") : matched ? ui("تأكيد الحضور مع التحقق") : ui("أكمل فحص الحيوية والمطابقة")}
           </Button>
         </div>
       </DialogContent>

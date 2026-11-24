@@ -1,3 +1,4 @@
+import { ui } from "@/lib/ui-language";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,13 +41,9 @@ export function FormTemplateEditor({
   }
   return (
     <div className="space-y-4">
-      <label>
-        عنوان القالب
-        <Input value={doc.title_ar} onChange={(e) => set({ ...doc, title_ar: e.target.value })} />
+      <label>{ui("عنوان القالب")}<Input value={doc.title_ar} onChange={(e) => set({ ...doc, title_ar: e.target.value })} />
       </label>
-      <label>
-        رمز القالب
-        <Input dir="ltr" value={doc.code} onChange={(e) => set({ ...doc, code: e.target.value })} />
+      <label>{ui("رمز القالب")}<Input dir="ltr" value={doc.code} onChange={(e) => set({ ...doc, code: e.target.value })} />
       </label>
       {sections.map((s, i) => (
         <fieldset className="space-y-3 rounded border p-3" key={i}>
@@ -61,32 +58,24 @@ export function FormTemplateEditor({
             }
           </legend>
           <div className="flex gap-2">
-            <Button variant="outline" disabled={!i} onClick={() => update(move(sections, i, -1))}>
-              رفع القسم
-            </Button>
+            <Button variant="outline" disabled={!i} onClick={() => update(move(sections, i, -1))}>{ui("رفع القسم")}</Button>
             <Button
               variant="outline"
               disabled={i === sections.length - 1}
               onClick={() => update(move(sections, i, 1))}
-            >
-              خفض القسم
-            </Button>
-            <Button variant="outline" onClick={() => update(sections.filter((_, j) => i !== j))}>
-              حذف القسم
-            </Button>
+            >{ui("خفض القسم")}</Button>
+            <Button variant="outline" onClick={() => update(sections.filter((_, j) => i !== j))}>{ui("حذف القسم")}</Button>
           </div>
           {s.type === "repeating_table" && (
             <>
-              <label>
-                عنوان الجدول
-                <Input
+              <label>{ui("عنوان الجدول")}<Input
                   value={s.title_ar ?? ""}
                   onChange={(e) => section(i, { ...s, title_ar: e.target.value })}
                 />
               </label>
               {(["min_rows", "max_rows"] as const).map((k) => (
                 <label key={k}>
-                  {k === "min_rows" ? "صفوف الطباعة" : "الحد الأعلى"}
+                  {k === "min_rows" ? ui("صفوف الطباعة") : ui("الحد الأعلى")}
                   <Input
                     type="number"
                     value={s[k]}
@@ -98,7 +87,7 @@ export function FormTemplateEditor({
           )}
           {s.type === "signature" || s.type === "text_block" ? (
             <Input
-              aria-label="عنوان القسم"
+              aria-label={ui("عنوان القسم")}
               value={s.label_ar}
               onChange={(e) => section(i, { ...s, label_ar: e.target.value })}
             />
@@ -112,16 +101,12 @@ export function FormTemplateEditor({
                   replace(fs.map((x, n) => (n === j ? { ...x, ...p } : x)));
                 return (
                   <div className="grid gap-2 border-t pt-2 sm:grid-cols-2" key={f.key}>
-                    <label>
-                      اسم الحقل
-                      <Input
+                    <label>{ui("اسم الحقل")}<Input
                         value={f.label_ar}
                         onChange={(e) => patch({ label_ar: e.target.value })}
                       />
                     </label>
-                    <label>
-                      نوع البيانات
-                      <select
+                    <label>{ui("نوع البيانات")}<select
                         className="block w-full border bg-background p-2"
                         value={f.input}
                         onChange={(e) => patch({ input: e.target.value as Field["input"] })}
@@ -142,18 +127,14 @@ export function FormTemplateEditor({
                       </select>
                     </label>
                     {f.input === "select" && (
-                      <label>
-                        الخيارات مفصولة بفاصلة
-                        <Input
+                      <label>{ui("الخيارات مفصولة بفاصلة")}<Input
                           value={f.options?.join(",") ?? ""}
                           onChange={(e) => patch({ options: e.target.value.split(",") })}
                         />
                       </label>
                     )}
                     {s.type === "repeating_table" && (
-                      <label>
-                        عرض العمود DXA
-                        <Input
+                      <label>{ui("عرض العمود DXA")}<Input
                           type="number"
                           value={f.width ?? 0}
                           onChange={(e) => patch({ width: Number(e.target.value) })}
@@ -165,30 +146,22 @@ export function FormTemplateEditor({
                         type="checkbox"
                         checked={!!f.required}
                         onChange={(e) => patch({ required: e.target.checked })}
-                      />{" "}
-                      مطلوب
-                    </label>
+                      />{" "}{ui("مطلوب")}</label>
                     <div className="flex gap-1">
                       <Button
                         variant="outline"
                         disabled={!j}
                         onClick={() => replace(move(fs, j, -1))}
-                      >
-                        رفع
-                      </Button>
+                      >{ui("رفع")}</Button>
                       <Button
                         variant="outline"
                         disabled={j === fs.length - 1}
                         onClick={() => replace(move(fs, j, 1))}
-                      >
-                        خفض
-                      </Button>
+                      >{ui("خفض")}</Button>
                       <Button
                         variant="outline"
                         onClick={() => replace(fs.filter((_, n) => j !== n))}
-                      >
-                        حذف الحقل
-                      </Button>
+                      >{ui("حذف الحقل")}</Button>
                     </div>
                   </div>
                 );
@@ -201,9 +174,7 @@ export function FormTemplateEditor({
                     [s.type === "info_grid" ? "fields" : "columns"]: [...fields(s), newField()],
                   })
                 }
-              >
-                إضافة حقل
-              </Button>
+              >{ui("إضافة حقل")}</Button>
             </>
           )}
         </fieldset>
@@ -251,9 +222,7 @@ export function FormTemplateEditor({
             fail((e as Error).message);
           }
         }}
-      >
-        حفظ القالب
-      </Button>
+      >{ui("حفظ القالب")}</Button>
       <p role="alert">{error}</p>
       <ElectronicFormDocument doc={{ ...doc, data: {}, branding: brand }} />
     </div>

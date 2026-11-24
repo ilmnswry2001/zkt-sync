@@ -1,3 +1,4 @@
+import { direction, displayLocale, ui } from "@/lib/ui-language";
 import { useProjectExecution } from "@/lib/use-project-execution";
 import { MetricCard, type MetricTone } from "@/components/MetricCard";
 import { formatErrorMessage } from "@/lib/error-message";
@@ -56,7 +57,7 @@ export const Route = createFileRoute("/_authenticated/attendance")({
     date: typeof search.date === "string" && /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(search.date) ? search.date : undefined,
     publish: search.publish === true ? true : undefined,
   }),
-  head: () => ({ meta: [{ title: "التقارير اليومية" }] }),
+  head: () => ({ meta: [{ title: ui("التقارير اليومية") }] }),
   component: AttendancePage,
 });
 
@@ -307,11 +308,11 @@ function AttendancePage() {
     if (approvingBiometric) return;
     const plan = finalizedPlanQuery.data;
     if (!siteId || !date || !plan || plan.site_id !== siteId || plan.request_date > date) {
-      toast.error("اعتمد خطة نهائية سارية للموقع والتاريخ المحددين أولاً");
+      toast.error(ui("اعتمد خطة نهائية سارية للموقع والتاريخ المحددين أولاً"));
       return;
     }
     if (!execution.isSuccess || !biometricMatch) {
-      toast.error("أكمل تحميل نتائج مطابقة البصمة قبل اعتماد التقرير");
+      toast.error(ui("أكمل تحميل نتائج مطابقة البصمة قبل اعتماد التقرير"));
       return;
     }
     setApprovingBiometric(true);
@@ -332,9 +333,9 @@ function AttendancePage() {
         queryClient.invalidateQueries({ queryKey: ["plan-biometric-match"] }),
         queryClient.invalidateQueries({ queryKey: ["project-execution", date] }),
       ]);
-      toast.success("تم اعتماد التقرير الميداني وتحديث تكاليف الموقع بنجاح");
+      toast.success(ui("تم اعتماد التقرير الميداني وتحديث تكاليف الموقع بنجاح"));
     } catch (error) {
-      toast.error(formatErrorMessage(error, "تعذر اعتماد التقرير من البصمة"));
+      toast.error(ui(formatErrorMessage(error, "تعذر اعتماد التقرير من البصمة")));
     } finally { setApprovingBiometric(false); }
   };
   const dailyCrewQuery = useQuery<DailyCrewAssignment[]>({
@@ -443,7 +444,7 @@ function AttendancePage() {
     }));
   };
   const saveReport = async () => {
-    if (!siteId) return toast.error("اختر الموقع أولاً");
+    if (!siteId) return toast.error(ui("اختر الموقع أولاً"));
     const { data: header, error: headerError } = await supabase
       .from("site_daily_reports")
       .upsert(
@@ -457,12 +458,12 @@ function AttendancePage() {
       )
       .select("id")
       .single();
-    if (headerError || !header) return toast.error(formatErrorMessage(headerError, "تعذر حفظ التقرير"));
+    if (headerError || !header) return toast.error(ui(formatErrorMessage(headerError, "تعذر حفظ التقرير")));
     const { error: deleteError } = await supabase
       .from("site_daily_report_lines")
       .delete()
       .eq("report_id", header.id);
-    if (deleteError) return toast.error(formatErrorMessage(deleteError));
+    if (deleteError) return toast.error(ui(formatErrorMessage(deleteError)));
     const { error: linesError } = await supabase.from("site_daily_report_lines").insert(
       rows.map((row) => ({
         report_id: header.id,
@@ -474,11 +475,11 @@ function AttendancePage() {
         idle_count: row.kind === "equipment_type" ? row.idle_count : 0,
       })),
     );
-    if (linesError) return toast.error(formatErrorMessage(linesError));
+    if (linesError) return toast.error(ui(formatErrorMessage(linesError)));
     setEditingReportId(header.id);
     await queryClient.invalidateQueries({ queryKey: ["site-daily-reports"] });
     await queryClient.invalidateQueries({ queryKey: ["projects-dashboard"] });
-    toast.success("تم حفظ التقرير بنجاح");
+    toast.success(ui("تم حفظ التقرير بنجاح"));
   };
   const editReport = (report: SiteReport) => {
     setSiteId(report.site_id);
@@ -492,19 +493,19 @@ function AttendancePage() {
     const reportSite = sites.find((site) => site.id === report.site_id);
     if (
       !window.confirm(
-        `هل أنت متأكد من حذف تقرير ${reportSite?.name ?? "الموقع"} بتاريخ ${report.report_date}؟ سيتم حذف جميع بنوده.`,
+        (ui("هل أنت متأكد من حذف تقرير ") + (reportSite?.name ?? "الموقع") + ui(" بتاريخ ") + (report.report_date) + ui("؟ سيتم حذف جميع بنوده.")),
       )
     )
       return;
     const { error } = await supabase.from("site_daily_reports").delete().eq("id", report.id);
-    if (error) return toast.error(formatErrorMessage(error));
+    if (error) return toast.error(ui(formatErrorMessage(error)));
     await queryClient.invalidateQueries({ queryKey: ["site-daily-reports"] });
     if (editingReportId === report.id) {
       setEditingReportId(null);
       setRows(buildRows());
       setNotes("");
     }
-    toast.success("تم حذف التقرير وبنوده");
+    toast.success(ui("تم حذف التقرير وبنوده"));
   };
   const exportDailyPdf = (report: SiteReport | null = existingReport ?? null) => {
     const reportSite = report ? sites.find((site) => site.id === report.site_id) : selectedSite;
@@ -519,7 +520,7 @@ function AttendancePage() {
       "تقرير الموقع اليومي",
       `<div class="meta"><span><b>الموقع:</b> ${reportSite?.name ?? "-"}</span><span><b>التاريخ:</b> ${reportDate}</span></div><h2>العاملون</h2>${workerTable}<h2>الآليات والمركبات</h2>${equipmentTable}${reportNotes ? `<div class="note"><b>الملاحظات:</b> ${reportNotes}</div>` : ""}`,
     );
-    if (!ok) toast.error("اسمح للنوافذ المنبثقة لتصدير التقرير");
+    if (!ok) toast.error(ui("اسمح للنوافذ المنبثقة لتصدير التقرير"));
   };
   const attendance = useQuery({
     queryKey: ["daily", date],
@@ -664,11 +665,11 @@ function AttendancePage() {
   );
   const selectedResponsible = responsibleEmployeesQuery.data?.find((employee) => employee.id === responsibleEmployeeId);
   const saveExcessDeduction = async () => {
-    if (!selectedOverage || !responsibleEmployeeId) return toast.error("اختر الموظف المسؤول أولاً");
+    if (!selectedOverage || !responsibleEmployeeId) return toast.error(ui("اختر الموظف المسؤول أولاً"));
     const pendingExcess = selectedOverage.excessAssignments.filter((assignment) => !assignment.alreadyDeducted);
-    if (!pendingExcess.length) return toast.error("سبق تسجيل الاستقطاع لجميع الأسماء الزائدة");
+    if (!pendingExcess.length) return toast.error(ui("سبق تسجيل الاستقطاع لجميع الأسماء الزائدة"));
     if (pendingExcess.some((assignment) => excessCost(assignment) === null)) {
-      return toast.error("أضف الأجر اليومي أو الشهري لهذا التخصص في إعدادات الأجور أولاً");
+      return toast.error(ui("أضف الأجر اليومي أو الشهري لهذا التخصص في إعدادات الأجور أولاً"));
     }
     setSavingDeduction(true);
     try {
@@ -677,13 +678,13 @@ function AttendancePage() {
         _accountable_employee_id: responsibleEmployeeId,
       });
       if (error) throw error;
-      toast.success(`تم تسجيل استقطاع إجمالي ${Number(data).toLocaleString("ar-IQ")} د.ع على ${selectedResponsible?.full_name}`);
+      toast.success(`تم تسجيل استقطاع إجمالي ${Number(data).toLocaleString(displayLocale())} د.ع على ${selectedResponsible?.full_name}`);
       setSelectedOverage(null);
       setResponsibleEmployeeId("");
       await queryClient.invalidateQueries({ queryKey: ["payroll"] });
       await queryClient.invalidateQueries({ queryKey: ["daily-excess-deduction-sources", date] });
     } catch (error) {
-      toast.error(formatErrorMessage(error, "تعذر تسجيل استقطاع الزيادة"));
+      toast.error(ui(formatErrorMessage(error, "تعذر تسجيل استقطاع الزيادة")));
     } finally {
       setSavingDeduction(false);
     }
@@ -714,14 +715,12 @@ function AttendancePage() {
             {row.item_name}
             {row.catalog_item_id &&
               catalogs.find((item) => item.id === row.catalog_item_id)?.is_archived && (
-                <Badge variant="secondary" className="mr-2">
-                  قديم مؤرشف
-                </Badge>
+                <Badge variant="secondary" className="mr-2">{ui("قديم مؤرشف")}</Badge>
               )}
           </TableCell>
           <TableCell>
             <Input
-              aria-label={`عدد ${row.item_name}`}
+              aria-label={(ui("عدد ") + (row.item_name))}
               type="number"
               min="0"
               value={row.total_count || ""}
@@ -732,7 +731,7 @@ function AttendancePage() {
             <>
               <TableCell>
                 <Input
-                  aria-label={`الآليات العاملة من ${row.item_name}`}
+                  aria-label={(ui("الآليات العاملة من ") + (row.item_name))}
                   type="number"
                   min="0"
                   max={row.total_count}
@@ -742,7 +741,7 @@ function AttendancePage() {
               </TableCell>
               <TableCell>
                 <Input
-                  aria-label={`الآليات المتوقفة من ${row.item_name}`}
+                  aria-label={(ui("الآليات المتوقفة من ") + (row.item_name))}
                   type="number"
                   min="0"
                   max={row.total_count}
@@ -758,24 +757,21 @@ function AttendancePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">التقارير اليومية</h1>
-        <p className="text-muted-foreground mt-1">تقارير الحضور وأعمال المواقع حسب التاريخ</p>
+        <h1 className="text-3xl font-bold">{ui("التقارير اليومية")}</h1>
+        <p className="text-muted-foreground mt-1">{ui("تقارير الحضور وأعمال المواقع حسب التاريخ")}</p>
       </div>
       {usingCatalogFallback && (
         <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
           <div>
-            <b>قائمة التخصصات جاهزة:</b> يتم عرض التخصصات المحفوظة محلياً مؤقتاً إلى أن تتم مزامنة
-            جداول التقارير مع قاعدة البيانات.
-          </div>
+            <b>{ui("قائمة التخصصات جاهزة:")}</b>{ui(" يتم عرض التخصصات المحفوظة محلياً مؤقتاً إلى أن تتم مزامنة جداول التقارير مع قاعدة البيانات.")}</div>
         </div>
       )}
       {catalogQuery.error && (
-        <p className="text-destructive">تعذر تحميل التخصصات: {catalogQuery.error.message}</p>
+        <p className="text-destructive">{ui("تعذر تحميل التخصصات: ")}{catalogQuery.error.message}</p>
       )}
       {reportsQuery.error && (
-        <p className="text-destructive">
-          تعذر تحميل التقارير المحفوظة: {reportsQuery.error.message}
+        <p className="text-destructive">{ui("تعذر تحميل التقارير المحفوظة: ")}{reportsQuery.error.message}
         </p>
       )}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
@@ -786,8 +782,8 @@ function AttendancePage() {
           <div className="flex items-center gap-3">
             <ClipboardList className="w-5 h-5 text-primary" />
             <div>
-              <div className="font-semibold">تقرير المواقع</div>
-              <div className="text-xs text-muted-foreground">العاملون والآليات</div>
+              <div className="font-semibold">{ui("تقرير المواقع")}</div>
+              <div className="text-xs text-muted-foreground">{ui("العاملون والآليات")}</div>
             </div>
           </div>
         </button>
@@ -798,10 +794,8 @@ function AttendancePage() {
           <div className="flex items-center gap-3">
             <FileText className="w-5 h-5 text-primary" />
             <div>
-              <div className="font-semibold">متابعة النشر</div>
-              <div className="text-xs text-muted-foreground">
-                مقارنة الخطة النهائية بالتقرير اليومي
-              </div>
+              <div className="font-semibold">{ui("متابعة النشر")}</div>
+              <div className="text-xs text-muted-foreground">{ui("مقارنة الخطة النهائية بالتقرير اليومي")}</div>
             </div>
           </div>
         </button>
@@ -812,8 +806,8 @@ function AttendancePage() {
           <div className="flex items-center gap-3">
             <ClipboardCheck className="w-5 h-5 text-primary" />
             <div>
-              <div className="font-semibold">الجرد اليومي</div>
-              <div className="text-xs text-muted-foreground">حضور كوادر الورش</div>
+              <div className="font-semibold">{ui("الجرد اليومي")}</div>
+              <div className="text-xs text-muted-foreground">{ui("حضور كوادر الورش")}</div>
             </div>
           </div>
         </button>
@@ -824,8 +818,8 @@ function AttendancePage() {
           <div className="flex items-center gap-3">
             <UsersRound className="w-5 h-5 text-primary" />
             <div>
-              <div className="font-semibold">الحضور والانصراف</div>
-              <div className="text-xs text-muted-foreground">سجلات البصمة</div>
+              <div className="font-semibold">{ui("الحضور والانصراف")}</div>
+              <div className="text-xs text-muted-foreground">{ui("سجلات البصمة")}</div>
             </div>
           </div>
         </button>
@@ -836,25 +830,22 @@ function AttendancePage() {
         <Card className="border-primary/20">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <FileText className="w-5 h-5 text-primary" />
-              متابعة النشر
-            </CardTitle>
+              <FileText className="w-5 h-5 text-primary" />{ui("متابعة النشر")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
             {dailyCrewQuery.error && (
-              <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-                تعذر تحميل إسنادات كادر اليوم: {formatErrorMessage(dailyCrewQuery.error)}
+              <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{ui("تعذر تحميل إسنادات كادر اليوم: ")}{ui(formatErrorMessage(dailyCrewQuery.error))}
               </p>
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label>الموقع</Label>
+                <Label>{ui("الموقع")}</Label>
                 <select
                   className="flex h-10 w-full rounded-md border bg-background px-3 text-sm"
                   value={siteId}
                   onChange={(e) => setSiteId(e.target.value)}
                 >
-                  <option value="">اختر الموقع</option>
+                  <option value="">{ui("اختر الموقع")}</option>
                   {sites.map((site) => (
                     <option key={site.id} value={site.id}>
                       {site.name} {site.ctr_code ? `— ${site.ctr_code}` : ""}
@@ -863,49 +854,43 @@ function AttendancePage() {
                 </select>
               </div>
               <div>
-                <Label>تاريخ المتابعة</Label>
+                <Label>{ui("تاريخ المتابعة")}</Label>
                 <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
               </div>
             </div>
 
             {!siteId ? (
-              <div className="rounded-xl border border-dashed p-6 text-center text-muted-foreground">
-                اختر موقعًا لعرض متابعة النشر.
-              </div>
+              <div className="rounded-xl border border-dashed p-6 text-center text-muted-foreground">{ui("اختر موقعًا لعرض متابعة النشر.")}</div>
             ) : finalizedPlanQuery.isLoading ? (
-              <div className="rounded-xl border border-dashed p-6 text-center text-muted-foreground">
-                جارٍ تحميل الخطة النهائية...
-              </div>
+              <div className="rounded-xl border border-dashed p-6 text-center text-muted-foreground">{ui("جارٍ تحميل الخطة النهائية...")}</div>
             ) : !finalizedPlanQuery.data ? (
-              <div className="rounded-xl border border-dashed p-6 text-center text-muted-foreground">
-                لا توجد خطة نهائية معتمدة لهذا الموقع حتى الآن.
-              </div>
+              <div className="rounded-xl border border-dashed p-6 text-center text-muted-foreground">{ui("لا توجد خطة نهائية معتمدة لهذا الموقع حتى الآن.")}</div>
             ) : (
               <div className="space-y-5">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div className="rounded-xl border bg-muted/50 p-3 text-foreground">
-                    <div className="text-xs text-muted-foreground">الموقع</div>
+                    <div className="text-xs text-muted-foreground">{ui("الموقع")}</div>
                     <div className="mt-1 font-bold">{finalizedPlanQuery.data.site_name}</div>
                   </div>
                   <div className="rounded-xl border bg-muted/50 p-3 text-foreground">
-                    <div className="text-xs text-muted-foreground">تاريخ الخطة</div>
+                    <div className="text-xs text-muted-foreground">{ui("تاريخ الخطة")}</div>
                     <div className="mt-1 font-bold">{finalizedPlanQuery.data.request_date}</div>
                   </div>
                   <div className="rounded-xl border bg-muted/50 p-3 text-foreground">
-                    <div className="text-xs text-muted-foreground">مطلوب (كوادر وآليات)</div>
+                    <div className="text-xs text-muted-foreground">{ui("مطلوب (كوادر وآليات)")}</div>
                     <div className="mt-1 font-bold">
                       {publishSummary.reduce((sum, item) => sum + item.quantity, 0)}
                     </div>
                   </div>
                   <div className="rounded-xl border bg-muted/50 p-3 text-foreground">
-                    <div className="text-xs text-muted-foreground">مرصود (كوادر وآليات)</div>
+                    <div className="text-xs text-muted-foreground">{ui("مرصود (كوادر وآليات)")}</div>
                     <div className="mt-1 font-bold">
                       {publishSummary.reduce((sum, item) => sum + item.reported, 0)}
                     </div>
                   </div>
                 </div>
 
-                {execution.isError && <p role="alert" className="text-sm text-destructive">تعذر قراءة سجل التنفيذ الموحد. تحقق من تطبيق SQL التكامل قبل الاعتماد.</p>}
+                {execution.isError && <p role="alert" className="text-sm text-destructive">{ui("تعذر قراءة سجل التنفيذ الموحد. تحقق من تطبيق SQL التكامل قبل الاعتماد.")}</p>}
                 <PlanBiometricMatch
                   key={matchKey}
                   onMatchChange={onMatchChange}
@@ -932,17 +917,17 @@ function AttendancePage() {
                   const plannedCost = comparisonWorkers.reduce((s, i) => s + i.quantity * dailyRate(i.specialty), 0);
                   const actualCost = comparisonWorkers.reduce((s, i) => s + i.reported * dailyRate(i.specialty), 0);
                   const variance = plannedCost - actualCost;
-                  const money = (value: number) => `${value.toLocaleString("ar-IQ", { maximumFractionDigits: 0 })} د.ع`;
+                  const money = (value: number) => `${value.toLocaleString(displayLocale(), { maximumFractionDigits: 0 })} د.ع`;
                   const pct = req ? Math.round((rep / req) * 100) : 0;
                   return (
                     <div className="rounded-2xl border bg-card p-4 shadow-sm">
                       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                         <div>
-                          <h3 className="font-bold">مقارنة الخطة النهائية وتقرير الموقع</h3>
+                          <h3 className="font-bold">{ui("مقارنة الخطة النهائية وتقرير الموقع")}</h3>
                           <p className="text-xs text-muted-foreground">
                             {existingReport
-                              ? `تقرير يوم ${date}`
-                              : `لا يوجد تقرير مرفوع ليوم ${date}`}
+                              ? (ui("تقرير يوم ") + (date))
+                              : (ui("لا يوجد تقرير مرفوع ليوم ") + (date))}
                           </p>
                         </div>
                         <div className="flex items-center gap-3">
@@ -957,9 +942,9 @@ function AttendancePage() {
                             </span>
                           </div>
                           <div className="text-xs space-y-1">
-                            <div>نسبة الالتزام بالخطة</div>
+                            <div>{ui("نسبة الالتزام بالخطة")}</div>
                             {extra > 0 && (
-                              <div className="text-primary font-semibold">زيادة: {extra}</div>
+                              <div className="text-primary font-semibold">{ui("زيادة: ")}{extra}</div>
                             )}
                             <Badge
                               variant={
@@ -972,10 +957,10 @@ function AttendancePage() {
                               className={extra > 0 && !publishSummary.some((i) => i.missing > 0) ? "bg-amber-500 text-white hover:bg-amber-500" : ""}
                             >
                               {publishSummary.some((i) => i.missing > 0)
-                                ? "يوجد نقص"
+                                ? ui("يوجد نقص")
                                 : extra > 0
-                                  ? "يوجد تجاوز للعدد"
-                                  : "مكتمل"}
+                                  ? ui("يوجد تجاوز للعدد")
+                                  : ui("مكتمل")}
                             </Badge>
                           </div>
                         </div>
@@ -991,13 +976,13 @@ function AttendancePage() {
                       </div>
                       <div className="mb-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-muted/30 p-4">
                         <div className="space-y-1 text-sm">
-                          <p>التكلفة المخططة: <b>{money(plannedCost)}</b></p>
-                          <p className={variance > 0 ? "text-success" : variance < 0 ? "text-destructive" : "text-muted-foreground"}>{variance > 0 ? "وفر" : variance < 0 ? "زيادة" : "تطابق الميزانية"}: {money(Math.abs(variance))}</p>
-                          <p className="text-xs text-muted-foreground">أجور يومية حسب التخصص؛ عند غياب الأجر يستخدم الأجر الافتراضي. الحضور والتكلفة يشملان الأفراد المسندين للموقع في سجل البصمة الموحد، بما فيهم تكليفات الورش.</p>
+                          <p>{ui("التكلفة المخططة: ")}<b>{money(plannedCost)}</b></p>
+                          <p className={variance > 0 ? "text-success" : variance < 0 ? "text-destructive" : "text-muted-foreground"}>{variance > 0 ? ui("وفر") : variance < 0 ? ui("زيادة") : ui("تطابق الميزانية")}: {money(Math.abs(variance))}</p>
+                          <p className="text-xs text-muted-foreground">{ui("أجور يومية حسب التخصص؛ عند غياب الأجر يستخدم الأجر الافتراضي. الحضور والتكلفة يشملان الأفراد المسندين للموقع في سجل البصمة الموحد، بما فيهم تكليفات الورش.")}</p>
                         </div>
                         <Button onClick={approveBiometric} disabled={!execution.isSuccess || !biometricMatch || approvingBiometric || deductionWagesQuery.isPending || deductionWagesQuery.isError}>
                           {approvingBiometric ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="ml-2 h-4 w-4" />}
-                          {approvingBiometric ? "جارٍ اعتماد التقرير..." : "اعتماد التقرير الميداني من البصمة"}
+                          {approvingBiometric ? ui("جارٍ اعتماد التقرير...") : ui("اعتماد التقرير الميداني من البصمة")}
                         </Button>
                       </div>
                       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -1014,7 +999,7 @@ function AttendancePage() {
                               <div className="mb-2 flex items-center justify-between">
                                 <span className="font-medium">{item.specialty}</span>
                                 <Badge variant="outline" className="mr-auto ml-2">
-                                  {item.kind === "equipment_type" ? "آليات" : "كادر"}
+                                  {item.kind === "equipment_type" ? ui("آليات") : ui("كادر")}
                                 </Badge>
                                 <span
                                   className={
@@ -1026,10 +1011,10 @@ function AttendancePage() {
                                   }
                                 >
                                   {item.missing > 0
-                                    ? `ناقص ${item.missing}`
+                                    ? (ui("ناقص ") + (item.missing))
                                     : over > 0
-                                      ? `زيادة ${over}`
-                                      : "مطابق"}
+                                      ? (ui("زيادة ") + (over))
+                                      : ui("مطابق")}
                                 </span>
                               </div>
                               <div className="h-2.5 overflow-hidden rounded-full bg-muted">
@@ -1045,26 +1030,23 @@ function AttendancePage() {
                                 />
                               </div>
                               <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-                                <span>
-                                  الخطة: <b className="text-foreground">{item.quantity}</b>
+                                <span>{ui("الخطة: ")}<b className="text-foreground">{item.quantity}</b>
                                 </span>
                                 <span>
-                                  {biometricMatch && item.kind === "worker_specialty" ? "بالبصمة" : "المرفوع"}: <b className="text-foreground">{item.reported}</b>
+                                  {biometricMatch && item.kind === "worker_specialty" ? ui("بالبصمة") : ui("المرفوع")}: <b className="text-foreground">{item.reported}</b>
                                 </span>
                                 <span>{p}%</span>
                               </div>
-                              {item.kind === "worker_specialty" && <p className="mt-2 text-xs text-muted-foreground">تكلفة البند: {money(item.reported * dailyRate(item.specialty))} · النقص: {item.missing}</p>}
+                              {item.kind === "worker_specialty" && <p className="mt-2 text-xs text-muted-foreground">{ui("تكلفة البند: ")}{money(item.reported * dailyRate(item.specialty))}{ui(" · النقص: ")}{item.missing}</p>}
                               {item.kind === "equipment_type" && (
                                 <div className="mt-2 flex gap-3 rounded-md bg-muted/40 px-2 py-1.5 text-xs text-muted-foreground">
-                                  <span>عاملة: <b className="text-foreground">{item.working}</b></span>
-                                  <span>متوقفة: <b className="text-foreground">{item.idle}</b></span>
+                                  <span>{ui("عاملة: ")}<b className="text-foreground">{item.working}</b></span>
+                                  <span>{ui("متوقفة: ")}<b className="text-foreground">{item.idle}</b></span>
                                 </div>
                               )}
                               {over > 0 && item.kind === "worker_specialty" && (
                                 <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-400/50 bg-amber-500/10 p-2">
-                                  <span className="text-sm font-semibold text-amber-800 dark:text-amber-200">
-                                    زيادة عن الخطة: {over} · تكلفة الفرد حسب أجر التخصص
-                                  </span>
+                                  <span className="text-sm font-semibold text-amber-800 dark:text-amber-200">{ui("زيادة عن الخطة: ")}{over}{ui(" · تكلفة الفرد حسب أجر التخصص")}</span>
                                   {item.excessAssignments.some((assignment) => !assignment.alreadyDeducted) && deductionPermissionQuery.data && (
                                     <Button
                                       type="button"
@@ -1076,15 +1058,13 @@ function AttendancePage() {
                                         setResponsibleEmployeeId("");
                                         setResponsibleSearch("");
                                       }}
-                                    >
-                                      ⚠ تحديد المسؤول عن الكلفة
-                                    </Button>
+                                    >{ui("⚠ تحديد المسؤول عن الكلفة")}</Button>
                                   )}
                                   {item.excessAssignments.some((assignment) => !assignment.alreadyDeducted) && !deductionPermissionQuery.data && (
-                                    <span className="text-xs text-muted-foreground">تسجيل الاستقطاع متاح للموارد البشرية والإدارة</span>
+                                    <span className="text-xs text-muted-foreground">{ui("تسجيل الاستقطاع متاح للموارد البشرية والإدارة")}</span>
                                   )}
                                   {item.excessAssignments.length > 0 && item.excessAssignments.every((assignment) => assignment.alreadyDeducted) && (
-                                    <Badge variant="outline" className="border-emerald-600 text-emerald-700 dark:text-emerald-300">تم تسجيل استقطاع هذه الزيادة</Badge>
+                                    <Badge variant="outline" className="border-emerald-600 text-emerald-700 dark:text-emerald-300">{ui("تم تسجيل استقطاع هذه الزيادة")}</Badge>
                                   )}
                                 </div>
                               )}
@@ -1111,10 +1091,8 @@ function AttendancePage() {
                             <UsersRound className="h-5 w-5" />
                           </div>
                           <div>
-                            <h3 className="font-bold">الكادر المعتمد في الخطة النهائية</h3>
-                            <p className="mt-0.5 text-sm text-muted-foreground">
-                              توزيع الأسماء حسب الاختصاص
-                            </p>
+                            <h3 className="font-bold">{ui("الكادر المعتمد في الخطة النهائية")}</h3>
+                            <p className="mt-0.5 text-sm text-muted-foreground">{ui("توزيع الأسماء حسب الاختصاص")}</p>
                           </div>
                         </div>
                         <Badge
@@ -1122,8 +1100,7 @@ function AttendancePage() {
                           className="w-fit gap-1.5 rounded-full px-3 py-1.5 text-sm"
                         >
                           <UsersRound className="h-4 w-4" />
-                          {staffCount.toLocaleString("ar-IQ")} فرد
-                        </Badge>
+                          {staffCount.toLocaleString(displayLocale())}{ui(" فرد")}</Badge>
                       </div>
                       {staffGroups.length ? (
                         <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3 sm:p-5">
@@ -1135,8 +1112,7 @@ function AttendancePage() {
                               <div className="mb-3 flex items-start justify-between gap-3">
                                 <h4 className="font-semibold leading-6">{group.specialty}</h4>
                                 <Badge variant="outline" className="shrink-0 rounded-full">
-                                  {group.names.length.toLocaleString("ar-IQ")} أفراد
-                                </Badge>
+                                  {group.names.length.toLocaleString(displayLocale())}{ui(" أفراد")}</Badge>
                               </div>
                               <StaffNameChips names={group.names} />
                             </article>
@@ -1145,10 +1121,8 @@ function AttendancePage() {
                       ) : (
                         <div className="m-4 flex flex-col items-center justify-center rounded-xl border border-dashed bg-card/70 px-4 py-8 text-center sm:m-5">
                           <UsersRound className="mb-2 h-8 w-8 text-muted-foreground/60" />
-                          <p className="font-medium">لا يوجد كادر مضاف إلى الخطة النهائية</p>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            ستظهر الأسماء هنا عند اعتماد توزيع الموظفين.
-                          </p>
+                          <p className="font-medium">{ui("لا يوجد كادر مضاف إلى الخطة النهائية")}</p>
+                          <p className="mt-1 text-sm text-muted-foreground">{ui("ستظهر الأسماء هنا عند اعتماد توزيع الموظفين.")}</p>
                         </div>
                       )}
                     </section>
@@ -1165,7 +1139,7 @@ function AttendancePage() {
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                 <CardTitle className="flex items-center gap-2">
                   <FileText className="w-5 h-5 text-primary" />
-                  {editingReportId ? "تعديل تقرير الموقع" : "إدخال تقرير موقع"}
+                  {editingReportId ? ui("تعديل تقرير الموقع") : ui("إدخال تقرير موقع")}
                 </CardTitle>
                 {existingReport && (
                   <Button
@@ -1173,22 +1147,20 @@ function AttendancePage() {
                     size="sm"
                     onClick={() => exportDailyPdf(existingReport)}
                   >
-                    <FileDown className="w-4 h-4 ml-2" />
-                    تصدير PDF
-                  </Button>
+                    <FileDown className="w-4 h-4 ml-2" />{ui("تصدير PDF")}</Button>
                 )}
               </div>
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label>الموقع</Label>
+                  <Label>{ui("الموقع")}</Label>
                   <select
                     className="flex h-10 w-full rounded-md border bg-background px-3 text-sm"
                     value={siteId}
                     onChange={(e) => setSiteId(e.target.value)}
                   >
-                    <option value="">اختر الموقع</option>
+                    <option value="">{ui("اختر الموقع")}</option>
                     {sites.map((site) => (
                       <option key={site.id} value={site.id}>
                         {site.name}
@@ -1198,7 +1170,7 @@ function AttendancePage() {
                   </select>
                 </div>
                 <div>
-                  <Label>تاريخ التقرير</Label>
+                  <Label>{ui("تاريخ التقرير")}</Label>
                   <Input
                     type="date"
                     max={today}
@@ -1210,23 +1182,21 @@ function AttendancePage() {
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <HardHat className="w-5 h-5 text-primary" />
-                  <h2 className="font-semibold">العاملون</h2>
-                  <span className="text-xs text-muted-foreground">كل تخصص نشط يظهر تلقائياً</span>
+                  <h2 className="font-semibold">{ui("العاملون")}</h2>
+                  <span className="text-xs text-muted-foreground">{ui("كل تخصص نشط يظهر تلقائياً")}</span>
                 </div>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>التخصص</TableHead>
-                      <TableHead className="w-48">العدد</TableHead>
+                      <TableHead>{ui("التخصص")}</TableHead>
+                      <TableHead className="w-48">{ui("العدد")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {renderRows("worker_specialty")}
                     {!activeWorkers.length && (
                       <TableRow>
-                        <TableCell colSpan={2} className="text-center text-muted-foreground">
-                          أضف التخصصات من إعدادات التقارير
-                        </TableCell>
+                        <TableCell colSpan={2} className="text-center text-muted-foreground">{ui("أضف التخصصات من إعدادات التقارير")}</TableCell>
                       </TableRow>
                     )}
                   </TableBody>
@@ -1235,71 +1205,65 @@ function AttendancePage() {
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <Truck className="w-5 h-5 text-primary" />
-                  <h2 className="font-semibold">الآليات والمركبات</h2>
-                  <span className="text-xs text-muted-foreground">
-                    الأعداد غير المعبأة تُحفظ كصفر
-                  </span>
+                  <h2 className="font-semibold">{ui("الآليات والمركبات")}</h2>
+                  <span className="text-xs text-muted-foreground">{ui("الأعداد غير المعبأة تُحفظ كصفر")}</span>
                 </div>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>الآلية / المركبة</TableHead>
-                      <TableHead>العدد</TableHead>
-                      <TableHead>عاملة</TableHead>
-                      <TableHead>متوقفة</TableHead>
+                      <TableHead>{ui("الآلية / المركبة")}</TableHead>
+                      <TableHead>{ui("العدد")}</TableHead>
+                      <TableHead>{ui("عاملة")}</TableHead>
+                      <TableHead>{ui("متوقفة")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {renderRows("equipment_type")}
                     {!activeEquipment.length && (
                       <TableRow>
-                        <TableCell colSpan={4} className="text-center text-muted-foreground">
-                          أضف أنواع الآليات من إعدادات التقارير
-                        </TableCell>
+                        <TableCell colSpan={4} className="text-center text-muted-foreground">{ui("أضف أنواع الآليات من إعدادات التقارير")}</TableCell>
                       </TableRow>
                     )}
                   </TableBody>
                 </Table>
               </div>
               <div>
-                <Label>ملاحظات الموقع (اختياري)</Label>
+                <Label>{ui("ملاحظات الموقع (اختياري)")}</Label>
                 <Textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="الأعمال المنجزة أو الملاحظات التشغيلية..."
+                  placeholder={ui("الأعمال المنجزة أو الملاحظات التشغيلية...")}
                 />
               </div>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => exportDailyPdf()}>
-                  <FileDown className="w-4 h-4 ml-2" />
-                  تصدير PDF
-                </Button>
+                  <FileDown className="w-4 h-4 ml-2" />{ui("تصدير PDF")}</Button>
                 <Button onClick={() => void saveReport()}>
                   <Save className="w-4 h-4 ml-2" />
-                  {editingReportId ? "حفظ التعديلات" : "حفظ التقرير"}
+                  {editingReportId ? ui("حفظ التعديلات") : ui("حفظ التقرير")}
                 </Button>
               </div>
             </CardContent>
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>التقارير المحفوظة</CardTitle>
+              <CardTitle>{ui("التقارير المحفوظة")}</CardTitle>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>الموقع</TableHead>
-                    <TableHead>التاريخ</TableHead>
-                    <TableHead>الملاحظات</TableHead>
-                    <TableHead className="w-44">الإجراءات</TableHead>
+                    <TableHead>{ui("الموقع")}</TableHead>
+                    <TableHead>{ui("التاريخ")}</TableHead>
+                    <TableHead>{ui("الملاحظات")}</TableHead>
+                    <TableHead className="w-44">{ui("الإجراءات")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {reports.map((report) => (
                     <TableRow key={report.id}>
                       <TableCell className="font-medium">
-                        {sites.find((site) => site.id === report.site_id)?.name ?? "موقع غير معروف"}
+                        {sites.find((site) => site.id === report.site_id)?.name ?? ui("موقع غير معروف")}
                       </TableCell>
                       <TableCell>{report.report_date}</TableCell>
                       <TableCell className="max-w-xs truncate">{report.notes || "—"}</TableCell>
@@ -1309,7 +1273,7 @@ function AttendancePage() {
                             variant="ghost"
                             size="icon"
                             onClick={() => editReport(report)}
-                            aria-label="تعديل"
+                            aria-label={ui("تعديل")}
                           >
                             <Pencil className="w-4 h-4" />
                           </Button>
@@ -1317,7 +1281,7 @@ function AttendancePage() {
                             variant="ghost"
                             size="icon"
                             onClick={() => exportDailyPdf(report)}
-                            aria-label="تصدير PDF"
+                            aria-label={ui("تصدير PDF")}
                           >
                             <FileDown className="w-4 h-4" />
                           </Button>
@@ -1325,7 +1289,7 @@ function AttendancePage() {
                             variant="ghost"
                             size="icon"
                             onClick={() => void deleteReport(report)}
-                            aria-label="حذف"
+                            aria-label={ui("حذف")}
                           >
                             <Trash2 className="w-4 h-4 text-destructive" />
                           </Button>
@@ -1335,9 +1299,7 @@ function AttendancePage() {
                   ))}
                   {!reports.length && (
                     <TableRow>
-                      <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
-                        لا توجد تقارير محفوظة
-                      </TableCell>
+                      <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">{ui("لا توجد تقارير محفوظة")}</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -1350,7 +1312,7 @@ function AttendancePage() {
           <Card>
             <CardContent className="p-4 flex items-end gap-4">
               <div>
-                <Label>التاريخ</Label>
+                <Label>{ui("التاريخ")}</Label>
                 <Input
                   type="date"
                   max={today}
@@ -1360,45 +1322,41 @@ function AttendancePage() {
                 />
               </div>
               <div className="flex gap-3 mr-auto">
-                <Badge className="bg-success">
-                  حاضر: {attendanceRows.filter((row) => row.status === "present").length}
+                <Badge className="bg-success">{ui("حاضر: ")}{attendanceRows.filter((row) => row.status === "present").length}
                 </Badge>
-                <Badge variant="destructive">
-                  غائب:{" "}
+                <Badge variant="destructive">{ui("غائب:")}{" "}
                   {attendanceRows.filter((row) => row.status === "absent").length}
                 </Badge>
-                <Badge className="border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
-                  غير مكتمل: {attendanceRows.filter((row) => row.status === "incomplete").length}
+                <Badge className="border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">{ui("غير مكتمل: ")}{attendanceRows.filter((row) => row.status === "incomplete").length}
                 </Badge>
-                <Badge className="border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
-                  متأخر: {attendanceRows.filter((row) => row.late).length}
+                <Badge className="border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">{ui("متأخر: ")}{attendanceRows.filter((row) => row.late).length}
                 </Badge>
               </div>
             </CardContent>
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>تقرير الحضور والانصراف — {date}</CardTitle>
+              <CardTitle>{ui("تقرير الحضور والانصراف — ")}{date}</CardTitle>
             </CardHeader>
             <CardContent>
               {attendance.isLoading ? (
-                <p className="text-muted-foreground">جارٍ التحميل...</p>
+                <p className="text-muted-foreground">{ui("جارٍ التحميل...")}</p>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>الرقم</TableHead>
-                      <TableHead>الاسم</TableHead>
-                      <TableHead>القسم</TableHead>
-                      <TableHead>أول دخول</TableHead>
-                      <TableHead>آخر خروج</TableHead>
-                      <TableHead>الساعات</TableHead>
-                      <TableHead>إضافي</TableHead>
-                      <TableHead>تفاصيل الحركات</TableHead>
-                      <TableHead>أجهزة</TableHead>
-                      <TableHead>مصدر الحركة</TableHead>
-                      <TableHead>التحقق</TableHead>
-                      <TableHead>الحالة</TableHead>
+                      <TableHead>{ui("الرقم")}</TableHead>
+                      <TableHead>{ui("الاسم")}</TableHead>
+                      <TableHead>{ui("القسم")}</TableHead>
+                      <TableHead>{ui("أول دخول")}</TableHead>
+                      <TableHead>{ui("آخر خروج")}</TableHead>
+                      <TableHead>{ui("الساعات")}</TableHead>
+                      <TableHead>{ui("إضافي")}</TableHead>
+                      <TableHead>{ui("تفاصيل الحركات")}</TableHead>
+                      <TableHead>{ui("أجهزة")}</TableHead>
+                      <TableHead>{ui("مصدر الحركة")}</TableHead>
+                      <TableHead>{ui("التحقق")}</TableHead>
+                      <TableHead>{ui("الحالة")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1410,38 +1368,36 @@ function AttendancePage() {
                         <TableCell>{fmtTime(row.check_in)}</TableCell>
                         <TableCell>{fmtTime(row.check_out)}</TableCell>
                         <TableCell>{row.hours > 0 ? row.hours.toFixed(2) : "—"}</TableCell>
-                        <TableCell>{row.overtime_hours ? `${row.overtime_hours.toFixed(2)} س` : "—"}</TableCell>
+                        <TableCell>{row.overtime_hours ? ((row.overtime_hours.toFixed(2)) + ui(" س")) : "—"}</TableCell>
                         <TableCell className="min-w-52">
                           <div className="flex flex-wrap gap-1">
                             {(row.event_details ?? []).map((event, index) => {
                               const labels = { in: "دخول", out: "خروج", break_out: "استراحة خارج", break_in: "استراحة عودة", overtime_in: "إضافي دخول", overtime_out: "إضافي خروج" };
                               const label = event.type ? labels[event.type] : "حركة غير محددة";
-                              return <Badge key={`${event.verify_time}-${index}`} variant="outline" className="gap-1 text-xs">{label} · {fmtTime(event.verify_time)}</Badge>;
+                              return <Badge key={`${event.verify_time}-${index}`} variant="outline" className="gap-1 text-xs">{ui(label)} · {fmtTime(event.verify_time)}</Badge>;
                             })}
                             {!row.event_details?.length && "—"}
                           </div>
                         </TableCell>
-                        <TableCell><span className="inline-flex items-center gap-1">{row.devices || "—"}{row.mobile_self && <Smartphone className="h-4 w-4 text-cyan-600" aria-label="حضور ذاتي من الهاتف" />}</span></TableCell>
+                        <TableCell><span className="inline-flex items-center gap-1">{row.devices || "—"}{row.mobile_self && <Smartphone className="h-4 w-4 text-cyan-600" aria-label={ui("حضور ذاتي من الهاتف")} />}</span></TableCell>
                         <TableCell className="text-xs">{(row.sources ?? []).map((source) => source === "mobile_self" ? "الهاتف" : source === "zk_agent" || source === "zkteco_auto_agent" ? "البرنامج المحلي" : source === "manual" ? "يدوي" : "جهاز البصمة").join("، ") || "—"}</TableCell>
-                        <TableCell>{row.suspicious && <div><Badge variant="destructive">مشبوه</Badge>{row.suspicious_reason && <p className="mt-1 max-w-40 text-xs text-destructive">{row.suspicious_reason}</p>}</div>}{row.selfie_url && <a className="mr-1 text-primary underline" href={row.selfie_url} target="_blank" rel="noreferrer">عرض الصورة</a>}</TableCell>
+                        <TableCell>{row.suspicious && <div><Badge variant="destructive">{ui("مشبوه")}</Badge>{row.suspicious_reason && <p className="mt-1 max-w-40 text-xs text-destructive">{row.suspicious_reason}</p>}</div>}{row.selfie_url && <a className="mr-1 text-primary underline" href={row.selfie_url} target="_blank" rel="noreferrer">{ui("عرض الصورة")}</a>}</TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
                             <Badge
                               variant={row.status === "present" ? "default" : row.status === "incomplete" ? "outline" : "destructive"}
                               className={row.status === "present" ? "bg-success" : row.status === "incomplete" ? "border-amber-500 text-amber-700" : ""}
                             >
-                              {row.status === "present" ? "حاضر" : row.status === "incomplete" ? "غير مكتمل" : "غائب"}
+                              {row.status === "present" ? ui("حاضر") : row.status === "incomplete" ? ui("غير مكتمل") : ui("غائب")}
                             </Badge>
-                            {row.late && <Badge className="bg-amber-500 text-white">متأخر</Badge>}
+                            {row.late && <Badge className="bg-amber-500 text-white">{ui("متأخر")}</Badge>}
                           </div>
                         </TableCell>
                       </TableRow>
                     ))}
                     {!attendanceRows.length && (
                       <TableRow>
-                        <TableCell colSpan={12} className="py-8 text-center text-muted-foreground">
-                          لا توجد بيانات لهذا التاريخ
-                        </TableCell>
+                        <TableCell colSpan={12} className="py-8 text-center text-muted-foreground">{ui("لا توجد بيانات لهذا التاريخ")}</TableCell>
                       </TableRow>
                     )}
                   </TableBody>
@@ -1457,37 +1413,32 @@ function AttendancePage() {
           if (!open && !savingDeduction) setSelectedOverage(null);
         }}
       >
-        <DialogContent dir="rtl" className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
+        <DialogContent dir={direction()} className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>تسجيل تكلفة الكادر الزائد</DialogTitle>
+            <DialogTitle>{ui("تسجيل تكلفة الكادر الزائد")}</DialogTitle>
           </DialogHeader>
           {selectedOverage && (
             <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                سيتم تسجيل استقطاع يومي لكل اسم زائد أدناه على الموظف المسؤول الذي تختاره. يتراكم
-                الاستقطاع في شهر العمل ويظهر مفصلاً في قصاصة الراتب. لا يمكن تسجيل السطر مرتين.
-              </p>
+              <p className="text-sm text-muted-foreground">{ui("سيتم تسجيل استقطاع يومي لكل اسم زائد أدناه على الموظف المسؤول الذي تختاره. يتراكم الاستقطاع في شهر العمل ويظهر مفصلاً في قصاصة الراتب. لا يمكن تسجيل السطر مرتين.")}</p>
               <div className="space-y-2 rounded-xl border border-amber-400/50 bg-amber-500/10 p-3">
                 {selectedOverage.excessAssignments.map((assignment) => {
                   const cost = excessCost(assignment);
                   return (
                     <div key={assignment.id} className="flex items-center justify-between gap-3 text-sm">
-                      <span className="font-medium">{assignment.employee_name_snapshot} · {assignment.employee_no_snapshot}{assignment.alreadyDeducted ? " · مسجل مسبقاً" : ""}</span>
-                      <span className="shrink-0">{assignment.alreadyDeducted ? "تم الاستقطاع" : cost === null ? "الأجر غير مهيأ" : `${cost.toLocaleString("ar-IQ")} د.ع / يوم`}</span>
+                      <span className="font-medium">{assignment.employee_name_snapshot} · {assignment.employee_no_snapshot}{assignment.alreadyDeducted ? ui(" · مسجل مسبقاً") : ""}</span>
+                      <span className="shrink-0">{assignment.alreadyDeducted ? ui("تم الاستقطاع") : cost === null ? ui("الأجر غير مهيأ") : `${cost.toLocaleString(displayLocale())} د.ع / يوم`}</span>
                     </div>
                   );
                 })}
-                <div className="border-t border-amber-500/30 pt-2 text-sm font-bold">
-                  المتبقي للتسجيل: {selectedOverage.excessAssignments.filter((assignment) => !assignment.alreadyDeducted).reduce((sum, assignment) => sum + (excessCost(assignment) ?? 0), 0).toLocaleString("ar-IQ")} د.ع
-                </div>
+                <div className="border-t border-amber-500/30 pt-2 text-sm font-bold">{ui("المتبقي للتسجيل: ")}{selectedOverage.excessAssignments.filter((assignment) => !assignment.alreadyDeducted).reduce((sum, assignment) => sum + (excessCost(assignment) ?? 0), 0).toLocaleString(displayLocale())}{ui(" د.ع")}</div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="excess-responsible-search">ابحث عن الموظف المسؤول في سجل الموظفين</Label>
+                <Label htmlFor="excess-responsible-search">{ui("ابحث عن الموظف المسؤول في سجل الموظفين")}</Label>
                 <Input
                   id="excess-responsible-search"
                   value={responsibleSearch}
                   onChange={(event) => setResponsibleSearch(event.target.value)}
-                  placeholder="الاسم أو الرقم الوظيفي..."
+                  placeholder={ui("الاسم أو الرقم الوظيفي...")}
                 />
                 <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border p-1">
                   {matchingResponsibleEmployees.slice(0, 80).map((employee) => (
@@ -1503,22 +1454,22 @@ function AttendancePage() {
                   ))}
                   {!matchingResponsibleEmployees.length && (
                     <p className="p-3 text-center text-sm text-muted-foreground">
-                      {responsibleEmployeesQuery.isLoading ? "جارٍ تحميل الموظفين..." : "لا يوجد موظف مطابق"}
+                      {responsibleEmployeesQuery.isLoading ? ui("جارٍ تحميل الموظفين...") : ui("لا يوجد موظف مطابق")}
                     </p>
                   )}
                 </div>
                 {selectedResponsible && (
-                  <p className="text-sm">سيُسجل الاستقطاع على: <b>{selectedResponsible.full_name}</b></p>
+                  <p className="text-sm">{ui("سيُسجل الاستقطاع على: ")}<b>{selectedResponsible.full_name}</b></p>
                 )}
               </div>
               <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => setSelectedOverage(null)} disabled={savingDeduction}>إلغاء</Button>
+                <Button type="button" variant="outline" onClick={() => setSelectedOverage(null)} disabled={savingDeduction}>{ui("إلغاء")}</Button>
                 <Button
                   type="button"
                   onClick={() => void saveExcessDeduction()}
                   disabled={savingDeduction || !responsibleEmployeeId || !selectedOverage.excessAssignments.some((assignment) => !assignment.alreadyDeducted) || selectedOverage.excessAssignments.some((assignment) => !assignment.alreadyDeducted && excessCost(assignment) === null)}
                 >
-                  {savingDeduction ? "جارٍ تسجيل الاستقطاع..." : "تسجيل الاستقطاع"}
+                  {savingDeduction ? ui("جارٍ تسجيل الاستقطاع...") : ui("تسجيل الاستقطاع")}
                 </Button>
               </div>
             </div>

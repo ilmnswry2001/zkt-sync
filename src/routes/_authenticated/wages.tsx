@@ -1,3 +1,4 @@
+import { direction, ui } from "@/lib/ui-language";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -53,7 +54,7 @@ export const Route = createFileRoute("/_authenticated/wages")({
   },
   head: () => ({
     meta: [
-      { title: "الأجور" },
+      { title: ui("الأجور") },
       {
         name: "description",
         content: "تحديد أجر كل تخصص وإضافة المكافآت والمهام الإضافية على راتب الموظف.",
@@ -211,9 +212,9 @@ function WagesPage() {
       qc.invalidateQueries({ queryKey: ["wage-rates"] });
       setOpen(false);
       setEditing(null);
-      toast.success("تم الحفظ");
+      toast.success(ui("تم الحفظ"));
     },
-    onError: (e: unknown) => toast.error(formatErrorMessage(e)),
+    onError: (e: unknown) => toast.error(ui(formatErrorMessage(e))),
   });
   const delRate = useMutation({
     mutationFn: async (id: string) => {
@@ -222,9 +223,9 @@ function WagesPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["wage-rates"] });
-      toast.success("تم الحذف");
+      toast.success(ui("تم الحذف"));
     },
-    onError: (e: unknown) => toast.error(formatErrorMessage(e)),
+    onError: (e: unknown) => toast.error(ui(formatErrorMessage(e))),
   });
   const saveAddition = useMutation({
     mutationFn: async (d: AdditionPayload) => {
@@ -234,9 +235,9 @@ function WagesPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["salary-additions"] });
       setAddOpen(false);
-      toast.success("تمت الإضافة");
+      toast.success(ui("تمت الإضافة"));
     },
-    onError: (e: unknown) => toast.error(formatErrorMessage(e)),
+    onError: (e: unknown) => toast.error(ui(formatErrorMessage(e))),
   });
   const delAddition = useMutation({
     mutationFn: async (id: string) => {
@@ -245,9 +246,9 @@ function WagesPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["salary-additions"] });
-      toast.success("تم الحذف");
+      toast.success(ui("تم الحذف"));
     },
-    onError: (e: unknown) => toast.error(formatErrorMessage(e)),
+    onError: (e: unknown) => toast.error(ui(formatErrorMessage(e))),
   });
 
   const specialtyNames = Array.from(
@@ -273,9 +274,9 @@ function WagesPage() {
     },
     onSuccess: (count) => {
       void qc.invalidateQueries({ queryKey: ["wage-rates"] });
-      toast.success(`تمت تهيئة أجور ${count} تخصص`);
+      toast.success((ui("تمت تهيئة أجور ") + (count) + ui(" تخصص")));
     },
-    onError: (error: Error) => toast.error(formatErrorMessage(error)),
+    onError: (error: Error) => toast.error(ui(formatErrorMessage(error))),
   });
 
   const KINDS: Record<string, string> = {
@@ -290,17 +291,15 @@ function WagesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">الأجور</h1>
-        <p className="text-muted-foreground mt-1">تحديد أجور الكوادر ومعدلات العمل الإضافي</p>
+        <h1 className="text-3xl font-bold">{ui("الأجور")}</h1>
+        <p className="text-muted-foreground mt-1">{ui("تحديد أجور الكوادر ومعدلات العمل الإضافي")}</p>
       </div>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
-            <CardTitle>أجور التخصصات</CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
-              الأجور الافتراضية أدناه قيم ابتدائية قابلة للتعديل وفق سياسة الشركة والعقد.
-            </p>
+            <CardTitle>{ui("أجور التخصصات")}</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">{ui("الأجور الافتراضية أدناه قيم ابتدائية قابلة للتعديل وفق سياسة الشركة والعقد.")}</p>
           </div>
           <div className="flex items-center gap-2">
             {missingSpecialties.length > 0 && (
@@ -311,8 +310,8 @@ function WagesPage() {
                 disabled={seedDefaultRates.isPending}
               >
                 {seedDefaultRates.isPending
-                  ? "جارٍ التهيئة..."
-                  : `تهيئة ${missingSpecialties.length} أجر افتراضي`}
+                  ? ui("جارٍ التهيئة...")
+                  : (ui("تهيئة ") + (missingSpecialties.length) + ui(" أجر افتراضي"))}
               </Button>
             )}
             <Dialog
@@ -324,12 +323,11 @@ function WagesPage() {
             >
               <DialogTrigger asChild>
                 <Button size="sm">
-                  <Plus className="w-4 h-4 ml-2" /> تخصص جديد
-                </Button>
+                  <Plus className="w-4 h-4 ml-2" />{ui(" تخصص جديد")}</Button>
               </DialogTrigger>
-              <DialogContent dir="rtl">
+              <DialogContent dir={direction()}>
                 <DialogHeader>
-                  <DialogTitle>{editing ? "تعديل أجر تخصص" : "أجر تخصص جديد"}</DialogTitle>
+                  <DialogTitle>{editing ? ui("تعديل أجر تخصص") : ui("أجر تخصص جديد")}</DialogTitle>
                 </DialogHeader>
                 <form
                   onSubmit={(e) => {
@@ -347,11 +345,11 @@ function WagesPage() {
                   className="grid grid-cols-2 gap-3"
                 >
                   <div className="col-span-2">
-                    <Label>التخصص / المسمى الوظيفي</Label>
+                    <Label>{ui("التخصص / المسمى الوظيفي")}</Label>
                     <Input name="title" required defaultValue={editing?.title} />
                   </div>
                   <div>
-                    <Label>الأجر اليومي</Label>
+                    <Label>{ui("الأجر اليومي")}</Label>
                     <Input
                       type="number"
                       step="0.01"
@@ -360,7 +358,7 @@ function WagesPage() {
                     />
                   </div>
                   <div>
-                    <Label>الراتب الشهري</Label>
+                    <Label>{ui("الراتب الشهري")}</Label>
                     <Input
                       type="number"
                       step="0.01"
@@ -369,7 +367,7 @@ function WagesPage() {
                     />
                   </div>
                   <div>
-                    <Label>أجر ساعة العمل الإضافي</Label>
+                    <Label>{ui("أجر ساعة العمل الإضافي")}</Label>
                     <Input
                       type="number"
                       step="0.01"
@@ -378,24 +376,22 @@ function WagesPage() {
                     />
                   </div>
                   <div>
-                    <Label>العملة</Label>
+                    <Label>{ui("العملة")}</Label>
                     <Select name="currency" defaultValue={editing?.currency ?? "IQD"}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="IQD">دينار عراقي</SelectItem>
-                        <SelectItem value="USD">دولار</SelectItem>
+                        <SelectItem value="IQD">{ui("دينار عراقي")}</SelectItem>
+                        <SelectItem value="USD">{ui("دولار")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="col-span-2">
-                    <Label>ملاحظات</Label>
+                    <Label>{ui("ملاحظات")}</Label>
                     <Input name="notes" defaultValue={editing?.notes ?? ""} />
                   </div>
-                  <Button type="submit" className="col-span-2">
-                    حفظ
-                  </Button>
+                  <Button type="submit" className="col-span-2">{ui("حفظ")}</Button>
                 </form>
               </DialogContent>
             </Dialog>
@@ -403,24 +399,20 @@ function WagesPage() {
         </CardHeader>
         {missingSpecialties.length > 0 && (
           <CardContent className="border-t bg-amber-50/50 pt-4 text-sm dark:bg-amber-950/20">
-            <p className="font-semibold text-amber-900 dark:text-amber-200">
-              تخصصات بلا أجر مسجل: {missingSpecialties.join("، ")}
+            <p className="font-semibold text-amber-900 dark:text-amber-200">{ui("تخصصات بلا أجر مسجل: ")}{missingSpecialties.join("، ")}
             </p>
-            <p className="mt-1 text-muted-foreground">
-              اضغط زر التهيئة لإضافة أجر يومي وشهري وأجر ساعة إضافية لكل تخصص، ويمكن تعديل القيم بعد
-              ذلك.
-            </p>
+            <p className="mt-1 text-muted-foreground">{ui("اضغط زر التهيئة لإضافة أجر يومي وشهري وأجر ساعة إضافية لكل تخصص، ويمكن تعديل القيم بعد ذلك.")}</p>
           </CardContent>
         )}
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>التخصص</TableHead>
-                <TableHead>يومي</TableHead>
-                <TableHead>شهري</TableHead>
-                <TableHead>ساعة إضافية</TableHead>
-                <TableHead>العملة</TableHead>
+                <TableHead>{ui("التخصص")}</TableHead>
+                <TableHead>{ui("يومي")}</TableHead>
+                <TableHead>{ui("شهري")}</TableHead>
+                <TableHead>{ui("ساعة إضافية")}</TableHead>
+                <TableHead>{ui("العملة")}</TableHead>
                 <TableHead></TableHead>
               </TableRow>
             </TableHeader>
@@ -448,7 +440,7 @@ function WagesPage() {
                         size="icon"
                         variant="ghost"
                         onClick={() => {
-                          if (confirm("حذف؟")) delRate.mutate(r.id);
+                          if (confirm(ui("حذف؟"))) delRate.mutate(r.id);
                         }}
                       >
                         <Trash2 className="w-4 h-4 text-destructive" />
@@ -459,16 +451,14 @@ function WagesPage() {
               ))}
               {!rates.length && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                    لا توجد تخصصات بعد
-                  </TableCell>
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">{ui("لا توجد تخصصات بعد")}</TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
           {rates.length > 50 && (
             <div className="mt-3 flex items-center justify-end gap-2 text-sm">
-              <Label htmlFor="wage-rates-row-limit">عدد الصفوف</Label>
+              <Label htmlFor="wage-rates-row-limit">{ui("عدد الصفوف")}</Label>
               <select
                 id="wage-rates-row-limit"
                 className="h-9 rounded-md border border-input bg-background px-3"
@@ -476,7 +466,7 @@ function WagesPage() {
                 onChange={(event) => setRateRowsLimit(Number(event.target.value))}
               >
                 {[50, 100, 250, 500].map((limit) => <option key={limit} value={limit}>{limit}</option>)}
-                <option value={rates.length}>الكل ({rates.length})</option>
+                <option value={rates.length}>{ui("الكل (")}{rates.length})</option>
               </select>
             </div>
           )}
@@ -485,8 +475,7 @@ function WagesPage() {
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <CardTitle>
-            الإضافات على الراتب — {month} (المجموع: {totalAdditions.toLocaleString()})
+          <CardTitle>{ui("الإضافات على الراتب — ")}{month}{ui(" (المجموع: ")}{totalAdditions.toLocaleString()})
           </CardTitle>
           <div className="flex items-center gap-2">
             <Input
@@ -498,12 +487,11 @@ function WagesPage() {
             <Dialog open={addOpen} onOpenChange={setAddOpen}>
               <DialogTrigger asChild>
                 <Button size="sm">
-                  <Plus className="w-4 h-4 ml-2" /> إضافة
-                </Button>
+                  <Plus className="w-4 h-4 ml-2" />{ui(" إضافة")}</Button>
               </DialogTrigger>
-              <DialogContent dir="rtl">
+              <DialogContent dir={direction()}>
                 <DialogHeader>
-                  <DialogTitle>إضافة على الراتب</DialogTitle>
+                  <DialogTitle>{ui("إضافة على الراتب")}</DialogTitle>
                 </DialogHeader>
                 <form
                   onSubmit={(e) => {
@@ -520,10 +508,10 @@ function WagesPage() {
                   className="space-y-3"
                 >
                   <div>
-                    <Label>الموظف</Label>
+                    <Label>{ui("الموظف")}</Label>
                     <Select name="employee_id" required>
                       <SelectTrigger>
-                        <SelectValue placeholder="اختر موظفاً" />
+                        <SelectValue placeholder={ui("اختر موظفاً")} />
                       </SelectTrigger>
                       <SelectContent>
                         {emps.map((e) => (
@@ -542,16 +530,16 @@ function WagesPage() {
                         disabled={isFetchingNextPage}
                         onClick={() => void fetchNextPage()}
                       >
-                        {isFetchingNextPage ? "جارٍ تحميل الموظفين…" : `تحميل 50 موظفاً إضافياً (${emps.length} محمّل)`}
+                        {isFetchingNextPage ? ui("جارٍ تحميل الموظفين…") : (ui("تحميل 50 موظفاً إضافياً (") + (emps.length) + ui(" محمّل)"))}
                       </Button>
                     )}
                   </div>
                   <div>
-                    <Label>الشهر</Label>
+                    <Label>{ui("الشهر")}</Label>
                     <Input type="month" name="month" defaultValue={month} required />
                   </div>
                   <div>
-                    <Label>النوع</Label>
+                    <Label>{ui("النوع")}</Label>
                     <Select name="kind" defaultValue="bonus">
                       <SelectTrigger>
                         <SelectValue />
@@ -566,16 +554,14 @@ function WagesPage() {
                     </Select>
                   </div>
                   <div>
-                    <Label>المبلغ</Label>
+                    <Label>{ui("المبلغ")}</Label>
                     <Input type="number" step="0.01" name="amount" required />
                   </div>
                   <div>
-                    <Label>الوصف</Label>
+                    <Label>{ui("الوصف")}</Label>
                     <Input name="description" />
                   </div>
-                  <Button type="submit" className="w-full">
-                    حفظ
-                  </Button>
+                  <Button type="submit" className="w-full">{ui("حفظ")}</Button>
                 </form>
               </DialogContent>
             </Dialog>
@@ -585,10 +571,10 @@ function WagesPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>الموظف</TableHead>
-                <TableHead>النوع</TableHead>
-                <TableHead>الوصف</TableHead>
-                <TableHead>المبلغ</TableHead>
+                <TableHead>{ui("الموظف")}</TableHead>
+                <TableHead>{ui("النوع")}</TableHead>
+                <TableHead>{ui("الوصف")}</TableHead>
+                <TableHead>{ui("المبلغ")}</TableHead>
                 <TableHead></TableHead>
               </TableRow>
             </TableHeader>
@@ -608,7 +594,7 @@ function WagesPage() {
                       size="icon"
                       variant="ghost"
                       onClick={() => {
-                        if (confirm("حذف؟")) delAddition.mutate(a.id);
+                        if (confirm(ui("حذف؟"))) delAddition.mutate(a.id);
                       }}
                     >
                       <Trash2 className="w-4 h-4 text-destructive" />
@@ -618,16 +604,14 @@ function WagesPage() {
               ))}
               {!additions.length && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                    لا توجد إضافات لهذا الشهر
-                  </TableCell>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">{ui("لا توجد إضافات لهذا الشهر")}</TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
           {additions.length > 50 && (
             <div className="mt-3 flex items-center justify-end gap-2 text-sm">
-              <Label htmlFor="salary-additions-row-limit">عدد الصفوف</Label>
+              <Label htmlFor="salary-additions-row-limit">{ui("عدد الصفوف")}</Label>
               <select
                 id="salary-additions-row-limit"
                 className="h-9 rounded-md border border-input bg-background px-3"
@@ -635,7 +619,7 @@ function WagesPage() {
                 onChange={(event) => setAdditionRowsLimit(Number(event.target.value))}
               >
                 {[50, 100, 250, 500].map((limit) => <option key={limit} value={limit}>{limit}</option>)}
-                <option value={additions.length}>الكل ({additions.length})</option>
+                <option value={additions.length}>{ui("الكل (")}{additions.length})</option>
               </select>
             </div>
           )}

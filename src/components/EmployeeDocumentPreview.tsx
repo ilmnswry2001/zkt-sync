@@ -1,3 +1,4 @@
+import { direction, ui } from "@/lib/ui-language";
 import { lazy, Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -40,9 +41,7 @@ export function EmployeeDocumentPreview({
     refetchOnReconnect: false,
   });
   const loading = (
-    <p role="status" className="p-4 text-sm">
-      جارٍ تحميل المعاينة…
-    </p>
+    <p role="status" className="p-4 text-sm">{ui("جارٍ تحميل المعاينة…")}</p>
   );
   const file = attachment.data;
   const isPdf =
@@ -56,7 +55,7 @@ export function EmployeeDocumentPreview({
       }}
     >
       <DialogContent
-        dir="rtl"
+        dir={direction()}
         className="w-[calc(100%-1.5rem)] max-w-4xl rounded-lg p-4 sm:p-6"
         onCloseAutoFocus={(event) => {
           event.preventDefault();
@@ -71,11 +70,9 @@ export function EmployeeDocumentPreview({
         {attachment.isError && (
           <div className="grid justify-items-start gap-3">
             <p role="alert" className="text-sm text-destructive">
-              {formatErrorMessage(attachment.error, "تعذر فتح المرفق")}
+              {ui(formatErrorMessage(attachment.error, "تعذر فتح المرفق"))}
             </p>
-            <Button type="button" variant="outline" onClick={() => void attachment.refetch()}>
-              إعادة المحاولة
-            </Button>
+            <Button type="button" variant="outline" onClick={() => void attachment.refetch()}>{ui("إعادة المحاولة")}</Button>
           </div>
         )}
         {file &&
@@ -94,9 +91,7 @@ export function EmployeeDocumentPreview({
 function ImagePreview({ url, fileName }: { url: string; fileName: string }) {
   const [failed, setFailed] = useState(false);
   return failed ? (
-    <p role="alert" className="text-sm text-destructive">
-      تعذر عرض الصورة. أغلق المعاينة وافتحها مجدداً، أو نزّل المرفق.
-    </p>
+    <p role="alert" className="text-sm text-destructive">{ui("تعذر عرض الصورة. أغلق المعاينة وافتحها مجدداً، أو نزّل المرفق.")}</p>
   ) : (
     <img
       src={url}

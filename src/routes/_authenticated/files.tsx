@@ -1,3 +1,4 @@
+import { direction, ui } from "@/lib/ui-language";
 import { useAuth } from "@/hooks/use-auth";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
@@ -16,7 +17,7 @@ import { toast } from "sonner";
 import { uploadedFilesTable } from "@/lib/uploaded-files-client";
 
 export const Route = createFileRoute("/_authenticated/files")({
-  head: () => ({ meta: [{ title: "سجل ملفات البصمة | إدارة الحضور" }, { name: "description", content: "معالجة ملفات أجهزة البصمة ومتابعة نتائج استيراد الحركات." }, { property: "og:title", content: "سجل ملفات البصمة | إدارة الحضور" }, { property: "og:description", content: "متابعة الملفات المرفوعة ونتائج معالجة الحضور." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" }] }),
+  head: () => ({ meta: [{ title: ui("سجل ملفات البصمة | إدارة الحضور") }, { name: "description", content: "معالجة ملفات أجهزة البصمة ومتابعة نتائج استيراد الحركات." }, { property: "og:title", content: "سجل ملفات البصمة | إدارة الحضور" }, { property: "og:description", content: "متابعة الملفات المرفوعة ونتائج معالجة الحضور." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" }] }),
   component: FilesPage,
 });
 
@@ -60,11 +61,11 @@ function FilesPage() {
           logs: parsed.logs,
         },
       });
-      toast.success(`تمت المعالجة: ${result.inserted} مسجلة، ${result.duplicates} مكررة، ${result.unmatched} غير مرتبطة`);
+      toast.success((ui("تمت المعالجة: ") + (result.inserted) + ui(" مسجلة، ") + (result.duplicates) + ui(" مكررة، ") + (result.unmatched) + ui(" غير مرتبطة")));
       await queryClient.invalidateQueries({ queryKey: ["device-sync-records"] });
       await queryClient.invalidateQueries({ queryKey: ["uploaded_files"] });
     } catch (error) {
-      toast.error(`فشلت معالجة الملف: ${formatErrorMessage(error, "حدث خطأ غير متوقع")}`);
+      toast.error((ui("فشلت معالجة الملف: ") + (formatErrorMessage(error, "حدث خطأ غير متوقع"))));
       await queryClient.invalidateQueries({ queryKey: ["uploaded_files"] });
     } finally {
       setProcessingId(null);
@@ -85,26 +86,26 @@ function FilesPage() {
   };
 
   return (
-    <div dir="rtl" className="space-y-6">
+    <div dir={direction()} className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">سجل الملفات المرفوعة</h1>
-        <p className="text-muted-foreground mt-1">آخر 100 ملف</p>
+        <h1 className="text-3xl font-bold">{ui("سجل الملفات المرفوعة")}</h1>
+        <p className="text-muted-foreground mt-1">{ui("آخر 100 ملف")}</p>
       </div>
       <Card>
-        <CardHeader><CardTitle>الملفات</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{ui("الملفات")}</CardTitle></CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>الملف</TableHead>
-                <TableHead>الجهاز</TableHead>
-                <TableHead>الرقم التسلسلي</TableHead>
-                <TableHead>الموظفون</TableHead>
-                <TableHead>السجلات</TableHead>
-                <TableHead>المُدرَج</TableHead>
-                <TableHead>الحالة</TableHead>
-                <TableHead>التاريخ</TableHead>
-                <TableHead>الإجراء</TableHead>
+                <TableHead>{ui("الملف")}</TableHead>
+                <TableHead>{ui("الجهاز")}</TableHead>
+                <TableHead>{ui("الرقم التسلسلي")}</TableHead>
+                <TableHead>{ui("الموظفون")}</TableHead>
+                <TableHead>{ui("السجلات")}</TableHead>
+                <TableHead>{ui("المُدرَج")}</TableHead>
+                <TableHead>{ui("الحالة")}</TableHead>
+                <TableHead>{ui("التاريخ")}</TableHead>
+                <TableHead>{ui("الإجراء")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -114,7 +115,7 @@ function FilesPage() {
                     <span className="font-mono text-sm">{r.file_name}</span>
                     {r.punch_time_zone && (
                       <p className="text-xs text-muted-foreground">
-                        {r.punch_time_zone === "UTC" ? "توقيت عالمي UTC" : "توقيت العراق المحلي"}
+                        {r.punch_time_zone === "UTC" ? ui("توقيت عالمي UTC") : ui("توقيت العراق المحلي")}
                       </p>
                     )}
                   </TableCell>
@@ -134,13 +135,13 @@ function FilesPage() {
                         onClick={() => void processFile(r)}
                       >
                         {processingId === r.id ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Play className="ml-2 h-4 w-4" />}
-                        {processingId === r.id ? "جارٍ المعالجة" : "بدء المعالجة"}
+                        {processingId === r.id ? ui("جارٍ المعالجة") : ui("بدء المعالجة")}
                       </Button>
                     )}
                   </TableCell>
                 </TableRow>
               ))}
-              {!rows.length && <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">لم يتم رفع أي ملفات بعد</TableCell></TableRow>}
+              {!rows.length && <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">{ui("لم يتم رفع أي ملفات بعد")}</TableCell></TableRow>}
             </TableBody>
           </Table>
         </CardContent>
