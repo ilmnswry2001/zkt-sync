@@ -5245,6 +5245,10 @@ export type Database = {
 
       set_workshop_period_tasks: { Args: { p_ids: string[]; p_start: string; p_end: string; p_site: string | null; p_activity: string; p_apply?: boolean }; Returns: undefined }
 
+      search_inventory_workshops: {
+        Args: { p_term: string; p_date: string; p_offset?: number }
+        Returns: { workshop_id: string; workshop_name: string; employee_id: string | null; match_kind: string; detail: string }[]
+      }
       reorder_daily_workshops: { Args: { p_ids: string[] }; Returns: undefined }
       set_workshop_daily_tasks: { Args: { p_ids: string[]; p_date: string; p_site: string | null; p_activity: string; p_apply?: boolean }; Returns: undefined }
 

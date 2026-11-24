@@ -1,3 +1,4 @@
+import { WorkshopInventorySearch } from "@/components/WorkshopInventorySearch";
 import { useDirectorySearch } from "@/hooks/use-directory-search";
 import { loadAllRows } from "@/lib/monthly-report";
 import { WorkshopManagement } from "@/components/WorkshopManagement";
@@ -189,6 +190,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
   };
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>(["all"]);
   const [workshopId, setWorkshopId] = useState(initialWorkshopId);
+  const [searchTarget, setSearchTarget] = useState<{ workshop: string; employee: string | null } | null>(null);
   const [additionalWorkshopId, setAdditionalWorkshopId] = useState("");
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [employeeSearch, setEmployeeSearch] = useState("");
@@ -364,6 +366,14 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
   const devices = devicesQuery.data ?? noDevices;
   const selectedWorkshop = workshops.find((workshop) => workshop.id === workshopId);
   const activeRoster = useMemo(() => members.filter((member) => member.employee), [members]);
+  useEffect(() => {
+    if (!searchTarget || searchTarget.workshop !== workshopId || membersQuery.isLoading) return;
+    const member = searchTarget.employee && document.getElementById(`inventory-member-${searchTarget.employee}`);
+    const target = member || document.getElementById("inventory-roster-heading");
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView({ block: "center" });
+    setSearchTarget(null);
+  }, [searchTarget, workshopId, membersQuery.isLoading]);
   const savedReport = reportQuery.data?.reports.find((report) => report.workshop_id === workshopId);
   const savedLines = useMemo(
     () => reportQuery.data?.lines.filter((line) => line.report_id === savedReport?.id) ?? [],
@@ -839,6 +849,10 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <WorkshopInventorySearch key={date} date={date} onSelect={(workshop, employee) => {
+                setWorkshopId(workshop);
+                setSearchTarget({ workshop, employee });
+              }} />
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="workshop-inventory-date">التاريخ</Label>
@@ -949,7 +963,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
               {selectedWorkshop && (
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-muted/20 p-3">
                   <div>
-                    <p className="font-semibold">{selectedWorkshop.name}</p>
+                    <p id="inventory-roster-heading" tabIndex={-1} className="font-semibold">{selectedWorkshop.name}</p>
                     <p className="text-xs text-muted-foreground">
                       علّم الموظفين الذين حضروا لتسجيل البصمة
                     </p>
@@ -989,7 +1003,9 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                   {activeRoster.map(({ id, employee, role_label }) => (
                     <label
                       key={id}
-                      className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border p-3 transition ${attendedByEmployee[employee!.id] ? "border-emerald-500/50 bg-emerald-500/5" : "hover:bg-muted/30"}`}
+                      id={`inventory-member-${employee!.id}`}
+                      tabIndex={-1}
+                      className={`focus-visible:ring-2 focus-visible:ring-primary flex cursor-pointer items-center justify-between gap-3 rounded-xl border p-3 transition ${attendedByEmployee[employee!.id] ? "border-emerald-500/50 bg-emerald-500/5" : "hover:bg-muted/30"}`}
                     >
                       <div className="flex min-w-0 items-center gap-3">
                         <input
