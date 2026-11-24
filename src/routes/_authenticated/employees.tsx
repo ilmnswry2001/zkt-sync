@@ -1,7 +1,8 @@
+import { useDebouncedValue } from "@/hooks/use-directory-search";
 import { EmployeeDocumentsTab } from "@/components/EmployeeDocumentsTab";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { Trash2, Plus, Pencil, Search, Upload, Loader2, UserRound } from "lucide-react";
+import { Trash2, Plus, Pencil, Search, Upload, Loader2, RotateCcw, X, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -55,7 +56,8 @@ const emptyOnboarding = {
 const iqd = new Intl.NumberFormat("ar-IQ", { style: "currency", currency: "IQD", maximumFractionDigits: 2 });
 const columnKeys = Object.keys(directoryColumns) as DirectoryColumn[];
 const defaultColumns = columnKeys.slice(0, 8);
-const emptyFilters = { department: "", status: "", pay: "", position: "", from: "", to: "" };
+const textFields = ["employee_no", "full_name", "id_no", "position", "email", "phone1"] as const;
+const emptyFilters = { search: "", employee_no: "", full_name: "", id_no: "", device: "", email: "", phone1: "", department: "", status: "", pay: "", position: "", from: "", to: "" };
 
 function EmployeesPage() {
   const qc = useQueryClient();
@@ -67,7 +69,6 @@ function EmployeesPage() {
   const [allowAllAttendanceSites, setAllowAllAttendanceSites] = useState(false);
   const [attendanceSiteIds, setAttendanceSiteIds] = useState<string[]>([]);
   const [checkInGraceHours, setCheckInGraceHours] = useState("0");
-  const [search, setSearch] = useState("");
   const [profileSearch, setProfileSearch] = useState("");
   const [selectedProfileId, setSelectedProfileId] = useState("");
   const [activeTab, setActiveTab] = useState("directory");
@@ -140,7 +141,6 @@ function EmployeesPage() {
   }
 
 
-  const [limit, setLimit] = useState(50);
   const [filters, setFilters] = useState(emptyFilters);
   const [columns, setColumns] = useState<DirectoryColumn[]>(defaultColumns);
   useEffect(() => {
@@ -152,55 +152,79 @@ function EmployeesPage() {
   }, []);
   function chooseColumns(next: DirectoryColumn[]) {
     setColumns(next);
+    setFilters(current => {
+      const updated = { ...current };
+      for (const key of columnKeys) {
+        if (next.includes(key)) continue;
+        if (key === "hire_date") {
+          updated.from = "";
+          updated.to = "";
+        } else {
+          updated[key] = "";
+        }
+      }
+      return updated;
+    });
     try { localStorage.setItem("employee-directory-columns", JSON.stringify(next)); } catch { /* Keep the session preference. */ }
   }
   function changeFilter(key: keyof typeof emptyFilters, value: string) {
     setFilters(current => ({ ...current, [key]: value }));
-    setLimit(50);
   }
-  const { data: directory, isFetching, isError: directoryError } = useQuery({
-    queryKey: ["employees", search, filters, limit],
-    queryFn: async () => {
-      let q = supabase.from("employees").select("*, departments(name)", {count: "exact"});
-      const term = search.trim();
+  const applied = useDebouncedValue(filters);
+  const profileTerm = useDebouncedValue(profileSearch.trim());
+  const directoryQuery = useInfiniteQuery({
+    queryKey: ["employees", "directory", applied],
+    enabled: activeTab === "directory",
+    placeholderData: keepPreviousData,
+    initialPageParam: 0,
+    queryFn: async ({ pageParam, signal }) => {
+      let q = supabase.from("employees").select(
+        "id, employee_no, full_name, department_id, departments(name), id_no, position, attendance_device_id, pay_type, status, email, phone1, hire_date",
+        { count: pageParam === 0 ? "exact" : undefined },
+      );
+      const term = applied.search.trim();
       if (term) {
         const pattern = JSON.stringify(`%${term}%`);
         q = q.or(["employee_no","full_name","id_no","attendance_device_id","phone1","email"].map(field => `${field}.ilike.${pattern}`).join(","));
       }
-      if (filters.department) q = q.eq("department_id", filters.department);
-      if (filters.status) q = q.eq("status", filters.status as "active" | "inactive" | "terminated");
-      if (filters.pay) q = q.eq("pay_type", filters.pay);
-      if (filters.position.trim()) q = q.ilike("position", `%${filters.position.trim()}%`);
-      if (filters.from) q = q.gte("hire_date", filters.from);
-      if (filters.to) q = q.lte("hire_date", filters.to);
-      const ordered = q.order("created_at", { ascending: false }).order("employee_no");
-      const rows: (Emp & { phone1?: string | null; hire_date?: string | null })[] = [];
-      let total = 0;
-      do {
-        const { data, error, count } = await ordered.range(rows.length, Math.min(rows.length + 999, limit - 1));
-        if (error) throw error;
-        total = count ?? 0;
-        if (!data.length) break;
-        rows.push(...(data as typeof rows));
-      } while (rows.length < Math.min(total, limit));
-      return { rows, count: total };
+      for (const field of textFields) {
+        const value = applied[field].trim();
+        if (value) q = q.ilike(field, `%${value}%`);
+      }
+      if (applied.device.trim()) q = q.ilike("attendance_device_id", `%${applied.device.trim()}%`);
+      if (applied.department) q = q.eq("department_id", applied.department);
+      if (applied.status) q = q.eq("status", applied.status as "active" | "inactive" | "terminated");
+      if (applied.pay) q = q.eq("pay_type", applied.pay);
+      if (applied.from) q = q.gte("hire_date", applied.from);
+      if (applied.to) q = q.lte("hire_date", applied.to);
+      const { data, error, count } = await q.order("created_at", { ascending: false })
+        .order("employee_no").range(pageParam, pageParam + 49).abortSignal(signal);
+      if (error) throw error;
+      return { rows: data, count };
+    },
+    getNextPageParam: (last, pages, offset) => {
+      const next = offset + last.rows.length;
+      return last.rows.length && next < (pages[0].count ?? 0) ? next : undefined;
     },
   });
-  const { data: profileMatches = [], isFetching: profileSearching } = useQuery({
-    queryKey: ["employee-profile-search", profileSearch],
-    enabled: profileSearch.trim().length >= 2,
-    queryFn: async () => {
-      const term = profileSearch.trim();
+  const { isFetching, isError: directoryError } = directoryQuery;
+  const profileWaiting = profileTerm !== profileSearch.trim();
+  const { data: matches = [], isFetching: fetchingMatches } = useQuery({
+    queryKey: ["employee-profile-search", profileTerm],
+    enabled: activeTab === "personal" && !profileWaiting && profileTerm.length >= 2,
+    queryFn: async ({ signal }) => {
+      const pattern = JSON.stringify(`%${profileTerm}%`);
       const { data, error } = await supabase
         .from("employees")
         .select("id, employee_no, full_name, position, status, departments(name)")
-        .or(`employee_no.ilike.%${term}%,full_name.ilike.%${term}%`)
-        .order("full_name")
-        .limit(20);
+        .or(`employee_no.ilike.${pattern},full_name.ilike.${pattern}`)
+        .order("full_name").limit(20).abortSignal(signal);
       if (error) throw error;
-      return (data ?? []) as Emp[];
+      return data;
     },
   });
+  const profileSearching = profileWaiting || fetchingMatches;
+  const profileMatches = profileWaiting ? [] : matches;
   const activeProfileId = selectedProfileId || (profileMatches.length === 1 ? profileMatches[0].id : "");
   const openPersonalReport = (employee: Emp) => {
     setProfileSearch(employee.full_name);
@@ -433,7 +457,23 @@ function EmployeesPage() {
     onError: (error: unknown) => toast.error(formatErrorMessage(error)),
   });
 
-  const filtered = directory?.rows ?? [];
+  const filtered = directoryQuery.data?.pages.flatMap(page => page.rows) ?? [];
+  const matchCount = directoryQuery.data?.pages[0]?.count ?? 0;
+  const visibleColumns = columnKeys.filter(key => columns.includes(key));
+  const options = {
+    department: depts.map(d => [d.id, d.name]),
+    pay: [["daily", "يومي"], ["monthly", "شهري"]],
+    status: [["active", "نشط"], ["inactive", "معطل"], ["terminated", "منتهي"]],
+  };
+  const editEmployee = useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.from("employees").select("*").eq("id", id).single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: data => { setEditing(data as Emp); setOpen(true); },
+    onError: error => toast.error(formatErrorMessage(error)),
+  });
 
   return (
     <div className="space-y-6">
@@ -886,27 +926,45 @@ function EmployeesPage() {
           <CardTitle>القائمة</CardTitle>
           <div className="relative w-full max-w-80">
             <Search className="absolute right-3 top-3 w-4 h-4 text-muted-foreground" />
-            <Input aria-label="بحث في دليل الموظفين" placeholder="الاسم، الرقم، الهوية، البصمة، الهاتف أو البريد" className="pr-9" value={search} onChange={(e) => { setSearch(e.target.value); setLimit(50); }} />
+            <Input aria-label="بحث في دليل الموظفين" placeholder="الاسم، الرقم، الهوية، البصمة، الهاتف أو البريد" className="pr-9" value={filters.search} onChange={e => changeFilter("search", e.target.value)} />
           </div>
         </CardHeader>
         <CardContent>
-          <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <label>القسم<select className="mt-1 h-10 w-full rounded-md border bg-background px-3" value={filters.department} onChange={e => changeFilter("department", e.target.value)}><option value="">الكل</option>{depts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
-            <label>الحالة<select className="mt-1 h-10 w-full rounded-md border bg-background px-3" value={filters.status} onChange={e => changeFilter("status", e.target.value)}><option value="">الكل</option><option value="active">نشط</option><option value="inactive">معطل</option><option value="terminated">منتهي</option></select></label>
-            <label>تصنيف الأجر<select className="mt-1 h-10 w-full rounded-md border bg-background px-3" value={filters.pay} onChange={e => changeFilter("pay", e.target.value)}><option value="">الكل</option><option value="daily">يومي</option><option value="monthly">شهري</option></select></label>
-            <label>المسمى الوظيفي<Input type="text" value={filters.position} onChange={e => changeFilter("position", e.target.value)} /></label>
-            <label>تاريخ المباشرة من<Input type="date" value={filters.from} onChange={e => changeFilter("from", e.target.value)} /></label>
-            <label>تاريخ المباشرة إلى<Input type="date" value={filters.to} onChange={e => changeFilter("to", e.target.value)} /></label>
-          </div>
           <div className="mb-4 flex flex-wrap items-start gap-4">
             <details><summary className="cursor-pointer py-2 font-medium">تخصيص الأعمدة</summary><div className="grid grid-cols-2 gap-3 rounded-md border p-3">
               {columnKeys.map(key => <label key={key} className="flex items-center gap-2"><input type="checkbox" checked={columns.includes(key)} disabled={columns.length === 1 && columns[0] === key} onChange={e => chooseColumns(e.target.checked ? [...columns,key] : columns.filter(col => col !== key))} />{directoryColumns[key]}</label>)}
               <Button variant="ghost" onClick={() => chooseColumns(defaultColumns)}>استعادة الأعمدة الافتراضية</Button>
             </div></details>
-            <Button variant="outline" onClick={() => {setFilters(emptyFilters); setSearch(""); setLimit(50);}}>مسح الفلاتر</Button>
           </div>
-          <Table>
-            <TableHeader><TableRow>{columnKeys.filter(key => columns.includes(key)).map(key => <TableHead key={key}>{directoryColumns[key]}</TableHead>)}<TableHead>الإجراءات</TableHead></TableRow></TableHeader>
+          <Table dir="rtl" aria-busy={isFetching}>
+            <TableHeader>
+              <TableRow>{visibleColumns.map(key => <TableHead key={key}>{directoryColumns[key]}</TableHead>)}
+                <TableHead>الإجراءات {isFetching && <Loader2 aria-label="جارٍ تحديث النتائج" className="inline size-3.5 animate-spin text-muted-foreground" />}</TableHead>
+              </TableRow>
+              <TableRow>
+                {visibleColumns.map(key => {
+                  const label = `تصفية حسب ${directoryColumns[key]}`;
+                  let control;
+                  if (key === "department" || key === "pay" || key === "status") {
+                    control = <select aria-label={label} className="h-8 w-full rounded-md border border-input bg-background px-1 text-xs" value={filters[key]} onChange={e => changeFilter(key, e.target.value)}>
+                      <option value="">الكل</option>
+                      {options[key].map(([value, name]) => <option key={value} value={value}>{name}</option>)}
+                    </select>;
+                  } else if (key === "hire_date") {
+                    control = <div className="flex gap-1">{(["from", "to"] as const).map(edge =>
+                      <Input key={edge} type="date" aria-label={edge === "from" ? "تاريخ المباشرة من" : "تاريخ المباشرة إلى"} className="h-8 w-32 px-1 text-xs" value={filters[edge]} onChange={e => changeFilter(edge, e.target.value)} />
+                    )}</div>;
+                  } else {
+                    control = <div className="relative">
+                      <Input aria-label={label} placeholder="بحث…" inputMode={key === "device" ? "numeric" : undefined} className="h-8 ps-2 pe-6 text-xs" value={filters[key]} onChange={e => changeFilter(key, e.target.value)} />
+                      {filters[key] && <button type="button" aria-label={`مسح فلتر ${directoryColumns[key]}`} className="absolute end-1 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground hover:text-foreground" onClick={() => changeFilter(key, "")}><X className="size-3.5" /></button>}
+                    </div>;
+                  }
+                  return <TableHead key={key} className="h-10 min-w-24 px-2">{control}</TableHead>;
+                })}
+                <TableHead><Button size="sm" variant="ghost" onClick={() => setFilters(emptyFilters)}><RotateCcw className="size-3.5" />مسح كل الفلاتر</Button></TableHead>
+              </TableRow>
+            </TableHeader>
             <TableBody showAllRows>
               {filtered.map((e) => (
                 <TableRow key={e.id}>
@@ -916,7 +974,7 @@ function EmployeesPage() {
                   {columns.includes("id_no") && <TableCell className="font-mono">{e.id_no || "-"}</TableCell>}
                   {columns.includes("position") && <TableCell>{e.position ?? "-"}</TableCell>}
                   {columns.includes("device") && <TableCell className="font-mono">{e.attendance_device_id || "-"}</TableCell>}
-                  {columns.includes("pay") && <TableCell>{(e as any).pay_type === "daily" ? "يومي" : "شهري"}</TableCell>}
+                  {columns.includes("pay") && <TableCell>{e.pay_type === "daily" ? "يومي" : "شهري"}</TableCell>}
                   {columns.includes("status") && <TableCell>
                     <Select value={e.status} onValueChange={(status: "active" | "inactive" | "terminated") => updateStatus.mutate({ employeeId: e.id, status })}>
                       <SelectTrigger className="h-9 min-w-28" aria-label={`حالة ${e.full_name}`}><SelectValue /></SelectTrigger>
@@ -933,19 +991,19 @@ function EmployeesPage() {
                   <TableCell>
                     <div className="flex gap-1">
                       <Button size="icon" variant="ghost" title="فتح التقرير الشخصي" aria-label="فتح التقرير الشخصي" onClick={() => openPersonalReport(e)}><UserRound className="w-4 h-4" /></Button>
-                      <Button size="icon" variant="ghost" title="تعديل الموظف" aria-label="تعديل الموظف" onClick={() => { setEditing(e); setOpen(true); }}><Pencil className="w-4 h-4" /></Button>
+                      <Button size="icon" variant="ghost" title="تعديل الموظف" aria-label="تعديل الموظف" disabled={editEmployee.isPending} onClick={() => editEmployee.mutate(e.id)}><Pencil className="w-4 h-4" /></Button>
                       <Button size="icon" variant="ghost" disabled={del.isPending} aria-label={`حذف ملف ${e.full_name} رقم ${e.employee_no}`} onClick={() => { if (confirm(`حذف ملف ${e.full_name} ذي الرقم الوظيفي ${e.employee_no}؟`)) del.mutate(e); }}><Trash2 className="w-4 h-4 text-destructive" /></Button>
                     </div>
                   </TableCell>
                 </TableRow>
               ))}
-              {!filtered.length && <TableRow><TableCell colSpan={columns.length + 1} className="text-center text-muted-foreground py-8">{directoryError ? "تعذر تحميل الموظفين" : isFetching ? "جارٍ تحميل الموظفين…" : "لا يوجد موظفون مطابقون"}</TableCell></TableRow>}
+              {(directoryError || !filtered.length) && <TableRow><TableCell colSpan={columns.length + 1} className="text-center text-muted-foreground py-8">{directoryError ? "تعذر تحميل الموظفين" : isFetching ? "جارٍ تحميل الموظفين…" : "لا يوجد موظفون مطابقون"}</TableCell></TableRow>}
             </TableBody>
           </Table>
           <div className="mt-4 flex items-center justify-center gap-3">
-            <p className="text-xs text-muted-foreground">يتم عرض {filtered.length} من {directory?.count ?? 0}</p>
-{filtered.length < (directory?.count ?? 0) && (
-              <Button variant="outline" size="sm" disabled={isFetching} onClick={() => setLimit(limit + 50)}>
+            <p className="text-xs text-muted-foreground">يتم عرض {filtered.length} من إجمالي {matchCount} موظف مطابق للفلترة</p>
+            {directoryQuery.hasNextPage && (
+              <Button variant="outline" size="sm" disabled={isFetching} onClick={() => directoryQuery.fetchNextPage()}>
                 {isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : "عرض المزيد"}
               </Button>
             )}
