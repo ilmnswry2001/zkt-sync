@@ -43,6 +43,7 @@ import { Route as AuthenticatedSelfAttendanceRouteImport } from './routes/_authe
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedShiftSchedulesRouteImport } from './routes/_authenticated/shift-schedules'
 import { Route as AuthenticatedSitesRouteImport } from './routes/_authenticated/sites'
+import { Route as AuthenticatedStaffDispatchRouteImport } from './routes/_authenticated/staff-dispatch'
 import { Route as AuthenticatedSystemMapRouteImport } from './routes/_authenticated/system-map'
 import { Route as AuthenticatedTasksRouteImport } from './routes/_authenticated/tasks'
 import { Route as AuthenticatedTeamFollowUpRouteImport } from './routes/_authenticated/team-follow-up'
@@ -242,6 +243,12 @@ const AuthenticatedSitesRoute = AuthenticatedSitesRouteImport.update({
   path: '/sites',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedStaffDispatchRoute =
+  AuthenticatedStaffDispatchRouteImport.update({
+    id: '/staff-dispatch',
+    path: '/staff-dispatch',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSystemMapRoute = AuthenticatedSystemMapRouteImport.update({
   id: '/system-map',
   path: '/system-map',
@@ -381,6 +388,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/shift-schedules': typeof AuthenticatedShiftSchedulesRoute
   '/sites': typeof AuthenticatedSitesRoute
+  '/staff-dispatch': typeof AuthenticatedStaffDispatchRoute
   '/system-map': typeof AuthenticatedSystemMapRoute
   '/tasks': typeof AuthenticatedTasksRoute
   '/team-follow-up': typeof AuthenticatedTeamFollowUpRoute
@@ -435,6 +443,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRoute
   '/shift-schedules': typeof AuthenticatedShiftSchedulesRoute
   '/sites': typeof AuthenticatedSitesRoute
+  '/staff-dispatch': typeof AuthenticatedStaffDispatchRoute
   '/system-map': typeof AuthenticatedSystemMapRoute
   '/tasks': typeof AuthenticatedTasksRoute
   '/team-follow-up': typeof AuthenticatedTeamFollowUpRoute
@@ -492,6 +501,7 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/shift-schedules': typeof AuthenticatedShiftSchedulesRoute
   '/_authenticated/sites': typeof AuthenticatedSitesRoute
+  '/_authenticated/staff-dispatch': typeof AuthenticatedStaffDispatchRoute
   '/_authenticated/system-map': typeof AuthenticatedSystemMapRoute
   '/_authenticated/tasks': typeof AuthenticatedTasksRoute
   '/_authenticated/team-follow-up': typeof AuthenticatedTeamFollowUpRoute
@@ -549,6 +559,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/shift-schedules'
     | '/sites'
+    | '/staff-dispatch'
     | '/system-map'
     | '/tasks'
     | '/team-follow-up'
@@ -603,6 +614,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/shift-schedules'
     | '/sites'
+    | '/staff-dispatch'
     | '/system-map'
     | '/tasks'
     | '/team-follow-up'
@@ -659,6 +671,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/_authenticated/shift-schedules'
     | '/_authenticated/sites'
+    | '/_authenticated/staff-dispatch'
     | '/_authenticated/system-map'
     | '/_authenticated/tasks'
     | '/_authenticated/team-follow-up'
@@ -934,6 +947,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSitesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/staff-dispatch': {
+      id: '/_authenticated/staff-dispatch'
+      path: '/staff-dispatch'
+      fullPath: '/staff-dispatch'
+      preLoaderRoute: typeof AuthenticatedStaffDispatchRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/system-map': {
       id: '/_authenticated/system-map'
       path: '/system-map'
@@ -1139,6 +1159,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedShiftSchedulesRoute: typeof AuthenticatedShiftSchedulesRoute
   AuthenticatedSitesRoute: typeof AuthenticatedSitesRoute
+  AuthenticatedStaffDispatchRoute: typeof AuthenticatedStaffDispatchRoute
   AuthenticatedSystemMapRoute: typeof AuthenticatedSystemMapRoute
   AuthenticatedTasksRoute: typeof AuthenticatedTasksRoute
   AuthenticatedTeamFollowUpRoute: typeof AuthenticatedTeamFollowUpRoute
@@ -1182,6 +1203,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedShiftSchedulesRoute: AuthenticatedShiftSchedulesRoute,
   AuthenticatedSitesRoute: AuthenticatedSitesRoute,
+  AuthenticatedStaffDispatchRoute: AuthenticatedStaffDispatchRoute,
   AuthenticatedSystemMapRoute: AuthenticatedSystemMapRoute,
   AuthenticatedTasksRoute: AuthenticatedTasksRoute,
   AuthenticatedTeamFollowUpRoute: AuthenticatedTeamFollowUpRoute,

@@ -1,3 +1,4 @@
+import { canUseStaffDispatch } from "@/lib/staff-dispatch";
 import { direction, ui } from "@/lib/ui-language";
 import { LanguageSwitch } from "@/components/LanguageSwitch";
 import { GuideNavigation } from "@/lib/guide-navigation";
@@ -6,6 +7,7 @@ import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import {
   LayoutDashboard,
   Users,
+  UsersRound,
   Fingerprint,
   Building2,
   Upload,
@@ -75,6 +77,7 @@ const nav = [
   { to: "/dashboard", label: "لوحة التحكم", icon: LayoutDashboard, access: "executive" },
   { to: "/command-center", label: "مركز العمليات", icon: Radar, access: "command" },
   { to: "/attendance", label: "التقارير اليومية", icon: ClockIcon },
+  { to: "/staff-dispatch", label: "تنسيق الكوادر", icon: UsersRound },
   { to: "/shift-schedules", label: "جداول الورديات", icon: CalendarDays, access: "hr" },
   { to: "/tasks", label: "مهامي اليومية", icon: ClipboardCheck },
   { to: "/self-attendance", label: "الحضور الذاتي", icon: Smartphone },
@@ -123,6 +126,7 @@ const NAV_GROUPS = [
       "/dashboard",
       "/command-center",
       "/attendance",
+      "/staff-dispatch",
       "/self-attendance",
       "/shift-schedules",
       "/tasks",
@@ -277,6 +281,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       (item.to === "/planning" && pathname === "/project-plans"),
   );
   const visibleNav = nav.filter((item) => {
+    if (item.to === "/staff-dispatch" && !canUseStaffDispatch(roles)) return false;
     if (item.to !== "/system-map" && !canAccessSection(item.to) && !(item.to === "/attendance-forms" && canAccessSection("/forms"))) return false;
     if ("access" in item && item.access === "admin" && !isAdmin) return false;
     if ("access" in item && item.access === "mobileSync" && !roles.some((role) => ["admin", "hr", "supervisor", "site_admin"].includes(role))) return false;

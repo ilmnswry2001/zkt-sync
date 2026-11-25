@@ -1,3 +1,4 @@
+import { canUseStaffDispatch } from "@/lib/staff-dispatch";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
@@ -79,7 +80,9 @@ export function useAuth() {
 
   const isAdmin = roles.includes("admin");
   const isEngineer = roles.includes("engineer") && !isAdmin;
+  const canDispatch = canUseStaffDispatch(roles);
   const roleSections = [
+    ...(canDispatch ? ["/staff-dispatch"] : []),
     ...(roles.some((role) => ["hr", "supervisor", "site_admin"].includes(role)) ? ["/mobile-sync"] : []),
     ...(roles.includes("planning_officer") || roles.some((role) => ["supervisor", "department_manager", "site_admin"].includes(role)) || isCompanyManager
       ? ["/planning"]
@@ -96,7 +99,7 @@ export function useAuth() {
     : isAdmin
       ? null
       : isEngineer
-        ? ["/project-plans", "/planning", "/requests"]
+        ? ["/project-plans", "/planning", "/requests", ...(canDispatch ? ["/staff-dispatch"] : [])]
         : allowedSections
           ? [...new Set([...allowedSections, ...roleSections])]
           : null;
@@ -107,7 +110,7 @@ export function useAuth() {
   );
   const sections = hasWorkflowOnlyRole && baseSections === null
     ? roleSections.filter((section) =>
-        (roles.includes("planning_officer") && section === "/planning") ||
+        (roles.includes("planning_officer") && (section === "/planning" || section === "/staff-dispatch")) ||
         (roles.includes("warehouse_keeper") && section === "/warehouses") ||
           section === "/requests",
       )
