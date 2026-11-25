@@ -43,7 +43,7 @@ export function WorkshopSitePicker({
           className="h-auto min-h-11 w-full justify-between gap-3 py-3 text-right font-normal"
         >
           <span className="min-w-0 whitespace-normal break-words leading-6">
-            {selected ? workshopSiteLabel(selected) : emptyLabel}
+            {selected ? workshopSiteLabel(selected) : ui(emptyLabel)}
           </span>
           <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -58,13 +58,13 @@ export function WorkshopSitePicker({
           <CommandList className="max-h-72">
             <CommandEmpty>{ui("لا يوجد مشروع مطابق.")}</CommandEmpty>
             <CommandItem
-              value={emptyLabel}
+              value={ui(emptyLabel)}
               onSelect={() => {
                 onChange("");
                 setOpen(false);
               }}
             >
-              {emptyLabel}
+              {ui(emptyLabel)}
             </CommandItem>
             {sites.map((site) => (
               <CommandItem

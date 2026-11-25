@@ -1,3 +1,4 @@
+import { LanguageSwitch } from "@/components/LanguageSwitch";
 import { direction, language, ui } from "@/lib/ui-language";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -32,6 +33,7 @@ function PublicForm() {
   });
   return (
     <main dir={direction()} lang={language()} className="mx-auto max-w-[640px] p-4">
+      <div className="mb-3 flex justify-end print:hidden"><LanguageSwitch /></div>
       {q.isPending ? (
         ui("جارٍ تحميل الاستمارة…")
       ) : q.error ? (

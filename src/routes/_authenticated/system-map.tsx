@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { GuideNavigation } from "@/lib/guide-navigation";
 import { sectionGuide } from "@/lib/section-guide";
-import { getSystemModule, SYSTEM_FLOWS } from "@/lib/system-map";
+import { systemWorkflows } from "@/lib/system-map";
 import { ui } from "@/lib/ui-language";
 
 export const Route = createFileRoute("/_authenticated/system-map")({
@@ -48,11 +48,11 @@ function SystemMapPage() {
     </Card>)}
     <details className="rounded-xl border bg-card p-4">
       <summary className="cursor-pointer font-semibold">{ui("كيف ترتبط الأقسام ببعضها؟")}</summary>
-      {SYSTEM_FLOWS.map(flow => {
-        const links = flow.relations.flatMap(relation => {
-          const from = sections.get(getSystemModule(relation.from)?.href ?? "");
-          const to = sections.get(getSystemModule(relation.to)?.href ?? "");
-          return from && to ? [{ from, to, label: relation.label }] : [];
+      {systemWorkflows.map(flow => {
+        const links = flow.links.flatMap(([source, destination, label]) => {
+          const from = sections.get(source);
+          const to = sections.get(destination);
+          return from && to ? [{ from, to, label }] : [];
         });
         return links.length > 0 && <section key={flow.title} className="mt-4"><h2 className="font-medium">{ui(flow.title)}</h2>
           <ul className="mt-1 space-y-1 text-sm">{links.map(link => <li key={link.from.to + link.to.to}>

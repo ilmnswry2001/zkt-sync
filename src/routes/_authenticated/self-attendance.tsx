@@ -1,4 +1,4 @@
-import { direction, displayLocale, ui } from "@/lib/ui-language";
+import { direction, displayLocale, localizedNumberFormat, ui } from "@/lib/ui-language";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
@@ -107,7 +107,7 @@ function baghdadDate(date = new Date()) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Baghdad" }).format(date);
 }
 function baghdadTime(date = new Date()) {
-  return new Intl.DateTimeFormat("ar-IQ", {
+  return new Intl.DateTimeFormat(displayLocale(), {
     timeZone: "Asia/Baghdad",
     hour: "2-digit",
     minute: "2-digit",
@@ -127,8 +127,8 @@ function minutesFromTime(value: string) {
   return hours * 60 + minutes;
 }
 function formatMinutes(value: number) {
-  const minutes = new Intl.NumberFormat("ar-IQ", { minimumIntegerDigits: 2, useGrouping: false }).format(value % 60);
-  return `${Math.floor(value / 60).toLocaleString(displayLocale())} س ${minutes} د`;
+  const minutes = localizedNumberFormat({ minimumIntegerDigits: 2, useGrouping: false }).format(value % 60);
+  return `${Math.floor(value / 60).toLocaleString(displayLocale())} ${ui("س")} ${minutes} ${ui("د")}`;
 }
 function haversineMeters(aLat: number, aLon: number, bLat: number, bLon: number) {
   const radius = 6371000;

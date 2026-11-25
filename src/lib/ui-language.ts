@@ -9,7 +9,13 @@ let browserLanguage: Language | undefined;
 
 export const language = createIsomorphicFn()
   .server((): Language => getCookie(preference) === "en" ? "en" : "ar")
-  .client((): Language => browserLanguage ??= document.cookie.split(";").some(part => part.trim() === preference + "=en") ? "en" : "ar");
+  .client((): Language => {
+    if (!browserLanguage) {
+      const englishSelected = document.cookie.split(";").some(part => part.trim() === preference + "=en");
+      browserLanguage = englishSelected ? "en" : "ar";
+    }
+    return browserLanguage;
+  });
 
 export const direction = () => language() === "en" ? "ltr" : "rtl";
 export const displayLocale = () => language() === "en" ? "en-IQ" : "ar-IQ";
@@ -26,4 +32,16 @@ export function ui(value: unknown): unknown {
   const key = value.trim().replace(/\s+/g, " ");
   const translated = Object.hasOwn(catalogue, key) ? catalogue[key] : undefined;
   return translated ? value.replace(/\S[\s\S]*\S|\S/, () => translated) : value;
+}
+
+export function localizedNumberFormat(options?: Intl.NumberFormatOptions) {
+  const ar = new Intl.NumberFormat("ar-IQ", options);
+  const en = new Intl.NumberFormat("en-IQ", options);
+  return { format: (value: number | bigint) => (language() === "en" ? en : ar).format(value) };
+}
+
+export function localizedDateFormat(options: Intl.DateTimeFormatOptions) {
+  const ar = new Intl.DateTimeFormat("ar-IQ", options);
+  const en = new Intl.DateTimeFormat("en-IQ", options);
+  return { format: (value: Date | number) => (language() === "en" ? en : ar).format(value) };
 }

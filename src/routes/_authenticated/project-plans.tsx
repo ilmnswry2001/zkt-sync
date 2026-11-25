@@ -214,18 +214,18 @@ function planPdfMarkup(plan: SiteWorkPlan, site?: Site) {
 
   return `<section class="plan-sheet">
     <header class="plan-header">
-      <div><div class="eyebrow">الخطة النهائية المعتمدة</div><h2>${escapeHtml(plan.final_plan?.title || `الخطة النهائية - ${plan.site_name}`)}</h2><p>${escapeHtml(plan.site_name)}${site?.ctr_code ? ` · CTR ${escapeHtml(site.ctr_code)}` : ""}</p></div>
+      <div><div class="eyebrow">${ui("الخطة النهائية المعتمدة")}</div><h2>${escapeHtml(plan.final_plan?.title || `الخطة النهائية - ${plan.site_name}`)}</h2><p>${escapeHtml(plan.site_name)}${site?.ctr_code ? ` · CTR ${escapeHtml(site.ctr_code)}` : ""}</p></div>
       <div class="status">${escapeHtml(planStatusLabel[plan.status])}</div>
     </header>
     <div class="meta-grid">
-      <div><span>تاريخ الخطة</span><strong>${escapeHtml(plan.request_date)}</strong></div>
-      <div><span>منشئ الخطة</span><strong>${escapeHtml(planCreatorLabel(plan))}</strong></div>
-      <div><span>طالب الخطة</span><strong>${escapeHtml(plan.applicant_name || "غير محدد")}</strong></div>
-      <div><span>إجمالي المطلوب</span><strong>${totalRequired}</strong></div>
-      <div><span>الأسماء المخصصة</span><strong>${totalAssigned}</strong></div>
+      <div><span>${ui("تاريخ الخطة")}</span><strong>${escapeHtml(plan.request_date)}</strong></div>
+      <div><span>${ui("منشئ الخطة")}</span><strong>${escapeHtml(planCreatorLabel(plan))}</strong></div>
+      <div><span>${ui("طالب الخطة")}</span><strong>${escapeHtml(plan.applicant_name || "غير محدد")}</strong></div>
+      <div><span>${ui("إجمالي المطلوب")}</span><strong>${totalRequired}</strong></div>
+      <div><span>${ui("الأسماء المخصصة")}</span><strong>${totalAssigned}</strong></div>
     </div>
-    <table class="plan-table"><thead><tr><th>التخصص</th><th>المطلوب</th><th>الأسماء المخصصة</th></tr></thead><tbody>${rows || `<tr><td colspan="3">لا توجد تخصصات</td></tr>`}</tbody></table>
-    <div class="note"><strong>ملاحظات المهندس:</strong> ${escapeHtml(plan.engineer_notes || plan.final_plan?.notes || plan.management_notes || plan.planning_notes || "لا توجد ملاحظات")}</div>
+    <table class="plan-table"><thead><tr><th>${ui("التخصص")}</th><th>${ui("المطلوب")}</th><th>${ui("الأسماء المخصصة")}</th></tr></thead><tbody>${rows || `<tr><td colspan="3">${ui("لا توجد تخصصات")}</td></tr>`}</tbody></table>
+    <div class="note"><strong>${ui("ملاحظات المهندس:")}</strong> ${escapeHtml(plan.engineer_notes || plan.final_plan?.notes || plan.management_notes || plan.planning_notes || "لا توجد ملاحظات")}</div>
   </section>`;
 }
 

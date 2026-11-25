@@ -1,4 +1,4 @@
-import { direction, ui } from "@/lib/ui-language";
+import { direction, displayLocale, ui } from "@/lib/ui-language";
 import { useAuth } from "@/hooks/use-auth";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
@@ -125,7 +125,7 @@ function FilesPage() {
                   <TableCell>{r.logs_count ?? 0}</TableCell>
                   <TableCell className="font-semibold text-success">{r.inserted_logs ?? 0}</TableCell>
                   <TableCell><Badge className={statusColor[r.status] ?? ""}>{statusLabel[r.status] ?? r.status}</Badge></TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{new Date(r.created_at).toLocaleString("ar")}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{new Date(r.created_at).toLocaleString(displayLocale())}</TableCell>
                   <TableCell>
                     {r.status !== "completed" && (
                       <Button

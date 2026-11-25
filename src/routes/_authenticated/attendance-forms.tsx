@@ -1,4 +1,4 @@
-import { direction, ui } from "@/lib/ui-language";
+import { direction, displayLocale, language, ui } from "@/lib/ui-language";
 import { useDirectorySearch } from "@/hooks/use-directory-search";
 import { formatErrorMessage } from "@/lib/error-message";
 import { createFileRoute } from "@tanstack/react-router";
@@ -103,7 +103,7 @@ function printForm(row: FormRow) {
     toast.error(ui("تعذر فتح نافذة الطباعة؛ اسمح بالنوافذ المنبثقة ثم حاول مرة أخرى"));
     return;
   }
-  popup.document.write(`<!doctype html><html dir="rtl"><head><meta charset="utf-8"/><title>استمارة رقم ${row.form_no}</title><style>body{font-family:Arial,sans-serif;color:#111;padding:40px;line-height:1.8}h1{text-align:center;margin-bottom:4px}h2{text-align:center;font-weight:normal;color:#555;margin-top:0}.meta{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:28px 0}.item{border:1px solid #ddd;padding:12px;border-radius:8px}.label{display:block;color:#666;font-size:12px}.reason{border:1px solid #ddd;border-radius:8px;padding:16px;min-height:90px}.signatures{display:grid;grid-template-columns:1fr 1fr 1fr;gap:30px;margin-top:70px;text-align:center}.line{border-top:1px solid #555;margin-top:45px}@media print{body{padding:0}}</style></head><body><h1>الاستمارة الإلكترونية</h1><h2>رقم الاستمارة: ${row.form_no}</h2><div class="meta"><div class="item"><span class="label">الموظف</span>${escapeHtml(`${row.employees?.employee_no ?? "—"} — ${row.employees?.full_name ?? "—"}`)}</div><div class="item"><span class="label">نوع الاستمارة</span>${escapeHtml(KIND_LABEL[row.kind])}</div><div class="item"><span class="label">تاريخ الاستحقاق</span>${escapeHtml(row.work_date)}</div><div class="item"><span class="label">القسم</span>${escapeHtml(row.department?.name ?? "—")}</div><div class="item"><span class="label">مرسلة إلى</span>${escapeHtml(row.target?.name ?? "—")}</div><div class="item"><span class="label">التفاصيل</span>${escapeHtml(details)}</div></div><h3>السبب والتفاصيل</h3><div class="reason">${escapeHtml(row.reason)}</div><div class="signatures"><div>مقدم الطلب<div class="line"></div></div><div>الاعتماد<div class="line"></div></div><div>التنفيذ<div class="line"></div></div></div><script>window.onload=()=>{window.print();}</script></body></html>`);
+  popup.document.write(`<!doctype html><html lang="${language()}" dir="${direction()}"><head><meta charset="utf-8"/><title>${ui("استمارة رقم ")}${row.form_no}</title><style>body{font-family:Arial,sans-serif;color:#111;padding:40px;line-height:1.8}h1{text-align:center;margin-bottom:4px}h2{text-align:center;font-weight:normal;color:#555;margin-top:0}.meta{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:28px 0}.item{border:1px solid #ddd;padding:12px;border-radius:8px}.label{display:block;color:#666;font-size:12px}.reason{border:1px solid #ddd;border-radius:8px;padding:16px;min-height:90px}.signatures{display:grid;grid-template-columns:1fr 1fr 1fr;gap:30px;margin-top:70px;text-align:center}.line{border-top:1px solid #555;margin-top:45px}@media print{body{padding:0}}</style></head><body><h1>${ui("الاستمارة الإلكترونية")}</h1><h2>${ui("رقم الاستمارة: ")}${row.form_no}</h2><div class="meta"><div class="item"><span class="label">${ui("الموظف")}</span>${escapeHtml(`${row.employees?.employee_no ?? "—"} — ${row.employees?.full_name ?? "—"}`)}</div><div class="item"><span class="label">${ui("نوع الاستمارة")}</span>${escapeHtml(KIND_LABEL[row.kind])}</div><div class="item"><span class="label">${ui("تاريخ الاستحقاق")}</span>${escapeHtml(row.work_date)}</div><div class="item"><span class="label">${ui("القسم")}</span>${escapeHtml(row.department?.name ?? "—")}</div><div class="item"><span class="label">${ui("مرسلة إلى")}</span>${escapeHtml(row.target?.name ?? "—")}</div><div class="item"><span class="label">${ui("التفاصيل")}</span>${escapeHtml(details)}</div></div><h3>${ui("السبب والتفاصيل")}</h3><div class="reason">${escapeHtml(row.reason)}</div><div class="signatures"><div>${ui("مقدم الطلب")}<div class="line"></div></div><div>${ui("الاعتماد")}<div class="line"></div></div><div>${ui("التنفيذ")}<div class="line"></div></div></div><script>window.onload=()=>{window.print();}</script></body></html>`);
   popup.document.close();
 }
 
@@ -389,13 +389,13 @@ function FormsPage() {
         <StatCard title={ui("معلّقة")} value={statistics.pending} icon={Clock3} tone="bg-warning" />
         <StatCard title={ui("منفذة")} value={statistics.executed} icon={Check} tone="bg-success" />
         <StatCard title={ui("مرفوضة")} value={statistics.rejected} icon={X} tone="bg-destructive" />
-        <StatCard title={ui("ساعات إضافية")} value={statistics.overtime.toLocaleString("ar")} icon={FileSignature} tone="bg-accent-foreground" />
+        <StatCard title={ui("ساعات إضافية")} value={statistics.overtime.toLocaleString(displayLocale())} icon={FileSignature} tone="bg-accent-foreground" />
       </div>
 
       <div className="flex gap-2 flex-wrap">
         {["all", "pending_manager", "pending_ceo", "pending_execution", "executed", "rejected"].map((s) => (
           <Button key={s} size="sm" variant={filter === s ? "default" : "outline"} onClick={() => setFilter(s)}>
-            {s === "all" ? ui("الكل") : STATUS_LABEL[s]}
+            {s === "all" ? ui("الكل") : ui(STATUS_LABEL[s])}
             {s !== "all" && counts[s] ? ` (${counts[s]})` : ""}
           </Button>
         ))}
@@ -443,7 +443,7 @@ function FormsPage() {
                     {row.reason}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={STATUS_VARIANT[row.status]}>{STATUS_LABEL[row.status]}</Badge>
+                    <Badge variant={STATUS_VARIANT[row.status]}>{ui(STATUS_LABEL[row.status])}</Badge>
                     {row.rejection_reason && (
                       <div className="text-[10px] text-destructive mt-1">{row.rejection_reason}</div>
                     )}
@@ -507,7 +507,7 @@ function FormsPage() {
           <DialogHeader><DialogTitle>{ui("استعراض الاستمارة الإلكترونية")}</DialogTitle></DialogHeader>
           {selectedForm && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between border-b pb-3"><div><p className="text-sm text-muted-foreground">{ui("رقم الاستمارة")}</p><p className="text-2xl font-bold">#{selectedForm.form_no}</p></div><Badge variant={STATUS_VARIANT[selectedForm.status]}>{STATUS_LABEL[selectedForm.status]}</Badge></div>
+              <div className="flex items-center justify-between border-b pb-3"><div><p className="text-sm text-muted-foreground">{ui("رقم الاستمارة")}</p><p className="text-2xl font-bold">#{selectedForm.form_no}</p></div><Badge variant={STATUS_VARIANT[selectedForm.status]}>{ui(STATUS_LABEL[selectedForm.status])}</Badge></div>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div><span className="text-muted-foreground">{ui("الموظف:")}</span> {selectedForm.employees?.employee_no} — {selectedForm.employees?.full_name}</div>
                 <div><span className="text-muted-foreground">{ui("النوع:")}</span> {KIND_LABEL[selectedForm.kind]}</div>

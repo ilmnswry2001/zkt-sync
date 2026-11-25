@@ -337,7 +337,7 @@ function VehicleMonthlyReport({
             <CalendarDays className="h-4 w-4 text-primary" />{ui(" أيام التشغيل والأجر")}</div>
           <div className="mt-3 grid grid-cols-2 gap-3">
             <ReportStat label={ui("أيام التشغيل")} value={`${operatingDays} يوم`} />
-            <ReportStat label={ui("الأجر المستحق")} value={`${Math.round(wage).toLocaleString()} د.ع`} />
+            <ReportStat label={ui("الأجر المستحق")} value={`${Math.round(wage).toLocaleString()} ${ui("د.ع")}`} />
           </div>
           <p className="mt-3 text-xs text-muted-foreground">
             {operatingDates.length
@@ -355,7 +355,7 @@ function VehicleMonthlyReport({
             <ReportStat label={ui("إجمالي اللترات")} value={`${fuel.liters.toLocaleString()} لتر`} />
             <ReportStat
               label={ui("إجمالي الكلفة")}
-              value={`${Math.round(fuel.cost).toLocaleString()} د.ع`}
+              value={`${Math.round(fuel.cost).toLocaleString()} ${ui("د.ع")}`}
             />
             <ReportStat label={ui("عدد الوصولات")} value={`${fuel.count}`} />
             <ReportStat label={ui("آخر تعبئة")} value={formatArabicDate(fuel.lastDate)} />
@@ -1385,15 +1385,15 @@ function VehiclesPage() {
                     ["قراءة العداد", machineryDetails.current_odometer],
                     [
                       "الإيجار اليومي",
-                      `${Number(machineryDetails.daily_rent ?? 0).toLocaleString(displayLocale())} د.ع`,
+                      `${Number(machineryDetails.daily_rent ?? 0).toLocaleString(displayLocale())} ${ui("د.ع")}`,
                     ],
                     [
                       "كلفة السائق اليومية",
-                      `${Number(machineryDetails.driver_daily_cost ?? 0).toLocaleString(displayLocale())} د.ع`,
+                      `${Number(machineryDetails.driver_daily_cost ?? 0).toLocaleString(displayLocale())} ${ui("د.ع")}`,
                     ],
                     [
                       "كلفة الساعة الإضافية",
-                      `${Number(machineryDetails.extra_hourly_rate ?? 0).toLocaleString(displayLocale())} د.ع`,
+                      `${Number(machineryDetails.extra_hourly_rate ?? 0).toLocaleString(displayLocale())} ${ui("د.ع")}`,
                     ],
                     ["حالة المستندات", machineryDetails.document_status],
                     ["الأيام المتبقية للمستندات", machineryDetails.document_days_remaining],

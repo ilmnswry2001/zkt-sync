@@ -256,7 +256,7 @@ function SettingsPage() {
   const renderCatalog = (title: string, kind: CatalogKind, list: CatalogItem[]) => (
     <Card>
       <CardHeader>
-        <CardTitle>{title}</CardTitle>
+        <CardTitle>{ui(title)}</CardTitle>
         <p className="text-sm text-muted-foreground">{ui("كل بند نشط يظهر تلقائياً في نموذج تقرير المواقع اليومية. الأرشفة لا تحذف البند من التقارير السابقة.")}</p>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -313,7 +313,7 @@ function SettingsPage() {
                 </>
               ) : (
                 <>
-                  <span className="flex-1 font-medium">{item.name}</span>
+                  <span className="flex-1 font-medium">{usingFallback ? ui(item.name) : item.name}</span>
                   {item.is_archived && <Badge variant="secondary">{ui("مؤرشف")}</Badge>}
                   <Button
                     size="icon"

@@ -1,3 +1,4 @@
+import { LanguageSwitch } from "@/components/LanguageSwitch";
 import { direction, ui } from "@/lib/ui-language";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -51,6 +52,7 @@ function FillForm() {
   });
   return (
     <main dir={direction()} className="mx-auto max-w-xl p-8">
+      <div className="mb-3 flex justify-end print:hidden"><LanguageSwitch /></div>
       {sent ? (
         ui("تم إرسال الاستمارة للمراجعة")
       ) : template.isPending ? (

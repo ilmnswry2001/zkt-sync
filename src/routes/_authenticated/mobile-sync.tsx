@@ -1,4 +1,4 @@
-import { direction, ui } from "@/lib/ui-language";
+import { direction, localizedDateFormat, ui } from "@/lib/ui-language";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -44,7 +44,7 @@ export const Route = createFileRoute("/_authenticated/mobile-sync")({
   component: MobileSync,
 });
 
-const baghdad = new Intl.DateTimeFormat("ar-IQ", {
+const baghdad = localizedDateFormat({
   dateStyle: "short",
   timeStyle: "short",
   timeZone: "Asia/Baghdad",

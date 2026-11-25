@@ -87,7 +87,7 @@ function StatCard({
 
 const refreshInterval = 120_000;
 const formatCount = (value: number) => value.toLocaleString(displayLocale());
-const formatIQD = (value: number) => `${Math.round(value).toLocaleString(displayLocale())} د.ع`;
+const formatIQD = (value: number) => `${Math.round(value).toLocaleString(displayLocale())} ${ui("د.ع")}`;
 const formatDateTime = (value: string | null | undefined) =>
   value
     ? new Date(value).toLocaleString(displayLocale(), { dateStyle: "medium", timeStyle: "short" })

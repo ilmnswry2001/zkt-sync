@@ -1,4 +1,4 @@
-import { direction, displayLocale, ui } from "@/lib/ui-language";
+import { direction, displayLocale, localizedNumberFormat, ui } from "@/lib/ui-language";
 import { useDebouncedValue } from "@/hooks/use-directory-search";
 import { EmployeeDocumentsTab } from "@/components/EmployeeDocumentsTab";
 import { formatErrorMessage } from "@/lib/error-message";
@@ -54,7 +54,7 @@ const emptyOnboarding = {
   payType: "monthly" as OnboardingPayType, preferredPayType: "monthly" as OnboardingPayType,
   salaryType: "", wagePosition: "",
 };
-const iqd = new Intl.NumberFormat("ar-IQ", { style: "currency", currency: "IQD", maximumFractionDigits: 2 });
+const iqd = localizedNumberFormat({ style: "currency", currency: "IQD", maximumFractionDigits: 2 });
 const columnKeys = Object.keys(directoryColumns) as DirectoryColumn[];
 const defaultColumns = columnKeys.slice(0, 8);
 const textFields = ["employee_no", "full_name", "id_no", "position", "email", "phone1"] as const;
@@ -933,12 +933,12 @@ function EmployeesPage() {
               </TableRow>
               <TableRow>
                 {visibleColumns.map(key => {
-                  const label = `تصفية حسب ${directoryColumns[key]}`;
+                  const label = `${ui("تصفية حسب")} ${ui(directoryColumns[key])}`;
                   let control;
                   if (key === "department" || key === "pay" || key === "status") {
                     control = <select aria-label={ui(label)} className="h-8 w-full rounded-md border border-input bg-background px-1 text-xs" value={filters[key]} onChange={e => changeFilter(key, e.target.value)}>
                       <option value="">{ui("الكل")}</option>
-                      {options[key].map(([value, name]) => <option key={value} value={value}>{name}</option>)}
+                      {options[key].map(([value, name]) => <option key={value} value={value}>{key === "department" ? name : ui(name)}</option>)}
                     </select>;
                   } else if (key === "hire_date") {
                     control = <div className="flex gap-1">{(["from", "to"] as const).map(edge =>
@@ -947,7 +947,7 @@ function EmployeesPage() {
                   } else {
                     control = <div className="relative">
                       <Input aria-label={ui(label)} placeholder={ui("بحث…")} inputMode={key === "device" ? "numeric" : undefined} className="h-8 ps-2 pe-6 text-xs" value={filters[key]} onChange={e => changeFilter(key, e.target.value)} />
-                      {filters[key] && <button type="button" aria-label={(ui("مسح فلتر ") + (directoryColumns[key]))} className="absolute end-1 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground hover:text-foreground" onClick={() => changeFilter(key, "")}><X className="size-3.5" /></button>}
+                      {filters[key] && <button type="button" aria-label={(ui("مسح فلتر ") + ui(directoryColumns[key]))} className="absolute end-1 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground hover:text-foreground" onClick={() => changeFilter(key, "")}><X className="size-3.5" /></button>}
                     </div>;
                   }
                   return <TableHead key={key} className="h-10 min-w-24 px-2">{control}</TableHead>;

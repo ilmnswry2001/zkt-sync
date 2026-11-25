@@ -392,7 +392,7 @@ function ProjectsPage() {
             <WorkshopSitePicker
               label={ui("المشروع / الموقع")}
               sites={data.projects}
-              emptyLabel="كل المشاريع"
+              emptyLabel={ui("كل المشاريع")}
               value={selectedProjectId === "all" ? "" : selectedProjectId}
               onChange={(id) => setSelectedProjectId(id || "all")}
             />
@@ -455,13 +455,13 @@ function ProjectsPage() {
         <CardContent className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-3">
           <StatCard
             title={ui("التكلفة المخططة للعمالة")}
-            value={`${plannedDailyCost.toLocaleString(displayLocale())} د.ع`}
+            value={`${plannedDailyCost.toLocaleString(displayLocale())} ${ui("د.ع")}`}
             icon={ClipboardList}
             tone="bg-sky-700"
           />
           <StatCard
             title={ui("الفعلية في المشاريع المقارنة")}
-            value={`${comparableDailyCost.toLocaleString(displayLocale())} د.ع`}
+            value={`${comparableDailyCost.toLocaleString(displayLocale())} ${ui("د.ع")}`}
             icon={WalletCards}
             tone="bg-rose-600"
           />
@@ -475,7 +475,7 @@ function ProjectsPage() {
             }
             value={
               comparableProjects.length
-                ? `${Math.abs(dailyCostVariance).toLocaleString(displayLocale())} د.ع${percentLabel(variancePercent)}`
+                ? `${Math.abs(dailyCostVariance).toLocaleString(displayLocale())} ${ui("د.ع")}${percentLabel(variancePercent)}`
                 : "—"
             }
             icon={dailyCostVariance > 0 ? TriangleAlert : CheckCircle2}
@@ -528,14 +528,14 @@ function ProjectsPage() {
                     <p className="text-xs text-muted-foreground">{ui("الخطة المعتمدة")}</p>
                     <p className="mt-2 font-semibold">
                       {card.plan
-                        ? `${card.plannedDailyCost.toLocaleString(displayLocale())} د.ع`
+                        ? `${card.plannedDailyCost.toLocaleString(displayLocale())} ${ui("د.ع")}`
                         : ui("لا توجد خطة سارية")}
                     </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">{card.biometricApproved ? ui("تكلفة العمالة الفعلية") : ui("تكلفة العمالة التقديرية")}</p>
                     <p className="mt-2 font-bold text-primary">
-                      {card.actualAvailable ? `${card.siteDailyCost.toLocaleString(displayLocale())} د.ع` : "—"}
+                      {card.actualAvailable ? `${card.siteDailyCost.toLocaleString(displayLocale())} ${ui("د.ع")}` : "—"}
                     </p>
                   </div>
                 </div>
@@ -679,7 +679,7 @@ function ProjectsPage() {
                                 className={`px-4 py-3 text-center font-semibold tabular-nums ${variance > 0 ? "text-destructive" : "text-emerald-700 dark:text-emerald-300"}`}
                               >
                                 {card.plan && card.biometricApproved
-                                  ? `${variance.toLocaleString(displayLocale(), { signDisplay: "exceptZero" })} د.ع${percentLabel(projectCostVariancePercent(card.siteDailyCost, card.plannedDailyCost))}`
+                                  ? `${variance.toLocaleString(displayLocale(), { signDisplay: "exceptZero" })} ${ui("د.ع")}${percentLabel(projectCostVariancePercent(card.siteDailyCost, card.plannedDailyCost))}`
                                   : "—"}
                               </td>
                               <td className="px-4 py-3 text-center">

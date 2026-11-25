@@ -114,7 +114,7 @@ type MonthlyMachinery = {
   total: number;
 };
 const weekday = (date: string) =>
-  new Date(`${date}T00:00:00Z`).toLocaleDateString("ar", { weekday: "short", timeZone: "UTC" });
+  new Date(`${date}T00:00:00Z`).toLocaleDateString(displayLocale(), { weekday: "short", timeZone: "UTC" });
 const datesInMonth = (month: string) => {
   const [year, monthNumber] = month.split("-").map(Number);
   const count = new Date(year, monthNumber, 0).getDate();
@@ -122,7 +122,7 @@ const datesInMonth = (month: string) => {
 };
 const formatTime = (time: string | null) =>
   time
-    ? new Date(time).toLocaleTimeString("ar", {
+    ? new Date(time).toLocaleTimeString(displayLocale(), {
         hour: "2-digit",
         minute: "2-digit",
         timeZone: COMPANY_TIME_ZONE,
@@ -405,10 +405,10 @@ function MonthlyPage() {
     const rowsMarkup = vehicleRows
       .map(
         (vehicle) =>
-          `<tr><td>${escapeHtml(vehicle.vehicle_no)}</td><td>${escapeHtml(vehicle.name)}</td><td>${vehicle.vehicle_class === "light" ? "خفيفة" : "ثقيلة"}</td><td>${vehicle.operatingDays}</td><td>${escapeHtml(vehicle.operatingDates.map((date) => Number(date.slice(8)).toLocaleString("ar")).join("، ") || "—")}</td><td>${Number(vehicle.daily_rate).toLocaleString(displayLocale())}</td><td>${vehicle.total.toLocaleString(displayLocale())}</td><td>${vehicle.is_active ? "نشطة" : "متوقفة"}</td></tr>`,
+          `<tr><td>${escapeHtml(vehicle.vehicle_no)}</td><td>${escapeHtml(vehicle.name)}</td><td>${vehicle.vehicle_class === "light" ? "خفيفة" : "ثقيلة"}</td><td>${vehicle.operatingDays}</td><td>${escapeHtml(vehicle.operatingDates.map((date) => Number(date.slice(8)).toLocaleString(displayLocale())).join("، ") || "—")}</td><td>${Number(vehicle.daily_rate).toLocaleString(displayLocale())}</td><td>${vehicle.total.toLocaleString(displayLocale())}</td><td>${vehicle.is_active ? "نشطة" : "متوقفة"}</td></tr>`,
       )
       .join("");
-    const body = `<p>الشهر: ${escapeHtml(month)} · عدد المركبات: ${vehicleRows.length} · إجمالي الاستحقاق: ${vehicleTotal.toLocaleString(displayLocale())} د.ع</p><table><thead><tr><th>رقم المركبة</th><th>المركبة</th><th>الفئة</th><th>أيام الحضور</th><th>تواريخ الحضور</th><th>الأجر اليومي</th><th>المستحق</th><th>الحالة</th></tr></thead><tbody>${rowsMarkup}</tbody></table>`;
+    const body = `<p>${ui("الشهر: ")}${escapeHtml(month)} · عدد المركبات: ${vehicleRows.length} · إجمالي الاستحقاق: ${vehicleTotal.toLocaleString(displayLocale())} د.ع</p><table><thead><tr><th>${ui("رقم المركبة")}</th><th>${ui("المركبة")}</th><th>${ui("الفئة")}</th><th>${ui("أيام الحضور")}</th><th>${ui("تواريخ الحضور")}</th><th>${ui("الأجر اليومي")}</th><th>${ui("المستحق")}</th><th>${ui("الحالة")}</th></tr></thead><tbody>${rowsMarkup}</tbody></table>`;
     if (!printReport(`التقرير الشهري للمركبات — ${month}`, body))
       toast.error(ui("اسمح بالنوافذ المنبثقة لطباعة التقرير"));
   };
@@ -551,7 +551,7 @@ function MonthlyPage() {
                 value={filter.value}
                 onChange={(e) => setFilter(filter.setter, e.target.value)}
               >
-                <option value="">{filter.all}</option>
+                <option value="">{ui(filter.all)}</option>
                 {filter.options.map(([id, name]) => (
                   <option key={id} value={id}>
                     {name}
@@ -582,7 +582,7 @@ function MonthlyPage() {
             >{ui("مسح الفلاتر")}</Button>
             {data && (
               <span className="mr-auto text-xs text-muted-foreground">
-                {(data?.totalRows ?? 0).toLocaleString("ar")}{ui(" موظف")}</span>
+                {(data?.totalRows ?? 0).toLocaleString(displayLocale())}{ui(" موظف")}</span>
             )}
           </div>
         </div>
@@ -835,7 +835,7 @@ function MonthlyPage() {
               },
               {
                 label: "إجمالي الاستحقاق",
-                value: `${vehicleTotal.toLocaleString(displayLocale())} د.ع`,
+                value: `${vehicleTotal.toLocaleString(displayLocale())} ${ui("د.ع")}`,
                 icon: Banknote,
               },
             ].map((stat) => (
@@ -860,15 +860,15 @@ function MonthlyPage() {
               <h2 className="font-semibold">{ui("تشغيل المركبات خلال الشهر")}</h2>
               <p className="text-xs text-muted-foreground">{ui("عدد المركبات المسجّل لها تشغيل في كل يوم · النتائج حسب الفلاتر الحالية")}</p>
             </div>
-            <Badge variant="secondary">{vehicleRows.filter((vehicle) => vehicle.operatingDays > 0).length.toLocaleString("ar")}{ui(" مركبة مسجلة")}</Badge>
+            <Badge variant="secondary">{vehicleRows.filter((vehicle) => vehicle.operatingDays > 0).length.toLocaleString(displayLocale())}{ui(" مركبة مسجلة")}</Badge>
           </div>
           <div className="h-64 w-full" dir="ltr">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={vehicleDailyChart} margin={{ top: 8, right: 16, left: 0, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                <XAxis dataKey="day" tickFormatter={(value) => Number(value).toLocaleString("ar")} />
+                <XAxis dataKey="day" tickFormatter={(value) => Number(value).toLocaleString(displayLocale())} />
                 <YAxis allowDecimals={false} width={36} />
-                <Tooltip labelFormatter={(value) => `اليوم ${Number(value).toLocaleString("ar")}`} formatter={(value) => [`${Number(value).toLocaleString("ar")} مركبة`, "عاملة"]} />
+                <Tooltip labelFormatter={(value) => `اليوم ${Number(value).toLocaleString(displayLocale())}`} formatter={(value) => [`${Number(value).toLocaleString(displayLocale())} مركبة`, "عاملة"]} />
                 <Line type="monotone" dataKey="operating" name="مركبات عاملة" stroke="#14b8a6" strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
               </LineChart>
             </ResponsiveContainer>
@@ -929,7 +929,7 @@ function MonthlyPage() {
                 </div>
               </div>
               <Badge variant="secondary" className="w-fit sm:mr-auto">
-                {vehicleRows.length.toLocaleString("ar")}{ui(" مركبة ·")}{" "}
+                {vehicleRows.length.toLocaleString(displayLocale())}{ui(" مركبة ·")}{" "}
                 {vehicleTotal.toLocaleString(displayLocale())}{ui(" د.ع")}</Badge>
             </div>
             {vehicleReport.isError ? (
@@ -981,7 +981,7 @@ function MonthlyPage() {
                         <td className="max-w-72 p-3 text-xs leading-6 text-muted-foreground">
                           {vehicle.operatingDates.length
                             ? vehicle.operatingDates
-                                .map((date) => Number(date.slice(8)).toLocaleString("ar"))
+                                .map((date) => Number(date.slice(8)).toLocaleString(displayLocale()))
                                 .join("، ")
                             : ui("لم تُسجّل التواريخ بعد")}
                         </td>
@@ -1022,10 +1022,10 @@ function MonthlyPage() {
         <TabsContent value="machinery" className="mt-0 space-y-4">
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[
-            { label: "إجمالي الآليات", value: machineryCount.toLocaleString("ar"), icon: Cog },
-            { label: "آليات سُجل لها تشغيل", value: machineryRows.filter((machine) => machine.operatingDays > 0).length.toLocaleString("ar"), icon: CalendarDays },
-            { label: "أيام التشغيل المسجلة", value: machineryRows.reduce((sum, machine) => sum + machine.operatingDays, 0).toLocaleString("ar"), icon: CalendarDays },
-            { label: "كلفة الآليات المعروضة", value: `${machineryTotal.toLocaleString(displayLocale())} د.ع`, icon: Banknote },
+            { label: "إجمالي الآليات", value: machineryCount.toLocaleString(displayLocale()), icon: Cog },
+            { label: "آليات سُجل لها تشغيل", value: machineryRows.filter((machine) => machine.operatingDays > 0).length.toLocaleString(displayLocale()), icon: CalendarDays },
+            { label: "أيام التشغيل المسجلة", value: machineryRows.reduce((sum, machine) => sum + machine.operatingDays, 0).toLocaleString(displayLocale()), icon: CalendarDays },
+            { label: "كلفة الآليات المعروضة", value: `${machineryTotal.toLocaleString(displayLocale())} ${ui("د.ع")}`, icon: Banknote },
           ].map((stat) => (
             <Card key={stat.label} className="rounded-2xl">
               <div className="flex items-center justify-between p-4">
@@ -1047,9 +1047,9 @@ function MonthlyPage() {
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={machineryDailyChart} margin={{ top: 8, right: 16, left: 0, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                <XAxis dataKey="day" tickFormatter={(value) => Number(value).toLocaleString("ar")} />
+                <XAxis dataKey="day" tickFormatter={(value) => Number(value).toLocaleString(displayLocale())} />
                 <YAxis allowDecimals={false} width={36} />
-                <Tooltip labelFormatter={(value) => `اليوم ${Number(value).toLocaleString("ar")}`} formatter={(value) => [`${Number(value).toLocaleString("ar")} آلية`, "عاملة"]} />
+                <Tooltip labelFormatter={(value) => `اليوم ${Number(value).toLocaleString(displayLocale())}`} formatter={(value) => [`${Number(value).toLocaleString(displayLocale())} آلية`, "عاملة"]} />
                 <Line type="monotone" dataKey="operating" name="آليات عاملة" stroke="#14b8a6" strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
               </LineChart>
             </ResponsiveContainer>
@@ -1116,7 +1116,7 @@ function MonthlyPage() {
                     <tr className="border-b bg-muted/40 text-right">
                       <th className="sticky right-0 z-10 min-w-48 bg-muted/40 p-3">{ui("الآلية / الرقم")}</th>
                       <th className="p-3">{ui("التصنيف والحالة")}</th>
-                      {monthDays.map((date) => <th key={date} className="min-w-12 p-2 text-center"><span>{Number(date.slice(-2)).toLocaleString("ar")}</span><small className="block text-muted-foreground">{weekday(date)}</small></th>)}
+                      {monthDays.map((date) => <th key={date} className="min-w-12 p-2 text-center"><span>{Number(date.slice(-2)).toLocaleString(displayLocale())}</span><small className="block text-muted-foreground">{weekday(date)}</small></th>)}
                       <th className="p-3">{ui("أيام التشغيل")}</th>
                       <th className="p-3">{ui("الإيجار اليومي")}</th>
                       <th className="p-3">{ui("الإجمالي")}</th>
@@ -1133,7 +1133,7 @@ function MonthlyPage() {
                           return <td key={date} className="border-x p-1 text-center"><span className={cn("inline-flex h-8 min-w-8 items-center justify-center rounded font-bold", operated ? "bg-emerald-100 text-emerald-800" : "bg-muted/60 text-muted-foreground")}>{operated ? "✓" : "—"}</span></td>;
                         })}
                         <td className="p-3 tabular-nums">
-                          {machine.operatingDays.toLocaleString("ar")}{ui(" يوم")}</td>
+                          {machine.operatingDays.toLocaleString(displayLocale())}{ui(" يوم")}</td>
                         <td className="p-3 tabular-nums">
                           {Number(machine.daily_rent).toLocaleString(displayLocale())}{ui(" د.ع")}</td>
                         <td className="p-3 font-bold tabular-nums">
@@ -1154,13 +1154,13 @@ function MonthlyPage() {
                   </tbody>
                   <tfoot>
                     <tr className="bg-muted/30 font-bold">
-                      <td className="sticky right-0 z-[1] bg-muted/30 p-3" colSpan={2}>{ui("الآليات المعروضة: ")}{machineryRows.length.toLocaleString("ar")}{ui(" من أصل ")}{machineryCount.toLocaleString("ar")}
+                      <td className="sticky right-0 z-[1] bg-muted/30 p-3" colSpan={2}>{ui("الآليات المعروضة: ")}{machineryRows.length.toLocaleString(displayLocale())}{ui(" من أصل ")}{machineryCount.toLocaleString(displayLocale())}
                       </td>
                       {monthDays.map((date) => <td key={date} className="p-1" />)}
                       <td className="p-3">
                         {machineryRows
                           .reduce((sum, machine) => sum + machine.operatingDays, 0)
-                          .toLocaleString("ar")}{" "}{ui("يوم")}</td>
+                          .toLocaleString(displayLocale())}{" "}{ui("يوم")}</td>
                       <td className="p-3">—</td>
                       <td className="p-3">{machineryTotal.toLocaleString(displayLocale())}{ui(" د.ع")}</td>
                       <td />
@@ -1177,7 +1177,7 @@ function MonthlyPage() {
                       disabled={machineryPage === 0 || machineryReport.isFetching}
                       onClick={() => setMachineryPage((current) => Math.max(0, current - 1))}
                     >{ui("الصفحة السابقة")}</Button>
-                    <span className="text-sm text-muted-foreground">{ui("صفحة ")}{(machineryPage + 1).toLocaleString("ar")}{ui(" من ")}{machineryPageCount.toLocaleString("ar")}{ui(" · 50 آلية كحد أقصى")}</span>
+                    <span className="text-sm text-muted-foreground">{ui("صفحة ")}{(machineryPage + 1).toLocaleString(displayLocale())}{ui(" من ")}{machineryPageCount.toLocaleString(displayLocale())}{ui(" · 50 آلية كحد أقصى")}</span>
                     <Button
                       variant="outline"
                       disabled={machineryPage + 1 >= machineryPageCount || machineryReport.isFetching}
@@ -1304,14 +1304,14 @@ function MonthlyOperatingDaysForm({
               className={cn("h-11 flex-col gap-0 p-1 sm:h-12", selected && "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white")}
               onClick={() => setDates((current) => selected ? current.filter((item) => item !== date) : [...current, date].sort())}
             >
-              <span className="text-sm font-bold">{day.toLocaleString("ar")}</span>
+              <span className="text-sm font-bold">{day.toLocaleString(displayLocale())}</span>
               <span className={cn("text-[9px]", selected ? "text-emerald-50" : "text-muted-foreground")}>{selected ? ui("عمل") : "—"}</span>
             </Button>
           );
         })}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-        <p className="text-sm">{ui("أيام التشغيل: ")}<b>{dates.length.toLocaleString("ar")}</b>{ui(" · الأجر اليومي: ")}<b>{dailyRate.toLocaleString(displayLocale())}{ui(" د.ع")}</b>{ui(" · الإجمالي: ")}<b>{(dates.length * dailyRate).toLocaleString(displayLocale())}{ui(" د.ع")}</b></p>
+        <p className="text-sm">{ui("أيام التشغيل: ")}<b>{dates.length.toLocaleString(displayLocale())}</b>{ui(" · الأجر اليومي: ")}<b>{dailyRate.toLocaleString(displayLocale())}{ui(" د.ع")}</b>{ui(" · الإجمالي: ")}<b>{(dates.length * dailyRate).toLocaleString(displayLocale())}{ui(" د.ع")}</b></p>
         <Button onClick={onSave} disabled={saving}>{saving ? ui("جارٍ الحفظ…") : ui("حفظ أيام التشغيل")}</Button>
       </div>
     </div>

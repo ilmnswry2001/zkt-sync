@@ -1,4 +1,4 @@
-import { direction, ui } from "@/lib/ui-language";
+import { direction, localizedDateFormat, localizedNumberFormat, ui } from "@/lib/ui-language";
 import { useEffect, useState, type FormEvent } from "react";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -81,11 +81,11 @@ type FilterRole = "" | "unassigned" | AccountAccess["roles"][number];
 type AccountAction =
   { kind: "create" } | { kind: "edit" | "password" | "delete"; account: DirectoryAccount };
 const pageSize = 20;
-const dateFormat = new Intl.DateTimeFormat("ar-IQ", {
+const dateFormat = localizedDateFormat({
   dateStyle: "medium",
   timeZone: "Asia/Baghdad",
 });
-const numberFormat = new Intl.NumberFormat("ar-IQ");
+const numberFormat = localizedNumberFormat();
 const selectClass =
   "h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
@@ -212,7 +212,7 @@ function AccountsPage() {
                 <option value="unassigned">{ui("بدون دور")}</option>
                 {roleKeys.map((key) => (
                   <option key={key} value={key}>
-                    {accountRoles[key][0]}
+                    {ui(accountRoles[key][0])}
                   </option>
                 ))}
               </select>
@@ -304,7 +304,7 @@ function AccountsPage() {
                               variant={key === "admin" ? "default" : "secondary"}
                               className="whitespace-normal"
                             >
-                              {accountRoles[key][0]}
+                              {ui(accountRoles[key][0])}
                             </Badge>
                           ))
                         ) : (
@@ -638,9 +638,9 @@ function AccountEditor({
                                 }}
                               />
                               <span className="min-w-0">
-                                <span className="block font-medium">{accountRoles[key][0]}</span>
+                                <span className="block font-medium">{ui(accountRoles[key][0])}</span>
                                 <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                                  {accountRoles[key][1]}
+                                  {ui(accountRoles[key][1])}
                                 </span>
                               </span>
                             </label>

@@ -692,7 +692,7 @@ function AttendancePage() {
   const attendanceRows = (attendance.data?.rows ?? []) as AttendanceRow[];
   const fmtTime = (value: string | null) =>
     value
-      ? new Date(value).toLocaleTimeString("ar", {
+      ? new Date(value).toLocaleTimeString(displayLocale(), {
           hour: "2-digit",
           minute: "2-digit",
           timeZone: COMPANY_TIME_ZONE,
@@ -917,7 +917,7 @@ function AttendancePage() {
                   const plannedCost = comparisonWorkers.reduce((s, i) => s + i.quantity * dailyRate(i.specialty), 0);
                   const actualCost = comparisonWorkers.reduce((s, i) => s + i.reported * dailyRate(i.specialty), 0);
                   const variance = plannedCost - actualCost;
-                  const money = (value: number) => `${value.toLocaleString(displayLocale(), { maximumFractionDigits: 0 })} د.ع`;
+                  const money = (value: number) => `${value.toLocaleString(displayLocale(), { maximumFractionDigits: 0 })} ${ui("د.ع")}`;
                   const pct = req ? Math.round((rep / req) * 100) : 0;
                   return (
                     <div className="rounded-2xl border bg-card p-4 shadow-sm">

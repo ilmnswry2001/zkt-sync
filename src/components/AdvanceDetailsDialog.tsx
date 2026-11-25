@@ -31,7 +31,7 @@ type Props = {
   onClose: () => void;
 };
 
-const money = (amount: number) => `${amount.toLocaleString(displayLocale())} د.ع`;
+const money = (amount: number) => `${amount.toLocaleString(displayLocale())} ${ui("د.ع")}`;
 const timestamp = (value: string) =>
   new Date(value).toLocaleString(displayLocale(), {
     dateStyle: "medium",

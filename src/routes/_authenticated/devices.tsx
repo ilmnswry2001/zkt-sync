@@ -229,8 +229,8 @@ function DevicesPage() {
         <Button asChild variant="outline"><Link to="/mobile-sync"><Smartphone className="size-4" />{ui(" سحب البصمة بالهاتف")}</Link></Button>
       )}
       <div className="grid gap-3 sm:grid-cols-2">
-        <MetricCard title={ui("الأجهزة المتصلة")} value={devicesError ? "—" : onlineCount} loading={devicesLoading} tone="success" detail="آخر مزامنة خلال 15 دقيقة" />
-        <MetricCard title={ui("الأجهزة غير المتصلة")} value={devicesError ? "—" : devices.length - onlineCount} loading={devicesLoading} tone="warning" detail="تشمل الأجهزة التي لم تزامن بعد" />
+        <MetricCard title={ui("الأجهزة المتصلة")} value={devicesError ? "—" : onlineCount} loading={devicesLoading} tone="success" detail={ui("آخر مزامنة خلال 15 دقيقة")} />
+        <MetricCard title={ui("الأجهزة غير المتصلة")} value={devicesError ? "—" : devices.length - onlineCount} loading={devicesLoading} tone="warning" detail={ui("تشمل الأجهزة التي لم تزامن بعد")} />
       </div>
       <TabsList className="h-auto flex-wrap bg-transparent p-0">
         <TabsTrigger value="devices" className="min-h-10 rounded-xl border bg-card">{ui("الأجهزة والمزامنة")}</TabsTrigger>
@@ -354,11 +354,11 @@ function DevicesPage() {
                       {d.status === "active" ? ui("نشط") : d.status === "maintenance" ? ui("صيانة") : ui("معطل")}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{d.last_sync_at ? new Date(d.last_sync_at).toLocaleString("ar") : "—"}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{d.last_sync_at ? new Date(d.last_sync_at).toLocaleString(displayLocale()) : "—"}</TableCell>
                   {(() => {
                     const sync = syncByDevice.get(d.id);
                     const connected = isConnected(d);
-                    return <TableCell><Badge variant={connected ? "default" : "destructive"}>{connected ? ui("متصل") : !sync ? ui("غير متصل") : sync.has_active_key ? ui("متوقف") : ui("غير مربوط")}</Badge>{lastContact(d) > 0 && <div className="mt-1 text-xs text-muted-foreground">{new Date(lastContact(d)).toLocaleString("ar")}</div>}</TableCell>;
+                    return <TableCell><Badge variant={connected ? "default" : "destructive"}>{connected ? ui("متصل") : !sync ? ui("غير متصل") : sync.has_active_key ? ui("متوقف") : ui("غير مربوط")}</Badge>{lastContact(d) > 0 && <div className="mt-1 text-xs text-muted-foreground">{new Date(lastContact(d)).toLocaleString(displayLocale())}</div>}</TableCell>;
                   })()}
                   <TableCell>{(syncByDevice.get(d.id)?.auto_synced_logs_total ?? 0).toLocaleString(displayLocale())}</TableCell>
                   <TableCell>

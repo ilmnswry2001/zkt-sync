@@ -187,7 +187,7 @@ export function MaterialRequestWorkflow({ stage, requestType }: { stage: Stage; 
     <section dir={direction()} className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold">{title}</h2>
+          <h2 className="text-lg font-bold">{ui(title)}</h2>
           <p className="text-sm text-muted-foreground">{ui("سجل موحد مع مراحل الطلب والتدقيق والاستلامات.")}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -542,7 +542,7 @@ function RequestList({ stage, requests, options, actor, canCreate, canPlan, canW
     return ["pending_procurement", "purchasing", "pending_receipt", "partially_received", "received", "closed"].includes(request.status);
   });
 
-  if (!visible.length) return <EmptyRequests text="لا توجد طلبات مطابقة حالياً." />;
+  if (!visible.length) return <EmptyRequests text={ui("لا توجد طلبات مطابقة حالياً.")} />;
   return (
     <div className="space-y-3">
       {visible.map((request) => (

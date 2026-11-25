@@ -2687,7 +2687,7 @@ function TaskDetailsDialog({
     return names[event.event_type] ?? event.event_type;
   };
   const dateTime = (value: string) =>
-    new Intl.DateTimeFormat("ar-IQ", {
+    new Intl.DateTimeFormat(displayLocale(), {
       dateStyle: "short",
       timeStyle: "short",
       timeZone: "Asia/Baghdad",

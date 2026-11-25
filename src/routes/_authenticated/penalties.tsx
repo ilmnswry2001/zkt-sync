@@ -287,7 +287,7 @@ function PenaltiesPage() {
         <Stat
           icon={CircleDollarSign}
           label={ui("إجمالي الاستقطاعات")}
-          value={`${stats.amount.toLocaleString()} د.ع`}
+          value={`${stats.amount.toLocaleString()} ${ui("د.ع")}`}
           color="bg-emerald-600"
         />
       </div>

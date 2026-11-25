@@ -1,4 +1,4 @@
-import { direction, ui } from "@/lib/ui-language";
+import { direction, localizedDateFormat, localizedNumberFormat, ui } from "@/lib/ui-language";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Boxes, Coins, Download, RefreshCw, Users, WalletCards } from "lucide-react";
@@ -28,14 +28,14 @@ import {
 import { calculateSiteMaterialCosts } from "@/lib/site-material-costs";
 import { formatErrorMessage } from "@/lib/error-message";
 
-const money = new Intl.NumberFormat("ar-IQ", {
+const money = localizedNumberFormat({
   style: "currency",
   currency: "IQD",
   maximumFractionDigits: 2,
 });
-const numbers = new Intl.NumberFormat("ar-IQ", { maximumFractionDigits: 3 });
-const percent = new Intl.NumberFormat("ar-IQ", { style: "percent", maximumFractionDigits: 1 });
-const time = new Intl.DateTimeFormat("ar-IQ", {
+const numbers = localizedNumberFormat({ maximumFractionDigits: 3 });
+const percent = localizedNumberFormat({ style: "percent", maximumFractionDigits: 1 });
+const time = localizedDateFormat({
   timeZone: "Asia/Baghdad",
   dateStyle: "short",
   timeStyle: "medium",

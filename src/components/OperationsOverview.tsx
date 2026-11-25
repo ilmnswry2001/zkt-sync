@@ -263,7 +263,7 @@ export function OperationsOverview({
                 <tr>
                   {["الورشة", "الكادر", "الحاضرون", "حالة الجرد"].map((t) => (
                     <th className="p-3" key={t}>
-                      {t}
+                      {ui(t)}
                     </th>
                   ))}
                 </tr>
@@ -306,11 +306,11 @@ export function OperationsOverview({
         <div className="grid gap-3 sm:grid-cols-3">
           {(
             [
-              ["/monthly", "الإضافي هذا الشهر", number(overtime) + " ساعة"],
+              ["/monthly", "الإضافي هذا الشهر", number(overtime) + ui(" ساعة")],
               [
                 "/tasks",
                 "المهام المنجزة اليوم",
-                number(tasks?.completed) + " من " + number(tasks?.total),
+                number(tasks?.completed) + ui(" من ") + number(tasks?.total),
               ],
               ["/attendance-forms", "استمارات بانتظار التنفيذ", number(forms)],
             ] as const

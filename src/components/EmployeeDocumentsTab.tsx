@@ -1,4 +1,4 @@
-import { direction, ui } from "@/lib/ui-language";
+import { direction, localizedNumberFormat, ui } from "@/lib/ui-language";
 import { supabase } from "@/integrations/supabase/client";
 import { useDirectorySearch } from "@/hooks/use-directory-search";
 import { useEffect, useState } from "react";
@@ -60,7 +60,7 @@ const badgeStyles: Record<EmployeeDocumentType, string> = {
   other: "border-amber-300 text-amber-800 dark:border-amber-700 dark:text-amber-200",
 };
 const pageSize = 20;
-const money = new Intl.NumberFormat("ar-IQ", { maximumFractionDigits: 2 });
+const money = localizedNumberFormat({ maximumFractionDigits: 2 });
 
 type ArchiveEmployee = DocumentEmployee & {
   position?: string | null;

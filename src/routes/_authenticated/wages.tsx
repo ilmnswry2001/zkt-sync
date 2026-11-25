@@ -399,7 +399,7 @@ function WagesPage() {
         </CardHeader>
         {missingSpecialties.length > 0 && (
           <CardContent className="border-t bg-amber-50/50 pt-4 text-sm dark:bg-amber-950/20">
-            <p className="font-semibold text-amber-900 dark:text-amber-200">{ui("تخصصات بلا أجر مسجل: ")}{missingSpecialties.join("، ")}
+            <p className="font-semibold text-amber-900 dark:text-amber-200">{ui("تخصصات بلا أجر مسجل: ")}{missingSpecialties.map(value => ui(value)).join(ui("، "))}
             </p>
             <p className="mt-1 text-muted-foreground">{ui("اضغط زر التهيئة لإضافة أجر يومي وشهري وأجر ساعة إضافية لكل تخصص، ويمكن تعديل القيم بعد ذلك.")}</p>
           </CardContent>

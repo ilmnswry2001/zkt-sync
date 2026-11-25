@@ -126,20 +126,20 @@ export function ExecutiveIntelligenceCard({ className = "" }: { className?: stri
                 icon={Gauge}
                 label={ui("نسبة الحضور اليوم")}
                 value={`${Number(brief?.attendance_percentage ?? 0).toLocaleString(displayLocale())}٪`}
-                detail={`${Number(brief?.present_employees ?? 0).toLocaleString(displayLocale())} من ${Number(brief?.active_employees ?? 0).toLocaleString(displayLocale())}`}
+                detail={`${Number(brief?.present_employees ?? 0).toLocaleString(displayLocale())}${ui(" من ")}${Number(brief?.active_employees ?? 0).toLocaleString(displayLocale())}`}
               />
               <IntelligenceMetric
                 icon={AlertTriangle}
                 label={ui("تنبيهات حرجة")}
                 value={Number(brief?.critical_anomalies ?? 0).toLocaleString(displayLocale())}
-                detail={`${Number(brief?.unresolved_anomalies ?? 0).toLocaleString(displayLocale())} تنبيه غير مسوّى`}
+                detail={`${Number(brief?.unresolved_anomalies ?? 0).toLocaleString(displayLocale())}${ui(" تنبيه غير مسوّى")}`}
                 critical={Number(brief?.critical_anomalies ?? 0) > 0}
               />
               <IntelligenceMetric
                 icon={Wrench}
                 label={ui("صيانة متجاوزة")}
                 value={Number(brief?.overdue_maintenance ?? 0).toLocaleString(displayLocale())}
-                detail="مركبات بلغت قراءة الاستحقاق"
+                detail={ui("مركبات بلغت قراءة الاستحقاق")}
                 critical={Number(brief?.overdue_maintenance ?? 0) > 0}
               />
             </div>

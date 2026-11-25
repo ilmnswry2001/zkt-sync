@@ -386,7 +386,7 @@ function WarehousesPage() {
             </CardHeader>
             <CardContent className="overflow-x-auto">
               {!items.length ? (
-                <Empty text="لا توجد أصناف بعد. أضفها من تبويب «الأصناف والمخازن»." />
+                <Empty text={ui("لا توجد أصناف بعد. أضفها من تبويب «الأصناف والمخازن».")} />
               ) : (
                 <Table>
                   <TableHeader>
@@ -581,7 +581,7 @@ function WarehousesPage() {
             </CardHeader>
             <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {!issuesBySite.length ? (
-                <Empty text="لا يوجد صرف للمواقع في هذا اليوم." />
+                <Empty text={ui("لا يوجد صرف للمواقع في هذا اليوم.")} />
               ) : (
                 issuesBySite.map(([sid, v]) => (
                   <div key={sid} className="rounded-xl border p-3">
@@ -645,7 +645,7 @@ function WarehousesPage() {
             </CardHeader>
             <CardContent>
               {!toolsWithEmps.length ? (
-                <Empty text="لا توجد عدد مسلّمة حالياً." />
+                <Empty text={ui("لا توجد عدد مسلّمة حالياً.")} />
               ) : (
                 <Table>
                   <TableHeader>
@@ -850,7 +850,7 @@ function F({ label, children }: { label: string; children: React.ReactNode }) {
   );
 }
 function Empty({ text }: { text: string }) {
-  return <p className="col-span-full py-6 text-center text-sm text-muted-foreground">{text}</p>;
+  return <p className="col-span-full py-6 text-center text-sm text-muted-foreground">{ui(text)}</p>;
 }
 function Stat({
   icon: Icon,

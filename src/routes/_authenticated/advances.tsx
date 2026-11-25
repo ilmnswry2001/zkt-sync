@@ -23,7 +23,7 @@ export const Route = createFileRoute("/_authenticated/advances")({
 
 type EmployeeOption = { id: string; employee_no: string; full_name: string };
 const pageSize = 20;
-const money = (amount: number) => `${Number(amount).toLocaleString(displayLocale())} د.ع`;
+const money = (amount: number) => `${Number(amount).toLocaleString(displayLocale())} ${ui("د.ع")}`;
 
 function AdvancesPage() {
   const { financeUserId, canManageAdvances } = Route.useRouteContext();

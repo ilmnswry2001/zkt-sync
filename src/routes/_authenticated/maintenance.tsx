@@ -586,7 +586,7 @@ function MaintenancePage() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="glass-card rounded-3xl p-5">
-          <p className="text-xs text-muted-foreground">{ui("سجلات ")}{activeTabLabel}</p>
+          <p className="text-xs text-muted-foreground">{ui("سجلات ")}{ui(activeTabLabel)}</p>
           <p className="mt-2 text-2xl font-bold tabular-nums">{filteredRecords.length}</p>
         </div>
         <div className="glass-card rounded-3xl p-5">
@@ -607,12 +607,12 @@ function MaintenancePage() {
 
       {overdueCount > 0 && (
         <div className="flex items-center gap-2 rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-          <AlertTriangle className="h-4 w-4" />{ui("توجد ")}{overdueCount}{ui(" عملية صيانة متأخرة في ")}{activeTabLabel}{ui(". راجع سجلات الصيانة القادمة.")}</div>
+          <AlertTriangle className="h-4 w-4" />{ui("توجد ")}{overdueCount}{ui(" عملية صيانة متأخرة في ")}{ui(activeTabLabel)}{ui(". راجع سجلات الصيانة القادمة.")}</div>
       )}
 
       <Card>
         <CardHeader className="flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-          <CardTitle>{ui("سجل ")}{activeTabLabel}</CardTitle>
+          <CardTitle>{ui("سجل ")}{ui(activeTabLabel)}</CardTitle>
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative w-full sm:w-64">
               <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -757,7 +757,7 @@ function MaintenancePage() {
         <DialogContent dir={direction()} className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>{form.id ? (ui("تعديل سجل ") + (form.recordNo)) : ui("إضافة سجل صيانة")}</DialogTitle>
-            <DialogDescription>{ui("سجل ")}{activeTabLabel}{ui(" بتفاصيل القطع والكلفة والمرفقات.")}</DialogDescription>
+            <DialogDescription>{ui("سجل ")}{ui(activeTabLabel)}{ui(" بتفاصيل القطع والكلفة والمرفقات.")}</DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 sm:grid-cols-2">

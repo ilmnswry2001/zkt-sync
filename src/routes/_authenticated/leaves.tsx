@@ -961,7 +961,7 @@ function LeavesPage() {
                   );
                 })}
               {!types.some((type) => type.is_active) && (
-                <EmptyState text="أضف سياسة إجازة لتفعيل تقديم الطلبات." />
+                <EmptyState text={ui("أضف سياسة إجازة لتفعيل تقديم الطلبات.")} />
               )}
             </CardContent>
           </Card>
@@ -1741,7 +1741,7 @@ function LeavesPage() {
               <p className="p-4 text-center text-muted-foreground">{ui("جارٍ تحميل سجل الحركات…")}</p>
             )}
             {!balanceHistoryQuery.isLoading && !balanceHistoryQuery.data?.length && (
-              <EmptyState text="لا توجد تسويات مسجلة لهذا الموظف ونوع الإجازة." />
+              <EmptyState text={ui("لا توجد تسويات مسجلة لهذا الموظف ونوع الإجازة.")} />
             )}
           </div>
         </DialogContent>
@@ -1816,7 +1816,7 @@ function LeaveCalendar({
           key={day}
           className="py-2 text-center text-[10px] font-bold text-muted-foreground sm:text-xs"
         >
-          {day}
+          {ui(day)}
         </div>
       ))}
       {cells.map((day, index) => {
@@ -1832,7 +1832,7 @@ function LeaveCalendar({
               <span
                 className={`text-xs font-bold ${date === todayInBaghdad() ? "flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground" : "text-muted-foreground"}`}
               >
-                {day}
+                {ui(day)}
               </span>
               {list.length > 0 && (
                 <span className="text-[10px] font-bold text-primary">{list.length}</span>
@@ -1881,7 +1881,7 @@ function Detail({ label, value }: { label: string; value: string }) {
 function EmptyState({ text }: { text: string }) {
   return (
     <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-      {text}
+      {ui(text)}
     </div>
   );
 }

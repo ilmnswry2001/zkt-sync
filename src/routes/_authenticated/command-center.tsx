@@ -49,7 +49,7 @@ type BadgeType = keyof typeof BADGES;
 
 const baghdadDate = (date: Date) => dateKeyInTimeZone(date);
 const toArabicNumber = (value: number) => value.toLocaleString(displayLocale());
-const formatIQD = (value: number) => `${Math.round(value).toLocaleString(displayLocale())} د.ع`;
+const formatIQD = (value: number) => `${Math.round(value).toLocaleString(displayLocale())} ${ui("د.ع")}`;
 const formatTime = (value: string) =>
   new Date(value).toLocaleTimeString(displayLocale(), { hour: "2-digit", minute: "2-digit" });
 const getDayStart = (date: string) => new Date(`${date}T00:00:00+03:00`).toISOString();
@@ -503,7 +503,7 @@ function CommandCenter() {
         <MetricCard
           title={ui("حضور الكادر الميداني اليوم")}
           value={`${toArabicNumber(presentToday.size)} / ${toArabicNumber(activeFieldIds.size)}`}
-          detail={`${toArabicNumber(fieldAttendance)}٪ من الموظفين النشطين المخصصين للمواقع`}
+          detail={`${toArabicNumber(fieldAttendance)}${ui("٪ من الموظفين النشطين المخصصين للمواقع")}`}
           icon={Users}
           progress={fieldAttendance}
           tone="cyan"
@@ -511,7 +511,7 @@ function CommandCenter() {
         <MetricCard
           title={ui("جرد الورش المكتمل اليوم")}
           value={`${toArabicNumber(todayCompleted)} / ${toArabicNumber(workshops.length)}`}
-          detail={`${toArabicNumber(todayReports.length)} تقرير جرد مسجل`}
+          detail={`${toArabicNumber(todayReports.length)}${ui(" تقرير جرد مسجل")}`}
           icon={Check}
           progress={workshops.length ? (todayCompleted / workshops.length) * 100 : 0}
           tone="emerald"
@@ -519,7 +519,7 @@ function CommandCenter() {
         <MetricCard
           title={ui("حركات الحضور الذاتي بالوجه")}
           value={toArabicNumber(facialLogs.length)}
-          detail={`نسبة التحقق من الحيوية: ${toArabicNumber(livenessRate)}٪`}
+          detail={`${ui("نسبة التحقق من الحيوية: ")}${toArabicNumber(livenessRate)}${ui("٪")}`}
           icon={Fingerprint}
           progress={livenessRate}
           tone="violet"
@@ -527,7 +527,7 @@ function CommandCenter() {
         <MetricCard
           title={ui("معدل الانضباط اليوم")}
           value={`${toArabicNumber(disciplineRate)}٪`}
-          detail="مؤشر الحضور للكادر الميداني"
+          detail={ui("مؤشر الحضور للكادر الميداني")}
           icon={Activity}
           progress={disciplineRate}
           tone="amber"
