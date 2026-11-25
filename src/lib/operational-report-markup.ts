@@ -45,38 +45,33 @@ export function finalPlanReportMarkup(plan: ReportPlan, site?: { ctr_code?: stri
 }
 
 type WorkshopLine = { attended: boolean; role_label: string | null; employee_no_snapshot: string; employee_name_snapshot: string };
-export function workshopSummaryMarkup(date: string, workshopCount: number, lines: Pick<WorkshopLine, "attended" | "role_label">[]) {
-  const specialties = new Map<string, { total: number; present: number }>();
+export function workshopSummaryMarkup(date: string, lines: Pick<WorkshopLine, "attended" | "role_label">[]) {
+  const specialties = new Map<string, number>();
   let present = 0;
   for (const line of lines) {
+    if (!line.attended) continue;
     const label = line.role_label?.trim() ?? "";
-    const counts = specialties.get(label) ?? { total: 0, present: 0 };
-    counts.total++;
-    if (line.attended) {
-      counts.present++;
-      present++;
-    }
-    specialties.set(label, counts);
+    specialties.set(label, (specialties.get(label) ?? 0) + 1);
+    present++;
   }
 
-  const labels = ["التخصص / الصفة", "الحاضرون", "الغائبون", "الإجمالي"];
-  const rows = [...specialties.entries()]
-    .sort(([labelA, a], [labelB, b]) => b.present - a.present || b.total - a.total || labelA.localeCompare(labelB, "ar"))
-    .map(([label, counts]) => `<tr><th scope="row" class="ops-name">${escapeHtml(label || ui("بدون تخصص"))}</th>
-      <td class="ops-num">${counts.present}</td><td class="ops-num">${counts.total - counts.present}</td>
-      <td class="ops-num">${counts.total}</td></tr>`).join("");
+  const ranked = [...specialties].sort(([labelA, a], [labelB, b]) => b - a || labelA.localeCompare(labelB, "ar"));
+  const largest = ranked[0]?.[1] ?? 1;
+  const rows = ranked.map(([label, count]) => `<tr>
+    <th scope="row">${escapeHtml(label || ui("بدون تخصص"))}</th>
+    <td aria-hidden="true" class="ops-summary-chart"><span style="width:${count / largest * 100}%"></span></td>
+    <td class="ops-summary-count">${count}</td>
+  </tr>`).join("");
 
   return `<section class="ops-report ops-sheet ops-workshop-summary">
-    <header class="ops-header"><div><span class="ops-kicker">${ui("EMAD_tc / الجرد اليومي للورش")}</span>
-      <h2>${ui("ملخص الجرد اليومي")}</h2><p>${ui("الأعداد حسب سجلات الورش المختارة للطباعة.")}</p></div>
-      <div class="ops-document"><b>${ui("التاريخ")}</b><span dir="ltr">${escapeHtml(date)}</span></div></header>
-    <div class="ops-metrics">${metric(ui("الورش المختارة"), workshopCount)}${metric(ui("إجمالي الكادر"), lines.length)}
-      ${metric(ui("الحاضرون"), present)}${metric(ui("الغائبون"), lines.length - present)}</div>
-    <div class="ops-section-label"><h3>${ui("توزيع الكادر حسب التخصص")}</h3>
-      <span>${ui("نسبة الحضور")} · ${lines.length ? Math.round(present / lines.length * 100) : 0}%</span></div>
-    <table class="ops-roster"><thead><tr>${labels.map((label, i) => `<th scope="col" class="${i ? "ops-num" : ""}">${escapeHtml(ui(label))}</th>`).join("")}</tr></thead>
-      <tbody>${rows || `<tr><td colspan="4" class="ops-empty">${ui("لا توجد سجلات كادر")}</td></tr>`}</tbody></table>
-    <footer class="ops-footer"><span>${ui("EMAD_tc · الجرد اليومي")}</span><span dir="ltr">${escapeHtml(date)}</span></footer>
+    <header class="ops-summary-header">
+      <div><h2>${ui("ملخص الحاضرين")}</h2><time dir="ltr" datetime="${escapeHtml(date)}">${escapeHtml(date)}</time></div>
+      <div class="ops-summary-total"><strong>${present}</strong><span>${ui("إجمالي الحاضرين")}</span></div>
+    </header>
+    <h3>${ui("الحاضرون حسب التخصص")}</h3>
+    <table class="ops-summary-table"><thead><tr><th scope="col">${ui("التخصص / الصفة")}</th>
+      <th aria-hidden="true"></th><th scope="col" class="ops-summary-count">${ui("العدد")}</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="3">${ui("لم يتم تسجيل حضور أي موظف.")}</td></tr>`}</tbody></table>
   </section>`;
 }
 

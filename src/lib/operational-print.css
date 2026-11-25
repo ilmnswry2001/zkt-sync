@@ -45,4 +45,20 @@ body:has(.ops-report) > h1 { display: none; }
 .ops-signatures i { display: block; height: 27px; border-bottom: 1px solid var(--report-line); }
 .ops-footer { display: flex; justify-content: space-between; gap: 15px; color: var(--report-muted); border-top: 1px solid var(--report-line); padding: 8px 0; font-size: 9px; break-inside: avoid; }
 @media print { body:has(.ops-report) { padding: 0; } .ops-report { print-color-adjust: exact; -webkit-print-color-adjust: exact; } @page { size: A4 portrait; margin: 12mm; } }
-.ops-workshop-summary .ops-roster tbody th { background: transparent; color: var(--report-ink); border-color: var(--report-line); overflow-wrap: anywhere; }
+
+.ops-summary-header { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 10px 0 18px; border-bottom: 2px solid #173030; break-inside: avoid; }
+.ops-summary-header h2 { color: #173030; font-size: 28px; margin: 0 0 6px; }
+.ops-summary-header time { display: inline-block; color: #526567; font-size: 12px; font-variant-numeric: tabular-nums; }
+.ops-summary-total { min-width: 115px; text-align: center; padding: 10px 16px; background: #edf5f3; color: #173030; border-radius: 8px; }
+.ops-summary-total strong { display: block; font-size: 32px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.ops-summary-total span { display: block; margin-top: 5px; font-size: 11px; }
+.ops-workshop-summary h3 { margin: 22px 0 8px; }
+.ops-summary-table { color: #173030; margin: 0; font-size: 11px; }
+.ops-summary-table thead { display: table-header-group; }
+.ops-summary-table tr { break-inside: avoid; }
+.ops-summary-table th, .ops-summary-table td { border: 0; border-bottom: 1px solid #dce7e5; padding: 8px 10px; vertical-align: middle; overflow-wrap: anywhere; }
+.ops-summary-table th { background: transparent; color: inherit; }
+.ops-summary-table thead th { background: #edf5f3; }
+.ops-summary-table .ops-summary-count { text-align: end; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ops-summary-chart { width: 34%; }
+.ops-summary-chart span { display: block; height: 4px; border-radius: 3px; background: #37746c; }

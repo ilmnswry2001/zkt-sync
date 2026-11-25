@@ -202,6 +202,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
     Record<string, { attended: Record<string, boolean>; notes: string }>
   >({});
   const [printOpen, setPrintOpen] = useState(false);
+  const [includePrintSummary, setIncludePrintSummary] = useState(false);
   const [printIds, setPrintIds] = useState<string[]>([]);
   const [selectedUnmatchedEmployeeIds, setSelectedUnmatchedEmployeeIds] = useState<string[]>([]);
   const [unassignedPage, setUnassignedPage] = useState(0);
@@ -818,7 +819,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
     if (!savedReports.length) return toast.error(ui("يرجى اختيار ورشة واحدة على الأقل"));
     const selectedReportIds = new Set(savedReports.map((report) => report.id));
     const selectedLines = (reportQuery.data?.lines ?? []).filter((line) => selectedReportIds.has(line.report_id));
-    const summary = workshopSummaryMarkup(date, savedReports.length, selectedLines);
+    const summary = includePrintSummary ? workshopSummaryMarkup(date, selectedLines) : "";
     const content = savedReports
       .map((report) => {
         const workshop = workshops.find((item) => item.id === report.workshop_id);
@@ -1430,6 +1431,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                     variant="outline"
                     onClick={() => {
                       setPrintIds(reports.map((r) => r.id));
+                      setIncludePrintSummary(false);
                       setPrintOpen(true);
                     }}
                     disabled={!reportQuery.data?.reports.length}
@@ -1467,6 +1469,11 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                           );
                         })}
                       </div>
+                      <label className="flex cursor-pointer items-center gap-3 rounded-lg border bg-muted/30 p-3 text-sm font-medium">
+                        <Checkbox checked={includePrintSummary}
+                          onCheckedChange={(checked) => setIncludePrintSummary(checked === true)} />
+                        {ui("إرفاق ملخص الحاضرين")}
+                      </label>
                       <DialogFooter>
                         <Button onClick={printDailyReport}>{ui("تأكيد وطباعة (")}{printIds.length}{ui(" ورش)")}</Button>
                         <Button variant="outline" onClick={() => setPrintOpen(false)}>{ui("إلغاء")}</Button>
