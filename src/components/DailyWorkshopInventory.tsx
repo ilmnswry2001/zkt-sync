@@ -547,10 +547,26 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
     }
   };
 
-  const assignUnmatchedPunch = async (employees: Employee[], targetWorkshopId: string) => {
-    if (!targetWorkshopId) return toast.error(ui("اختر الورشة أولاً"));
+  const assignUnmatchedPunch = async (employees: Employee[], targetWorkshopId: string, fromDirectory = false) => {
+    if (!targetWorkshopId) {
+      toast.error(ui("اختر الورشة أولاً"));
+      return false;
+    }
     setSaving(true);
     try {
+      let markAttendance = true;
+      if (fromDirectory) {
+        const { data: memberships, error } = await supabase.from("daily_workshop_members")
+          .select("is_active, daily_workshops!inner(is_active)")
+          .eq("employee_id", employees[0].id);
+        if (error) throw error;
+        if (memberships.some((member) => member.is_active && member.daily_workshops.is_active)) {
+          await queryClient.invalidateQueries({ queryKey: ["workshop-inventory-search"] });
+          toast.error(ui("الموظف منسّب إلى ورشة بالفعل."));
+          return false;
+        }
+        markAttendance = memberships.length === 0;
+      }
       const { data, error } = await supa
         .from("daily_workshop_members")
         .upsert(
@@ -576,19 +592,29 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
         ],
       );
       if (date === dateRef.current) {
-        markEmployeePresentInWorkshop(targetWorkshopId, ids);
+        if (markAttendance) markEmployeePresentInWorkshop(targetWorkshopId, ids);
+        if (fromDirectory) {
+          setWorkshopId(targetWorkshopId);
+          setSearchTarget({ workshop: targetWorkshopId, employee: ids[0] });
+        }
         changeUnassignedPage(0);
       }
       await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["workshop-inventory-search"] }),
         queryClient.invalidateQueries({ queryKey: ["daily-workshop-members"] }),
         queryClient.invalidateQueries({ queryKey: ["daily-workshop-all-active-members"] }),
         queryClient.invalidateQueries({ queryKey: ["daily-workshop-unassigned-punches"] }),
       ]);
+      if (fromDirectory) {
+        toast.success(ui(markAttendance ? "تم التنسيب وتأشير الحضور في مسودة الجرد." : "تم إسناد الموظف إلى الورشة"));
+        return true;
+      }
       toast.success(
         (ui("تمت إضافة ") + (employees.length === 1 ? employees[0].full_name : employees.length + " موظفين") + ui(" إلى الورشة وتسجيل الحضور")),
       );
     } catch (error) {
       toast.error(ui(formatErrorMessage(error, "تعذر إضافة الموظف إلى الورشة")));
+      return false;
     } finally {
       setSaving(false);
     }
@@ -596,6 +622,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
 
   const refreshData = async () => {
     await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["workshop-inventory-search"] }),
       queryClient.invalidateQueries({ queryKey: ["project-execution"] }),
       queryClient.invalidateQueries({ queryKey: ["projects-dashboard"] }),
       queryClient.invalidateQueries({ queryKey: ["workshop-management"] }),
@@ -844,15 +871,31 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
                 <ClipboardCheck className="h-5 w-5 text-primary" />{ui(" تسجيل حضور البصمة")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <WorkshopInventorySearch key={date} date={date} onSelect={(workshop, employee) => {
-                setWorkshopId(workshop);
-                setSearchTarget({ workshop, employee });
-              }} />
+              <WorkshopInventorySearch key={date} date={date} workshops={workshops} busy={saving || markingBiometrics || !reportQuery.isSuccess}
+                onAssign={async (workshop, employeeId) => {
+                  try {
+                    const { data, error } = await supabase.from("employees")
+                      .select("id, employee_no, full_name, position").eq("id", employeeId)
+                      .eq("status", "active").single();
+                    if (error) throw error;
+                    if (date !== dateRef.current) return false;
+                    return await assignUnmatchedPunch([data], workshop, true);
+                  } catch (error) {
+                    toast.error(ui(formatErrorMessage(error, "تعذر إضافة الموظف إلى الورشة")));
+                    return false;
+                  }
+                }}
+                onSelect={(workshop, employee) => {
+                  if (employee) markEmployeePresentInWorkshop(workshop, [employee]);
+                  setWorkshopId(workshop);
+                  setSearchTarget({ workshop, employee });
+                }} />
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="workshop-inventory-date">{ui("التاريخ")}</Label>
                   <Input
                     id="workshop-inventory-date"
+                    disabled={saving}
                     type="date"
                     max={todayInBaghdad()}
                     value={date}

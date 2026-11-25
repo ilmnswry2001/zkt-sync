@@ -8,12 +8,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export function WorkshopInventorySearch({ date, onSelect }: {
+export function WorkshopInventorySearch({ date, workshops, busy, onSelect, onAssign }: {
   date: string;
+  workshops: { id: string; name: string }[];
+  busy: boolean;
+  onAssign: (workshopId: string, employeeId: string) => Promise<boolean | undefined>;
   onSelect: (workshopId: string, employeeId: string | null) => void;
 }) {
   const [input, setInput] = useState("");
   const [page, setPage] = useState(0);
+  const [assignment, setAssignment] = useState<{ employee: string; detail: string } | null>(null);
+  const [target, setTarget] = useState("");
+  const [assigning, setAssigning] = useState(false);
+  const reset = () => { setInput(""); setPage(0); setAssignment(null); setTarget(""); };
   const text = input.trim();
   const term = useDebouncedValue(text);
   const ready = term === text && term.length >= 2 && !!date;
@@ -34,9 +41,9 @@ export function WorkshopInventorySearch({ date, onSelect }: {
     <Label htmlFor="inventory-workshop-search">{ui("البحث في جميع الورش")}</Label>
     <div className="relative">
       <Search aria-hidden className="absolute start-3 top-3 size-4 text-muted-foreground" />
-      <Input id="inventory-workshop-search" type="search" maxLength={100} value={input}
+      <Input id="inventory-workshop-search" type="search" maxLength={100} value={input} disabled={assigning}
         className="bg-background ps-9" placeholder={ui("اسم الورشة، الموظف أو رقمه، التخصص، الموقع أو عمل اليوم…")}
-        onChange={event => { setInput(event.target.value); setPage(0); }} />
+        onChange={event => { setInput(event.target.value); setPage(0); setAssignment(null); setTarget(""); }} />
     </div>
     {text && <div aria-live="polite">
       {text.length < 2 ? <p className="text-sm text-muted-foreground">{ui("اكتب حرفين على الأقل.")}</p>
@@ -47,9 +54,19 @@ export function WorkshopInventorySearch({ date, onSelect }: {
         : <ul className="max-h-72 divide-y overflow-auto rounded-lg border bg-card">
           {rows.slice(0, 20).map(row => <li key={JSON.stringify([row.workshop_id, row.match_kind, row.employee_id])}>
             <button type="button" className="flex w-full items-center gap-3 px-3 py-2 text-start hover:bg-muted focus-visible:bg-muted"
-              onClick={() => { onSelect(row.workshop_id, row.employee_id); setInput(""); setPage(0); }}>
-              <span className="min-w-0 flex-1"><strong className="block">{row.workshop_name}</strong>
-                <span className="break-words text-sm text-muted-foreground">{row.match_kind}{row.match_kind !== "ورشة" && ` · ${row.detail}`}</span>
+              disabled={busy || assigning}
+              onClick={() => {
+                if (!row.workshop_id) {
+                  if (!row.employee_id) return;
+                  setAssignment({ employee: row.employee_id, detail: row.detail });
+                  setTarget("");
+                  return;
+                }
+                onSelect(row.workshop_id, row.employee_id);
+                reset();
+              }}>
+              <span className="min-w-0 flex-1"><strong className="block">{row.workshop_name || row.detail}</strong>
+                <span className="break-words text-sm text-muted-foreground">{ui(row.match_kind)}{row.workshop_id && row.match_kind !== "ورشة" && ` · ${row.detail}`}</span>
               </span><ArrowLeft aria-hidden className="size-4 shrink-0 text-primary" />
             </button>
           </li>)}
@@ -60,5 +77,26 @@ export function WorkshopInventorySearch({ date, onSelect }: {
         <Button size="sm" variant="outline" disabled={rows.length <= 20} onClick={() => setPage(page + 1)}>{ui("التالي")}</Button>
       </div>}
     </div>}
+    {assignment && <form className="grid gap-3 rounded-lg border bg-card p-3" onSubmit={async (event) => {
+      event.preventDefault();
+      if (!target || busy || assigning) return;
+      setAssigning(true);
+      try {
+        if (await onAssign(target, assignment.employee)) reset();
+      } finally {
+        setAssigning(false);
+      }
+    }}>
+      <p className="break-words text-sm font-medium">{assignment.detail}</p>
+      <Label htmlFor="inventory-search-workshop">{ui("اختر الورشة المستهدفة")}</Label>
+      <select id="inventory-search-workshop" value={target} onChange={(event) => setTarget(event.target.value)}
+        disabled={busy || assigning} className="min-h-10 w-full rounded-md border bg-background px-3 text-sm">
+        <option value="">{ui("اختر الورشة")}</option>
+        {workshops.map((workshop) => <option key={workshop.id} value={workshop.id}>{workshop.name}</option>)}
+      </select>
+      <Button type="submit" className="justify-self-start" disabled={!target || busy || assigning}>
+        {ui(assigning ? "جارٍ الحفظ…" : "تنسيب إلى الورشة")}
+      </Button>
+    </form>}
   </section>;
 }
