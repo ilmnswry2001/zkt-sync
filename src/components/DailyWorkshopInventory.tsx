@@ -8,7 +8,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { todayInBaghdad } from "@/lib/date-time";
 import { printReport } from "@/lib/report-print";
-import { workshopReportMarkup } from "@/lib/operational-report-markup";
+import { workshopReportMarkup, workshopSummaryMarkup } from "@/lib/operational-report-markup";
 import { formatErrorMessage } from "@/lib/error-message";
 import { getDefaultWage } from "@/lib/wage-defaults";
 import { matchWorkshopPunches } from "@/lib/workshop-management";
@@ -815,12 +815,14 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
   const reports = reportQuery.data?.reports ?? [];
   const printDailyReport = () => {
     const savedReports = reports.filter((report) => printIds.includes(report.id));
-    const allLines = reportQuery.data?.lines ?? [];
     if (!savedReports.length) return toast.error(ui("يرجى اختيار ورشة واحدة على الأقل"));
+    const selectedReportIds = new Set(savedReports.map((report) => report.id));
+    const selectedLines = (reportQuery.data?.lines ?? []).filter((line) => selectedReportIds.has(line.report_id));
+    const summary = workshopSummaryMarkup(date, savedReports.length, selectedLines);
     const content = savedReports
       .map((report) => {
         const workshop = workshops.find((item) => item.id === report.workshop_id);
-        const lines = allLines.filter((line) => line.report_id === report.id);
+        const lines = selectedLines.filter((line) => line.report_id === report.id);
         return workshopReportMarkup({
           name: workshop?.name ?? "ورشة",
           date,
@@ -829,7 +831,7 @@ export function DailyWorkshopInventory({initialWorkshopId=""}:{initialWorkshopId
         });
       })
       .join("");
-    if (!printReport(`الجرد اليومي للورش — ${date}`, content)) {
+    if (!printReport(`الجرد اليومي للورش — ${date}`, summary + content)) {
       toast.error(ui("اسمح بالنوافذ المنبثقة لطباعة التقرير"));
     } else setPrintOpen(false);
   };

@@ -45,3 +45,4 @@ body:has(.ops-report) > h1 { display: none; }
 .ops-signatures i { display: block; height: 27px; border-bottom: 1px solid var(--report-line); }
 .ops-footer { display: flex; justify-content: space-between; gap: 15px; color: var(--report-muted); border-top: 1px solid var(--report-line); padding: 8px 0; font-size: 9px; break-inside: avoid; }
 @media print { body:has(.ops-report) { padding: 0; } .ops-report { print-color-adjust: exact; -webkit-print-color-adjust: exact; } @page { size: A4 portrait; margin: 12mm; } }
+.ops-workshop-summary .ops-roster tbody th { background: transparent; color: var(--report-ink); border-color: var(--report-line); overflow-wrap: anywhere; }

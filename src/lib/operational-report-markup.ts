@@ -45,6 +45,41 @@ export function finalPlanReportMarkup(plan: ReportPlan, site?: { ctr_code?: stri
 }
 
 type WorkshopLine = { attended: boolean; role_label: string | null; employee_no_snapshot: string; employee_name_snapshot: string };
+export function workshopSummaryMarkup(date: string, workshopCount: number, lines: Pick<WorkshopLine, "attended" | "role_label">[]) {
+  const specialties = new Map<string, { total: number; present: number }>();
+  let present = 0;
+  for (const line of lines) {
+    const label = line.role_label?.trim() ?? "";
+    const counts = specialties.get(label) ?? { total: 0, present: 0 };
+    counts.total++;
+    if (line.attended) {
+      counts.present++;
+      present++;
+    }
+    specialties.set(label, counts);
+  }
+
+  const labels = ["التخصص / الصفة", "الحاضرون", "الغائبون", "الإجمالي"];
+  const rows = [...specialties.entries()]
+    .sort(([labelA, a], [labelB, b]) => b.present - a.present || b.total - a.total || labelA.localeCompare(labelB, "ar"))
+    .map(([label, counts]) => `<tr><th scope="row" class="ops-name">${escapeHtml(label || ui("بدون تخصص"))}</th>
+      <td class="ops-num">${counts.present}</td><td class="ops-num">${counts.total - counts.present}</td>
+      <td class="ops-num">${counts.total}</td></tr>`).join("");
+
+  return `<section class="ops-report ops-sheet ops-workshop-summary">
+    <header class="ops-header"><div><span class="ops-kicker">${ui("EMAD_tc / الجرد اليومي للورش")}</span>
+      <h2>${ui("ملخص الجرد اليومي")}</h2><p>${ui("الأعداد حسب سجلات الورش المختارة للطباعة.")}</p></div>
+      <div class="ops-document"><b>${ui("التاريخ")}</b><span dir="ltr">${escapeHtml(date)}</span></div></header>
+    <div class="ops-metrics">${metric(ui("الورش المختارة"), workshopCount)}${metric(ui("إجمالي الكادر"), lines.length)}
+      ${metric(ui("الحاضرون"), present)}${metric(ui("الغائبون"), lines.length - present)}</div>
+    <div class="ops-section-label"><h3>${ui("توزيع الكادر حسب التخصص")}</h3>
+      <span>${ui("نسبة الحضور")} · ${lines.length ? Math.round(present / lines.length * 100) : 0}%</span></div>
+    <table class="ops-roster"><thead><tr>${labels.map((label, i) => `<th scope="col" class="${i ? "ops-num" : ""}">${escapeHtml(ui(label))}</th>`).join("")}</tr></thead>
+      <tbody>${rows || `<tr><td colspan="4" class="ops-empty">${ui("لا توجد سجلات كادر")}</td></tr>`}</tbody></table>
+    <footer class="ops-footer"><span>${ui("EMAD_tc · الجرد اليومي")}</span><span dir="ltr">${escapeHtml(date)}</span></footer>
+  </section>`;
+}
+
 export function workshopReportMarkup({ name, date, notes, lines }: { name: string; date: string; notes?: string | null; lines: WorkshopLine[] }) {
   const present = lines.filter((line) => line.attended);
   const rows = present.map((line, index) => `<tr><td class="ops-num">${index + 1}</td><td class="ops-name">${escapeHtml(line.employee_name_snapshot)}</td><td class="ops-num">${escapeHtml(line.employee_no_snapshot)}</td><td>${escapeHtml(line.role_label || "—")}</td></tr>`).join("");
