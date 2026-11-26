@@ -26,6 +26,7 @@ import { Route as AuthenticatedFilesRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedFormCenterRouteImport } from './routes/_authenticated/form-center'
 import { Route as AuthenticatedFormsRouteImport } from './routes/_authenticated/forms'
 import { Route as AuthenticatedFuelRouteImport } from './routes/_authenticated/fuel'
+import { Route as AuthenticatedHiringRequestsRouteImport } from './routes/_authenticated/hiring-requests'
 import { Route as AuthenticatedLeavesRouteImport } from './routes/_authenticated/leaves'
 import { Route as AuthenticatedMaintenanceRouteImport } from './routes/_authenticated/maintenance'
 import { Route as AuthenticatedMobileSyncRouteImport } from './routes/_authenticated/mobile-sync'
@@ -153,6 +154,12 @@ const AuthenticatedFuelRoute = AuthenticatedFuelRouteImport.update({
   path: '/fuel',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedHiringRequestsRoute =
+  AuthenticatedHiringRequestsRouteImport.update({
+    id: '/hiring-requests',
+    path: '/hiring-requests',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedLeavesRoute = AuthenticatedLeavesRouteImport.update({
   id: '/leaves',
   path: '/leaves',
@@ -371,6 +378,7 @@ export interface FileRoutesByFullPath {
   '/form-center': typeof AuthenticatedFormCenterRoute
   '/forms': typeof AuthenticatedFormsRouteWithChildren
   '/fuel': typeof AuthenticatedFuelRoute
+  '/hiring-requests': typeof AuthenticatedHiringRequestsRoute
   '/leaves': typeof AuthenticatedLeavesRoute
   '/maintenance': typeof AuthenticatedMaintenanceRoute
   '/mobile-sync': typeof AuthenticatedMobileSyncRoute
@@ -426,6 +434,7 @@ export interface FileRoutesByTo {
   '/files': typeof AuthenticatedFilesRoute
   '/form-center': typeof AuthenticatedFormCenterRoute
   '/fuel': typeof AuthenticatedFuelRoute
+  '/hiring-requests': typeof AuthenticatedHiringRequestsRoute
   '/leaves': typeof AuthenticatedLeavesRoute
   '/maintenance': typeof AuthenticatedMaintenanceRoute
   '/mobile-sync': typeof AuthenticatedMobileSyncRoute
@@ -484,6 +493,7 @@ export interface FileRoutesById {
   '/_authenticated/form-center': typeof AuthenticatedFormCenterRoute
   '/_authenticated/forms': typeof AuthenticatedFormsRouteWithChildren
   '/_authenticated/fuel': typeof AuthenticatedFuelRoute
+  '/_authenticated/hiring-requests': typeof AuthenticatedHiringRequestsRoute
   '/_authenticated/leaves': typeof AuthenticatedLeavesRoute
   '/_authenticated/maintenance': typeof AuthenticatedMaintenanceRoute
   '/_authenticated/mobile-sync': typeof AuthenticatedMobileSyncRoute
@@ -542,6 +552,7 @@ export interface FileRouteTypes {
     | '/form-center'
     | '/forms'
     | '/fuel'
+    | '/hiring-requests'
     | '/leaves'
     | '/maintenance'
     | '/mobile-sync'
@@ -597,6 +608,7 @@ export interface FileRouteTypes {
     | '/files'
     | '/form-center'
     | '/fuel'
+    | '/hiring-requests'
     | '/leaves'
     | '/maintenance'
     | '/mobile-sync'
@@ -654,6 +666,7 @@ export interface FileRouteTypes {
     | '/_authenticated/form-center'
     | '/_authenticated/forms'
     | '/_authenticated/fuel'
+    | '/_authenticated/hiring-requests'
     | '/_authenticated/leaves'
     | '/_authenticated/maintenance'
     | '/_authenticated/mobile-sync'
@@ -826,6 +839,13 @@ declare module '@tanstack/react-router' {
       path: '/fuel'
       fullPath: '/fuel'
       preLoaderRoute: typeof AuthenticatedFuelRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/hiring-requests': {
+      id: '/_authenticated/hiring-requests'
+      path: '/hiring-requests'
+      fullPath: '/hiring-requests'
+      preLoaderRoute: typeof AuthenticatedHiringRequestsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/leaves': {
@@ -1142,6 +1162,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedFormCenterRoute: typeof AuthenticatedFormCenterRoute
   AuthenticatedFormsRoute: typeof AuthenticatedFormsRouteWithChildren
   AuthenticatedFuelRoute: typeof AuthenticatedFuelRoute
+  AuthenticatedHiringRequestsRoute: typeof AuthenticatedHiringRequestsRoute
   AuthenticatedLeavesRoute: typeof AuthenticatedLeavesRoute
   AuthenticatedMaintenanceRoute: typeof AuthenticatedMaintenanceRoute
   AuthenticatedMobileSyncRoute: typeof AuthenticatedMobileSyncRoute
@@ -1186,6 +1207,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedFormCenterRoute: AuthenticatedFormCenterRoute,
   AuthenticatedFormsRoute: AuthenticatedFormsRouteWithChildren,
   AuthenticatedFuelRoute: AuthenticatedFuelRoute,
+  AuthenticatedHiringRequestsRoute: AuthenticatedHiringRequestsRoute,
   AuthenticatedLeavesRoute: AuthenticatedLeavesRoute,
   AuthenticatedMaintenanceRoute: AuthenticatedMaintenanceRoute,
   AuthenticatedMobileSyncRoute: AuthenticatedMobileSyncRoute,
