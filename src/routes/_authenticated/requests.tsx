@@ -8,9 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 
 type RequestStage = "planning" | "warehouse" | "procurement";
-const ProjectPlansView = lazy(() =>
-  import("./project-plans").then(({ PlanningPage }) => ({ default: PlanningPage })),
-);
+const ProjectPlansView = lazy(() => import("@/components/ProjectPlansPage"));
 
 export const Route = createFileRoute("/_authenticated/requests")({
   beforeLoad: async () => {

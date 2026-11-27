@@ -1,3 +1,4 @@
+import { Toaster } from "@/components/ui/sonner";
 import { direction, language, ui } from "@/lib/ui-language";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -116,6 +117,7 @@ function RootShell({ children }: { children: ReactNode }) {
       </head>
       <body>
         {children}
+        <Toaster richColors position="top-center" />
         <Scripts />
       </body>
     </html>

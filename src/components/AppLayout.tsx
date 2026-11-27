@@ -54,7 +54,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Toaster } from "@/components/ui/sonner";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useOperationalAlerts } from "@/hooks/use-operational-alerts";
 import { supabase } from "@/integrations/supabase/client";
@@ -906,7 +905,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           updatedBy={user?.id ?? null}
         />
       )}
-      <Toaster richColors position="top-center" />
     </div>
   );
 }

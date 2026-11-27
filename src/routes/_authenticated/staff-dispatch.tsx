@@ -22,6 +22,18 @@ import {
 } from "@/lib/staff-dispatch";
 
 export const Route = createFileRoute("/_authenticated/staff-dispatch")({
+  head: () => {
+    const title = ui("نشر الكوادر الميدانية");
+    const description = ui("تنسيق نشر الكوادر الميدانية ومتابعة وجهات التكليف.");
+    return { meta: [
+      { title },
+      { name: "description", content: description },
+      { property: "og:title", content: title },
+      { property: "og:description", content: description },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ] };
+  },
   component: StaffDispatchPage,
 });
 

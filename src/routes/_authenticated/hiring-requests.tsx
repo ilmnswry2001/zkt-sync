@@ -16,6 +16,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { direction, displayLocale, ui } from "@/lib/ui-language";
 
 export const Route = createFileRoute("/_authenticated/hiring-requests")({
+  head: () => {
+    const title = ui("طلبات التعيين");
+    const description = ui("إدارة طلبات التعيين ومتابعة قراراتها ومرفقاتها.");
+    return { meta: [
+      { title },
+      { name: "description", content: description },
+      { property: "og:title", content: title },
+      { property: "og:description", content: description },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ] };
+  },
   component: HiringRequestsPage,
 });
 

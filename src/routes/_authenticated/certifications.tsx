@@ -861,5 +861,3 @@ function CertificationsPage() {
     </div>
   );
 }
-
-export default CertificationsPage;
